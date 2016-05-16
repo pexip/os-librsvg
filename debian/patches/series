@@ -1,0 +1,6 @@
+10_rsvg-gz.patch
+20_rsvg_compat.patch
+CVE-2015-7557.patch
+CVE-2016-4348-state-Store-mask-as-reference.patch
+state-Look-up-clip-path-lazily.patch
+CVE-2015-7558_CVE-2016-4347-rsvg-Add-rsvg_acquire_node.patch

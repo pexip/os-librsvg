@@ -1,0 +1,20 @@
+Description: Revert ABI breakage
+ Provide the rsvg_handle_new_gz function.
+ Do not provide the C prototype to force
+ applications using it to use rsvg_handle_new instead.
+Author: Josselin Mouette <joss@debian.org>
+Bug-Debian: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=348920
+Index: librsvg-2.40.0/rsvg-gobject.c
+===================================================================
+--- librsvg-2.40.0.orig/rsvg-gobject.c	2013-10-14 23:15:46.004777056 +0200
++++ librsvg-2.40.0/rsvg-gobject.c	2013-10-14 23:15:46.004777056 +0200
+@@ -377,3 +377,9 @@
+                          "flags", flags,
+                          NULL);
+ }
++
++RsvgHandle *
++rsvg_handle_new_gz (void)
++{
++    return rsvg_handle_new ();
++}
