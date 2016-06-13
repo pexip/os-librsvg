@@ -38,7 +38,7 @@ typedef struct _RsvgGradientStops RsvgGradientStops;
 typedef struct _RsvgLinearGradient RsvgLinearGradient;
 typedef struct _RsvgRadialGradient RsvgRadialGradient;
 typedef struct _RsvgPattern RsvgPattern;
-typedef struct _RsvgSolidColour RsvgSolidColour;
+typedef struct _RsvgSolidColor RsvgSolidColor;
 
 typedef struct _RsvgPaintServer RsvgPaintServer;
 
@@ -65,7 +65,7 @@ struct _RsvgLinearGradient {
     int hasbbox:1;
     int hasspread:1;
     int hastransform:1;
-    RsvgNode *fallback;
+    char *fallback;
 };
 
 struct _RsvgRadialGradient {
@@ -84,7 +84,7 @@ struct _RsvgRadialGradient {
     int hasspread:1;
     int hasbbox:1;
     int hastransform:1;
-    RsvgNode *fallback;
+    char *fallback;
 };
 
 struct _RsvgPattern {
@@ -104,30 +104,26 @@ struct _RsvgPattern {
     int hascbox:1;
     int hasbbox:1;
     int hastransform:1;
-    RsvgPattern *fallback;
+    char *fallback;
 };
 
-struct _RsvgSolidColour {
-    gboolean currentcolour;
+struct _RsvgSolidColor {
+    gboolean currentcolor;
     guint32 argb;
 };
 
-typedef struct _RsvgSolidColour RsvgPaintServerColour;
+typedef struct _RsvgSolidColor RsvgPaintServerColor;
 typedef enum _RsvgPaintServerType RsvgPaintServerType;
 typedef union _RsvgPaintServerCore RsvgPaintServerCore;
 
 union _RsvgPaintServerCore {
-    RsvgLinearGradient *lingrad;
-    RsvgRadialGradient *radgrad;
-    RsvgSolidColour *colour;
-    RsvgPattern *pattern;
+    RsvgSolidColor *color;
+    char *iri;
 };
 
 enum _RsvgPaintServerType {
-    RSVG_PAINT_SERVER_RAD_GRAD,
-    RSVG_PAINT_SERVER_LIN_GRAD,
     RSVG_PAINT_SERVER_SOLID,
-    RSVG_PAINT_SERVER_PATTERN
+    RSVG_PAINT_SERVER_IRI
 };
 
 struct _RsvgPaintServer {
@@ -138,18 +134,12 @@ struct _RsvgPaintServer {
 
 /* Create a new paint server based on a specification string. */
 G_GNUC_INTERNAL
-RsvgPaintServer	    *rsvg_paint_server_parse    (gboolean * inherit, const RsvgDefs * defs,
-                                                 const char *str, guint32 current_color);
+RsvgPaintServer	    *rsvg_paint_server_parse    (gboolean * inherit, const char *str);
 G_GNUC_INTERNAL
 void                 rsvg_paint_server_ref      (RsvgPaintServer * ps);
 G_GNUC_INTERNAL
 void                 rsvg_paint_server_unref    (RsvgPaintServer * ps);
-G_GNUC_INTERNAL
-RsvgRadialGradient  *rsvg_clone_radial_gradient (const RsvgRadialGradient * grad,
-                                                 gboolean * shallow_cloned);
-G_GNUC_INTERNAL
-RsvgLinearGradient  *rsvg_clone_linear_gradient (const RsvgLinearGradient * grad,
-                                                 gboolean * shallow_cloned);
+
 G_GNUC_INTERNAL
 RsvgNode *rsvg_new_linear_gradient  (void);
 G_GNUC_INTERNAL
@@ -159,11 +149,14 @@ RsvgNode *rsvg_new_stop	        (void);
 G_GNUC_INTERNAL
 RsvgNode *rsvg_new_pattern      (void);
 G_GNUC_INTERNAL
-void rsvg_pattern_fix_fallback          (RsvgPattern * pattern);
+void rsvg_pattern_fix_fallback          (RsvgDrawingCtx * ctx,
+                                         RsvgPattern * pattern);
 G_GNUC_INTERNAL
-void rsvg_linear_gradient_fix_fallback	(RsvgLinearGradient * grad);
+void rsvg_linear_gradient_fix_fallback	(RsvgDrawingCtx * ctx,
+                                         RsvgLinearGradient * grad);
 G_GNUC_INTERNAL
-void rsvg_radial_gradient_fix_fallback	(RsvgRadialGradient * grad);
+void rsvg_radial_gradient_fix_fallback	(RsvgDrawingCtx * ctx,
+                                         RsvgRadialGradient * grad);
 
 G_END_DECLS
 
