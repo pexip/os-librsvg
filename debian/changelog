@@ -1,3 +1,9 @@
+librsvg (2.40.5-1+deb8u2pexip1) pexip; urgency=medium
+
+  * Prepare Pexip packaging
+
+ -- Vincent Sanders <vince@pexip.com>  Fri, 06 Oct 2017 08:40:33 +0000
+
 librsvg (2.40.5-1+deb8u2) jessie-security; urgency=high
 
   * Non-maintainer upload by the Security Team.
