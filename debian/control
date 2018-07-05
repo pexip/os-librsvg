@@ -30,7 +30,7 @@ Standards-Version: 3.9.6
 Homepage: https://wiki.gnome.org/Projects/LibRsvg
 Vcs-Svn: svn://anonscm.debian.org/pkg-gnome/desktop/unstable/librsvg
 Vcs-Browser: http://anonscm.debian.org/viewvc/pkg-gnome/desktop/unstable/librsvg
-XS-Pexip-Upstream: http://ftp.debian.org/debian/ jessie
+XS-Pexip-Upstream: http://ftp.debian.org/debian/ stretch
 
 Package: librsvg2-dev
 Section: libdevel
