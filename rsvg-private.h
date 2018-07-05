@@ -193,13 +193,12 @@ struct RsvgDrawingCtx {
     RsvgState *state;
     GError **error;
     RsvgDefs *defs;
-    gchar *base_uri;
     PangoContext *pango_context;
     double dpi_x, dpi_y;
     RsvgViewBox vb;
     GSList *vb_stack;
     GSList *drawsub_stack;
-    GSList *ptrs;
+    GSList *acquired_nodes;
 };
 
 /*Abstract base class for context for our backends (one as yet)*/
@@ -293,7 +292,7 @@ typedef enum {
     /* Filter primitives */
     RSVG_NODE_TYPE_FILTER_PRIMITIVE = 64,
     RSVG_NODE_TYPE_FILTER_PRIMITIVE_BLEND,
-    RSVG_NODE_TYPE_FILTER_PRIMITIVE_COLOUR_MATRIX,
+    RSVG_NODE_TYPE_FILTER_PRIMITIVE_COLOR_MATRIX,
     RSVG_NODE_TYPE_FILTER_PRIMITIVE_COMPONENT_TRANSFER,
     RSVG_NODE_TYPE_FILTER_PRIMITIVE_COMPOSITE,
     RSVG_NODE_TYPE_FILTER_PRIMITIVE_CONVOLVE_MATRIX,
@@ -360,6 +359,10 @@ void rsvg_pop_discrete_layer    (RsvgDrawingCtx * ctx);
 G_GNUC_INTERNAL
 void rsvg_push_discrete_layer   (RsvgDrawingCtx * ctx);
 G_GNUC_INTERNAL
+RsvgNode *rsvg_acquire_node     (RsvgDrawingCtx * ctx, const char *url);
+G_GNUC_INTERNAL
+void rsvg_release_node          (RsvgDrawingCtx * ctx, RsvgNode *node);
+G_GNUC_INTERNAL
 void rsvg_render_path           (RsvgDrawingCtx * ctx, const cairo_path_t *path);
 G_GNUC_INTERNAL
 void rsvg_render_surface        (RsvgDrawingCtx * ctx, cairo_surface_t *surface,
@@ -391,6 +394,8 @@ double _rsvg_css_hand_normalize_length  (const RsvgLength * in, gdouble pixels_p
                                          gdouble width_or_height, gdouble font_size);
 double _rsvg_css_normalize_font_size    (RsvgState * state, RsvgDrawingCtx * ctx);
 G_GNUC_INTERNAL
+double _rsvg_css_accumulate_baseline_shift (RsvgState * state, RsvgDrawingCtx * ctx);
+G_GNUC_INTERNAL
 RsvgLength _rsvg_css_parse_length (const char *str);
 G_GNUC_INTERNAL
 void _rsvg_push_view_box    (RsvgDrawingCtx * ctx, double w, double h);
@@ -405,11 +410,11 @@ void rsvg_return_if_fail_warning (const char *pretty_function,
                                   const char *expression, GError ** error);
 
 G_GNUC_INTERNAL
-guint8* _rsvg_handle_acquire_data (RsvgHandle *handle,
-                                   const char *uri,
-                                   char **content_type,
-                                   gsize *len,
-                                   GError **error);
+char *_rsvg_handle_acquire_data (RsvgHandle *handle,
+                                 const char *uri,
+                                 char **content_type,
+                                 gsize *len,
+                                 GError **error);
 G_GNUC_INTERNAL
 GInputStream *_rsvg_handle_acquire_stream (RsvgHandle *handle,
                                            const char *uri,

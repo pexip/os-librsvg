@@ -1,9 +1,7 @@
-SUBDIRS = . gdk-pixbuf-loader tests tools doc
+SUBDIRS = . gdk-pixbuf-loader tests tools doc build
 
 NULL =
 BUILT_SOURCES =
-
-ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS} -I m4
 
 lib_LTLIBRARIES = librsvg-@RSVG_API_MAJOR_VERSION@.la
 
@@ -25,6 +23,7 @@ librsvg_@RSVG_API_MAJOR_VERSION@_la_SOURCES = \
 	librsvg-features.c 	\
 	rsvg-css.c 		\
 	rsvg-css.h 		\
+	rsvg-compat.h		\
 	rsvg-defs.c 		\
 	rsvg-defs.h 		\
 	rsvg-image.c		\
@@ -166,7 +165,13 @@ EXTRA_DIST =				\
 	librsvg-zip.in 			\
 	gtk-doc.make			\
 	Rsvg-2.0-custom.vala		\
-	Rsvg-2.0.metadata
+	Rsvg-2.0.metadata		\
+	config.h.win32.in		\
+	config.h.win32			\
+	rsvg.symbols			\
+	glib-tap.mk			\
+	tap-driver.sh			\
+	tap-test
 
 CLEANFILES = \
 	$(enum_sources) \
@@ -266,6 +271,52 @@ CLEANFILES += $(VAPIGEN_VAPIS)
 endif # ENABLE_VAPIGEN
 
 endif # HAVE_INTROSPECTION
+
+# ------------------- MSVC Build Items ----------------
+
+MSVCPROJS = rsvg rsvg-convert
+
+rsvg_FILES = $(librsvg_@RSVG_API_MAJOR_VERSION@_la_SOURCES)
+rsvg_EXCLUDES = dummy
+rsvg_HEADERS_DIR = $(librsvgincdir)
+rsvg_HEADERS_INST = $(librsvginc_HEADERS)
+
+rsvg_HEADERS_EXCLUDES = dummy
+
+rsvg_convert_FILES = $(rsvg_convert_SOURCES)
+rsvg_convert_EXCLUDES = dummy
+
+include $(top_srcdir)/build/Makefile.msvcproj
+
+# autotools: Why must we do this instead of dist-hook?
+MSVCPROJ_GENERATED = \
+	$(top_builddir)/build/win32/vs9/rsvg.vcproj		\
+	$(top_builddir)/build/win32/vs9/rsvg-convert.vcproj
+
+if HAVE_INTROSPECTION
+
+MSVC_INTROSPECT_GIRS = $(INTROSPECTION_GIRS)
+
+INTROSPECTION_INTERMEDIATE_ITEMS = \
+	$(top_builddir)/build/win32/Rsvg-@RSVG_API_VERSION@.gir.msvc.introspect		\
+	$(top_builddir)/build/win32/Rsvg_@RSVG_API_VERSION_U@_gir_list
+
+Rsvg_@RSVG_API_VERSION_U@_gir_MSVC_FILES = $(Rsvg_@RSVG_API_VERSION_U@_gir_FILES)
+Rsvg_@RSVG_API_VERSION_U@_gir_MSVC_PACKAGES = $(Rsvg_@RSVG_API_VERSION_U@_gir_PACKAGES)
+Rsvg_@RSVG_API_VERSION_U@_gir_MSVC_EXPORT_PACKAGES = $(Rsvg_@RSVG_API_VERSION_U@_gir_EXPORT_PACKAGES)
+Rsvg_@RSVG_API_VERSION_U@_gir_MSVC_INCLUDE_GIRS = $(Rsvg_@RSVG_API_VERSION_U@_gir_INCLUDES)
+Rsvg_@RSVG_API_VERSION_U@_gir_MSVC_LIBS = rsvg-@RSVG_API_VERSION@
+Rsvg_@RSVG_API_VERSION_U@_gir_MSVC_CFLAGS = -I../.. -DRSVG_COMPILATION
+Rsvg_@RSVG_API_VERSION_U@_gir_MSVC_SCANNERFLAGS = $(Rsvg_@RSVG_API_VERSION_U@_gir_SCANNERFLAGS)
+
+MSVCPROJ_GENERATED += $(INTROSPECTION_INTERMEDIATE_ITEMS)
+
+include $(top_srcdir)/build/Makefile.msvc-introspection
+endif # HAVE_INTROSPECTION
+
+$(MSVCPROJ_GENERATED): $(top_builddir)/build/win32/vs9/rsvg.headers
+
+EXTRA_DIST += $(MSVCPROJ_GENERATED)
 
 # ChangeLog generation
 

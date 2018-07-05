@@ -28,8 +28,6 @@
 #include <rsvg.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 
-#include "librsvg-features.h"
-
 #define N_(string) (string)
 #define _(string) (string)
 
@@ -54,7 +52,7 @@ enum {
 } RsvgLoaderErrorReasons;
 
 static void
-rsvg_propegate_error (GError ** err,
+rsvg_propagate_error (GError ** err,
                       const char * reason,
                       gint code)
 {
@@ -120,7 +118,7 @@ gdk_pixbuf__svg_image_load_increment (gpointer data,
                 context->handle = rsvg_handle_new ();
 
                 if (!context->handle) {
-                        rsvg_propegate_error (error, _("Error displaying image"), ERROR_DISPLAYING_IMAGE);
+                        rsvg_propagate_error (error, _("Error displaying image"), ERROR_DISPLAYING_IMAGE);
                         return FALSE;
                 }
 
@@ -128,12 +126,12 @@ gdk_pixbuf__svg_image_load_increment (gpointer data,
         }
 
         if (!context->handle) {
-                rsvg_propegate_error (error, _("Error displaying image"), ERROR_DISPLAYING_IMAGE);
+                rsvg_propagate_error (error, _("Error displaying image"), ERROR_DISPLAYING_IMAGE);
                 return FALSE;
         }
 
         if (!rsvg_handle_write (context->handle, buf, size, error)) {
-                rsvg_propegate_error (error, _("Error writing"), ERROR_WRITING);
+                rsvg_propagate_error (error, _("Error writing"), ERROR_WRITING);
                 return FALSE;
         }
 
@@ -151,7 +149,7 @@ gdk_pixbuf__svg_image_stop_load (gpointer data, GError **error)
                 *error = NULL;
 
         if (!context->handle) {
-                rsvg_propegate_error (error, _("Error displaying image"), ERROR_DISPLAYING_IMAGE);
+                rsvg_propagate_error (error, _("Error displaying image"), ERROR_DISPLAYING_IMAGE);
                 return FALSE;
         }
 
@@ -165,7 +163,7 @@ gdk_pixbuf__svg_image_stop_load (gpointer data, GError **error)
                 g_object_unref (pixbuf);
         }
         else {
-                rsvg_propegate_error (error, _("Error displaying image"), ERROR_DISPLAYING_IMAGE);
+                rsvg_propagate_error (error, _("Error displaying image"), ERROR_DISPLAYING_IMAGE);
                 result = FALSE;
         }
 
@@ -186,13 +184,13 @@ fill_vtable (GdkPixbufModule *module)
 void
 fill_info (GdkPixbufFormat *info)
 {
-        static GdkPixbufModulePattern signature[] = {
+        static const GdkPixbufModulePattern signature[] = {
                 {  " <svg",  "*    ", 100 },
                 {  " <!DOCTYPE svg",  "*             ", 100 },
                 { NULL, NULL, 0 }
         };
 
-        static gchar *mime_types[] = { /* yes folks, i actually have run into all of these in the wild... */
+        static const gchar *mime_types[] = { /* yes folks, i actually have run into all of these in the wild... */
                 "image/svg+xml",
                 "image/svg",
                 "image/svg-xml",
@@ -201,7 +199,7 @@ fill_info (GdkPixbufFormat *info)
                 "image/svg+xml-compressed",
                 NULL
         };
-        static gchar *extensions[] = {
+        static const gchar *extensions[] = {
                 "svg",
                 "svgz",
                 "svg.gz",
@@ -209,10 +207,10 @@ fill_info (GdkPixbufFormat *info)
         };
 
         info->name        = "svg";
-        info->signature   = signature;
+        info->signature   = (GdkPixbufModulePattern *) signature;
         info->description = _("Scalable Vector Graphics");
-        info->mime_types  = mime_types;
-        info->extensions  = extensions;
+        info->mime_types  = (gchar **) mime_types;
+        info->extensions  = (gchar **) extensions;
         info->flags       = GDK_PIXBUF_FORMAT_SCALABLE | GDK_PIXBUF_FORMAT_THREADSAFE;
         info->license     = "LGPL";
 }
