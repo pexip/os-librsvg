@@ -50,7 +50,7 @@
     <keyword type="function" name="rsvg_init ()" link="RsvgHandle.html#rsvg-init" deprecated="2.36: Use g_type_init()" since="2.9"/>
     <keyword type="function" name="rsvg_term ()" link="RsvgHandle.html#rsvg-term" deprecated="2.36" since="2.9"/>
     <keyword type="function" name="rsvg_handle_free ()" link="RsvgHandle.html#rsvg-handle-free" deprecated="Use g_object_unref() instead."/>
-    <keyword type="function" name="rsvg_handle_set_size_callback ()" link="RsvgHandle.html#rsvg-handle-set-size-callback" deprecated="Set up a cairo matrix and use rsvg_handle_render_cairo() instead."/>
+    <keyword type="function" name="rsvg_handle_set_size_callback ()" link="RsvgHandle.html#rsvg-handle-set-size-callback" deprecated=""/>
     <keyword type="enum" name="enum RsvgError" link="RsvgHandle.html#RsvgError"/>
     <keyword type="struct" name="struct RsvgHandle" link="RsvgHandle.html#RsvgHandle-struct"/>
     <keyword type="typedef" name="RsvgHandlePrivate" link="RsvgHandle.html#RsvgHandlePrivate"/>

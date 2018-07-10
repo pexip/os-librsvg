@@ -2,6 +2,7 @@
 
 #include <glib.h>
 #include "rsvg.h"
+#include "rsvg-compat.h"
 #include "rsvg-private.h"
 #include "rsvg-defs.h"
 #include "rsvg-styles.h"
@@ -40,9 +41,9 @@ static void
 assert_equal_value (FixtureData *fixture, RsvgNode *node)
 {
     if (g_str_equal (fixture->target_name, "stroke"))
-        assert_equal_color (fixture->expected.color, node->state->stroke->core.colour->argb);
+        assert_equal_color (fixture->expected.color, node->state->stroke->core.color->argb);
     else if (g_str_equal (fixture->target_name, "fill"))
-        assert_equal_color (fixture->expected.color, node->state->fill->core.colour->argb);
+        assert_equal_color (fixture->expected.color, node->state->fill->core.color->argb);
     else if (g_str_equal (fixture->target_name, "stroke-width"))
         assert_equal_length (&fixture->expected.length, &node->state->stroke_width);
     else
@@ -96,8 +97,8 @@ static const FixtureData fixtures[] =
     {"/styles/selectors/2 or more selectors (stroke)", "592207", "styles/bug592207.svg", "#target", "stroke", .expected.color = 0xff0000ff},
     {"/styles/svg-element-style", "615701", "styles/svg-class.svg", "#svg", "fill", .expected.color = 0xff0000ff},
     {"/styles/presentation attribute in svg element", "620693", "styles/bug620693.svg", "#svg", "stroke", .expected.color = 0xffff0000},
-    {"/styles/!important", "379629", "styles/bug379629.svg", "#base_shadow", "stroke", .expected.color = 0xffffc0cb /* pink */},
-    {"/styles/!important", "379629", "styles/bug379629.svg", "#base_shadow", "stroke-width", .expected.length = {POINTS_LENGTH(5.), 'i'}},
+    {"/styles/!important/stroke", "379629", "styles/bug379629.svg", "#base_shadow", "stroke", .expected.color = 0xffffc0cb /* pink */},
+    {"/styles/!important/stroke-width", "379629", "styles/bug379629.svg", "#base_shadow", "stroke-width", .expected.length = {POINTS_LENGTH(5.), 'i'}},
     {"/styles/!important/class", "614606", "styles/bug614606.svg", "#path6306", "fill", .expected.color = 0xffff0000 /* red */ },
     {"/styles/!important/element", "614606", "styles/bug614606.svg", "#path6308", "fill", .expected.color = 0xff000000},
     {"/styles/!important/#id prior than class", NULL, "styles/important.svg", "#red", "fill", .expected.color = 0xffff0000 },
@@ -114,7 +115,7 @@ main (int argc, char *argv[])
     gint i;
     int result;
 
-    g_type_init ();
+    RSVG_G_TYPE_INIT;
     g_test_init (&argc, &argv, NULL);
     g_test_bug_base ("https://bugzilla.gnome.org/show_bug.cgi?id=");
 
