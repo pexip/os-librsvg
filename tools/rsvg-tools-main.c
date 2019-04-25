@@ -29,10 +29,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "rsvg.h"
-#include "rsvg-private.h"
+#include "librsvg/rsvg.h"
+#include "librsvg/rsvg-private.h"
 #include "rsvg-tools-main.h"
-#include "rsvg-compat.h"
 
 static gboolean
 read_contents (const gchar *file_name, guint8 **contents, gsize *length)
@@ -53,7 +52,7 @@ read_contents (const gchar *file_name, guint8 **contents, gsize *length)
             gsize bytes_read;
 
             *length = g_file_info_get_size (file_info);
-            *contents = (guint8 *) g_new (guint8*, *length);
+            *contents = g_new (guint8, *length);
             success = g_input_stream_read_all (G_INPUT_STREAM(input_stream),
                                                *contents,
                                                *length,
@@ -128,8 +127,6 @@ rsvg_tools_main (int *argc, char ***argv)
         exit (EXIT_FAILURE);
     }
 
-    RSVG_G_TYPE_INIT;
-
     for (j = 0; j < n_args; j++) {
         if (!read_contents (args[j], &contents, &length))
             continue;
@@ -178,6 +175,7 @@ rsvg_tools_main (int *argc, char ***argv)
         cairo_destroy (cr);
     }
 
+    g_strfreev (args);
     rsvg_cleanup ();
 
     return 0;

@@ -1,0 +1,7 @@
+Tests: build
+Depends: build-essential, librsvg2-dev
+Restrictions: allow-stderr
+
+Tests: convert
+Depends: file, librsvg2-bin
+Restrictions: allow-stderr

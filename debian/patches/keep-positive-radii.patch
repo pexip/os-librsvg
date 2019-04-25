@@ -1,0 +1,33 @@
+From: Federico Mena Quintero <federico@gnome.org>
+Date: Sat, 29 Dec 2018 12:32:08 -0600
+Subject: Morphology needs positive radii even after the transformation
+
+This is the same pattern as in gaussian_blur.rs; the paffine
+transformation can leave us with negative radii, so take their
+absolute value after the transformation.
+
+This fixes assertion error (crashing) when nagative r takes place.
+
+Forwarded: https://gitlab.gnome.org/GNOME/librsvg/issues/395
+Applied-Upstream: https://gitlab.gnome.org/GNOME/librsvg/commit/4ef7f198fceb8fb4a544f4768174af5b11fc9bcc
+Bug-Debian: https://bugs.debian.org/927886
+Signed-off-by: Boyuan Yang <byang@debian.org>
+---
+ rsvg_internals/src/filters/morphology.rs | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/rsvg_internals/src/filters/morphology.rs b/rsvg_internals/src/filters/morphology.rs
+index 60fbcef..7de1a0d 100644
+--- a/rsvg_internals/src/filters/morphology.rs
++++ b/rsvg_internals/src/filters/morphology.rs
+@@ -95,6 +95,10 @@ impl Filter for Morphology {
+         let (rx, ry) = self.radius.get();
+         let (rx, ry) = ctx.paffine().transform_distance(rx, ry);
+ 
++        // The radii can become negative here due to the transform.
++        let rx = rx.abs();
++        let ry = ry.abs();
++
+         let operator = self.operator.get();
+ 
+         let mut output_surface = ImageSurface::create(

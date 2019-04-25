@@ -1,0 +1,6 @@
+# These regression tests render a SVG file to PNG and compare it to a
+# reference PNG, so they need to ship their own frozen copies of the
+# necessary fonts, to avoid spurious failures caused by different font
+# versions. These fonts are not intended to be used by other packages.
+librsvg2-tests: font-outside-font-dir usr/libexec/installed-tests/RSVG/resources/*
+librsvg2-tests: duplicate-font-file usr/libexec/installed-tests/RSVG/resources/*

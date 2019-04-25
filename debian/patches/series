@@ -1,1 +1,4 @@
 10_rsvg-gz.patch
+typenum-i386-ftbfs.patch
+i386-rounding-errors.patch
+keep-positive-radii.patch

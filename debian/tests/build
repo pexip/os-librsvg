@@ -1,0 +1,32 @@
+#!/bin/sh
+
+set -e
+exec 2>&1
+set -u
+
+: "${AUTOPKGTEST_TMP:="${ADTTMP}"}"
+
+cd "$AUTOPKGTEST_TMP"
+
+echo "1..1"
+
+cat > simple.c <<'EOF'
+#include <glib-object.h>
+#include <librsvg/rsvg.h>
+
+int main (void)
+{
+    RsvgHandle *handle;
+
+    handle = rsvg_handle_new ();
+    g_object_unref (handle);
+
+    g_print ("ok 1\n");
+    return 0;
+}
+EOF
+
+gcc -o simple simple.c $(pkg-config --cflags --libs librsvg-2.0 gobject-2.0)
+test -x simple
+./simple
+echo "# everything seems OK"

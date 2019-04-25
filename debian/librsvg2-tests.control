@@ -1,0 +1,13 @@
+# TODO: Move this back into d/control.in when librsvg2-tests has been
+# through the NEW queue
+Package: librsvg2-tests
+Section: misc
+Architecture: any
+Depends: ${misc:Depends},
+         ${shlibs:Depends}
+Description: automated tests for RSVG library
+ The rsvg library is an efficient renderer for Scalable Vector Graphics
+ (SVG) pictures.
+ .
+ This package contains automated tests, which can be run with
+ gnome-desktop-testing or autopkgtest.

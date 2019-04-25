@@ -1,5 +1,5 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* vim: set sw=4 sts=4 ts=4 expandtab: */
+/* -*- Mode: C; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* vim: set sw=4 sts=4 expandtab: */
 /*
 
    rsvg-convert.c: Command line utility for exercising rsvg with cairo.
@@ -30,9 +30,11 @@
 
 #include "config.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include <locale.h>
 #include <glib/gi18n.h>
 #include <gio/gio.h>
@@ -44,14 +46,15 @@
 #ifdef G_OS_WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <io.h>
+#include <fcntl.h>
 
 #include <gio/gwin32inputstream.h>
 #endif
 
-#include "rsvg-css.h"
-#include "rsvg.h"
-#include "rsvg-compat.h"
-#include "rsvg-size-callback.h"
+#include "librsvg/rsvg-css.h"
+#include "librsvg/rsvg.h"
+#include "librsvg/rsvg-size-callback.h"
 
 #ifdef CAIRO_HAS_PS_SURFACE
 #include <cairo-ps.h>
@@ -130,6 +133,8 @@ main (int argc, char **argv)
     gboolean no_keep_image_data = FALSE;
     GError *error = NULL;
 
+    gboolean success = TRUE;
+
     int i;
     char **args = NULL;
     gint n_args = 0;
@@ -142,6 +147,13 @@ main (int argc, char **argv)
     char *export_lookup_id;
     double unscaled_width, unscaled_height;
     int scaled_width, scaled_height;
+
+    char buffer[25];
+    char *endptr;
+    char *source_date_epoch;
+    time_t now;
+    struct tm *build_time;
+    unsigned long long epoch;
 
 #ifdef G_OS_WIN32
     HANDLE handle;
@@ -183,8 +195,6 @@ main (int argc, char **argv)
     /* Set the locale so that UTF-8 filenames work */
     setlocale(LC_ALL, "");
 
-    RSVG_G_TYPE_INIT;
-
     g_option_context = g_option_context_new (_("- SVG Converter"));
     g_option_context_add_main_entries (g_option_context, options_table, NULL);
     g_option_context_set_help_enabled (g_option_context, TRUE);
@@ -211,17 +221,33 @@ main (int argc, char **argv)
 
         g_free (output);
     }
+#ifdef G_OS_WIN32
+    else {
+        setmode (fileno (stdout), O_BINARY);
+    }
+#endif   
 
     if (args)
         while (args[n_args] != NULL)
             n_args++;
 
     if (n_args == 0) {
+        const gchar * const stdin_args[] = { "stdin", NULL };
         n_args = 1;
         using_stdin = TRUE;
+        g_strfreev (args);
+        args = g_strdupv ((gchar **) stdin_args);
     } else if (n_args > 1 && (!format || !(!strcmp (format, "ps") || !strcmp (format, "eps") || !strcmp (format, "pdf")))) {
         g_printerr (_("Multiple SVG files are only allowed for PDF and (E)PS output.\n"));
         exit (1);
+    }
+
+    if (dpi_x <= 0.0) {
+        dpi_x = 90.0;
+    }
+
+    if (dpi_y <= 0.0) {
+        dpi_y = 90.0;
     }
 
     if (format != NULL &&
@@ -232,15 +258,13 @@ main (int argc, char **argv)
     if (zoom != 1.0)
         x_zoom = y_zoom = zoom;
 
-    rsvg_set_default_dpi_x_y (dpi_x, dpi_y);
-
     if (unlimited)
         flags |= RSVG_HANDLE_FLAG_UNLIMITED;
 
     if (keep_image_data)
         flags |= RSVG_HANDLE_FLAG_KEEP_IMAGE_DATA;
 
-    for (i = 0; i < n_args; i++) {
+    for (i = 0; i < n_args && success; i++) {
         GFile *file;
         GInputStream *stream;
 
@@ -260,36 +284,8 @@ main (int argc, char **argv)
             stream = g_unix_input_stream_new (STDIN_FILENO, FALSE);
 #endif
         } else {
-            GFileInfo *file_info;
-            gboolean compressed = FALSE;
-
             file = g_file_new_for_commandline_arg (args[i]);
             stream = (GInputStream *) g_file_read (file, NULL, &error);
-
-            if ((file_info = g_file_query_info (file,
-                                                G_FILE_ATTRIBUTE_STANDARD_CONTENT_TYPE,
-                                                G_FILE_QUERY_INFO_NONE,
-                                                NULL,
-                                                NULL))) {
-                const char *content_type;
-                char *gz_content_type;
-
-                content_type = g_file_info_get_content_type (file_info);
-                gz_content_type = g_content_type_from_mime_type ("application/x-gzip");
-                compressed = (content_type != NULL && g_content_type_is_a (content_type, gz_content_type));
-                g_free (gz_content_type);
-                g_object_unref (file_info);
-            }
-
-            if (compressed) {
-                GZlibDecompressor *decompressor;
-                GInputStream *converter_stream;
-
-                decompressor = g_zlib_decompressor_new (G_ZLIB_COMPRESSOR_FORMAT_GZIP);
-                converter_stream = g_converter_input_stream_new (stream, G_CONVERTER (decompressor));
-                g_object_unref (stream);
-                stream = converter_stream;
-            }
 
             if (stream == NULL)
                 goto done;
@@ -308,6 +304,10 @@ main (int argc, char **argv)
             exit (1);
         }
 
+        g_assert (rsvg != NULL);
+
+        rsvg_handle_set_dpi_x_y (rsvg, dpi_x, dpi_y);
+
         export_lookup_id = get_lookup_id_from_command_line (export_id);
         if (export_lookup_id != NULL
             && !rsvg_handle_has_sub (rsvg, export_lookup_id)) {
@@ -318,8 +318,10 @@ main (int argc, char **argv)
         if (i == 0) {
             struct RsvgSizeCallbackData size_data;
 
-            if (!rsvg_handle_get_dimensions_sub (rsvg, &dimensions, export_lookup_id))
+            if (!rsvg_handle_get_dimensions_sub (rsvg, &dimensions, export_lookup_id)) {
                 g_printerr ("Could not get dimensions for file %s\n", args[i]);
+                exit (1);
+            }
 
             unscaled_width = dimensions.width;
             unscaled_height = dimensions.height;
@@ -361,9 +363,42 @@ main (int argc, char **argv)
                 surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
                                                       scaled_width, scaled_height);
 #ifdef CAIRO_HAS_PDF_SURFACE
-            else if (!strcmp (format, "pdf"))
+            else if (!strcmp (format, "pdf")) {
                 surface = cairo_pdf_surface_create_for_stream (rsvg_cairo_write_func, output_file,
                                                                scaled_width, scaled_height);
+                source_date_epoch = getenv("SOURCE_DATE_EPOCH");
+                if (source_date_epoch) {
+                    errno = 0;
+                    epoch = strtoull(source_date_epoch, &endptr, 10);
+                    if ((errno == ERANGE && (epoch == ULLONG_MAX || epoch == 0))
+                            || (errno != 0 && epoch == 0)) {
+                        g_printerr (_("Environment variable $SOURCE_DATE_EPOCH: strtoull: %s\n"),
+                                    strerror(errno));
+                        exit (1);
+                    }
+                    if (endptr == source_date_epoch) {
+                        g_printerr (_("Environment variable $SOURCE_DATE_EPOCH: No digits were found: %s\n"),
+                                    endptr);
+                        exit (1);
+                    }
+                    if (*endptr != '\0') {
+                        g_printerr (_("Environment variable $SOURCE_DATE_EPOCH: Trailing garbage: %s\n"),
+                                    endptr);
+                        exit (1);
+                    }
+                    if (epoch > ULONG_MAX) {
+                        g_printerr (_("Environment variable $SOURCE_DATE_EPOCH: value must be smaller than or equal to %lu but was found to be: %llu \n"),
+                                    ULONG_MAX, epoch);
+                        exit (1);
+                    }
+                    now = (time_t) epoch;
+                    build_time = gmtime(&now);
+                    g_assert (strftime (buffer, sizeof (buffer), "%Y-%m-%dT%H:%M:%S%z", build_time));
+                    cairo_pdf_surface_set_metadata (surface,
+                                                    CAIRO_PDF_METADATA_CREATE_DATE,
+                                                    buffer);
+                }
+            }
 #endif
 #ifdef CAIRO_HAS_PS_SURFACE
             else if (!strcmp (format, "ps") || !strcmp (format, "eps")){
@@ -374,9 +409,11 @@ main (int argc, char **argv)
             }
 #endif
 #ifdef CAIRO_HAS_SVG_SURFACE
-            else if (!strcmp (format, "svg"))
+            else if (!strcmp (format, "svg")) {
                 surface = cairo_svg_surface_create_for_stream (rsvg_cairo_write_func, output_file,
                                                                scaled_width, scaled_height);
+                cairo_svg_surface_set_document_unit(surface, CAIRO_SVG_UNIT_PX);
+            }
 #endif
 #ifdef CAIRO_HAS_XML_SURFACE
             else if (!strcmp (format, "xml")) {
@@ -400,7 +437,15 @@ main (int argc, char **argv)
 
         // Set background color
         if (background_color_str && g_ascii_strcasecmp(background_color_str, "none") != 0) {
-            background_color = rsvg_css_parse_color(background_color_str, FALSE);
+            RsvgCssColorSpec spec;
+
+            spec = rsvg_css_parse_color_ (background_color_str);
+            if (spec.kind == RSVG_CSS_COLOR_SPEC_ARGB) {
+                background_color = spec.argb;
+            } else {
+                g_printerr (_("Invalid color specification."));
+                exit (1);
+            }
 
             cairo_set_source_rgb (
                 cr, 
@@ -410,6 +455,10 @@ main (int argc, char **argv)
             cairo_rectangle (cr, 0, 0, scaled_width, scaled_height);
             cairo_fill (cr);
         }
+
+        cairo_scale (cr,
+                     scaled_width / unscaled_width,
+                     scaled_height / unscaled_height);
 
         if (export_lookup_id) {
             RsvgPositionData pos;
@@ -423,10 +472,10 @@ main (int argc, char **argv)
             cairo_translate (cr, -pos.x, -pos.y);
         }
 
-        cairo_scale (cr,
-                     scaled_width / unscaled_width,
-                     scaled_height / unscaled_height);
-        rsvg_handle_render_cairo_sub (rsvg, cr, export_lookup_id);
+        if (!rsvg_handle_render_cairo_sub (rsvg, cr, export_lookup_id)) {
+            g_printerr ("Could not render file %s\n", args[i]);
+            exit (1);
+        }
 
         g_free (export_lookup_id);
 
