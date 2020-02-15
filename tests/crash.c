@@ -1,8 +1,8 @@
+/* -*- Mode: C; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* vim: set ts=4 nowrap ai expandtab sw=4: */
 
 #include <glib.h>
-#include "rsvg.h"
-#include "rsvg-compat.h"
+#include "librsvg/rsvg.h"
 #include "test-utils.h"
 
 static void
@@ -13,10 +13,13 @@ test_crash (gconstpointer data)
     GError *error = NULL;
 
     handle = rsvg_handle_new_from_gfile_sync (file, RSVG_HANDLE_FLAGS_NONE, NULL, &error);
-    g_assert_no_error (error);
-    g_assert (handle != NULL);
-
-    g_object_unref (handle);
+    if (handle) {
+        g_assert_no_error (error);
+        g_object_unref (handle);
+    } else {
+        g_assert (error != NULL);
+        g_error_free (error);
+    }
 }
 
 int
@@ -25,7 +28,6 @@ main (int argc, char *argv[])
     GFile *base, *crash;
     int result;
 
-    RSVG_G_TYPE_INIT;
     g_test_init (&argc, &argv, NULL);
 
     if (argc < 2) {

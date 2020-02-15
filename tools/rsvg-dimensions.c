@@ -8,8 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <glib.h>
-#include <rsvg.h>
-#include "rsvg-compat.h"
+#include "librsvg/rsvg.h"
 
 static void
 show_help (GOptionContext *context)
@@ -37,11 +36,9 @@ main (int	  argc,
 
     GOptionEntry options[] = {
         { "fragment", 'f', 0, G_OPTION_ARG_STRING, &fragment, "The SVG fragment to address.", "<string>" },
-        { G_OPTION_REMAINING, 0, G_OPTION_FLAG_FILENAME, G_OPTION_ARG_FILENAME_ARRAY, &filenames, NULL, "[FILE...]" },
+        { G_OPTION_REMAINING, 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &filenames, NULL, "[FILE...]" },
         { NULL }
     };
-
-    RSVG_G_TYPE_INIT;
 
     context = NULL;
     fragment = NULL;
@@ -88,14 +85,30 @@ main (int	  argc,
         }
 
         if (fragment && handle) {
-            gboolean have_fragment = FALSE;
-            have_fragment |= rsvg_handle_get_dimensions_sub (handle,
-                    &dimensions, fragment);
-            have_fragment |= rsvg_handle_get_position_sub (handle,
-                    &position, fragment);
-            if (!have_fragment) {
+            if (!rsvg_handle_has_sub (handle, fragment)) {
                 g_warning ("%s: fragment `'%s' not found.",
                         file, fragment);
+                exit_code = EXIT_FAILURE;
+                goto bail;
+            }
+
+            gboolean have_position, have_dimensions;
+
+            have_dimensions = rsvg_handle_get_dimensions_sub (handle,
+                                                              &dimensions, fragment);
+            have_position = rsvg_handle_get_position_sub (handle,
+                                                          &position, fragment);
+            if (!have_dimensions) {
+                g_warning ("%s: could not compute position for fragment `'%s'.",
+                        file, fragment);
+            }
+
+            if (!have_position) {
+                g_warning ("%s: could not compute dimensions for fragment `'%s'.",
+                        file, fragment);
+            }
+
+            if (!have_position || !have_dimensions) {
                 exit_code = EXIT_FAILURE;
                 goto bail;
             }
