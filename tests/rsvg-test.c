@@ -34,11 +34,13 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <glib/gstdio.h>
 
-#include "rsvg.h"
-#include "rsvg-compat.h"
+#include "librsvg/rsvg.h"
 
 #include "test-utils.h"
+
+static char *_output_dir;
 
 typedef struct _buffer_diff_result {
     unsigned int pixels_changed;
@@ -140,10 +142,21 @@ compare_surfaces (cairo_surface_t	*surface_a,
 }
 
 static char *
+get_output_dir (void) {
+    if (_output_dir == NULL) {
+	char *cwd = g_get_current_dir ();
+        _output_dir = g_strconcat (cwd, G_DIR_SEPARATOR_S, "output", NULL);
+        g_mkdir (_output_dir, 0777);
+	g_free (cwd);
+    }
+    return _output_dir;
+}
+
+static char *
 get_output_file (const char *test_file,
                  const char *extension)
 {
-  const char *output_dir = g_get_tmp_dir ();
+  const char *output_dir = get_output_dir ();
   char *result, *base;
 
   base = g_path_get_basename (test_file);
@@ -173,17 +186,29 @@ save_image (cairo_surface_t *surface,
 static gboolean
 is_svg_or_subdir (GFile *file)
 {
-  char *uri;
-  gboolean result;
+    char *basename;
+    gboolean ignore;
+    gboolean result;
 
-  if (g_file_query_file_type (file, 0, NULL) == G_FILE_TYPE_DIRECTORY)
-    return TRUE;
+    result = FALSE;
 
-  uri = g_file_get_uri (file);
-  result = g_str_has_suffix (uri, ".svg");
-  g_free (uri);
+    basename = g_file_get_basename (file);
+    ignore = g_str_has_prefix (basename, "ignore") || strcmp (basename, "resources") == 0;
 
-  return result;
+    if (ignore)
+	goto out;
+
+    if (g_file_query_file_type (file, 0, NULL) == G_FILE_TYPE_DIRECTORY) {
+	result = TRUE;
+	goto out;
+    }
+
+    result = g_str_has_suffix (basename, ".svg");
+
+out:
+    g_free (basename);
+
+    return result;
 }
 
 static cairo_status_t
@@ -213,6 +238,8 @@ read_png (const char *test_name)
 
   reference_uri = g_strconcat (test_name, "-ref.png", NULL);
   file = g_file_new_for_uri (reference_uri);
+  g_free (reference_uri);
+
   stream = g_file_read (file, NULL, &error);
   g_assert_no_error (error);
   g_assert (stream);
@@ -225,6 +252,64 @@ read_png (const char *test_name)
   return surface;
 }
 
+static cairo_surface_t *
+extract_rectangle (cairo_surface_t *source,
+		   int x,
+		   int y,
+		   int w,
+		   int h)
+{
+    cairo_surface_t *dest;
+    cairo_t *cr;
+
+    dest = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, w, h);
+    cr = cairo_create (dest);
+    cairo_set_source_surface (cr, source, -x, -y);
+
+    cairo_paint (cr);
+    cairo_destroy (cr);
+
+    return dest;
+}
+
+/*
+ * Report that a test would have failed if we used stricter criteria,
+ * but that we are tolerating it for a reason given in @message.
+ *
+ * This is the same as g_test_incomplete(), but with a workaround for
+ * GNOME/glib#1474 so that we don't fail tests on older GLib.
+ */
+static void
+test_tolerate (const gchar *message)
+{
+    if (glib_check_version (2, 57, 3)) {
+        /* In GLib >= 2.57.3, g_test_incomplete() behaves as intended:
+         * the test result is reported as an expected failure and the
+         * overall test exits 0 */
+        g_test_incomplete (message);
+    }
+    else {
+        /* In GLib < 2.57.3, g_test_incomplete() reported the wrong TAP
+         * result (an unexpected success) and the overall test exited 1,
+         * which would break "make check". g_test_skip() is the next
+         * best thing available. */
+        g_test_skip (message);
+    }
+}
+
+// https://gitlab.gnome.org/GNOME/librsvg/issues/91
+//
+// We were computing some offsets incorrectly if the initial transformation matrix
+// passed to rsvg_handle_render_cairo() was not the identity matrix.  So,
+// we create a surface with a "frame" around the destination for the image,
+// and then only consider the pixels inside the frame.  This will require us
+// to have a non-identity transformation (i.e. a translation matrix), which
+// will test for this bug.
+//
+// The frame size is meant to be a ridiculous number to simulate an arbitrary
+// offset.
+#define FRAME_SIZE 47
+
 static void
 rsvg_cairo_check (gconstpointer data)
 {
@@ -232,6 +317,7 @@ rsvg_cairo_check (gconstpointer data)
     RsvgHandle *rsvg;
     RsvgDimensionData dimensions;
     cairo_t *cr;
+    cairo_surface_t *render_surface;
     cairo_surface_t *surface_a, *surface_b, *surface_diff;
     buffer_diff_result_t result;
     char *test_file_base;
@@ -247,13 +333,30 @@ rsvg_cairo_check (gconstpointer data)
     g_assert_no_error (error);
     g_assert (rsvg != NULL);
 
+    rsvg_handle_internal_set_testing (rsvg, TRUE);
+
+    if (g_str_has_suffix (test_file_base, "-48dpi"))
+      rsvg_handle_set_dpi_x_y (rsvg, 48.0, 48.0);
+    else
+      rsvg_handle_set_dpi_x_y (rsvg, 72.0, 72.0);
     rsvg_handle_get_dimensions (rsvg, &dimensions);
     g_assert (dimensions.width > 0);
     g_assert (dimensions.height > 0);
-    surface_a = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
-					    dimensions.width, dimensions.height);
-    cr = cairo_create (surface_a);
-    rsvg_handle_render_cairo (rsvg, cr);
+
+    render_surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
+						 dimensions.width + 2 * FRAME_SIZE,
+						 dimensions.height + 2 * FRAME_SIZE);
+    cr = cairo_create (render_surface);
+    cairo_translate (cr, FRAME_SIZE, FRAME_SIZE);
+    g_assert (rsvg_handle_render_cairo (rsvg, cr));
+
+    surface_a = extract_rectangle (render_surface,
+				   FRAME_SIZE,
+				   FRAME_SIZE,
+				   dimensions.width,
+				   dimensions.height);
+    cairo_surface_destroy (render_surface);
+
     save_image (surface_a, test_file_base, "-out.png");
 
     surface_b = read_png (test_file_base);
@@ -272,13 +375,26 @@ rsvg_cairo_check (gconstpointer data)
                         width_a, height_a, width_b, height_b); 
     }
     else {
+#ifdef __x86_64__
+	const unsigned int MAX_DIFF = 2;
+#else
+        /* https://gitlab.gnome.org/GNOME/librsvg/issues/178,
+         * https://gitlab.gnome.org/GNOME/librsvg/issues/366 */
+	const unsigned int MAX_DIFF = 20;
+#endif
+	const unsigned int WARN_DIFF = 2;
+
 	surface_diff = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
 						   dimensions.width, dimensions.height);
 
 	compare_surfaces (surface_a, surface_b, surface_diff, &result);
 
-	if (result.pixels_changed && result.max_diff > 1) {
+	if (result.pixels_changed && result.max_diff > MAX_DIFF) {
             g_test_fail ();
+            save_image (surface_diff, test_file_base, "-diff.png");
+	}
+        else if (result.pixels_changed && result.max_diff > WARN_DIFF) {
+            test_tolerate ("not the same as x86_64, but giving it the benefit of the doubt");
             save_image (surface_diff, test_file_base, "-diff.png");
 	}
 
@@ -290,6 +406,7 @@ rsvg_cairo_check (gconstpointer data)
     cairo_destroy (cr);
 
     g_object_unref (rsvg);
+    g_free (test_file_base);
 }
 
 int
@@ -297,17 +414,17 @@ main (int argc, char **argv)
 {
     int result;
 
-    RSVG_G_TYPE_INIT;
-    g_test_init (&argc, &argv, NULL);
+    /* For systemLanguage attribute tests */
+    g_setenv ("LC_ALL", "de:en_US:en", TRUE);
 
-    rsvg_set_default_dpi_x_y (72, 72);
+    g_test_init (&argc, &argv, NULL);
 
     if (argc < 2) {
         GFile *base, *tests;
 
         base = g_file_new_for_path (test_utils_get_test_data_path ());
         tests = g_file_get_child (base, "reftests");
-        test_utils_add_test_for_all_files ("/rsvg/reftest", tests, tests, rsvg_cairo_check, is_svg_or_subdir);
+        test_utils_add_test_for_all_files ("/rsvg-test/reftests", tests, tests, rsvg_cairo_check, is_svg_or_subdir);
         g_object_unref (tests);
         g_object_unref (base);
     } else {
@@ -316,7 +433,7 @@ main (int argc, char **argv)
         for (i = 1; i < argc; i++) {
             GFile *file = g_file_new_for_commandline_arg (argv[i]);
 
-            test_utils_add_test_for_all_files ("/rsvg/reftest", NULL, file, rsvg_cairo_check, is_svg_or_subdir);
+            test_utils_add_test_for_all_files ("/rsvg-test/reftests", NULL, file, rsvg_cairo_check, is_svg_or_subdir);
 
             g_object_unref (file);
         }
