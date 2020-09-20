@@ -1,3 +1,27 @@
+librsvg (2.44.10-2.1+deb10u3) buster; urgency=medium
+
+  * nalgebra-borrow-mutable-immutable.patch:
+    - Update checksum for cg.rs.
+  * cssparser-dont-assign-to-borrowed-variable.patch:
+    - Fix another build failure with rustc 1.41.
+
+ -- Emilio Pozuelo Monfort <pochu@debian.org>  Sun, 20 Sep 2020 21:21:54 +0200
+
+librsvg (2.44.10-2.1+deb10u2) buster; urgency=medium
+
+  * nalgebra-borrow-mutable-immutable.patch: fix build with rustc 1.41.
+  * Don-t-drop-nodes-recursively-to-avoid-stack-over.patch: fix stack
+    exhaustion due to recursion when freeing nodes, which caused FTBFS
+    on ppc64el and s390x with the newly introduced tests for CVE-2019-20446.
+
+ -- Emilio Pozuelo Monfort <pochu@debian.org>  Sun, 20 Sep 2020 10:48:42 +0200
+
+librsvg (2.44.10-2.1+deb10u1) buster; urgency=medium
+
+  * CVE-2019-20446: DoS via billion laughs attack.
+
+ -- Emilio Pozuelo Monfort <pochu@debian.org>  Wed, 22 Jul 2020 13:11:57 +0200
+
 librsvg (2.44.10-2.1) unstable; urgency=high
 
   * Non-maintainer upload.
