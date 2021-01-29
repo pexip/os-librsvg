@@ -6,23 +6,278 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 A [separate changelog is kept for rand_core](rand_core/CHANGELOG.md).
 
-You may also find the [Update Guide](UPDATING.md) useful.
+You may also find the [Upgrade Guide](https://rust-random.github.io/book/update.html) useful.
+
+## [0.8.3] - 2021-01-25
+### Fixes
+- Fix `no-std` + `alloc` build by gating `choose_multiple_weighted` on `std` (#1088)
+
+## [0.8.2] - 2021-01-12
+### Fixes
+- Fix panic in `UniformInt::sample_single_inclusive` and `Rng::gen_range` when
+  providing a full integer range (eg `0..=MAX`) (#1087)
+
+## [0.8.1] - 2020-12-31
+### Other
+- Enable all stable features in the playground (#1081)
+
+## [0.8.0] - 2020-12-18
+### Platform support
+- The minimum supported Rust version is now 1.36 (#1011)
+- `getrandom` updated to v0.2 (#1041)
+- Remove `wasm-bindgen` and `stdweb` feature flags. For details of WASM support,
+  see the [getrandom documentation](https://docs.rs/getrandom/latest). (#948)
+- `ReadRng::next_u32` and `next_u64` now use little-Endian conversion instead
+  of native-Endian, affecting results on Big-Endian platforms (#1061)
+- The `nightly` feature no longer implies the `simd_support` feature (#1048)
+- Fix `simd_support` feature to work on current nightlies (#1056)
+
+### Rngs
+- `ThreadRng` is no longer `Copy` to enable safe usage within thread-local destructors (#1035)
+- `gen_range(a, b)` was replaced with `gen_range(a..b)`. `gen_range(a..=b)` is
+  also supported. Note that `a` and `b` can no longer be references or SIMD types. (#744, #1003)
+- Replace `AsByteSliceMut` with `Fill` and add support for `[bool], [char], [f32], [f64]` (#940)
+- Restrict `rand::rngs::adapter` to `std` (#1027; see also #928)
+- `StdRng`: add new `std_rng` feature flag (enabled by default, but might need
+  to be used if disabling default crate features) (#948)
+- `StdRng`: Switch from ChaCha20 to ChaCha12 for better performance (#1028)
+- `SmallRng`: Replace PCG algorithm with xoshiro{128,256}++ (#1038)
+
+### Sequences
+- Add `IteratorRandom::choose_stable` as an alternative to `choose` which does
+  not depend on size hints (#1057)
+- Improve accuracy and performance of `IteratorRandom::choose` (#1059)
+- Implement `IntoIterator` for `IndexVec`, replacing the `into_iter` method (#1007)
+- Add value stability tests for `seq` module (#933)
+
+### Misc
+- Support `PartialEq` and `Eq` for `StdRng`, `SmallRng` and `StepRng` (#979)
+- Added a `serde1` feature and added Serialize/Deserialize to `UniformInt` and `WeightedIndex` (#974)
+- Drop some unsafe code (#962, #963, #1011)
+- Reduce packaged crate size (#983)
+- Migrate to GitHub Actions from Travis+AppVeyor (#1073)
+
+### Distributions
+- `Alphanumeric` samples bytes instead of chars (#935)
+- `Uniform` now supports `char`, enabling `rng.gen_range('A'..='Z')` (#1068)
+- Add `UniformSampler::sample_single_inclusive` (#1003)
+
+#### Weighted sampling
+- Implement weighted sampling without replacement (#976, #1013)
+- `rand::distributions::alias_method::WeightedIndex` was moved to `rand_distr::WeightedAliasIndex`.
+  The simpler alternative `rand::distribution::WeightedIndex` remains. (#945)
+- Improve treatment of rounding errors in `WeightedIndex::update_weights` (#956)
+- `WeightedIndex`: return error on NaN instead of panic (#1005)
+
+### Documentation
+- Document types supported by `random` (#994)
+- Document notes on password generation (#995)
+- Note that `SmallRng` may not be the best choice for performance and in some
+  other cases (#1038)
+- Use `doc(cfg)` to annotate feature-gated items (#1019)
+- Adjust README (#1065)
+
+## [0.7.3] - 2020-01-10
+### Fixes
+- The `Bernoulli` distribution constructors now reports an error on NaN and on
+  `denominator == 0`. (#925)
+- Use `std::sync::Once` to register fork handler, avoiding possible atomicity violation (#928)
+- Fix documentation on the precision of generated floating-point values
+
+### Changes
+- Unix: make libc dependency optional; only use fork protection with std feature (#928)
+
+### Additions
+- Implement `std::error::Error` for `BernoulliError` (#919)
+
+## [0.7.2] - 2019-09-16
+### Fixes
+- Fix dependency on `rand_core` 0.5.1 (#890)
+
+### Additions
+- Unit tests for value stability of distributions added (#888)
+
+## [0.7.1] - 2019-09-13
+### Yanked
+This release was yanked since it depends on `rand_core::OsRng` added in 0.5.1
+but specifies a dependency on version 0.5.0 (#890), causing a broken builds
+when updating from `rand 0.7.0` without also updating `rand_core`.
+
+### Fixes
+- Fix `no_std` behaviour, appropriately enable c2-chacha's `std` feature (#844)
+- `alloc` feature in `no_std` is available since Rust 1.36 (#856)
+- Fix or squelch issues from Clippy lints (#840)
+
+### Additions
+- Add a `no_std` target to CI to continuously evaluate `no_std` status (#844)
+- `WeightedIndex`: allow adjusting a sub-set of weights (#866)
+
+## [0.7.0] - 2019-06-28
+
+### Fixes
+- Fix incorrect pointer usages revealed by Miri testing (#780, #781)
+- Fix (tiny!) bias in `Uniform` for 8- and 16-bit ints (#809)
+
+### Crate
+- Bumped MSRV (min supported Rust version) to 1.32.0
+- Updated to Rust Edition 2018  (#823, #824)
+- Removed dependence on `rand_xorshift`, `rand_isaac`, `rand_jitter` crates (#759, #765)
+- Remove dependency on `winapi` (#724)
+- Removed all `build.rs` files (#824)
+- Removed code already deprecated in version 0.6 (#757)
+- Removed the serde1 feature (It's still available for backwards compatibility, but it does not do anything. #830)
+- Many documentation changes
+
+### rand_core
+- Updated to `rand_core` 0.5.0
+- `Error` type redesigned with new API (#800)
+- Move `from_entropy` method to `SeedableRng` and remove `FromEntropy` (#800)
+- `SeedableRng::from_rng` is now expected to be value-stable (#815)
+
+### Standard RNGs
+- OS interface moved from `rand_os` to new `getrandom` crate (#765, [getrandom](https://github.com/rust-random/getrandom))
+- Use ChaCha for `StdRng` and `ThreadRng` (#792)
+- Feature-gate `SmallRng` (#792)
+- `ThreadRng` now supports `Copy` (#758)
+- Deprecated `EntropyRng` (#765)
+- Enable fork protection of ReseedingRng without `std` (#724)
+
+### Distributions
+- Many distributions have been moved to `rand_distr` (#761)
+- `Bernoulli::new` constructor now returns a `Result` (#803)
+- `Distribution::sample_iter` adjusted for more flexibility (#758)
+- Added `distributions::weighted::alias_method::WeightedIndex` for `O(1)` sampling (#692)
+- Support sampling `NonZeroU*` types with the `Standard` distribution (#728)
+- Optimised `Binomial` distribution sampling (#735, #740, #752)
+- Optimised SIMD float sampling (#739)
+
+### Sequences
+- Make results portable across 32- and 64-bit by using `u32` samples for `usize` where possible (#809)
+
+## [0.6.5] - 2019-01-28
+### Crates
+- Update `rand_core` to 0.4 (#703)
+- Move `JitterRng` to its own crate (#685)
+- Add a wasm-bindgen test crate (#696)
+
+### Platforms
+- Fuchsia: Replaced fuchsia-zircon with fuchsia-cprng
+
+### Doc
+- Use RFC 1946 for doc links (#691)
+- Fix some doc links and notes (#711)
+
+## [0.6.4] - 2019-01-08
+### Fixes
+- Move wasm-bindgen shims to correct crate (#686)
+- Make `wasm32-unknown-unknown` compile but fail at run-time if missing bindingsg (#686)
+
+## [0.6.3] - 2019-01-04
+### Fixes
+- Make the `std` feature require the optional `rand_os` dependency (#675)
+- Re-export the optional WASM dependencies of `rand_os` from `rand` to avoid breakage (#674)
+
+## [0.6.2] - 2019-01-04
+### Additions
+- Add `Default` for `ThreadRng` (#657)
+- Move `rngs::OsRng` to `rand_os` sub-crate; clean up code; use as dependency (#643) ##BLOCKER##
+- Add `rand_xoshiro` sub-crate, plus benchmarks (#642, #668)
+
+### Fixes
+- Fix bias in `UniformInt::sample_single` (#662)
+- Use `autocfg` instead of `rustc_version` for rustc version detection (#664)
+- Disable `i128` and `u128` if the `target_os` is `emscripten` (#671: work-around Emscripten limitation)
+- CI fixes (#660, #671)
+
+### Optimisations
+- Optimise memory usage of `UnitCircle` and `UnitSphereSurface` distributions (no PR)
+
+## [0.6.1] - 2018-11-22
+- Support sampling `Duration` also for `no_std` (only since Rust 1.25) (#649)
+- Disable default features of `libc` (#647)
+
+## [0.6.0] - 2018-11-14
+
+### Project organisation
+- Rand has moved from [rust-lang-nursery](https://github.com/rust-lang-nursery/rand)
+  to [rust-random](https://github.com/rust-random/rand)! (#578)
+- Created [The Rust Random Book](https://rust-random.github.io/book/)
+  ([source](https://github.com/rust-random/book))
+- Update copyright and licence notices (#591, #611)
+- Migrate policy documentation from the wiki (#544)
+
+### Platforms
+- Add fork protection on Unix (#466)
+- Added support for wasm-bindgen. (#541, #559, #562, #600)
+- Enable `OsRng` for powerpc64, sparc and sparc64 (#609)
+- Use `syscall` from `libc` on Linux instead of redefining it (#629)
+
+### RNGs
+- Switch `SmallRng` to use PCG (#623)
+- Implement `Pcg32` and `Pcg64Mcg` generators (#632)
+- Move ISAAC RNGs to a dedicated crate (#551)
+- Move Xorshift RNG to its own crate (#557)
+- Move ChaCha and HC128 RNGs to dedicated crates (#607, #636)
+- Remove usage of `Rc` from `ThreadRng` (#615)
+
+### Sampling and distributions
+- Implement `Rng.gen_ratio()` and `Bernoulli::new_ratio()` (#491)
+- Make `Uniform` strictly respect `f32` / `f64` high/low bounds (#477)
+- Allow `gen_range` and `Uniform` to work on non-`Copy` types (#506)
+- `Uniform` supports inclusive ranges: `Uniform::from(a..=b)`. This is
+  automatically enabled for Rust >= 1.27. (#566)
+- Implement `TrustedLen` and `FusedIterator` for `DistIter` (#620)
+
+#### New distributions
+- Add the `Dirichlet` distribution (#485)
+- Added sampling from the unit sphere and circle. (#567)
+- Implement the triangular distribution (#575)
+- Implement the Weibull distribution (#576)
+- Implement the Beta distribution (#574)
+
+#### Optimisations
+
+- Optimise `Bernoulli::new` (#500)
+- Optimise `char` sampling (#519)
+- Optimise sampling of `std::time::Duration` (#583)
+
+### Sequences
+- Redesign the `seq` module (#483, #515)
+- Add `WeightedIndex` and `choose_weighted` (#518, #547)
+- Optimised and changed return type of the `sample_indices` function. (#479)
+- Use `Iterator::size_hint()` to speed up `IteratorRandom::choose` (#593)
+
+### SIMD
+- Support for generating SIMD types (#523, #542, #561, #630)
+
+### Other
+- Revise CI scripts (#632, #635)
+- Remove functionality already deprecated in 0.5 (#499)
+- Support for `i128` and `u128` is automatically enabled for Rust >= 1.26. This
+  renders the `i128_support` feature obsolete. It still exists for backwards
+  compatibility but does not have any effect. This breaks programs using Rand
+  with `i128_support` on nightlies older than Rust 1.26. (#571)
+
 
 ## [0.5.5] - 2018-08-07
 ### Documentation
 - Fix links in documentation (#582)
 
+
 ## [0.5.4] - 2018-07-11
 ### Platform support
 - Make `OsRng` work via WASM/stdweb for WebWorkers
+
 
 ## [0.5.3] - 2018-06-26
 ### Platform support
 - OpenBSD, Bitrig: fix compilation (broken in 0.5.1) (#530)
 
+
 ## [0.5.2] - 2018-06-18
 ### Platform support
 - Hide `OsRng` and `JitterRng` on unsupported platforms (#512; fixes #503).
+
 
 ## [0.5.1] - 2018-06-08
 
@@ -40,6 +295,7 @@ You may also find the [Update Guide](UPDATING.md) useful.
 - Emscripten, Haiku: don't do an extra blocking read from `/dev/random`. (#484)
 - Linux, NetBSD, Solaris: read in blocking mode on first use in `fill_bytes`. (#484)
 - Fuchsia, CloudABI: fix compilation (broken in Rand 0.5). (#484)
+
 
 ## [0.5.0] - 2018-05-21
 
@@ -130,6 +386,11 @@ You may also find the [Update Guide](UPDATING.md) useful.
 - Implement `Uniform` distribution for `Duration`. (#427)
 
 
+## [0.4.3] - 2018-08-16
+### Fixed
+- Use correct syscall number for PowerPC (#589)
+
+
 ## [0.4.2] - 2018-01-06
 ### Changed
 - Use `winapi` on Windows
@@ -208,7 +469,7 @@ You may also find the [Update Guide](UPDATING.md) useful.
 
 ## [0.3.14] - 2016-02-13
 ### Fixed
-- Inline definitions from winapi/advapi32, wich decreases build times
+- Inline definitions from winapi/advapi32, which decreases build times
 
 
 ## [0.3.13] - 2016-01-09

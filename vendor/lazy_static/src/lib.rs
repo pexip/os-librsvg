@@ -90,33 +90,28 @@ The `Deref` implementation uses a hidden static variable that is guarded by an a
 
 # Cargo features
 
-This crate provides two cargo features:
+This crate provides one cargo feature:
 
-- `nightly`: This uses unstable language features only available on the nightly release channel for a more optimal implementation. In practice this currently means avoiding a heap allocation per static. This feature might get deprecated at a later point once all relevant optimizations are usable from stable.
-- `spin_no_std` (implies `nightly`): This allows using this crate in a no-std environment, by depending on the standalone `spin` crate.
-
-Both features depend on unstable language features, which means
-no guarantees can be made about them in regard to SemVer stability.
+- `spin_no_std`: This allows using this crate in a no-std environment, by depending on the standalone `spin` crate.
 
 */
 
-// NOTE: see build.rs for where these cfg values are set.
-#![cfg_attr(lazy_static_spin_impl, feature(const_fn))]
-
-#![doc(html_root_url = "https://docs.rs/lazy_static/1.1.0")]
+#![doc(html_root_url = "https://docs.rs/lazy_static/1.4.0")]
 #![no_std]
 
-#[cfg(lazy_static_heap_impl)]
-#[path="heap_lazy.rs"]
-#[doc(hidden)]
-pub mod lazy;
-
-#[cfg(lazy_static_inline_impl)]
+#[cfg(not(feature = "spin_no_std"))]
 #[path="inline_lazy.rs"]
 #[doc(hidden)]
 pub mod lazy;
 
-#[cfg(lazy_static_spin_impl)]
+#[cfg(test)]
+#[macro_use]
+extern crate doc_comment;
+
+#[cfg(test)]
+doctest!("../README.md");
+
+#[cfg(feature = "spin_no_std")]
 #[path="core_lazy.rs"]
 #[doc(hidden)]
 pub mod lazy;
@@ -137,19 +132,16 @@ macro_rules! __lazy_static_internal {
     (@TAIL, $N:ident : $T:ty = $e:expr) => {
         impl $crate::__Deref for $N {
             type Target = $T;
-            #[allow(unsafe_code)]
             fn deref(&self) -> &$T {
-                unsafe {
-                    #[inline(always)]
-                    fn __static_ref_initialize() -> $T { $e }
+                #[inline(always)]
+                fn __static_ref_initialize() -> $T { $e }
 
-                    #[inline(always)]
-                    unsafe fn __stability() -> &'static $T {
-                        __lazy_static_create!(LAZY, $T);
-                        LAZY.get(__static_ref_initialize)
-                    }
-                    __stability()
+                #[inline(always)]
+                fn __stability() -> &'static $T {
+                    __lazy_static_create!(LAZY, $T);
+                    LAZY.get(__static_ref_initialize)
                 }
+                __stability()
             }
         }
         impl $crate::LazyStatic for $N {
@@ -207,7 +199,7 @@ pub trait LazyStatic {
 /// extern crate lazy_static;
 ///
 /// lazy_static! {
-///     static ref BUFFER: Vec<u8> = (0..65537).collect();
+///     static ref BUFFER: Vec<u8> = (0..255).collect();
 /// }
 ///
 /// fn main() {

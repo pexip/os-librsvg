@@ -3,10 +3,12 @@
 use std::borrow::Cow;
 use std::iter::IntoIterator;
 
-use data::Matrix;
-use traits::{self, Data, Set};
-use {Color, Display, ErrorBarDefault, Figure, Label, LineType, LineWidth, Plot, PointSize,
-     PointType, Script};
+use crate::data::Matrix;
+use crate::traits::{self, Data, Set};
+use crate::{
+    Color, Display, ErrorBarDefault, Figure, Label, LineType, LineWidth, Plot, PointSize,
+    PointType, Script,
+};
 
 /// Properties common to error bar plots
 pub struct Properties {
@@ -228,7 +230,7 @@ where
     where
         F: FnOnce(&mut Properties) -> &mut Properties,
     {
-        let (x_factor, y_factor) = ::scale_factor(&self.axes, ::Axes::BottomXLeftY);
+        let (x_factor, y_factor) = crate::scale_factor(&self.axes, crate::Axes::BottomXLeftY);
 
         let style = e.style();
         let (x, y, length, height, e_factor) = match e {

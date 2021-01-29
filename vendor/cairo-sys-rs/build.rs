@@ -2,34 +2,37 @@ extern crate pkg_config;
 
 use pkg_config::{Config, Error};
 use std::env;
-use std::io::prelude::*;
 use std::io;
+use std::io::prelude::*;
 use std::process;
 
 fn main() {
-    if let Err(s) = find() {
-        let _ = writeln!(io::stderr(), "{}", s);
-        process::exit(1);
+    if cfg!(feature = "use_glib") {
+        // This include cairo linker flags
+        if let Err(s) = find("cairo-gobject", &["cairo", "cairo-gobject"]) {
+            let _ = writeln!(io::stderr(), "{}", s);
+            process::exit(1);
+        }
+    } else {
+        if let Err(s) = find("cairo", &["cairo"]) {
+            let _ = writeln!(io::stderr(), "{}", s);
+            process::exit(1);
+        }
     }
 }
 
-fn find() -> Result<(), Error> {
-    let package_name = "cairo";
-    let shared_libs = ["cairo"];
-    let version = if cfg!(feature = "1.14") {
-        "1.14"
-    } else if cfg!(feature = "1.12") {
-        "1.12"
-    } else {
-        "1.10"
-    };
+fn find(package_name: &str, shared_libs: &[&str]) -> Result<(), Error> {
+    let version = "1.12";
 
+    if let Ok(inc_dir) = env::var("GTK_INCLUDE_DIR") {
+        println!("cargo:include={}", inc_dir);
+    }
     if let Ok(lib_dir) = env::var("GTK_LIB_DIR") {
         for lib_ in shared_libs.iter() {
             println!("cargo:rustc-link-lib=dylib={}", lib_);
         }
         println!("cargo:rustc-link-search=native={}", lib_dir);
-        return Ok(())
+        return Ok(());
     }
 
     let target = env::var("TARGET").unwrap();
@@ -37,11 +40,17 @@ fn find() -> Result<(), Error> {
 
     let mut config = Config::new();
     config.atleast_version(version);
+    config.print_system_libs(false);
+
     if hardcode_shared_libs {
         config.cargo_metadata(false);
     }
     match config.probe(package_name) {
         Ok(library) => {
+            if let Ok(paths) = std::env::join_paths(library.include_paths) {
+                // Exposed to other build scripts as DEP_CAIRO_INCLUDE; use env::split_paths
+                println!("cargo:include={}", paths.to_string_lossy());
+            }
             if hardcode_shared_libs {
                 for lib_ in shared_libs.iter() {
                     println!("cargo:rustc-link-lib=dylib={}", lib_);
@@ -61,4 +70,3 @@ fn find() -> Result<(), Error> {
         Err(err) => Err(err),
     }
 }
-

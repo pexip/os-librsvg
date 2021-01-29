@@ -1,187 +1,131 @@
-use std::cell::RefCell;
+use markup5ever::{expanded_name, local_name, namespace_url, ns};
 
-use cairo::{self, ImageSurface};
+use crate::attributes::Attributes;
+use crate::document::AcquiredNodes;
+use crate::drawing_ctx::DrawingCtx;
+use crate::element::{Draw, Element, ElementResult, SetAttributes};
+use crate::node::{Node, NodeBorrow};
+use crate::parsers::ParseValue;
+use crate::rect::IRect;
+use crate::surface_utils::shared_surface::{SharedImageSurface, SurfaceType};
 
-use attributes::Attribute;
-use drawing_ctx::DrawingCtx;
-use handle::RsvgHandle;
-use node::{NodeResult, NodeTrait, NodeType, RsvgNode};
-use property_bag::PropertyBag;
-use surface_utils::shared_surface::{SharedImageSurface, SurfaceType};
-
-use super::context::{FilterContext, FilterOutput, FilterResult, IRect};
-use super::input::Input;
-use super::{Filter, FilterError, Primitive};
+use super::context::{FilterContext, FilterOutput, FilterResult};
+use super::{FilterEffect, FilterError, Input, Primitive};
 
 /// The `feMerge` filter primitive.
-pub struct Merge {
+pub struct FeMerge {
     base: Primitive,
 }
 
 /// The `<feMergeNode>` element.
-pub struct MergeNode {
-    in_: RefCell<Option<Input>>,
+#[derive(Default)]
+pub struct FeMergeNode {
+    in_: Option<Input>,
 }
 
-impl Merge {
+impl Default for FeMerge {
     /// Constructs a new `Merge` with empty properties.
     #[inline]
-    pub fn new() -> Merge {
-        Merge {
+    fn default() -> FeMerge {
+        FeMerge {
             base: Primitive::new::<Self>(),
         }
     }
 }
 
-impl MergeNode {
-    /// Constructs a new `MergeNode` with empty properties.
-    #[inline]
-    pub fn new() -> MergeNode {
-        MergeNode {
-            in_: RefCell::new(None),
-        }
+impl SetAttributes for FeMerge {
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        self.base.set_attributes(attrs)
     }
 }
 
-impl NodeTrait for Merge {
+impl SetAttributes for FeMergeNode {
     #[inline]
-    fn set_atts(
-        &self,
-        node: &RsvgNode,
-        handle: *const RsvgHandle,
-        pbag: &PropertyBag<'_>,
-    ) -> NodeResult {
-        self.base.set_atts(node, handle, pbag)
-    }
-}
-
-impl NodeTrait for MergeNode {
-    #[inline]
-    fn set_atts(
-        &self,
-        _node: &RsvgNode,
-        _handle: *const RsvgHandle,
-        pbag: &PropertyBag<'_>,
-    ) -> NodeResult {
-        for (_key, attr, value) in pbag.iter() {
-            match attr {
-                Attribute::In => {
-                    self.in_.replace(Some(Input::parse(Attribute::In, value)?));
-                }
-                _ => (),
-            }
-        }
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        self.in_ = attrs
+            .iter()
+            .find(|(attr, _)| attr.expanded() == expanded_name!("", "in"))
+            .and_then(|(attr, value)| attr.parse(value).ok());
 
         Ok(())
     }
 }
 
-impl MergeNode {
+impl Draw for FeMergeNode {}
+
+impl FeMergeNode {
     fn render(
         &self,
         ctx: &FilterContext,
-        draw_ctx: &mut DrawingCtx<'_>,
+        acquired_nodes: &mut AcquiredNodes,
+        draw_ctx: &mut DrawingCtx,
         bounds: IRect,
         output_surface: Option<SharedImageSurface>,
     ) -> Result<SharedImageSurface, FilterError> {
-        let input = ctx.get_input(draw_ctx, self.in_.borrow().as_ref())?;
+        let input = ctx.get_input(acquired_nodes, draw_ctx, self.in_.as_ref())?;
 
         if output_surface.is_none() {
             return Ok(input.surface().clone());
         }
-        let output_surface = output_surface.unwrap();
 
-        // If we're combining two alpha-only surfaces, the result is alpha-only. Otherwise the
-        // result is whatever the non-alpha-only type we're working on (which can be either sRGB or
-        // linear sRGB depending on color-interpolation-filters).
-        let surface_type = if input.surface().is_alpha_only() {
-            output_surface.surface_type()
-        } else {
-            if !output_surface.is_alpha_only() {
-                // All surface types should match (this is enforced by get_input()).
-                assert_eq!(
-                    output_surface.surface_type(),
-                    input.surface().surface_type()
-                );
-            }
-
-            input.surface().surface_type()
-        };
-
-        let output_surface = output_surface.into_image_surface()?;
-
-        {
-            let cr = cairo::Context::new(&output_surface);
-            cr.rectangle(
-                bounds.x0 as f64,
-                bounds.y0 as f64,
-                (bounds.x1 - bounds.x0) as f64,
-                (bounds.y1 - bounds.y0) as f64,
-            );
-            cr.clip();
-
-            input.surface().set_as_source_surface(&cr, 0f64, 0f64);
-            cr.set_operator(cairo::Operator::Over);
-            cr.paint();
-        }
-
-        Ok(SharedImageSurface::new(output_surface, surface_type)?)
+        input
+            .surface()
+            .compose(&output_surface.unwrap(), bounds, cairo::Operator::Over)
+            .map_err(FilterError::CairoError)
     }
 }
 
-impl Filter for Merge {
+impl FilterEffect for FeMerge {
     fn render(
         &self,
-        node: &RsvgNode,
+        node: &Node,
         ctx: &FilterContext,
-        draw_ctx: &mut DrawingCtx<'_>,
+        acquired_nodes: &mut AcquiredNodes,
+        draw_ctx: &mut DrawingCtx,
     ) -> Result<FilterResult, FilterError> {
         // Compute the filter bounds, taking each child node's input into account.
-        let mut bounds = self.base.get_bounds(ctx);
-        for child in node
-            .children()
-            .filter(|c| c.get_type() == NodeType::FilterPrimitiveMergeNode)
-        {
-            if child.is_in_error() {
+        let mut bounds = self.base.get_bounds(ctx, node.parent().as_ref())?;
+        for child in node.children().filter(|c| c.is_element()) {
+            let elt = child.borrow_element();
+
+            if elt.is_in_error() {
                 return Err(FilterError::ChildNodeInError);
             }
 
-            bounds = bounds.add_input(
-                &child
-                    .with_impl(|c: &MergeNode| ctx.get_input(draw_ctx, c.in_.borrow().as_ref()))?,
-            );
+            if let Element::FeMergeNode(ref merge_node) = *elt {
+                let input = ctx.get_input(acquired_nodes, draw_ctx, merge_node.in_.as_ref())?;
+                bounds = bounds.add_input(&input);
+            }
         }
+
         let bounds = bounds.into_irect(draw_ctx);
 
         // Now merge them all.
         let mut output_surface = None;
-        for child in node
-            .children()
-            .filter(|c| c.get_type() == NodeType::FilterPrimitiveMergeNode)
-        {
-            output_surface = Some(
-                child.with_impl(|c: &MergeNode| c.render(ctx, draw_ctx, bounds, output_surface))?,
-            );
+        for child in node.children().filter(|c| c.is_element()) {
+            if let Element::FeMergeNode(ref merge_node) = *child.borrow_element() {
+                output_surface = Some(merge_node.render(
+                    ctx,
+                    acquired_nodes,
+                    draw_ctx,
+                    bounds,
+                    output_surface,
+                )?);
+            }
         }
 
-        let output_surface = match output_surface {
-            Some(surface) => surface,
-            None => SharedImageSurface::new(
-                ImageSurface::create(
-                    cairo::Format::ARgb32,
-                    ctx.source_graphic().width(),
-                    ctx.source_graphic().height(),
-                )?,
+        let surface = match output_surface {
+            Some(s) => s,
+            None => SharedImageSurface::empty(
+                ctx.source_graphic().width(),
+                ctx.source_graphic().height(),
                 SurfaceType::AlphaOnly,
             )?,
         };
 
         Ok(FilterResult {
-            name: self.base.result.borrow().clone(),
-            output: FilterOutput {
-                surface: output_surface,
-                bounds,
-            },
+            name: self.base.result.clone(),
+            output: FilterOutput { surface, bounds },
         })
     }
 

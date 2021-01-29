@@ -1,21 +1,55 @@
 mod exponent;
 mod mantissa;
 
-use core::{mem, ptr};
-
 use self::exponent::*;
 use self::mantissa::*;
-use d2s;
-use d2s::*;
-use f2s;
-use f2s::*;
-
+use crate::common;
+use crate::d2s::{self, *};
+use crate::f2s::*;
+use core::{mem, ptr};
 #[cfg(feature = "no-panic")]
 use no_panic::no_panic;
 
-#[cfg_attr(must_use_return, must_use)]
+/// Print f64 to the given buffer and return number of bytes written.
+///
+/// At most 24 bytes will be written.
+///
+/// ## Special cases
+///
+/// This function **does not** check for NaN or infinity. If the input
+/// number is not a finite float, the printed representation will be some
+/// correctly formatted but unspecified numerical value.
+///
+/// Please check [`is_finite`] yourself before calling this function, or
+/// check [`is_nan`] and [`is_infinite`] and handle those cases yourself.
+///
+/// [`is_finite`]: https://doc.rust-lang.org/std/primitive.f64.html#method.is_finite
+/// [`is_nan`]: https://doc.rust-lang.org/std/primitive.f64.html#method.is_nan
+/// [`is_infinite`]: https://doc.rust-lang.org/std/primitive.f64.html#method.is_infinite
+///
+/// ## Safety
+///
+/// The `result` pointer argument must point to sufficiently many writable bytes
+/// to hold Ryū's representation of `f`.
+///
+/// ## Example
+///
+/// ```
+/// use std::{mem::MaybeUninit, slice, str};
+///
+/// let f = 1.234f64;
+///
+/// unsafe {
+///     let mut buffer = [MaybeUninit::<u8>::uninit(); 24];
+///     let len = ryu::raw::format64(f, buffer.as_mut_ptr() as *mut u8);
+///     let slice = slice::from_raw_parts(buffer.as_ptr() as *const u8, len);
+///     let print = str::from_utf8_unchecked(slice);
+///     assert_eq!(print, "1.234");
+/// }
+/// ```
+#[must_use]
 #[cfg_attr(feature = "no-panic", no_panic)]
-pub unsafe fn d2s_buffered_n(f: f64, result: *mut u8) -> usize {
+pub unsafe fn format64(f: f64, result: *mut u8) -> usize {
     let bits = mem::transmute::<f64, u64>(f);
     let sign = ((bits >> (DOUBLE_MANTISSA_BITS + DOUBLE_EXPONENT_BITS)) & 1) != 0;
     let ieee_mantissa = bits & ((1u64 << DOUBLE_MANTISSA_BITS) - 1);
@@ -35,7 +69,7 @@ pub unsafe fn d2s_buffered_n(f: f64, result: *mut u8) -> usize {
 
     let v = d2d(ieee_mantissa, ieee_exponent);
 
-    let length = d2s::decimal_length(v.mantissa) as isize;
+    let length = d2s::decimal_length17(v.mantissa) as isize;
     let k = v.exponent as isize;
     let kk = length + k; // 10^(kk-1) <= v < 10^kk
     debug_assert!(k >= -324);
@@ -83,9 +117,46 @@ pub unsafe fn d2s_buffered_n(f: f64, result: *mut u8) -> usize {
     }
 }
 
-#[cfg_attr(must_use_return, must_use)]
+/// Print f32 to the given buffer and return number of bytes written.
+///
+/// At most 16 bytes will be written.
+///
+/// ## Special cases
+///
+/// This function **does not** check for NaN or infinity. If the input
+/// number is not a finite float, the printed representation will be some
+/// correctly formatted but unspecified numerical value.
+///
+/// Please check [`is_finite`] yourself before calling this function, or
+/// check [`is_nan`] and [`is_infinite`] and handle those cases yourself.
+///
+/// [`is_finite`]: https://doc.rust-lang.org/std/primitive.f32.html#method.is_finite
+/// [`is_nan`]: https://doc.rust-lang.org/std/primitive.f32.html#method.is_nan
+/// [`is_infinite`]: https://doc.rust-lang.org/std/primitive.f32.html#method.is_infinite
+///
+/// ## Safety
+///
+/// The `result` pointer argument must point to sufficiently many writable bytes
+/// to hold Ryū's representation of `f`.
+///
+/// ## Example
+///
+/// ```
+/// use std::{mem::MaybeUninit, slice, str};
+///
+/// let f = 1.234f32;
+///
+/// unsafe {
+///     let mut buffer = [MaybeUninit::<u8>::uninit(); 16];
+///     let len = ryu::raw::format32(f, buffer.as_mut_ptr() as *mut u8);
+///     let slice = slice::from_raw_parts(buffer.as_ptr() as *const u8, len);
+///     let print = str::from_utf8_unchecked(slice);
+///     assert_eq!(print, "1.234");
+/// }
+/// ```
+#[must_use]
 #[cfg_attr(feature = "no-panic", no_panic)]
-pub unsafe fn f2s_buffered_n(f: f32, result: *mut u8) -> usize {
+pub unsafe fn format32(f: f32, result: *mut u8) -> usize {
     let bits = mem::transmute::<f32, u32>(f);
     let sign = ((bits >> (FLOAT_MANTISSA_BITS + FLOAT_EXPONENT_BITS)) & 1) != 0;
     let ieee_mantissa = bits & ((1u32 << FLOAT_MANTISSA_BITS) - 1);
@@ -105,7 +176,7 @@ pub unsafe fn f2s_buffered_n(f: f32, result: *mut u8) -> usize {
 
     let v = f2d(ieee_mantissa, ieee_exponent);
 
-    let length = f2s::decimal_length(v.mantissa) as isize;
+    let length = common::decimal_length9(v.mantissa) as isize;
     let k = v.exponent as isize;
     let kk = length + k; // 10^(kk-1) <= v < 10^kk
     debug_assert!(k >= -45);

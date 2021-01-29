@@ -1,26 +1,208 @@
-librsvg (2.44.10-2.1+deb10u3) buster; urgency=medium
+librsvg (2.50.3+dfsg-1) unstable; urgency=medium
 
-  * nalgebra-borrow-mutable-immutable.patch:
-    - Update checksum for cg.rs.
-  * cssparser-dont-assign-to-borrowed-variable.patch:
-    - Fix another build failure with rustc 1.41.
+  * Team upload
+  * New upstream release
+    - Fixes FTBFS with newer rustc (Closes: #976577)
+  * (Build-)Depend on libgdk-pixbuf-2.0-dev in preference to
+    transitional package libgdk-pixbuf2.0-dev
+  * d/upstream/metadata: Add
+  * d/copyright: Update
+  * Drop patch and exclusion that are no longer needed
+  * Standards-Version: 4.5.1 (no changes required)
+  * Remove obsolete workarounds for backtrace-sys crate
 
- -- Emilio Pozuelo Monfort <pochu@debian.org>  Sun, 20 Sep 2020 21:21:54 +0200
+ -- Simon McVittie <smcv@debian.org>  Fri, 29 Jan 2021 00:35:18 +0000
 
-librsvg (2.44.10-2.1+deb10u2) buster; urgency=medium
+librsvg (2.50.2+dfsg-1) unstable; urgency=medium
 
-  * nalgebra-borrow-mutable-immutable.patch: fix build with rustc 1.41.
-  * Don-t-drop-nodes-recursively-to-avoid-stack-over.patch: fix stack
-    exhaustion due to recursion when freeing nodes, which caused FTBFS
-    on ppc64el and s390x with the newly introduced tests for CVE-2019-20446.
+  * New upstream release
 
- -- Emilio Pozuelo Monfort <pochu@debian.org>  Sun, 20 Sep 2020 10:48:42 +0200
+ -- Olivier Tilloy <olivier.tilloy@canonical.com>  Mon, 23 Nov 2020 23:29:10 +0100
 
-librsvg (2.44.10-2.1+deb10u1) buster; urgency=medium
+librsvg (2.50.1+dfsg-1) unstable; urgency=medium
 
-  * CVE-2019-20446: DoS via billion laughs attack.
+  * New upstream release
+  * Refresh patches
+  * d/librsvg2-2.symbols: updated symbols for new APIs
 
- -- Emilio Pozuelo Monfort <pochu@debian.org>  Wed, 22 Jul 2020 13:11:57 +0200
+ -- Olivier Tilloy <olivier.tilloy@canonical.com>  Tue, 06 Oct 2020 16:01:21 +0200
+
+librsvg (2.50.0+dfsg-1) unstable; urgency=medium
+
+  [ Simon McVittie ]
+  * New upstream release
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Tue, 29 Sep 2020 15:09:38 +0200
+
+librsvg (2.49.5+dfsg-1) experimental; urgency=medium
+
+  * New upstream release
+
+ -- Olivier Tilloy <olivier.tilloy@canonical.com>  Tue, 08 Sep 2020 18:03:49 +0200
+
+librsvg (2.48.8+dfsg-1) unstable; urgency=medium
+
+  * Team upload
+  * New upstream release
+  * Refresh patch series
+  * d/copyright: Update
+  * Revert checks for Loongson-3A mips* hardware.
+    The root cause of #959845 is believed to have been avoided by disabling
+    the madd.fmt instructions in llvm-toolchain-*.
+  * d/copyright: Exclude HTML code coverage report from imported source
+    - Add patch to avoid checksumming the excluded file
+  * d/watch: Add a +dfsg suffix to the repacked tarball
+  * d/copyright: Consolidate Rust modules into one stanza
+  * d/librsvg2-2.lintian-overrides: Override tag for no compiler hardening.
+    Rust code doesn't use C string concatenation, so it's not going to use
+    the hardened versions either.
+
+ -- Simon McVittie <smcv@debian.org>  Fri, 04 Sep 2020 14:47:04 +0100
+
+librsvg (2.48.7-1) unstable; urgency=medium
+
+  * New upstream release
+  * d/librsvg2-2.symbols: updated symbols for new/removed APIs
+
+ -- Olivier Tilloy <olivier.tilloy@canonical.com>  Tue, 09 Jun 2020 14:35:19 +0200
+
+librsvg (2.48.4+dfsg-1) unstable; urgency=medium
+
+  * Team upload
+  * d/rules: Fail the build early on Loongson-3A mips* hardware.
+    This is apparently known to have FPU bugs that will break librsvg's
+    tests, so don't even try. Mitigates: #959845
+  * Skip invalid_viewbox test on 32-bit x86.
+    This test appears to be failing on i386, possibly due to extended
+    precision in the i387 FPU. Building with -mfpmath=sse might resolve this,
+    but that isn't currently allowed in Debian due to our i386 baseline
+    being 20 years old (in particular no SSE and no SSE2). (Closes: #959847)
+  * d/watch: Force repacking without Windows archive files.
+    Please use `uscan --download` to download new upstream releases with
+    Files-Excluded taken into account.
+
+ -- Simon McVittie <smcv@debian.org>  Mon, 11 May 2020 20:16:22 +0100
+
+librsvg (2.48.4-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Olivier Tilloy <olivier.tilloy@canonical.com>  Tue, 05 May 2020 16:37:03 +0200
+
+librsvg (2.48.3-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/control.in: Bump glib (build-)dependency to 2.50.0
+  * debian/rules: Drop workaround for the tests on ppc*
+    The package should now build fine on these architectures (Closes: #955845)
+
+ -- Laurent Bigonville <bigon@debian.org>  Tue, 21 Apr 2020 11:15:08 +0200
+
+librsvg (2.48.2-1) unstable; urgency=medium
+
+  [ Sebastien Bacher ]
+  * debian/control.in:
+    - Build-Depends on libharfbuzz-dev, new configure.ac requirement
+
+  [ Olivier Tilloy ]
+  * New upstream release
+  * Drop patch that was applied upstream
+    (578-Link-the-C-tests-to-harfbuzz-so-they-can-call-hb_vers.patch)
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Tue, 07 Apr 2020 22:23:36 +0200
+
+librsvg (2.48.0-2) unstable; urgency=medium
+
+  * Fix FTBFS in the tests due to missing link against libharfbuzz
+    (Closes: #955264)
+  * debian/control.in: Bump Standards-Version 4.5.0 (no further changes)
+  * debian/control.in: Mark the -doc package with Build-Profiles: <!nodoc>,
+    move the -doc package to BDI and add libgdk-pixbuf2.0-doc to it
+
+ -- Laurent Bigonville <bigon@debian.org>  Wed, 01 Apr 2020 00:11:51 +0200
+
+librsvg (2.48.0-1) experimental; urgency=medium
+
+  * New upstream release
+
+ -- Olivier Tilloy <olivier.tilloy@canonical.com>  Fri, 13 Mar 2020 18:18:27 +0100
+
+librsvg (2.47.3-1) experimental; urgency=medium
+
+  [ Simon McVittie ]
+  * d/tests/build: Silence a shellcheck warning
+  * d/tests: Remove support for ancient autopkgtest versions.
+    AUTOPKGTEST_TMP is now required to be set, and we do not fall back
+    to the deprecated ADTTMP.
+  * d/tests/build: Use correct compiler for proposed autopkgtest
+    cross-architecture testing support (Closes: #946444)
+  * d/tests: Mark tests as superficial
+
+  [ Olivier Tilloy ]
+  * New upstream release
+  * d/control.in: remove libcroco3-dev build dependency
+  * d/patches/thin-lto.patch: update patch
+  * d/librsvg2-2.symbols: updated symbols for new/removed APIs
+
+ -- Olivier Tilloy <olivier.tilloy@canonical.com>  Mon, 02 Mar 2020 09:59:47 +0100
+
+librsvg (2.46.4-1) unstable; urgency=medium
+
+  [ Philip Chimento ]
+  * New upstream release
+  * d/rules:
+    - Remove script to manipulate checksum of backtrace-sys, this crate
+      is no longer used
+    - Skip reftests, as they are tightly coupled to particular versions of
+      pixman, cairo, freetype, and pango
+  * d/librsvg2-2.install: Install librsvg.mo files, internationalization
+    was added in this version
+  * d/patches: Remove typenum-i386-ftbfs.patch, this was fixed in typenum
+    1.11.0, which is now used
+
+  [ Olivier Tilloy ]
+  * d/patches/thin-lto.patch: change LTO setting to 'thin', to work
+    around a bug in rustc that generates invalid DWARF
+  * d/librsvg2-2.symbols: updated symbols for new APIs
+
+ -- Olivier Tilloy <olivier.tilloy@canonical.com>  Wed, 27 Nov 2019 19:21:55 +0100
+
+librsvg (2.44.15-1) unstable; urgency=medium
+
+  * Team upload
+
+  [ Andreas Henriksson ]
+  * Add patch to fix FTBFS with gtk-doc 1.32 (Closes: #939958)
+
+  [ Simon McVittie ]
+  * New upstream release
+  * Drop patches that were applied upstream
+  * Standards-Version: 4.4.1 (no changes required)
+  * d/rules: Generate German and American English locales, required for
+    systemLanguage attribute tests
+
+ -- Simon McVittie <smcv@debian.org>  Mon, 07 Oct 2019 20:59:14 +0100
+
+librsvg (2.44.14-1) unstable; urgency=medium
+
+  * Team upload
+  * New upstream release
+  * Update to upstream librsvg-2.44 branch at commit 2.44.14-3-g98c0eba8,
+    disregarding CI-only changes
+    - Respect the direction property for bidi text
+    - Be compatible with older rustc
+  * d/copyright: Update
+  * Drop patches that were applied upstream
+  * Stop building rsvg-view-3. It has been removed upstream and will not
+    be included in librsvg 2.45.x. The upstream developer of librsvg
+    suggests eog as a better interactive GUI SVG viewer; display(1) from
+    ImageMagick is another possibility.
+    - Drop GTK build-dependency
+  * Standards-Version: 4.4.0 (no changes required)
+  * Use debhelper-compat 12
+    - Drop --libexecdir override, /usr/libexec is now the default
+
+ -- Simon McVittie <smcv@debian.org>  Mon, 12 Aug 2019 08:24:49 +0100
 
 librsvg (2.44.10-2.1) unstable; urgency=high
 

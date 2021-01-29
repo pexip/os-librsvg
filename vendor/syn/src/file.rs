@@ -1,17 +1,9 @@
-// Copyright 2018 Syn Developers
-//
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
-// except according to those terms.
-
 use super::*;
 
 ast_struct! {
     /// A complete file of Rust source code.
     ///
-    /// *This type is available if Syn is built with the `"full"` feature.*
+    /// *This type is available only if Syn is built with the `"full"` feature.*
     ///
     /// # Example
     ///
@@ -19,8 +11,6 @@ ast_struct! {
     /// representation of the syntax tree.
     ///
     /// ```
-    /// # extern crate syn;
-    /// #
     /// use std::env;
     /// use std::fs::File;
     /// use std::io::Read;
@@ -47,6 +37,8 @@ ast_struct! {
     ///     file.read_to_string(&mut src).expect("Unable to read file");
     ///
     ///     let syntax = syn::parse_file(&src).expect("Unable to parse file");
+    ///
+    ///     // Debug impl is available if Syn is built with "extra-traits" feature.
     ///     println!("{:#?}", syntax);
     /// }
     /// ```
@@ -59,24 +51,33 @@ ast_struct! {
     ///     shebang: None,
     ///     attrs: [],
     ///     items: [
-    ///         ExternCrate(
-    ///             ItemExternCrate {
+    ///         Use(
+    ///             ItemUse {
     ///                 attrs: [],
     ///                 vis: Inherited,
-    ///                 extern_token: Extern,
-    ///                 crate_token: Crate,
-    ///                 ident: Ident {
-    ///                     term: Term(
-    ///                         "syn"
-    ///                     ),
-    ///                     span: Span
-    ///                 },
-    ///                 rename: None,
-    ///                 semi_token: Semi
-    ///             }
+    ///                 use_token: Use,
+    ///                 leading_colon: None,
+    ///                 tree: Path(
+    ///                     UsePath {
+    ///                         ident: Ident(
+    ///                             std,
+    ///                         ),
+    ///                         colon2_token: Colon2,
+    ///                         tree: Name(
+    ///                             UseName {
+    ///                                 ident: Ident(
+    ///                                     env,
+    ///                                 ),
+    ///                             },
+    ///                         ),
+    ///                     },
+    ///                 ),
+    ///                 semi_token: Semi,
+    ///             },
     ///         ),
     /// ...
     /// ```
+    #[cfg_attr(doc_cfg, doc(cfg(feature = "full")))]
     pub struct File {
         pub shebang: Option<String>,
         pub attrs: Vec<Attribute>,
@@ -87,9 +88,9 @@ ast_struct! {
 #[cfg(feature = "parsing")]
 pub mod parsing {
     use super::*;
+    use crate::parse::{Parse, ParseStream, Result};
 
-    use parse::{Parse, ParseStream, Result};
-
+    #[cfg_attr(doc_cfg, doc(cfg(feature = "parsing")))]
     impl Parse for File {
         fn parse(input: ParseStream) -> Result<Self> {
             Ok(File {
@@ -110,10 +111,11 @@ pub mod parsing {
 #[cfg(feature = "printing")]
 mod printing {
     use super::*;
-    use attr::FilterAttrs;
+    use crate::attr::FilterAttrs;
     use proc_macro2::TokenStream;
     use quote::{ToTokens, TokenStreamExt};
 
+    #[cfg_attr(doc_cfg, doc(cfg(feature = "printing")))]
     impl ToTokens for File {
         fn to_tokens(&self, tokens: &mut TokenStream) {
             tokens.append_all(self.attrs.inner());

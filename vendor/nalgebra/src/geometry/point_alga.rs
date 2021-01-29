@@ -1,11 +1,11 @@
-use alga::general::{Field, JoinSemilattice, Lattice, MeetSemilattice, Real};
+use alga::general::{Field, JoinSemilattice, Lattice, MeetSemilattice, RealField};
 use alga::linear::{AffineSpace, EuclideanSpace};
 
-use base::{DefaultAllocator, Scalar, VectorN};
-use base::dimension::DimName;
-use base::allocator::Allocator;
+use crate::base::allocator::Allocator;
+use crate::base::dimension::DimName;
+use crate::base::{DefaultAllocator, Scalar, VectorN};
 
-use geometry::Point;
+use crate::geometry::Point;
 
 impl<N: Scalar + Field, D: DimName> AffineSpace for Point<N, D>
 where
@@ -15,12 +15,12 @@ where
     type Translation = VectorN<N, D>;
 }
 
-impl<N: Real, D: DimName> EuclideanSpace for Point<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> EuclideanSpace for Point<N, D>
 where
     DefaultAllocator: Allocator<N, D>,
 {
     type Coordinates = VectorN<N, D>;
-    type Real = N;
+    type RealField = N;
 
     #[inline]
     fn origin() -> Self {
@@ -34,7 +34,7 @@ where
 
     #[inline]
     fn from_coordinates(coords: Self::Coordinates) -> Self {
-        Self::from_coordinates(coords)
+        Self::from(coords)
     }
 
     #[inline]
@@ -55,7 +55,7 @@ where
 {
     #[inline]
     fn meet(&self, other: &Self) -> Self {
-        Point::from_coordinates(self.coords.meet(&other.coords))
+        Self::from(self.coords.meet(&other.coords))
     }
 }
 
@@ -66,7 +66,7 @@ where
 {
     #[inline]
     fn join(&self, other: &Self) -> Self {
-        Point::from_coordinates(self.coords.join(&other.coords))
+        Self::from(self.coords.join(&other.coords))
     }
 }
 
@@ -79,6 +79,6 @@ where
     fn meet_join(&self, other: &Self) -> (Self, Self) {
         let (meet, join) = self.coords.meet_join(&other.coords);
 
-        (Point::from_coordinates(meet), Point::from_coordinates(join))
+        (Self::from(meet), Self::from(join))
     }
 }

@@ -1,6 +1,6 @@
 //! [Criterion]'s plotting library.
 //!
-//! [Criterion]: https://github.com/japaric/criterion.rs
+//! [Criterion]: https://github.com/bheisler/criterion.rs
 //!
 //! **WARNING** This library is criterion's implementation detail and there no plans to stabilize
 //! it. In other words, the API may break at any time without notice.
@@ -12,16 +12,12 @@
 //! ![Plot](curve.svg)
 //!
 //! ```
-//! extern crate itertools_num;
-//! extern crate criterion_plot as plot;
-//!
 //! # use std::fs;
 //! # use std::path::Path;
 //! use itertools_num::linspace;
-//! use plot::prelude::*;
+//! use criterion_plot::prelude::*;
 //!
-//! # fn main() {
-//! # if let Err(_) = plot::version() {
+//! # if let Err(_) = criterion_plot::version() {
 //! #     return;
 //! # }
 //! let ref xs = linspace::<f64>(-10., 10., 51).collect::<Vec<_>>();
@@ -70,7 +66,6 @@
 //! #   .and_then(|gnuplot| {
 //! #       gnuplot.wait_with_output().ok().and_then(|p| String::from_utf8(p.stderr).ok())
 //! #   }));
-//! # }
 //! ```
 //!
 //! - error bars (based on
@@ -79,17 +74,13 @@
 //! ![Plot](error_bar.svg)
 //!
 //! ```
-//! extern crate itertools_num;
-//! extern crate rand;
-//! extern crate criterion_plot as plot;
-//!
 //! # use std::fs;
 //! # use std::path::Path;
 //! use std::f64::consts::PI;
 //!
 //! use itertools_num::linspace;
 //! use rand::{Rng, XorShiftRng};
-//! use plot::prelude::*;
+//! use criterion_plot::prelude::*;
 //!
 //! fn sinc(mut x: f64) -> f64 {
 //!     if x == 0. {
@@ -100,8 +91,7 @@
 //!     }
 //! }
 //!
-//! # fn main() {
-//! # if let Err(_) = plot::version() {
+//! # if let Err(_) = criterion_plot::version() {
 //! #     return;
 //! # }
 //! let ref xs_ = linspace::<f64>(-4., 4., 101).collect::<Vec<_>>();
@@ -156,7 +146,6 @@
 //! #   .and_then(|gnuplot| {
 //! #       gnuplot.wait_with_output().ok().and_then(|p| String::from_utf8(p.stderr).ok())
 //! #   }));
-//! # }
 //! ```
 //!
 //! - Candlesticks (based on
@@ -165,16 +154,12 @@
 //! ![Plot](candlesticks.svg)
 //!
 //! ```
-//! extern crate rand;
-//! extern crate criterion_plot as plot;
-//!
 //! # use std::fs;
 //! # use std::path::Path;
-//! use plot::prelude::*;
+//! use criterion_plot::prelude::*;
 //! use rand::Rng;
 //!
-//! # fn main() {
-//! # if let Err(_) = plot::version() {
+//! # if let Err(_) = criterion_plot::version() {
 //! #     return;
 //! # }
 //! let xs = 1..11;
@@ -226,7 +211,6 @@
 //! #   .and_then(|gnuplot| {
 //! #       gnuplot.wait_with_output().ok().and_then(|p| String::from_utf8(p.stderr).ok())
 //! #   }));
-//! # }
 //! ```
 //!
 //! - Multiaxis (based on [`multiaxis.dem`](http://gnuplot.sourceforge.net/demo/multiaxis.html))
@@ -234,24 +218,19 @@
 //! ![Plot](multiaxis.svg)
 //!
 //! ```
-//! extern crate itertools_num;
-//! extern crate num_complex;
-//! extern crate criterion_plot as plot;
-//!
 //! # use std::fs;
 //! # use std::path::Path;
 //! use std::f64::consts::PI;
 //!
 //! use itertools_num::linspace;
 //! use num_complex::Complex;
-//! use plot::prelude::*;
+//! use criterion_plot::prelude::*;
 //!
 //! fn tf(x: f64) -> Complex<f64> {
 //!     Complex::new(0., x) / Complex::new(10., x) / Complex::new(1., x / 10_000.)
 //! }
 //!
-//! # fn main() {
-//! # if let Err(_) = plot::version() {
+//! # if let Err(_) = criterion_plot::version() {
 //! #     return;
 //! # }
 //! let (start, end): (f64, f64) = (1.1, 90_000.);
@@ -304,7 +283,6 @@
 //! #           String::from_utf8(p.stderr).ok()
 //! #       })
 //! #   }));
-//! # }
 //! ```
 //! - Filled curves (based on
 //! [`transparent.dem`](http://gnuplot.sourceforge.net/demo/transparent.html))
@@ -312,19 +290,15 @@
 //! ![Plot](filled_curve.svg)
 //!
 //! ```
-//! extern crate itertools_num;
-//! extern crate criterion_plot as plot;
-//!
 //! # use std::fs;
 //! # use std::path::Path;
 //! use std::f64::consts::PI;
 //! use std::iter;
 //!
 //! use itertools_num::linspace;
-//! use plot::prelude::*;
+//! use criterion_plot::prelude::*;
 //!
-//! # fn main() {
-//! # if let Err(_) = plot::version() {
+//! # if let Err(_) = criterion_plot::version() {
 //! #     return;
 //! # }
 //! let (start, end) = (-5., 5.);
@@ -385,31 +359,33 @@
 //!     .and_then(|gnuplot| {
 //!         gnuplot.wait_with_output().ok().and_then(|p| String::from_utf8(p.stderr).ok())
 //!     }));
-//! # }
 //! ```
 
 #![deny(missing_docs)]
 #![deny(warnings)]
+#![deny(bare_trait_objects)]
 // This lint has lots of false positives ATM, see
 // https://github.com/Manishearth/rust-clippy/issues/761
-#![cfg_attr(feature = "cargo-clippy", allow(new_without_default))]
+#![cfg_attr(feature = "cargo-clippy", allow(clippy::new_without_default))]
 // False positives with images
-#![cfg_attr(feature = "cargo-clippy", allow(doc_markdown))]
+#![cfg_attr(feature = "cargo-clippy", allow(clippy::doc_markdown))]
+#![cfg_attr(feature = "cargo-clippy", allow(clippy::many_single_char_names))]
 
-extern crate byteorder;
 extern crate cast;
 #[macro_use]
 extern crate itertools;
 
 use std::borrow::Cow;
+use std::fmt;
 use std::fs::File;
 use std::io;
+use std::num::ParseIntError;
 use std::path::Path;
 use std::process::{Child, Command};
 use std::str;
 
-use data::Matrix;
-use traits::{Configure, Set};
+use crate::data::Matrix;
+use crate::traits::{Configure, Set};
 
 mod data;
 mod display;
@@ -465,7 +441,10 @@ impl Figure {
     fn script(&self) -> Vec<u8> {
         let mut s = String::new();
 
-        s.push_str(&format!("set output '{}'\n", self.output.display()));
+        s.push_str(&format!(
+            "set output '{}'\n",
+            self.output.display().to_string().replace("'", "''")
+        ));
 
         if let Some(width) = self.box_width {
             s.push_str(&format!("set boxwidth {}\n", width))
@@ -561,14 +540,12 @@ impl Figure {
     pub fn draw(&mut self) -> io::Result<Child> {
         use std::process::Stdio;
 
-        let mut gnuplot = try!{
-            Command::new("gnuplot").
-                stderr(Stdio::piped()).
-                stdin(Stdio::piped()).
-                stdout(Stdio::piped()).
-                spawn()
-        };
-        try!(self.dump(gnuplot.stdin.as_mut().unwrap()));
+        let mut gnuplot = Command::new("gnuplot")
+            .stderr(Stdio::piped())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()?;
+        self.dump(gnuplot.stdin.as_mut().unwrap())?;
         Ok(gnuplot)
     }
 
@@ -577,7 +554,7 @@ impl Figure {
     where
         W: io::Write,
     {
-        try!(sink.write_all(&self.script()));
+        sink.write_all(&self.script())?;
         Ok(self)
     }
 
@@ -585,7 +562,7 @@ impl Figure {
     pub fn save(&self, path: &Path) -> io::Result<&Figure> {
         use std::io::Write;
 
-        try!((try!(File::create(path))).write_all(&self.script()));
+        File::create(path)?.write_all(&self.script())?;
         Ok(self)
     }
 }
@@ -794,7 +771,7 @@ pub enum Axis {
 
 impl Axis {
     fn next(self) -> Option<Axis> {
-        use Axis::*;
+        use crate::Axis::*;
 
         match self {
             BottomX => Some(LeftY),
@@ -836,7 +813,7 @@ pub enum Grid {
 
 impl Grid {
     fn next(self) -> Option<Grid> {
-        use Grid::*;
+        use crate::Grid::*;
 
         match self {
             Major => Some(Minor),
@@ -909,13 +886,13 @@ trait Display<S> {
 /// Curve variant of Default
 trait CurveDefault<S> {
     /// Creates `curve::Properties` with default configuration
-    fn default(S) -> Self;
+    fn default(s: S) -> Self;
 }
 
 /// Error bar variant of Default
 trait ErrorBarDefault<S> {
     /// Creates `errorbar::Properties` with default configuration
-    fn default(S) -> Self;
+    fn default(s: S) -> Self;
 }
 
 /// Structs that can produce gnuplot code
@@ -949,39 +926,114 @@ impl Plot {
         &self.script
     }
 }
-/// Returns `gnuplot` version
-// FIXME Parsing may fail
-pub fn version() -> io::Result<(usize, usize, usize)> {
-    let stdout = try!(Command::new("gnuplot").arg("--version").output()).stdout;
-    let mut words = str::from_utf8(&stdout).unwrap().split_whitespace().skip(1);
-    let mut version = words.next().unwrap().split('.');
-    let major = version.next().unwrap().parse().unwrap();
-    let minor = version.next().unwrap().parse().unwrap();
-    let patchlevel = words.nth(1).unwrap().parse().unwrap();
 
-    Ok((major, minor, patchlevel))
+/// Possible errors when parsing gnuplot's version string
+#[derive(Debug)]
+pub enum VersionError {
+    /// The `gnuplot` command couldn't be executed
+    Exec(io::Error),
+    /// The `gnuplot` command returned an error message
+    Error(String),
+    /// The `gnuplot` command returned invalid utf-8
+    OutputError,
+    /// The `gnuplot` command returned an unparseable string
+    ParseError(String),
+}
+impl fmt::Display for VersionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            VersionError::Exec(err) => write!(f, "`gnuplot --version` failed: {}", err),
+            VersionError::Error(msg) => {
+                write!(f, "`gnuplot --version` failed with error message:\n{}", msg)
+            }
+            VersionError::OutputError => write!(f, "`gnuplot --version` returned invalid utf-8"),
+            VersionError::ParseError(msg) => write!(
+                f,
+                "`gnuplot --version` returned an unparseable version string: {}",
+                msg
+            ),
+        }
+    }
+}
+impl ::std::error::Error for VersionError {
+    fn description(&self) -> &str {
+        match self {
+            VersionError::Exec(_) => "Execution Error",
+            VersionError::Error(_) => "Other Error",
+            VersionError::OutputError => "Output Error",
+            VersionError::ParseError(_) => "Parse Error",
+        }
+    }
+
+    fn cause(&self) -> Option<&dyn ::std::error::Error> {
+        match self {
+            VersionError::Exec(err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
+/// Structure representing a gnuplot version number.
+pub struct Version {
+    /// The major version number
+    pub major: usize,
+    /// The minor version number
+    pub minor: usize,
+    /// The patch level
+    pub patch: String,
+}
+
+/// Returns `gnuplot` version
+pub fn version() -> Result<Version, VersionError> {
+    let command_output = Command::new("gnuplot")
+        .arg("--version")
+        .output()
+        .map_err(VersionError::Exec)?;
+    if !command_output.status.success() {
+        let error =
+            String::from_utf8(command_output.stderr).map_err(|_| VersionError::OutputError)?;
+        return Err(VersionError::Error(error));
+    }
+
+    let output = String::from_utf8(command_output.stdout).map_err(|_| VersionError::OutputError)?;
+
+    parse_version(&output).map_err(|_| VersionError::ParseError(output.clone()))
+}
+
+fn parse_version(version_str: &str) -> Result<Version, Option<ParseIntError>> {
+    let mut words = version_str.split_whitespace().skip(1);
+    let mut version = words.next().ok_or(None)?.split('.');
+    let major = version.next().ok_or(None)?.parse()?;
+    let minor = version.next().ok_or(None)?.parse()?;
+    let patchlevel = words.nth(1).ok_or(None)?.to_owned();
+
+    Ok(Version {
+        major,
+        minor,
+        patch: patchlevel,
+    })
 }
 
 fn scale_factor(map: &map::axis::Map<axis::Properties>, axes: Axes) -> (f64, f64) {
-    use Axes::*;
-    use Axis::*;
+    use crate::Axes::*;
+    use crate::Axis::*;
 
     match axes {
         BottomXLeftY => (
-            map.get(BottomX).map_or(1., |props| props.scale_factor()),
-            map.get(LeftY).map_or(1., |props| props.scale_factor()),
+            map.get(BottomX).map_or(1., ScaleFactorTrait::scale_factor),
+            map.get(LeftY).map_or(1., ScaleFactorTrait::scale_factor),
         ),
         BottomXRightY => (
-            map.get(BottomX).map_or(1., |props| props.scale_factor()),
-            map.get(RightY).map_or(1., |props| props.scale_factor()),
+            map.get(BottomX).map_or(1., ScaleFactorTrait::scale_factor),
+            map.get(RightY).map_or(1., ScaleFactorTrait::scale_factor),
         ),
         TopXLeftY => (
-            map.get(TopX).map_or(1., |props| props.scale_factor()),
-            map.get(LeftY).map_or(1., |props| props.scale_factor()),
+            map.get(TopX).map_or(1., ScaleFactorTrait::scale_factor),
+            map.get(LeftY).map_or(1., ScaleFactorTrait::scale_factor),
         ),
         TopXRightY => (
-            map.get(TopX).map_or(1., |props| props.scale_factor()),
-            map.get(RightY).map_or(1., |props| props.scale_factor()),
+            map.get(TopX).map_or(1., ScaleFactorTrait::scale_factor),
+            map.get(RightY).map_or(1., ScaleFactorTrait::scale_factor),
         ),
     }
 }
@@ -998,10 +1050,41 @@ mod test {
     #[test]
     fn version() {
         if let Ok(version) = super::version() {
-            let (major, _, _) = version;
-            assert!(major >= 4);
+            assert!(version.major >= 4);
         } else {
             println!("Gnuplot not installed.");
+        }
+    }
+
+    #[test]
+    fn test_parse_version_on_valid_string() {
+        let string = "gnuplot 5.0 patchlevel 7";
+        let version = super::parse_version(&string).unwrap();
+        assert_eq!(5, version.major);
+        assert_eq!(0, version.minor);
+        assert_eq!("7", &version.patch);
+    }
+
+    #[test]
+    fn test_parse_gentoo_version() {
+        let string = "gnuplot 5.2 patchlevel 5a (Gentoo revision r0)";
+        let version = super::parse_version(&string).unwrap();
+        assert_eq!(5, version.major);
+        assert_eq!(2, version.minor);
+        assert_eq!("5a", &version.patch);
+    }
+
+    #[test]
+    fn test_parse_version_returns_error_on_invalid_strings() {
+        let strings = [
+            "",
+            "foobar",
+            "gnuplot 50 patchlevel 7",
+            "gnuplot 5.0 patchlevel",
+            "gnuplot foo.bar patchlevel 7",
+        ];
+        for string in &strings {
+            assert!(super::parse_version(string).is_err());
         }
     }
 }

@@ -1,6 +1,17 @@
 include $(top_srcdir)/glib-tap.mk
 
+test_sources =				\
+	Cargo.toml			\
+	src/main.rs			\
+	src/cmdline/mod.rs		\
+	src/cmdline/rsvg_convert.rs	\
+	src/predicates/file.rs		\
+	src/predicates/mod.rs		\
+	src/predicates/pdf.rs		\
+	src/predicates/png.rs
+
 EXTRA_DIST +=		\
+	$(test_sources)	\
 	README.md
 
 # Keep "errors" at the end; they are the slowest to run
@@ -13,8 +24,6 @@ test_programs =		\
 	dimensions	\
 	errors		\
 	infinite-loop
-
-# Removed "styles" from the above; it is broken right now
 
 test_utils_common_sources = \
 	test-utils.c	\
@@ -43,10 +52,6 @@ crash_SOURCES = \
 render_crash_SOURCES = \
 	render-crash.c	\
 	$(test_utils_common_sources)
-
-# styles_SOURCES = \
-# 	styles.c	\
-# 	$(test_utils_common_sources)
 
 dimensions_SOURCES = \
 	dimensions.c	\
@@ -80,15 +85,17 @@ dist_installed_test_data =						\
 	$(wildcard $(srcdir)/fixtures/reftests/*.css)			\
 	$(wildcard $(srcdir)/fixtures/reftests/*.svg)			\
 	$(wildcard $(srcdir)/fixtures/reftests/*.png)			\
+	$(wildcard $(srcdir)/fixtures/reftests/*.txt)			\
 	$(wildcard $(srcdir)/fixtures/reftests/bugs/*.svg)		\
 	$(wildcard $(srcdir)/fixtures/reftests/bugs/*.png)		\
 	$(wildcard $(srcdir)/fixtures/reftests/svg1.1/*.svg)		\
 	$(wildcard $(srcdir)/fixtures/reftests/svg1.1/*.png)		\
 	$(wildcard $(srcdir)/fixtures/reftests/svg1.1/images/*)		\
 	$(wildcard $(srcdir)/fixtures/reftests/svg1.1/resources/*)	\
+	$(wildcard $(srcdir)/fixtures/reftests/svg2/*.svg)		\
+	$(wildcard $(srcdir)/fixtures/reftests/svg2/*.png)		\
 	$(wildcard $(srcdir)/fixtures/render-crash/*.svg)		\
-	$(wildcard $(srcdir)/fixtures/dimensions/*.svg)			\
-	$(wildcard $(srcdir)/fixtures/styles/*.svg)
+	$(wildcard $(srcdir)/fixtures/dimensions/*.svg)
 
 clean-local:
 	rm -rf output

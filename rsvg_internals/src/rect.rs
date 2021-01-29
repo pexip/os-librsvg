@@ -1,226 +1,232 @@
-use cairo;
-use cairo::MatrixTrait;
+//! Types for rectangles.
 
-use float_eq_cairo::ApproxEqCairo;
+#[allow(clippy::module_inception)]
+mod rect {
+    use crate::float_eq_cairo::ApproxEqCairo;
+    use core::ops::{Add, Range, Sub};
+    use num_traits::Zero;
 
-pub trait RectangleExt {
-    fn is_empty(&self) -> bool;
-    fn intersect(&self, rect: &cairo::Rectangle) -> cairo::Rectangle;
-    fn union(&self, rect: &cairo::Rectangle) -> cairo::Rectangle;
-    fn transform(&self, affine: &cairo::Matrix) -> cairo::Rectangle;
-    fn outer(&self) -> cairo::Rectangle;
-}
+    // Use our own min() and max() that are acceptable for floating point
 
-impl RectangleExt for cairo::Rectangle {
-    fn is_empty(&self) -> bool {
-        self.width.approx_eq_cairo(&0.0) || self.height.approx_eq_cairo(&0.0)
-    }
-
-    fn intersect(&self, rect: &cairo::Rectangle) -> cairo::Rectangle {
-        let (x1, y1, x2, y2) = (
-            self.x.max(rect.x),
-            self.y.max(rect.y),
-            (self.x + self.width).min(rect.x + rect.width),
-            (self.y + self.height).min(rect.y + rect.height),
-        );
-
-        if x2 > x1 && y2 > y1 {
-            cairo::Rectangle {
-                x: x1,
-                y: y1,
-                width: x2 - x1,
-                height: y2 - y1,
-            }
+    fn min<T: PartialOrd>(x: T, y: T) -> T {
+        if x <= y {
+            x
         } else {
-            cairo::Rectangle {
-                x: 0.0,
-                y: 0.0,
-                width: 0.0,
-                height: 0.0,
+            y
+        }
+    }
+
+    fn max<T: PartialOrd>(x: T, y: T) -> T {
+        if x >= y {
+            x
+        } else {
+            y
+        }
+    }
+
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct Rect<T> {
+        pub x0: T,
+        pub y0: T,
+        pub x1: T,
+        pub y1: T,
+    }
+
+    impl<T> Rect<T> {
+        #[inline]
+        pub fn new(x0: T, y0: T, x1: T, y1: T) -> Self {
+            Self { x0, y0, x1, y1 }
+        }
+    }
+
+    impl<T> Rect<T>
+    where
+        T: Copy + PartialOrd + PartialEq + Add<T, Output = T> + Sub<T, Output = T> + Zero,
+    {
+        #[inline]
+        pub fn from_size(w: T, h: T) -> Self {
+            Self {
+                x0: Zero::zero(),
+                y0: Zero::zero(),
+                x1: w,
+                y1: h,
+            }
+        }
+
+        #[inline]
+        pub fn width(&self) -> T {
+            self.x1 - self.x0
+        }
+
+        #[inline]
+        pub fn height(&self) -> T {
+            self.y1 - self.y0
+        }
+
+        #[inline]
+        pub fn size(&self) -> (T, T) {
+            (self.width(), self.height())
+        }
+
+        #[inline]
+        pub fn x_range(&self) -> Range<T> {
+            self.x0..self.x1
+        }
+
+        #[inline]
+        pub fn y_range(&self) -> Range<T> {
+            self.y0..self.y1
+        }
+
+        #[inline]
+        pub fn contains(self, x: T, y: T) -> bool {
+            x >= self.x0 && x < self.x1 && y >= self.y0 && y < self.y1
+        }
+
+        #[inline]
+        pub fn translate(&self, by: (T, T)) -> Self {
+            Self {
+                x0: self.x0 + by.0,
+                y0: self.y0 + by.1,
+                x1: self.x1 + by.0,
+                y1: self.y1 + by.1,
+            }
+        }
+
+        #[inline]
+        pub fn intersection(&self, rect: &Self) -> Option<Self> {
+            let (x0, y0, x1, y1) = (
+                max(self.x0, rect.x0),
+                max(self.y0, rect.y0),
+                min(self.x1, rect.x1),
+                min(self.y1, rect.y1),
+            );
+
+            if x1 > x0 && y1 > y0 {
+                Some(Self { x0, y0, x1, y1 })
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        pub fn union(&self, rect: &Self) -> Self {
+            Self {
+                x0: min(self.x0, rect.x0),
+                y0: min(self.y0, rect.y0),
+                x1: max(self.x1, rect.x1),
+                y1: max(self.y1, rect.y1),
             }
         }
     }
 
-    fn union(&self, rect: &cairo::Rectangle) -> cairo::Rectangle {
-        let (x1, y1, x2, y2) = (
-            self.x.min(rect.x),
-            self.y.min(rect.y),
-            (self.x + self.width).max(rect.x + rect.width),
-            (self.y + self.height).max(rect.y + rect.height),
-        );
+    impl Rect<i32> {
+        #[inline]
+        pub fn is_empty(&self) -> bool {
+            self.width() == Zero::zero() || self.height() == Zero::zero()
+        }
 
-        cairo::Rectangle {
-            x: x1,
-            y: y1,
-            width: x2 - x1,
-            height: y2 - y1,
+        #[inline]
+        pub fn scale(self, x: f64, y: f64) -> Self {
+            Self {
+                x0: (f64::from(self.x0) * x).floor() as i32,
+                y0: (f64::from(self.y0) * y).floor() as i32,
+                x1: (f64::from(self.x1) * x).ceil() as i32,
+                y1: (f64::from(self.y1) * y).ceil() as i32,
+            }
         }
     }
 
-    fn transform(&self, affine: &cairo::Matrix) -> cairo::Rectangle {
-        let points = vec![
-            affine.transform_point(self.x, self.y),
-            affine.transform_point(self.x + self.width, self.y),
-            affine.transform_point(self.x, self.y + self.height),
-            affine.transform_point(self.x + self.width, self.y + self.height),
-        ];
-
-        let (mut xmin, mut ymin, mut xmax, mut ymax) = {
-            let (x, y) = points[0];
-
-            (x, y, x, y)
-        };
-
-        for i in 1..4 {
-            let (x, y) = points[i];
-
-            if x < xmin {
-                xmin = x;
-            }
-
-            if x > xmax {
-                xmax = x;
-            }
-
-            if y < ymin {
-                ymin = y;
-            }
-
-            if y > ymax {
-                ymax = y;
-            }
+    impl Rect<f64> {
+        #[inline]
+        pub fn is_empty(&self) -> bool {
+            self.width().approx_eq_cairo(0.0) || self.height().approx_eq_cairo(0.0)
         }
 
-        cairo::Rectangle {
-            x: xmin,
-            y: ymin,
-            width: xmax - xmin,
-            height: ymax - ymin,
-        }
-    }
-
-    fn outer(&self) -> cairo::Rectangle {
-        let (x, y) = (self.x.floor(), self.y.floor());
-
-        cairo::Rectangle {
-            x,
-            y,
-            width: (self.x + self.width).ceil() - x,
-            height: (self.y + self.height).ceil() - y,
+        #[inline]
+        pub fn scale(self, x: f64, y: f64) -> Self {
+            Self {
+                x0: self.x0 * x,
+                y0: self.y0 * y,
+                x1: self.x1 * x,
+                y1: self.y1 * y,
+            }
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub type Rect = rect::Rect<f64>;
 
-    #[test]
-    fn empty_rect() {
-        let empty = cairo::Rectangle {
-            x: 0.42,
-            y: 0.42,
-            width: 0.0,
-            height: 0.0,
-        };
-        let not_empty = cairo::Rectangle {
-            x: 0.22,
-            y: 0.22,
-            width: 3.14,
-            height: 3.14,
-        };
-
-        assert!(empty.is_empty());
-        assert!(!not_empty.is_empty());
+impl From<Rect> for IRect {
+    #[inline]
+    fn from(r: Rect) -> Self {
+        Self {
+            x0: r.x0.floor() as i32,
+            y0: r.y0.floor() as i32,
+            x1: r.x1.ceil() as i32,
+            y1: r.y1.ceil() as i32,
+        }
     }
+}
 
-    #[test]
-    fn intersect_rects() {
-        let r1 = cairo::Rectangle {
-            x: 0.42,
-            y: 0.42,
-            width: 4.14,
-            height: 4.14,
-        };
-        let r2 = cairo::Rectangle {
-            x: 0.22,
-            y: 0.22,
-            width: 3.14,
-            height: 3.14,
-        };
-        let r3 = cairo::Rectangle {
-            x: 10.0,
-            y: 10.0,
-            width: 3.14,
-            height: 3.14,
-        };
-
-        let r = r1.intersect(&r2);
-        assert_approx_eq_cairo!(0.42_f64, r.x);
-        assert_approx_eq_cairo!(0.42_f64, r.y);
-        assert_approx_eq_cairo!(2.94_f64, r.width);
-        assert_approx_eq_cairo!(2.94_f64, r.height);
-
-        let r = r1.intersect(&r3);
-        assert!(r.is_empty());
+impl From<cairo::Rectangle> for Rect {
+    #[inline]
+    fn from(r: cairo::Rectangle) -> Self {
+        Self {
+            x0: r.x,
+            y0: r.y,
+            x1: r.x + r.width,
+            y1: r.y + r.height,
+        }
     }
+}
 
-    #[test]
-    fn union_rects() {
-        let r1 = cairo::Rectangle {
-            x: 0.42,
-            y: 0.42,
-            width: 4.14,
-            height: 4.14,
-        };
-        let r2 = cairo::Rectangle {
-            x: 0.22,
-            y: 0.22,
-            width: 3.14,
-            height: 3.14,
-        };
-
-        let r = r1.union(&r2);
-        assert_approx_eq_cairo!(0.22_f64, r.x);
-        assert_approx_eq_cairo!(0.22_f64, r.y);
-        assert_approx_eq_cairo!(4.34_f64, r.width);
-        assert_approx_eq_cairo!(4.34_f64, r.height);
+impl From<Rect> for cairo::Rectangle {
+    #[inline]
+    fn from(r: Rect) -> Self {
+        Self {
+            x: r.x0,
+            y: r.y0,
+            width: r.x1 - r.x0,
+            height: r.y1 - r.y0,
+        }
     }
+}
 
-    #[test]
-    fn transform_rect() {
-        let r = cairo::Rectangle {
-            x: 0.42,
-            y: 0.42,
-            width: 3.14,
-            height: 3.14,
-        };
+pub type IRect = rect::Rect<i32>;
 
-        let m = cairo::Matrix::identity();
-        let tr = r.transform(&m);
-        assert_eq!(tr, r);
-
-        let m = cairo::Matrix::new(2.0, 0.0, 0.0, 2.0, 1.5, 1.5);
-        let tr = r.transform(&m);
-        assert_approx_eq_cairo!(2.34_f64, tr.x);
-        assert_approx_eq_cairo!(2.34_f64, tr.y);
-        assert_approx_eq_cairo!(6.28_f64, tr.width);
-        assert_approx_eq_cairo!(6.28_f64, tr.height);
+impl From<IRect> for Rect {
+    #[inline]
+    fn from(r: IRect) -> Self {
+        Self {
+            x0: f64::from(r.x0),
+            y0: f64::from(r.y0),
+            x1: f64::from(r.x1),
+            y1: f64::from(r.y1),
+        }
     }
+}
 
-    #[test]
-    fn outer_rect() {
-        let r = cairo::Rectangle {
-            x: 1.42,
-            y: 1.42,
-            width: 3.14,
-            height: 3.14,
-        };
+impl From<cairo::Rectangle> for IRect {
+    #[inline]
+    fn from(r: cairo::Rectangle) -> Self {
+        Self {
+            x0: r.x.floor() as i32,
+            y0: r.y.floor() as i32,
+            x1: (r.x + r.width).ceil() as i32,
+            y1: (r.y + r.height).ceil() as i32,
+        }
+    }
+}
 
-        let or = r.outer();
-        assert_eq!(1.0, or.x);
-        assert_eq!(1.0, or.y);
-        assert_eq!(4.0, or.width);
-        assert_eq!(4.0, or.height);
+impl From<IRect> for cairo::Rectangle {
+    #[inline]
+    fn from(r: IRect) -> Self {
+        Self {
+            x: f64::from(r.x0),
+            y: f64::from(r.y0),
+            width: f64::from(r.x1 - r.x0),
+            height: f64::from(r.y1 - r.y0),
+        }
     }
 }

@@ -2,7 +2,12 @@ use super::expf;
 use super::expm1f;
 use super::k_expo2f;
 
-#[inline]
+/// Hyperbolic cosine (f64)
+///
+/// Computes the hyperbolic cosine of the argument x.
+/// Is defined as `(exp(x) + exp(-x))/2`
+/// Angles are specified in radians.
+#[cfg_attr(all(test, assert_no_panic), no_panic::no_panic)]
 pub fn coshf(mut x: f32) -> f32 {
     let x1p120 = f32::from_bits(0x7b800000); // 0x1p120f === 2 ^ 120
 

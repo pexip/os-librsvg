@@ -4,9 +4,13 @@ set -e
 exec 2>&1
 set -u
 
-: "${AUTOPKGTEST_TMP:="${ADTTMP}"}"
-
 cd "$AUTOPKGTEST_TMP"
+
+if [ -n "${DEB_HOST_GNU_TYPE:-}" ]; then
+    CROSS_COMPILE="$DEB_HOST_GNU_TYPE-"
+else
+    CROSS_COMPILE=
+fi
 
 echo "1..1"
 
@@ -26,7 +30,9 @@ int main (void)
 }
 EOF
 
-gcc -o simple simple.c $(pkg-config --cflags --libs librsvg-2.0 gobject-2.0)
+# Deliberately word-splitting, that's how pkg-config works:
+# shellcheck disable=SC2046
+"${CROSS_COMPILE}gcc" -o simple simple.c $("${CROSS_COMPILE}pkg-config" --cflags --libs librsvg-2.0 gobject-2.0)
 test -x simple
 ./simple
 echo "# everything seems OK"

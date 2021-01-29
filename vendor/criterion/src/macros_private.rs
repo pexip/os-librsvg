@@ -22,10 +22,26 @@ macro_rules! try_else_return {
         match $x {
             Ok(x) => x,
             Err(e) => {
-                ::error::log_error(&e);
+                crate::error::log_error(&e);
                 let closure = $el;
                 return closure();
             }
         }
     };
+}
+
+/// Print an error message to stdout. Format is the same as println! or format!
+macro_rules! error {
+    ($($arg:tt)*) => (
+        println!("Criterion.rs ERROR: {}", &format!($($arg)*));
+    )
+}
+
+/// Print a debug message to stdout. Format is the same as println! or format!
+macro_rules! info {
+    ($($arg:tt)*) => (
+        if $crate::debug_enabled() {
+            println!("Criterion.rs DEBUG: {}", &format!($($arg)*));
+        }
+    )
 }

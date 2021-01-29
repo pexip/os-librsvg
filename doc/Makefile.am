@@ -12,7 +12,6 @@ DOC_MODULE = rsvg
 # Uncomment for versioned docs and specify the version of the module, e.g. '2'.
 DOC_MODULE_VERSION = $(RSVG_API_VERSION)
 
-
 # The top-level SGML file. You can change this if you want to.
 DOC_MAIN_SGML_FILE = $(DOC_MODULE)-docs.xml
 
@@ -20,7 +19,7 @@ DOC_MAIN_SGML_FILE = $(DOC_MODULE)-docs.xml
 # gtk-doc will search all .c & .h files beneath here for inline comments
 # documenting the functions and macros.
 # e.g. DOC_SOURCE_DIR=../../../gtk
-DOC_SOURCE_DIR = $(abs_top_srcdir)
+DOC_SOURCE_DIR = $(abs_top_srcdir)/librsvg
 
 # Extra options to pass to gtkdoc-scangobj. Not normally needed.
 SCANGOBJ_OPTIONS = --type-init-func="g_type_init ()"
@@ -58,8 +57,7 @@ HFILE_GLOB = \
 	$(top_builddir)/librsvg/*.h
 
 CFILE_GLOB = \
-	$(top_srcdir)/librsvg/*.c \
-	$(top_builddir)/librsvg/*.c
+	$(top_srcdir)/librsvg/*.c
 
 # Extra header to include when scanning, which are not under DOC_SOURCE_DIR
 # e.g. EXTRA_HFILES=$(top_srcdir}/contrib/extra.h
@@ -70,18 +68,7 @@ EXTRA_HFILES =
 # e.g. IGNORE_HFILES=gtkdebug.h gtkintl.h
 IGNORE_HFILES =			\
 	config.h		\
-	rsvg-attributes.h	\
-	rsvg-cairo-clip.h	\
-	rsvg-compat.h		\
-	rsvg-css.h		\
-	rsvg-filter.h		\
-	rsvg-io.h		\
-	rsvg-marker.h		\
-	rsvg-mask.h		\
-	rsvg-private.h		\
-	rsvg-shapes.h		\
-	rsvg-size-callback.h	\
-	rsvg-styles.h
+	rsvg-css.h
 
 # Images to copy into HTML directory.
 # e.g. HTML_IMAGES=$(top_srcdir)/gtk/stock-icons/stock_about_24.png
@@ -89,11 +76,12 @@ HTML_IMAGES =
 
 # Extra SGML files that are included by $(DOC_MAIN_SGML_FILE).
 # e.g. content_files=running.sgml building.sgml changes-2.0.sgml
-content_files =		\
-	overview.xml	\
+content_files =			\
+	overview.xml		\
+	recommendations.xml	\
 	version.xml
 
-# SGML files where gtk-doc abbrevations (#GtkWidget) are expanded
+# SGML files where gtk-doc abbreviations (#GtkWidget) are expanded
 # These files must be listed here *and* in content_files
 # e.g. expand_content_files=running.sgml
 expand_content_files =
@@ -103,21 +91,19 @@ expand_content_files =
 # signals and properties.
 # e.g. GTKDOC_CFLAGS=-I$(top_srcdir) -I$(top_builddir) $(GTK_DEBUG_FLAGS)
 # e.g. GTKDOC_LIBS=$(top_builddir)/gtk/$(gtktargetlib)
-GTKDOC_CFLAGS = \
-	-I$(top_srcdir) \
-	-I$(top_builddir) \
-	$(LIBRSVG_CFLAGS) \
-	$(GTK_CFLAGS) \
-	$(GDK_X11_CFLAGS) \
-	$(WARN_CFLAGS) \
-	$(DISABLE_DEPRECATED) \
+GTKDOC_CFLAGS =					\
+	-I$(top_srcdir)				\
+	-I$(top_builddir)			\
+	-I$(top_builddir)/librsvg		\
+	$(LIBRSVG_CFLAGS)			\
+	$(WARN_CFLAGS)				\
+	$(DISABLE_DEPRECATED)			\
 	$(AM_CFLAGS)
 
 GTKDOC_LIBS = \
 	$(top_builddir)/librsvg-@RSVG_API_MAJOR_VERSION@.la \
 	$(LIBRSVG_LIBS) \
-	$(GTHREAD_LIBS) \
-	$(GTK_LIBS)
+	$(GTHREAD_LIBS)
 
 # This includes the standard gtk-doc make rules, copied by gtkdocize.
 include $(top_srcdir)/gtk-doc.make

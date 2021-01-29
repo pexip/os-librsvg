@@ -1,24 +1,28 @@
-use alga::general::{AbstractGroup, AbstractLoop, AbstractMagma, AbstractMonoid,
-                    AbstractQuasigroup, AbstractSemigroup, Id, Identity, Inverse, Multiplicative,
-                    Real};
+use alga::general::{
+    AbstractGroup, AbstractLoop, AbstractMagma, AbstractMonoid, AbstractQuasigroup,
+    AbstractSemigroup, Id, Identity, Multiplicative, RealField, TwoSidedInverse,
+};
 use alga::linear::Isometry as AlgaIsometry;
-use alga::linear::{AffineTransformation, DirectIsometry, ProjectiveTransformation, Rotation,
-                   Similarity, Transformation};
+use alga::linear::{
+    AffineTransformation, DirectIsometry, ProjectiveTransformation, Rotation, Similarity,
+    Transformation,
+};
 
-use base::allocator::Allocator;
-use base::dimension::DimName;
-use base::{DefaultAllocator, VectorN};
+use crate::base::allocator::Allocator;
+use crate::base::dimension::DimName;
+use crate::base::{DefaultAllocator, VectorN};
 
-use geometry::{Isometry, Point, Translation};
+use crate::geometry::{AbstractRotation, Isometry, Point, Translation};
 
 /*
  *
  * Algebraic structures.
  *
  */
-impl<N: Real, D: DimName, R> Identity<Multiplicative> for Isometry<N, D, R>
+impl<N: RealField + simba::scalar::RealField, D: DimName, R> Identity<Multiplicative>
+    for Isometry<N, D, R>
 where
-    R: Rotation<Point<N, D>>,
+    R: Rotation<Point<N, D>> + AbstractRotation<N, D>,
     DefaultAllocator: Allocator<N, D>,
 {
     #[inline]
@@ -27,25 +31,28 @@ where
     }
 }
 
-impl<N: Real, D: DimName, R> Inverse<Multiplicative> for Isometry<N, D, R>
+impl<N: RealField + simba::scalar::RealField, D: DimName, R> TwoSidedInverse<Multiplicative>
+    for Isometry<N, D, R>
 where
-    R: Rotation<Point<N, D>>,
+    R: Rotation<Point<N, D>> + AbstractRotation<N, D>,
     DefaultAllocator: Allocator<N, D>,
 {
     #[inline]
-    fn inverse(&self) -> Self {
+    #[must_use = "Did you mean to use two_sided_inverse_mut()?"]
+    fn two_sided_inverse(&self) -> Self {
         self.inverse()
     }
 
     #[inline]
-    fn inverse_mut(&mut self) {
+    fn two_sided_inverse_mut(&mut self) {
         self.inverse_mut()
     }
 }
 
-impl<N: Real, D: DimName, R> AbstractMagma<Multiplicative> for Isometry<N, D, R>
+impl<N: RealField + simba::scalar::RealField, D: DimName, R> AbstractMagma<Multiplicative>
+    for Isometry<N, D, R>
 where
-    R: Rotation<Point<N, D>>,
+    R: Rotation<Point<N, D>> + AbstractRotation<N, D>,
     DefaultAllocator: Allocator<N, D>,
 {
     #[inline]
@@ -56,8 +63,8 @@ where
 
 macro_rules! impl_multiplicative_structures(
     ($($marker: ident<$operator: ident>),* $(,)*) => {$(
-        impl<N: Real, D: DimName, R> $marker<$operator> for Isometry<N, D, R>
-            where R: Rotation<Point<N, D>>,
+        impl<N: RealField + simba::scalar::RealField, D: DimName, R> $marker<$operator> for Isometry<N, D, R>
+            where R: Rotation<Point<N, D>> + AbstractRotation<N, D>,
                   DefaultAllocator: Allocator<N, D> { }
     )*}
 );
@@ -75,42 +82,44 @@ impl_multiplicative_structures!(
  * Transformation groups.
  *
  */
-impl<N: Real, D: DimName, R> Transformation<Point<N, D>> for Isometry<N, D, R>
+impl<N: RealField + simba::scalar::RealField, D: DimName, R> Transformation<Point<N, D>>
+    for Isometry<N, D, R>
 where
-    R: Rotation<Point<N, D>>,
+    R: Rotation<Point<N, D>> + AbstractRotation<N, D>,
     DefaultAllocator: Allocator<N, D>,
 {
     #[inline]
     fn transform_point(&self, pt: &Point<N, D>) -> Point<N, D> {
-        self * pt
+        self.transform_point(pt)
     }
 
     #[inline]
     fn transform_vector(&self, v: &VectorN<N, D>) -> VectorN<N, D> {
-        self * v
+        self.transform_vector(v)
     }
 }
 
-impl<N: Real, D: DimName, R> ProjectiveTransformation<Point<N, D>> for Isometry<N, D, R>
+impl<N: RealField + simba::scalar::RealField, D: DimName, R> ProjectiveTransformation<Point<N, D>>
+    for Isometry<N, D, R>
 where
-    R: Rotation<Point<N, D>>,
+    R: Rotation<Point<N, D>> + AbstractRotation<N, D>,
     DefaultAllocator: Allocator<N, D>,
 {
     #[inline]
     fn inverse_transform_point(&self, pt: &Point<N, D>) -> Point<N, D> {
-        self.rotation
-            .inverse_transform_point(&(pt - &self.translation.vector))
+        self.inverse_transform_point(pt)
     }
 
     #[inline]
     fn inverse_transform_vector(&self, v: &VectorN<N, D>) -> VectorN<N, D> {
-        self.rotation.inverse_transform_vector(v)
+        self.inverse_transform_vector(v)
     }
 }
 
-impl<N: Real, D: DimName, R> AffineTransformation<Point<N, D>> for Isometry<N, D, R>
+impl<N: RealField + simba::scalar::RealField, D: DimName, R> AffineTransformation<Point<N, D>>
+    for Isometry<N, D, R>
 where
-    R: Rotation<Point<N, D>>,
+    R: Rotation<Point<N, D>> + AbstractRotation<N, D>,
     DefaultAllocator: Allocator<N, D>,
 {
     type Rotation = R;
@@ -118,12 +127,12 @@ where
     type Translation = Translation<N, D>;
 
     #[inline]
-    fn decompose(&self) -> (Translation<N, D>, R, Id, R) {
+    fn decompose(&self) -> (Self::Translation, R, Id, R) {
         (
             self.translation.clone(),
             self.rotation.clone(),
             Id::new(),
-            R::identity(),
+            <R as AbstractRotation<N, D>>::identity(),
         )
     }
 
@@ -139,16 +148,13 @@ where
 
     #[inline]
     fn append_rotation(&self, r: &Self::Rotation) -> Self {
-        let shift = r.transform_vector(&self.translation.vector);
-        Isometry::from_parts(
-            Translation::from_vector(shift),
-            r.clone() * self.rotation.clone(),
-        )
+        let shift = Transformation::transform_vector(r, &self.translation.vector);
+        Isometry::from_parts(Translation::from(shift), r.clone() * self.rotation.clone())
     }
 
     #[inline]
     fn prepend_rotation(&self, r: &Self::Rotation) -> Self {
-        self * r
+        Isometry::from_parts(self.translation.clone(), self.rotation.prepend_rotation(r))
     }
 
     #[inline]
@@ -169,9 +175,10 @@ where
     }
 }
 
-impl<N: Real, D: DimName, R> Similarity<Point<N, D>> for Isometry<N, D, R>
+impl<N: RealField + simba::scalar::RealField, D: DimName, R> Similarity<Point<N, D>>
+    for Isometry<N, D, R>
 where
-    R: Rotation<Point<N, D>>,
+    R: Rotation<Point<N, D>> + AbstractRotation<N, D>,
     DefaultAllocator: Allocator<N, D>,
 {
     type Scaling = Id;
@@ -194,8 +201,8 @@ where
 
 macro_rules! marker_impl(
     ($($Trait: ident),*) => {$(
-        impl<N: Real, D: DimName, R> $Trait<Point<N, D>> for Isometry<N, D, R>
-        where R: Rotation<Point<N, D>>,
+        impl<N: RealField + simba::scalar::RealField, D: DimName, R> $Trait<Point<N, D>> for Isometry<N, D, R>
+        where R: Rotation<Point<N, D>> + AbstractRotation<N, D>,
               DefaultAllocator: Allocator<N, D> { }
     )*}
 );

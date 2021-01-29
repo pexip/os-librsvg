@@ -5,22 +5,24 @@
  *
  */
 
-use num::One;
+use num::{One, Zero};
 
-use base::{DefaultAllocator, Matrix3, Matrix4, MatrixN, Scalar, SquareMatrix, Unit, Vector,
-           Vector3, VectorN};
-use base::dimension::{DimName, DimNameDiff, DimNameSub, U1};
-use base::storage::{Storage, StorageMut};
-use base::allocator::Allocator;
-use geometry::{Isometry, IsometryMatrix3, Orthographic3, Perspective3, Point, Point3, Rotation2,
-               Rotation3};
+use crate::base::allocator::Allocator;
+use crate::base::dimension::{DimName, DimNameDiff, DimNameSub, U1};
+use crate::base::storage::{Storage, StorageMut};
+use crate::base::{
+    DefaultAllocator, Matrix3, Matrix4, MatrixN, Scalar, SquareMatrix, Unit, Vector, Vector3,
+    VectorN,
+};
+use crate::geometry::{
+    Isometry, IsometryMatrix3, Orthographic3, Perspective3, Point, Point3, Rotation2, Rotation3,
+};
 
-use alga::general::{Ring, Real};
-use alga::linear::Transformation;
+use simba::scalar::{ClosedAdd, ClosedMul, RealField};
 
 impl<N, D: DimName> MatrixN<N, D>
 where
-    N: Scalar + Ring,
+    N: Scalar + Zero + One,
     DefaultAllocator: Allocator<N, D, D>,
 {
     /// Creates a new homogeneous matrix that applies the same scaling factor on each dimension.
@@ -39,9 +41,9 @@ where
         D: DimNameSub<U1>,
         SB: Storage<N, DimNameDiff<D, U1>>,
     {
-        let mut res = Self::one();
+        let mut res = Self::identity();
         for i in 0..scaling.len() {
-            res[(i, i)] = scaling[i];
+            res[(i, i)] = scaling[i].inlined_clone();
         }
 
         res
@@ -54,7 +56,7 @@ where
         D: DimNameSub<U1>,
         SB: Storage<N, DimNameDiff<D, U1>>,
     {
-        let mut res = Self::one();
+        let mut res = Self::identity();
         res.fixed_slice_mut::<DimNameDiff<D, U1>, U1>(0, D::dim() - 1)
             .copy_from(translation);
 
@@ -62,7 +64,7 @@ where
     }
 }
 
-impl<N: Real> Matrix3<N> {
+impl<N: RealField> Matrix3<N> {
     /// Builds a 2 dimensional homogeneous rotation matrix from an angle in radian.
     #[inline]
     pub fn new_rotation(angle: N) -> Self {
@@ -70,7 +72,7 @@ impl<N: Real> Matrix3<N> {
     }
 }
 
-impl<N: Real> Matrix4<N> {
+impl<N: RealField> Matrix4<N> {
     /// Builds a 3D homogeneous rotation matrix from an axis and an angle (multiplied together).
     ///
     /// Returns the identity matrix if the given argument is zero.
@@ -112,13 +114,13 @@ impl<N: Real> Matrix4<N> {
     /// Creates a new homogeneous matrix for an orthographic projection.
     #[inline]
     pub fn new_orthographic(left: N, right: N, bottom: N, top: N, znear: N, zfar: N) -> Self {
-        Orthographic3::new(left, right, bottom, top, znear, zfar).unwrap()
+        Orthographic3::new(left, right, bottom, top, znear, zfar).into_inner()
     }
 
     /// Creates a new homogeneous matrix for a perspective projection.
     #[inline]
     pub fn new_perspective(aspect: N, fovy: N, znear: N, zfar: N) -> Self {
-        Perspective3::new(aspect, fovy, znear, zfar).unwrap()
+        Perspective3::new(aspect, fovy, znear, zfar).into_inner()
     }
 
     /// Creates an isometry that corresponds to the local frame of an observer standing at the
@@ -127,8 +129,14 @@ impl<N: Real> Matrix4<N> {
     /// It maps the view direction `target - eye` to the positive `z` axis and the origin to the
     /// `eye`.
     #[inline]
+    pub fn face_towards(eye: &Point3<N>, target: &Point3<N>, up: &Vector3<N>) -> Self {
+        IsometryMatrix3::face_towards(eye, target, up).to_homogeneous()
+    }
+
+    /// Deprecated: Use [Matrix4::face_towards] instead.
+    #[deprecated(note = "renamed to `face_towards`")]
     pub fn new_observer_frame(eye: &Point3<N>, target: &Point3<N>, up: &Vector3<N>) -> Self {
-        IsometryMatrix3::new_observer_frame(eye, target, up).to_homogeneous()
+        Matrix4::face_towards(eye, target, up)
     }
 
     /// Builds a right-handed look-at view matrix.
@@ -144,9 +152,12 @@ impl<N: Real> Matrix4<N> {
     }
 }
 
-impl<N: Scalar + Ring, D: DimName, S: Storage<N, D, D>> SquareMatrix<N, D, S> {
+impl<N: Scalar + Zero + One + ClosedMul + ClosedAdd, D: DimName, S: Storage<N, D, D>>
+    SquareMatrix<N, D, S>
+{
     /// Computes the transformation equal to `self` followed by an uniform scaling factor.
     #[inline]
+    #[must_use = "Did you mean to use append_scaling_mut()?"]
     pub fn append_scaling(&self, scaling: N) -> MatrixN<N, D>
     where
         D: DimNameSub<U1>,
@@ -159,6 +170,7 @@ impl<N: Scalar + Ring, D: DimName, S: Storage<N, D, D>> SquareMatrix<N, D, S> {
 
     /// Computes the transformation equal to an uniform scaling factor followed by `self`.
     #[inline]
+    #[must_use = "Did you mean to use prepend_scaling_mut()?"]
     pub fn prepend_scaling(&self, scaling: N) -> MatrixN<N, D>
     where
         D: DimNameSub<U1>,
@@ -171,6 +183,7 @@ impl<N: Scalar + Ring, D: DimName, S: Storage<N, D, D>> SquareMatrix<N, D, S> {
 
     /// Computes the transformation equal to `self` followed by a non-uniform scaling factor.
     #[inline]
+    #[must_use = "Did you mean to use append_nonuniform_scaling_mut()?"]
     pub fn append_nonuniform_scaling<SB>(
         &self,
         scaling: &Vector<N, DimNameDiff<D, U1>, SB>,
@@ -187,6 +200,7 @@ impl<N: Scalar + Ring, D: DimName, S: Storage<N, D, D>> SquareMatrix<N, D, S> {
 
     /// Computes the transformation equal to a non-uniform scaling factor followed by `self`.
     #[inline]
+    #[must_use = "Did you mean to use prepend_nonuniform_scaling_mut()?"]
     pub fn prepend_nonuniform_scaling<SB>(
         &self,
         scaling: &Vector<N, DimNameDiff<D, U1>, SB>,
@@ -203,6 +217,7 @@ impl<N: Scalar + Ring, D: DimName, S: Storage<N, D, D>> SquareMatrix<N, D, S> {
 
     /// Computes the transformation equal to `self` followed by a translation.
     #[inline]
+    #[must_use = "Did you mean to use append_translation_mut()?"]
     pub fn append_translation<SB>(&self, shift: &Vector<N, DimNameDiff<D, U1>, SB>) -> MatrixN<N, D>
     where
         D: DimNameSub<U1>,
@@ -216,6 +231,7 @@ impl<N: Scalar + Ring, D: DimName, S: Storage<N, D, D>> SquareMatrix<N, D, S> {
 
     /// Computes the transformation equal to a translation followed by `self`.
     #[inline]
+    #[must_use = "Did you mean to use prepend_translation_mut()?"]
     pub fn prepend_translation<SB>(
         &self,
         shift: &Vector<N, DimNameDiff<D, U1>, SB>,
@@ -231,7 +247,9 @@ impl<N: Scalar + Ring, D: DimName, S: Storage<N, D, D>> SquareMatrix<N, D, S> {
     }
 }
 
-impl<N: Scalar + Ring, D: DimName, S: StorageMut<N, D, D>> SquareMatrix<N, D, S> {
+impl<N: Scalar + Zero + One + ClosedMul + ClosedAdd, D: DimName, S: StorageMut<N, D, D>>
+    SquareMatrix<N, D, S>
+{
     /// Computes in-place the transformation equal to `self` followed by an uniform scaling factor.
     #[inline]
     pub fn append_scaling_mut(&mut self, scaling: N)
@@ -261,7 +279,7 @@ impl<N: Scalar + Ring, D: DimName, S: StorageMut<N, D, D>> SquareMatrix<N, D, S>
     {
         for i in 0..scaling.len() {
             let mut to_scale = self.fixed_rows_mut::<U1>(i);
-            to_scale *= scaling[i];
+            to_scale *= scaling[i].inlined_clone();
         }
     }
 
@@ -276,7 +294,7 @@ impl<N: Scalar + Ring, D: DimName, S: StorageMut<N, D, D>> SquareMatrix<N, D, S>
     {
         for i in 0..scaling.len() {
             let mut to_scale = self.fixed_columns_mut::<U1>(i);
-            to_scale *= scaling[i];
+            to_scale *= scaling[i].inlined_clone();
         }
     }
 
@@ -289,7 +307,8 @@ impl<N: Scalar + Ring, D: DimName, S: StorageMut<N, D, D>> SquareMatrix<N, D, S>
     {
         for i in 0..D::dim() {
             for j in 0..D::dim() - 1 {
-                self[(j, i)] += shift[j] * self[(D::dim() - 1, i)];
+                let add = shift[j].inlined_clone() * self[(D::dim() - 1, i)].inlined_clone();
+                self[(j, i)] += add;
             }
         }
     }
@@ -302,7 +321,8 @@ impl<N: Scalar + Ring, D: DimName, S: StorageMut<N, D, D>> SquareMatrix<N, D, S>
         SB: Storage<N, DimNameDiff<D, U1>>,
         DefaultAllocator: Allocator<N, DimNameDiff<D, U1>>,
     {
-        let scale = self.fixed_slice::<U1, DimNameDiff<D, U1>>(D::dim() - 1, 0)
+        let scale = self
+            .fixed_slice::<U1, DimNameDiff<D, U1>>(D::dim() - 1, 0)
             .tr_dot(&shift);
         let post_translation =
             self.fixed_slice::<DimNameDiff<D, U1>, DimNameDiff<D, U1>>(0, 0) * shift;
@@ -314,14 +334,15 @@ impl<N: Scalar + Ring, D: DimName, S: StorageMut<N, D, D>> SquareMatrix<N, D, S>
     }
 }
 
-impl<N: Real, D: DimNameSub<U1>> Transformation<Point<N, DimNameDiff<D, U1>>> for MatrixN<N, D>
+impl<N: RealField, D: DimNameSub<U1>, S: Storage<N, D, D>> SquareMatrix<N, D, S>
 where
     DefaultAllocator: Allocator<N, D, D>
         + Allocator<N, DimNameDiff<D, U1>>
         + Allocator<N, DimNameDiff<D, U1>, DimNameDiff<D, U1>>,
 {
+    /// Transforms the given vector, assuming the matrix `self` uses homogeneous coordinates.
     #[inline]
-    fn transform_vector(
+    pub fn transform_vector(
         &self,
         v: &VectorN<N, DimNameDiff<D, U1>>,
     ) -> VectorN<N, DimNameDiff<D, U1>> {
@@ -336,19 +357,22 @@ where
         transform * v
     }
 
+    /// Transforms the given point, assuming the matrix `self` uses homogeneous coordinates.
     #[inline]
-    fn transform_point(&self, pt: &Point<N, DimNameDiff<D, U1>>) -> Point<N, DimNameDiff<D, U1>> {
+    pub fn transform_point(
+        &self,
+        pt: &Point<N, DimNameDiff<D, U1>>,
+    ) -> Point<N, DimNameDiff<D, U1>> {
         let transform = self.fixed_slice::<DimNameDiff<D, U1>, DimNameDiff<D, U1>>(0, 0);
         let translation = self.fixed_slice::<DimNameDiff<D, U1>, U1>(0, D::dim() - 1);
         let normalizer = self.fixed_slice::<U1, DimNameDiff<D, U1>>(D::dim() - 1, 0);
-        let n = normalizer.tr_dot(&pt.coords) + unsafe {
-            *self.get_unchecked(D::dim() - 1, D::dim() - 1)
-        };
+        let n = normalizer.tr_dot(&pt.coords)
+            + unsafe { *self.get_unchecked((D::dim() - 1, D::dim() - 1)) };
 
         if !n.is_zero() {
-            return transform * (pt / n) + translation;
+            (transform * pt + translation) / n
+        } else {
+            transform * pt + translation
         }
-
-        transform * pt + translation
     }
 }

@@ -1,10 +1,9 @@
-extern crate rayon;
-
 use rayon::prelude::*;
 
 fn check<I>(iter: I)
-    where I: ParallelIterator + Clone,
-          I::Item: std::fmt::Debug + PartialEq
+where
+    I: ParallelIterator + Clone,
+    I::Item: std::fmt::Debug + PartialEq,
 {
     let a: Vec<_> = iter.clone().collect();
     let b: Vec<_> = iter.collect();
@@ -22,7 +21,7 @@ fn clone_binary_heap() {
 #[test]
 fn clone_btree_map() {
     use std::collections::BTreeMap;
-    let map: BTreeMap<_,_> = (0..1000).enumerate().collect();
+    let map: BTreeMap<_, _> = (0..1000).enumerate().collect();
     check(map.par_iter());
 }
 
@@ -36,7 +35,7 @@ fn clone_btree_set() {
 #[test]
 fn clone_hash_map() {
     use std::collections::HashMap;
-    let map: HashMap<_,_> = (0..1000).enumerate().collect();
+    let map: HashMap<_, _> = (0..1000).enumerate().collect();
     check(map.par_iter());
 }
 
@@ -83,6 +82,11 @@ fn clone_range() {
 }
 
 #[test]
+fn clone_range_inclusive() {
+    check((0..=1000).into_par_iter());
+}
+
+#[test]
 fn clone_str() {
     let s = include_str!("clones.rs");
     check(s.par_chars());
@@ -97,6 +101,7 @@ fn clone_vec() {
     let v: Vec<_> = (0..1000).collect();
     check(v.par_iter());
     check(v.par_chunks(42));
+    check(v.par_chunks_exact(42));
     check(v.par_windows(42));
     check(v.par_split(|x| x % 3 == 0));
     check(v.into_par_iter());
@@ -107,11 +112,14 @@ fn clone_adaptors() {
     let v: Vec<_> = (0..1000).map(Some).collect();
     check(v.par_iter().chain(&v));
     check(v.par_iter().cloned());
+    check(v.par_iter().copied());
     check(v.par_iter().enumerate());
     check(v.par_iter().filter(|_| true));
     check(v.par_iter().filter_map(|x| *x));
     check(v.par_iter().flat_map(|x| *x));
+    check(v.par_iter().flat_map_iter(|x| *x));
     check(v.par_iter().flatten());
+    check(v.par_iter().flatten_iter());
     check(v.par_iter().with_max_len(1).fold(|| 0, |x, _| x));
     check(v.par_iter().with_max_len(1).fold_with(0, |x, _| x));
     check(v.par_iter().with_max_len(1).try_fold(|| 0, |_, &x| x));
@@ -124,6 +132,9 @@ fn clone_adaptors() {
     check(v.par_iter().chunks(3));
     check(v.par_iter().map(|x| x));
     check(v.par_iter().map_with(0, |_, x| x));
+    check(v.par_iter().map_init(|| 0, |_, x| x));
+    check(v.par_iter().panic_fuse());
+    check(v.par_iter().positions(|_| true));
     check(v.par_iter().rev());
     check(v.par_iter().skip(1));
     check(v.par_iter().take(1));
@@ -132,6 +143,7 @@ fn clone_adaptors() {
     check(v.par_iter().with_min_len(1));
     check(v.par_iter().zip(&v));
     check(v.par_iter().zip_eq(&v));
+    check(v.par_iter().step_by(2));
 }
 
 #[test]
@@ -156,3 +168,19 @@ fn clone_splitter() {
     check(rayon::iter::split(0..1000, |x| (x, None)));
 }
 
+#[test]
+fn clone_multizip() {
+    let v: &Vec<_> = &(0..1000).collect();
+    check((v,).into_par_iter());
+    check((v, v).into_par_iter());
+    check((v, v, v).into_par_iter());
+    check((v, v, v, v).into_par_iter());
+    check((v, v, v, v, v).into_par_iter());
+    check((v, v, v, v, v, v).into_par_iter());
+    check((v, v, v, v, v, v, v).into_par_iter());
+    check((v, v, v, v, v, v, v, v).into_par_iter());
+    check((v, v, v, v, v, v, v, v, v).into_par_iter());
+    check((v, v, v, v, v, v, v, v, v, v).into_par_iter());
+    check((v, v, v, v, v, v, v, v, v, v, v).into_par_iter());
+    check((v, v, v, v, v, v, v, v, v, v, v, v).into_par_iter());
+}

@@ -1,13 +1,14 @@
 use std::mem;
 use std::ops::{Deref, DerefMut};
 
-use alga::general::Real;
+use simba::simd::SimdValue;
 
-use base::coordinates::IJKW;
+use crate::base::coordinates::IJKW;
+use crate::Scalar;
 
-use geometry::Quaternion;
+use crate::geometry::Quaternion;
 
-impl<N: Real> Deref for Quaternion<N> {
+impl<N: Scalar + SimdValue> Deref for Quaternion<N> {
     type Target = IJKW<N>;
 
     #[inline]
@@ -16,7 +17,7 @@ impl<N: Real> Deref for Quaternion<N> {
     }
 }
 
-impl<N: Real> DerefMut for Quaternion<N> {
+impl<N: Scalar + SimdValue> DerefMut for Quaternion<N> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { mem::transmute(self) }

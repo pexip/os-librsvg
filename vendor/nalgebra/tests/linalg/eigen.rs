@@ -2,98 +2,111 @@ use na::DMatrix;
 
 #[cfg(feature = "arbitrary")]
 mod quickcheck_tests {
-    use std::cmp;
-    use na::{DMatrix, Matrix2, Matrix3, Matrix4};
+    macro_rules! gen_tests(
+        ($module: ident, $scalar: ty) => {
+            mod $module {
+                use na::{DMatrix, Matrix2, Matrix3, Matrix4};
+                #[allow(unused_imports)]
+                use crate::core::helper::{RandScalar, RandComplex};
+                use std::cmp;
 
-    quickcheck! {
-        fn symmetric_eigen(n: usize) -> bool {
-            let n      = cmp::max(1, cmp::min(n, 10));
-            let m      = DMatrix::<f64>::new_random(n, n);
-            let eig    = m.clone().symmetric_eigen();
-            let recomp = eig.recompose();
+                quickcheck! {
+                    fn symmetric_eigen(n: usize) -> bool {
+                        let n      = cmp::max(1, cmp::min(n, 10));
+                        let m      = DMatrix::<$scalar>::new_random(n, n).map(|e| e.0).hermitian_part();
+                        let eig    = m.clone().symmetric_eigen();
+                        let recomp = eig.recompose();
 
-            println!("{}{}", m.lower_triangle(), recomp.lower_triangle());
+                        relative_eq!(m.lower_triangle(), recomp.lower_triangle(), epsilon = 1.0e-5)
+                    }
 
-            relative_eq!(m.lower_triangle(), recomp.lower_triangle(), epsilon = 1.0e-5)
+                    fn symmetric_eigen_singular(n: usize) -> bool {
+                        let n      = cmp::max(1, cmp::min(n, 10));
+                        let mut m  = DMatrix::<$scalar>::new_random(n, n).map(|e| e.0).hermitian_part();
+                        m.row_mut(n / 2).fill(na::zero());
+                        m.column_mut(n / 2).fill(na::zero());
+                        let eig    = m.clone().symmetric_eigen();
+                        let recomp = eig.recompose();
+
+                        relative_eq!(m.lower_triangle(), recomp.lower_triangle(), epsilon = 1.0e-5)
+                    }
+
+                    fn symmetric_eigen_static_square_4x4(m: Matrix4<$scalar>) -> bool {
+                        let m      = m.map(|e| e.0).hermitian_part();
+                        let eig    = m.symmetric_eigen();
+                        let recomp = eig.recompose();
+
+                        relative_eq!(m.lower_triangle(), recomp.lower_triangle(), epsilon = 1.0e-5)
+                    }
+
+                    fn symmetric_eigen_static_square_3x3(m: Matrix3<$scalar>) -> bool {
+                        let m      = m.map(|e| e.0).hermitian_part();
+                        let eig    = m.symmetric_eigen();
+                        let recomp = eig.recompose();
+
+                        relative_eq!(m.lower_triangle(), recomp.lower_triangle(), epsilon = 1.0e-5)
+                    }
+
+                    fn symmetric_eigen_static_square_2x2(m: Matrix2<$scalar>) -> bool {
+                        let m      = m.map(|e| e.0).hermitian_part();
+                        let eig    = m.symmetric_eigen();
+                        let recomp = eig.recompose();
+
+                        relative_eq!(m.lower_triangle(), recomp.lower_triangle(), epsilon = 1.0e-5)
+                    }
+                }
+            }
         }
+    );
 
-        fn symmetric_eigen_singular(n: usize) -> bool {
-            let n      = cmp::max(1, cmp::min(n, 10));
-            let mut m  = DMatrix::<f64>::new_random(n, n);
-            m.row_mut(n / 2).fill(0.0);
-            m.column_mut(n / 2).fill(0.0);
-            let eig    = m.clone().symmetric_eigen();
-            let recomp = eig.recompose();
-
-            println!("{}{}", m.lower_triangle(), recomp.lower_triangle());
-
-            relative_eq!(m.lower_triangle(), recomp.lower_triangle(), epsilon = 1.0e-5)
-        }
-
-        fn symmetric_eigen_static_square_4x4(m: Matrix4<f64>) -> bool {
-            let eig    = m.symmetric_eigen();
-            let recomp = eig.recompose();
-
-            println!("{}{}", m.lower_triangle(), recomp.lower_triangle());
-
-            relative_eq!(m.lower_triangle(), recomp.lower_triangle(), epsilon = 1.0e-5)
-        }
-
-        fn symmetric_eigen_static_square_3x3(m: Matrix3<f64>) -> bool {
-            let eig    = m.symmetric_eigen();
-            let recomp = eig.recompose();
-
-            println!("{}{}", m.lower_triangle(), recomp.lower_triangle());
-
-            relative_eq!(m.lower_triangle(), recomp.lower_triangle(), epsilon = 1.0e-5)
-        }
-
-        fn symmetric_eigen_static_square_2x2(m: Matrix2<f64>) -> bool {
-            let eig    = m.symmetric_eigen();
-            let recomp = eig.recompose();
-
-            println!("{}{}", m.lower_triangle(), recomp.lower_triangle());
-
-            relative_eq!(m.lower_triangle(), recomp.lower_triangle(), epsilon = 1.0e-5)
-        }
-    }
+    gen_tests!(complex, RandComplex<f64>);
+    gen_tests!(f64, RandScalar<f64>);
 }
 
 // Test proposed on the issue #176 of rulinalg.
 #[test]
+#[rustfmt::skip]
 fn symmetric_eigen_singular_24x24() {
-    let m = DMatrix::from_row_slice(24, 24, &[
-        1.0,  1.0,  1.0,  1.0,  1.0,  1.0,  0.0,  1.0,  1.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        -1.0, -1.0, -1.0, -1.0, -1.0,  0.0,  1.0,  0.0,  0.0,  1.0,  1.0,  1.0,  1.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0, -1.0, -1.0, -1.0, -1.0,  0.0,  0.0,  0.0,  0.0,  1.0,  1.0,  1.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -1.0, -1.0, -1.0,  0.0,  0.0,  0.0,  0.0,  1.0,  1.0,  1.0,  1.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,  0.0,  1.0,  1.0,  1.0,
-        0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  4.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  4.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  4.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0]);
+    let m = DMatrix::from_row_slice(
+        24,
+        24,
+        &[
+            1.0,  1.0,  1.0,  1.0,  1.0,  1.0,  0.0,  1.0,  1.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            -1.0, -1.0, -1.0, -1.0, -1.0,  0.0,  1.0,  0.0,  0.0,  1.0,  1.0,  1.0,  1.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0, -1.0, -1.0, -1.0, -1.0,  0.0,  0.0,  0.0,  0.0,  1.0,  1.0,  1.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -1.0, -1.0, -1.0,  0.0,  0.0,  0.0,  0.0,  1.0,  1.0,  1.0,  1.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,  0.0,  1.0,  1.0,  1.0,
+            0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  4.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  4.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  4.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0, -4.0,  0.0,  0.0,  0.0,  0.0,  4.0,  0.0,  0.0,  0.0,  0.0,  0.0
+        ],
+    );
 
     let eig = m.clone().symmetric_eigen();
     let recomp = eig.recompose();
 
-    assert!(relative_eq!(m.lower_triangle(), recomp.lower_triangle(), epsilon = 1.0e-5));
+    assert_relative_eq!(
+        m.lower_triangle(),
+        recomp.lower_triangle(),
+        epsilon = 1.0e-5
+    );
 }
-
 
 //  #[cfg(feature = "arbitrary")]
 //  quickcheck! {
@@ -167,16 +180,16 @@ fn symmetric_eigen_singular_24x24() {
 //           MatrixN<f64, D>: Display,
 //           VectorN<f64, D>: Display {
 //     let mv = &m * &eig.eigenvectors;
-// 
+//
 //     println!("eigenvalues: {}eigenvectors: {}", eig.eigenvalues, eig.eigenvectors);
-// 
+//
 //     let dim = m.nrows();
 //     for i in 0 .. dim {
 //         let mut col = eig.eigenvectors.column_mut(i);
 //         col *= eig.eigenvalues[i];
 //     }
-// 
+//
 //     println!("{}{:.5}{:.5}", m, mv, eig.eigenvectors);
-// 
+//
 //     relative_eq!(eig.eigenvectors, mv, epsilon = 1.0e-5)
 // }

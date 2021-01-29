@@ -1,23 +1,49 @@
 # Rand
 
-[![Build Status](https://travis-ci.org/rust-lang-nursery/rand.svg?branch=master)](https://travis-ci.org/rust-lang-nursery/rand)
-[![Build Status](https://ci.appveyor.com/api/projects/status/github/rust-lang-nursery/rand?svg=true)](https://ci.appveyor.com/project/alexcrichton/rand)
-[![Latest version](https://img.shields.io/crates/v/rand.svg)](https://crates.io/crates/rand)
-[![Documentation](https://docs.rs/rand/badge.svg)](https://docs.rs/rand)
-[![Minimum rustc version](https://img.shields.io/badge/rustc-1.22+-yellow.svg)](https://github.com/rust-lang-nursery/rand#rust-version-requirements)
+[![Test Status](https://github.com/rust-random/rand/workflows/Tests/badge.svg?event=push)](https://github.com/rust-random/rand/actions)
+[![Crate](https://img.shields.io/crates/v/rand.svg)](https://crates.io/crates/rand)
+[![Book](https://img.shields.io/badge/book-master-yellow.svg)](https://rust-random.github.io/book/)
+[![API](https://img.shields.io/badge/api-master-yellow.svg)](https://rust-random.github.io/rand/rand)
+[![API](https://docs.rs/rand/badge.svg)](https://docs.rs/rand)
+[![Minimum rustc version](https://img.shields.io/badge/rustc-1.36+-lightgray.svg)](https://github.com/rust-random/rand#rust-version-requirements)
 
-A Rust library for random number generation.
+A Rust library for random number generation, featuring:
 
-Rand provides utilities to generate random numbers, to convert them to useful
-types and distributions, and some randomness-related algorithms.
+-   Easy random value generation and usage via the [`Rng`](https://docs.rs/rand/*/rand/trait.Rng.html),
+    [`SliceRandom`](https://docs.rs/rand/*/rand/seq/trait.SliceRandom.html) and
+    [`IteratorRandom`](https://docs.rs/rand/*/rand/seq/trait.IteratorRandom.html) traits
+-   Secure seeding via the [`getrandom` crate](https://crates.io/crates/getrandom)
+    and fast, convenient generation via [`thread_rng`](https://docs.rs/rand/*/rand/fn.thread_rng.html)
+-   A modular design built over [`rand_core`](https://crates.io/crates/rand_core)
+    ([see the book](https://rust-random.github.io/book/crates.html))
+-   Fast implementations of the best-in-class [cryptographic](https://rust-random.github.io/book/guide-rngs.html#cryptographically-secure-pseudo-random-number-generators-csprngs) and
+    [non-cryptographic](https://rust-random.github.io/book/guide-rngs.html#basic-pseudo-random-number-generators-prngs) generators
+-   A flexible [`distributions`](https://docs.rs/rand/*/rand/distributions/index.html) module
+-   Samplers for a large number of random number distributions via our own
+    [`rand_distr`](https://docs.rs/rand_distr) and via
+    the [`statrs`](https://docs.rs/statrs/0.13.0/statrs/)
+-   [Portably reproducible output](https://rust-random.github.io/book/portability.html)
+-   `#[no_std]` compatibility (partial)
+-   *Many* performance optimisations
 
-The core random number generation traits of Rand live in the [rand_core](
-https://crates.io/crates/rand_core) crate; this crate is most useful when
-implementing RNGs.
+It's also worth pointing out what `rand` *is not*:
 
-API reference:
-[master branch](https://rust-lang-nursery.github.io/rand/rand/index.html),
-[by release](https://docs.rs/rand/0.5).
+-   Small. Most low-level crates are small, but the higher-level `rand` and
+    `rand_distr` each contain a lot of functionality.
+-   Simple (implementation). We have a strong focus on correctness, speed and flexibility, but
+    not simplicity. If you prefer a small-and-simple library, there are
+    alternatives including [fastrand](https://crates.io/crates/fastrand)
+    and [oorandom](https://crates.io/crates/oorandom).
+-   Slow. We take performance seriously, with considerations also for set-up
+    time of new distributions, commonly-used parameters, and parameters of the
+    current sampler.
+
+Documentation:
+
+-   [The Rust Rand Book](https://rust-random.github.io/book)
+-   [API reference (master branch)](https://rust-random.github.io/rand)
+-   [API reference (docs.rs)](https://docs.rs/rand)
+
 
 ## Usage
 
@@ -25,119 +51,98 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rand = "0.5"
+rand = "0.8.0"
 ```
 
-and this to your crate root:
-
-```rust
-extern crate rand;
-
-use rand::prelude::*;
-
-fn main() {
-  // basic usage with random():
-  let x: u8 = random();
-  println!("{}", x);
-
-  let y = random::<f64>();
-  println!("{}", y);
-
-  if random() { // generates a boolean
-      println!("Heads!");
-  }
-
-  // normal usage needs both an RNG and a function to generate the appropriate
-  // type, range, distribution, etc.
-  let mut rng = thread_rng();
-  if rng.gen() { // random bool
-      let x: f64 = rng.gen(); // random number in range [0, 1)
-      println!("x is: {}", x);
-      let ch = rng.gen::<char>(); // Sometimes you need type annotation
-      println!("char is: {}", ch);
-      println!("Number from 0 to 9: {}", rng.gen_range(0, 10));
-  }
-}
-```
-
-## Functionality
-
-The Rand crate provides:
-
-- A convenient to use default RNG, `thread_rng`: an automatically seeded,
-  crypto-grade generator stored in thread-local memory.
-- Pseudo-random number generators: `StdRng`, `SmallRng`, `prng` module.
-- Functionality for seeding PRNGs: the `FromEntropy` trait, and as sources of
-  external randomness `EntropyRng`, `OsRng` and `JitterRng`.
-- Most content from [`rand_core`](https://crates.io/crates/rand_core)
-  (re-exported): base random number generator traits and error-reporting types.
-- 'Distributions' producing many different types of random values:
-  - A `Standard` distribution for integers, floats, and derived types including
-    tuples, arrays and `Option`
-  - Unbiased sampling from specified `Uniform` ranges.
-  - Sampling from exponential/normal/gamma distributions.
-  - Sampling from binomial/poisson distributions.
-  - `gen_bool` aka Bernoulli distribution.
-- `seq`-uence related functionality:
-  - Sampling a subset of elements.
-  - Randomly shuffling a list.
+To get started using Rand, see [The Book](https://rust-random.github.io/book).
 
 
 ## Versions
 
-Version 0.5 is the latest version and contains many breaking changes.
-See [the Upgrade Guide](UPDATING.md) for guidance on updating from previous
-versions.
+Rand is *mature* (suitable for general usage, with infrequent breaking releases
+which minimise breakage) but not yet at 1.0. We maintain compatibility with
+pinned versions of the Rust compiler (see below).
 
-Version 0.4 was released in December 2017. It contains almost no breaking
-changes since the 0.3 series.
+Current Rand versions are:
 
-For more details, see the [changelog](CHANGELOG.md).
+-   Version 0.7 was released in June 2019, moving most non-uniform distributions
+    to an external crate, moving `from_entropy` to `SeedableRng`, and many small
+    changes and fixes.
+-   Version 0.8 was released in December 2020 with many small changes.
+
+A detailed [changelog](CHANGELOG.md) is available for releases.
+
+When upgrading to the next minor series (especially 0.4 → 0.5), we recommend
+reading the [Upgrade Guide](https://rust-random.github.io/book/update.html).
+
+Rand has not yet reached 1.0 implying some breaking changes may arrive in the
+future ([SemVer](https://semver.org/) allows each 0.x.0 release to include
+breaking changes), but is considered *mature*: breaking changes are minimised
+and breaking releases are infrequent.
+
+Rand libs have inter-dependencies and make use of the
+[semver trick](https://github.com/dtolnay/semver-trick/) in order to make traits
+compatible across crate versions. (This is especially important for `RngCore`
+and `SeedableRng`.) A few crate releases are thus compatibility shims,
+depending on the *next* lib version (e.g. `rand_core` versions `0.2.2` and
+`0.3.1`). This means, for example, that `rand_core_0_4_0::SeedableRng` and
+`rand_core_0_3_0::SeedableRng` are distinct, incompatible traits, which can
+cause build errors. Usually, running `cargo update` is enough to fix any issues.
+
+### Yanked versions
+
+Some versions of Rand crates have been yanked ("unreleased"). Where this occurs,
+the crate's CHANGELOG *should* be updated with a rationale, and a search on the
+issue tracker with the keyword `yank` *should* uncover the motivation.
 
 ### Rust version requirements
 
-The 0.5 release of Rand requires **Rustc version 1.22 or greater**.
-Rand 0.4 and 0.3 (since approx. June 2017) require Rustc version 1.15 or
-greater. Subsets of the Rand code may work with older Rust versions, but this
-is not supported.
+Since version 0.8, Rand requires **Rustc version 1.36 or greater**.
+Rand 0.7 requires Rustc 1.32 or greater while versions 0.5 require Rustc 1.22 or
+greater, and 0.4 and 0.3 (since approx. June 2017) require Rustc version 1.15 or
+greater. Subsets of the Rand code may work with older Rust versions, but this is
+not supported.
 
-Travis CI always has a build with a pinned version of Rustc matching the oldest
-supported Rust release. The current policy is that this can be updated in any
+Continuous Integration (CI) will always test the minimum supported Rustc version
+(the MSRV). The current policy is that this can be updated in any
 Rand release if required, but the change must be noted in the changelog.
-
 
 ## Crate Features
 
-Rand is built with only the `std` feature enabled by default. The following
-optional features are available:
+Rand is built with these features enabled by default:
 
-- `alloc` can be used instead of `std` to provide `Vec` and `Box`.
-- `i128_support` enables support for generating `u128` and `i128` values.
-- `log` enables some logging via the `log` crate.
-- `nightly` enables all unstable features (`i128_support`).
-- `serde1` enables serialization for some types, via Serde version 1.
-- `stdweb` enables support for `OsRng` on `wasm-unknown-unknown` via `stdweb`
-  combined with `cargo-web`.
+-   `std` enables functionality dependent on the `std` lib
+-   `alloc` (implied by `std`) enables functionality requiring an allocator
+-   `getrandom` (implied by `std`) is an optional dependency providing the code
+    behind `rngs::OsRng`
+-   `std_rng` enables inclusion of `StdRng`, `thread_rng` and `random`
+    (the latter two *also* require that `std` be enabled)
 
-`no_std` mode is activated by setting `default-features = false`; this removes
-functionality depending on `std`:
+Optionally, the following dependencies can be enabled:
 
-- `thread_rng()`, and `random()` are not available, as they require thread-local
-  storage and an entropy source.
-- `OsRng` and `EntropyRng` are unavailable.
-- `JitterRng` code is still present, but a nanosecond timer must be provided via
-  `JitterRng::new_with_timer`
-- Since no external entropy is available, it is not possible to create
-  generators with fresh seeds using the `FromEntropy` trait (user must provide
-  a seed).
-- Exponential, normal and gamma type distributions are unavailable since `exp`
-  and `log` functions are not provided in `core`.
-- The `seq`-uence module is unavailable, as it requires `Vec`.
+-   `log` enables logging via the `log` crate` crate
 
+Additionally, these features configure Rand:
+
+-   `small_rng` enables inclusion of the `SmallRng` PRNG
+-   `nightly` enables some optimizations requiring nightly Rust
+-   `simd_support` (experimental) enables sampling of SIMD values
+    (uniformly random SIMD integers and floats), requiring nightly Rust
+
+Note that nightly features are not stable and therefore not all library and
+compiler versions will be compatible. This is especially true of Rand's
+experimental `simd_support` feature.
+
+Rand supports limited functionality in `no_std` mode (enabled via
+`default-features = false`). In this case, `OsRng` and `from_entropy` are
+unavailable (unless `getrandom` is enabled), large parts of `seq` are
+unavailable (unless `alloc` is enabled), and `thread_rng` and `random` are
+unavailable.
 
 # License
 
 Rand is distributed under the terms of both the MIT license and the
 Apache License (Version 2.0).
 
-See [LICENSE-APACHE](LICENSE-APACHE) and [LICENSE-MIT](LICENSE-MIT) for details.
+See [LICENSE-APACHE](LICENSE-APACHE) and [LICENSE-MIT](LICENSE-MIT), and
+[COPYRIGHT](COPYRIGHT) for details.

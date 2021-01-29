@@ -1,6 +1,8 @@
-#![doc(html_root_url = "https://docs.rs/rayon/1.0")]
+#![doc(html_root_url = "https://docs.rs/rayon/1.5")]
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
+#![deny(unreachable_pub)]
+#![warn(rust_2018_idioms)]
 
 //! Data-parallelism library that makes it easy to convert sequential
 //! computations into parallel
@@ -17,6 +19,9 @@
 //!   typically the most efficient.
 //!   - [Parallel iterators][iter module] make it easy to convert a sequential iterator to
 //!     execute in parallel.
+//!     - The [`ParallelIterator`] trait defines general methods for all parallel iterators.
+//!     - The [`IndexedParallelIterator`] trait adds methods for iterators that support random
+//!       access.
 //!   - The [`par_sort`] method sorts `&mut [T]` slices (or vectors) in parallel.
 //!   - [`par_extend`] can be used to efficiently grow collections with items produced
 //!     by a parallel iterator.
@@ -35,8 +40,7 @@
 //!
 //! # Basic usage and the Rayon prelude
 //!
-//! First, you will need to add `rayon` to your `Cargo.toml` and put
-//! `extern crate rayon` in your main file (`lib.rs`, `main.rs`).
+//! First, you will need to add `rayon` to your `Cargo.toml`.
 //!
 //! Next, to use parallel iterators or the other high-level methods,
 //! you need to import several traits. Those traits are bundled into
@@ -54,6 +58,8 @@
 //! [`filter`]: iter/trait.ParallelIterator.html#method.filter
 //! [`fold`]: iter/trait.ParallelIterator.html#method.fold
 //! [more]: iter/trait.ParallelIterator.html#provided-methods
+//! [`ParallelIterator`]: iter/trait.ParallelIterator.html
+//! [`IndexedParallelIterator`]: iter/trait.IndexedParallelIterator.html
 //!
 //! # Crate Layout
 //!
@@ -77,13 +83,6 @@
 //!
 //! [faq]: https://github.com/rayon-rs/rayon/blob/master/FAQ.md
 
-extern crate rayon_core;
-extern crate either;
-extern crate crossbeam_deque;
-
-#[cfg(test)]
-extern crate rand;
-
 #[macro_use]
 mod delegate;
 
@@ -97,21 +96,25 @@ pub mod iter;
 pub mod option;
 pub mod prelude;
 pub mod range;
+pub mod range_inclusive;
 pub mod result;
 pub mod slice;
 pub mod str;
+pub mod string;
 pub mod vec;
 
-mod par_either;
 mod math;
+mod par_either;
 
 mod compile_fail;
 
-pub use rayon_core::current_num_threads;
-pub use rayon_core::ThreadPool;
-pub use rayon_core::ThreadPoolBuilder;
-pub use rayon_core::ThreadPoolBuildError;
-pub use rayon_core::{join, join_context};
 pub use rayon_core::FnContext;
+pub use rayon_core::ThreadBuilder;
+pub use rayon_core::ThreadPool;
+pub use rayon_core::ThreadPoolBuildError;
+pub use rayon_core::ThreadPoolBuilder;
+pub use rayon_core::{current_num_threads, current_thread_index};
+pub use rayon_core::{join, join_context};
 pub use rayon_core::{scope, Scope};
-pub use rayon_core::spawn;
+pub use rayon_core::{scope_fifo, ScopeFifo};
+pub use rayon_core::{spawn, spawn_fifo};

@@ -1,30 +1,35 @@
+use num::Zero;
 #[cfg(feature = "serde-serialize")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use alga::general::Real;
-use base::{DefaultAllocator, Matrix, MatrixMN, MatrixN, Unit, VectorN};
-use dimension::{Dim, DimMin, DimMinimum, U1};
-use storage::{Storage, StorageMut};
-use allocator::{Allocator, Reallocator};
-use constraint::{SameNumberOfRows, ShapeConstraint};
+use crate::allocator::{Allocator, Reallocator};
+use crate::base::{DefaultAllocator, Matrix, MatrixMN, MatrixN, Unit, VectorN};
+use crate::constraint::{SameNumberOfRows, ShapeConstraint};
+use crate::dimension::{Dim, DimMin, DimMinimum, U1};
+use crate::storage::{Storage, StorageMut};
+use simba::scalar::ComplexField;
 
-use linalg::householder;
-use geometry::Reflection;
+use crate::geometry::Reflection;
+use crate::linalg::householder;
 
 /// The QR decomposition of a general matrix.
 #[cfg_attr(feature = "serde-serialize", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde-serialize",
-           serde(bound(serialize = "DefaultAllocator: Allocator<N, R, C> +
+#[cfg_attr(
+    feature = "serde-serialize",
+    serde(bound(serialize = "DefaultAllocator: Allocator<N, R, C> +
                            Allocator<N, DimMinimum<R, C>>,
          MatrixMN<N, R, C>: Serialize,
-         VectorN<N, DimMinimum<R, C>>: Serialize")))]
-#[cfg_attr(feature = "serde-serialize",
-           serde(bound(deserialize = "DefaultAllocator: Allocator<N, R, C> +
+         VectorN<N, DimMinimum<R, C>>: Serialize"))
+)]
+#[cfg_attr(
+    feature = "serde-serialize",
+    serde(bound(deserialize = "DefaultAllocator: Allocator<N, R, C> +
                            Allocator<N, DimMinimum<R, C>>,
          MatrixMN<N, R, C>: Deserialize<'de>,
-         VectorN<N, DimMinimum<R, C>>: Deserialize<'de>")))]
+         VectorN<N, DimMinimum<R, C>>: Deserialize<'de>"))
+)]
 #[derive(Clone, Debug)]
-pub struct QR<N: Real, R: DimMin<C>, C: Dim>
+pub struct QR<N: ComplexField, R: DimMin<C>, C: Dim>
 where
     DefaultAllocator: Allocator<N, R, C> + Allocator<N, DimMinimum<R, C>>,
 {
@@ -32,7 +37,7 @@ where
     diag: VectorN<N, DimMinimum<R, C>>,
 }
 
-impl<N: Real, R: DimMin<C>, C: Dim> Copy for QR<N, R, C>
+impl<N: ComplexField, R: DimMin<C>, C: Dim> Copy for QR<N, R, C>
 where
     DefaultAllocator: Allocator<N, R, C> + Allocator<N, DimMinimum<R, C>>,
     MatrixMN<N, R, C>: Copy,
@@ -40,7 +45,7 @@ where
 {
 }
 
-impl<N: Real, R: DimMin<C>, C: Dim> QR<N, R, C>
+impl<N: ComplexField, R: DimMin<C>, C: Dim> QR<N, R, C>
 where
     DefaultAllocator: Allocator<N, R, C> + Allocator<N, R> + Allocator<N, DimMinimum<R, C>>,
 {
@@ -73,12 +78,10 @@ where
     pub fn r(&self) -> MatrixMN<N, DimMinimum<R, C>, C>
     where
         DefaultAllocator: Allocator<N, DimMinimum<R, C>, C>,
-        // FIXME: the following bound is ugly.
-        DimMinimum<R, C>: DimMin<C, Output = DimMinimum<R, C>>,
     {
         let (nrows, ncols) = self.qr.data.shape();
         let mut res = self.qr.rows_generic(0, nrows.min(ncols)).upper_triangle();
-        res.set_diagonal(&self.diag);
+        res.set_partial_diagonal(self.diag.iter().map(|e| N::from_real(e.modulus())));
         res
     }
 
@@ -89,13 +92,11 @@ where
     pub fn unpack_r(self) -> MatrixMN<N, DimMinimum<R, C>, C>
     where
         DefaultAllocator: Reallocator<N, R, C, DimMinimum<R, C>, C>,
-        // FIXME: the following bound is ugly (needed by `set_diagonal`).
-        DimMinimum<R, C>: DimMin<C, Output = DimMinimum<R, C>>,
     {
         let (nrows, ncols) = self.qr.data.shape();
         let mut res = self.qr.resize_generic(nrows.min(ncols), ncols, N::zero());
         res.fill_lower_triangle(N::zero(), 1);
-        res.set_diagonal(&self.diag);
+        res.set_partial_diagonal(self.diag.iter().map(|e| N::from_real(e.modulus())));
         res
     }
 
@@ -117,7 +118,7 @@ where
             let refl = Reflection::new(Unit::new_unchecked(axis), N::zero());
 
             let mut res_rows = res.slice_range_mut(i.., i..);
-            refl.reflect(&mut res_rows);
+            refl.reflect_with_sign(&mut res_rows, self.diag[i].signum());
         }
 
         res
@@ -132,8 +133,8 @@ where
     )
     where
         DimMinimum<R, C>: DimMin<C, Output = DimMinimum<R, C>>,
-        DefaultAllocator: Allocator<N, R, DimMinimum<R, C>>
-            + Reallocator<N, R, C, DimMinimum<R, C>, C>,
+        DefaultAllocator:
+            Allocator<N, R, DimMinimum<R, C>> + Reallocator<N, R, C, DimMinimum<R, C>, C>,
     {
         (self.q(), self.unpack_r())
     }
@@ -156,12 +157,12 @@ where
             let refl = Reflection::new(Unit::new_unchecked(axis), N::zero());
 
             let mut rhs_rows = rhs.rows_range_mut(i..);
-            refl.reflect(&mut rhs_rows);
+            refl.reflect_with_sign(&mut rhs_rows, self.diag[i].signum().conjugate());
         }
     }
 }
 
-impl<N: Real, D: DimMin<D, Output = D>> QR<N, D, D>
+impl<N: ComplexField, D: DimMin<D, Output = D>> QR<N, D, D>
 where
     DefaultAllocator: Allocator<N, D, D> + Allocator<N, D>,
 {
@@ -173,7 +174,7 @@ where
         b: &Matrix<N, R2, C2, S2>,
     ) -> Option<MatrixMN<N, R2, C2>>
     where
-        S2: StorageMut<N, R2, C2>,
+        S2: Storage<N, R2, C2>,
         ShapeConstraint: SameNumberOfRows<R2, D>,
         DefaultAllocator: Allocator<N, R2, C2>,
     {
@@ -226,13 +227,13 @@ where
                 let coeff;
 
                 unsafe {
-                    let diag = *self.diag.vget_unchecked(i);
+                    let diag = self.diag.vget_unchecked(i).modulus();
 
                     if diag.is_zero() {
                         return false;
                     }
 
-                    coeff = *b.vget_unchecked(i) / diag;
+                    coeff = b.vget_unchecked(i).unscale(diag);
                     *b.vget_unchecked_mut(i) = coeff;
                 }
 
@@ -294,7 +295,7 @@ where
     // }
 }
 
-impl<N: Real, R: DimMin<C>, C: Dim, S: Storage<N, R, C>> Matrix<N, R, C, S>
+impl<N: ComplexField, R: DimMin<C>, C: Dim, S: Storage<N, R, C>> Matrix<N, R, C, S>
 where
     DefaultAllocator: Allocator<N, R, C> + Allocator<N, R> + Allocator<N, DimMinimum<R, C>>,
 {

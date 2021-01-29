@@ -2,59 +2,93 @@
 girs_dir = "gir-files"
 library = "Gio"
 version = "2.0"
-min_cfg_version = "2.32"
+min_cfg_version = "2.42"
 target_path = "."
 work_mode = "normal"
 single_version_file = true
+deprecate_by_min_version = true
 
 generate = [
+    # "Gio.Task",
     "Gio.Action",
     "Gio.ActionMap",
-    "Gio.AppInfo",
     "Gio.AppInfoCreateFlags",
-    "Gio.AppLaunchContext",
     "Gio.ApplicationFlags",
     "Gio.AskPasswordFlags",
     "Gio.BufferedOutputStream",
-    "Gio.Cancellable",
+    "Gio.CharsetConverter",
+    "Gio.ConverterFlags",
+    "Gio.ConverterInputStream",
+    "Gio.ConverterOutputStream",
+    "Gio.ConverterResult",
+    "Gio.CredentialsType",
     "Gio.DataOutputStream",
     "Gio.DataStreamByteOrder",
     "Gio.DataStreamNewlineType",
+    "Gio.Drive",
+    "Gio.DriveStartFlags",
+    "Gio.DriveStartStopType",
+    "Gio.Emblem",
+    "Gio.EmblemedIcon",
+    "Gio.EmblemOrigin",
+    "Gio.FileAttributeStatus",
+    "Gio.FileAttributeType",
+    "Gio.FileCopyFlags",
     "Gio.FileCreateFlags",
+    "Gio.FileIcon",
     "Gio.FileInfo",
     "Gio.FileInputStream",
     "Gio.FileIOStream",
+    "Gio.FileMeasureFlags",
+    "Gio.FileMonitor",
+    "Gio.FileMonitorEvent",
+    "Gio.FileMonitorFlags",
+    "Gio.FilenameCompleter",
     "Gio.FileOutputStream",
     "Gio.FileQueryInfoFlags",
     "Gio.FileType",
+    "Gio.FilterInputStream",
     "Gio.Icon",
-    "Gio.InetSocketAddress",
-    "Gio.IOStreamSpliceFlags",
     "Gio.IOErrorEnum",
+    "Gio.IOStreamSpliceFlags",
+    "Gio.ListModel",
+    "Gio.LoadableIcon",
     "Gio.Menu",
     "Gio.MenuAttributeIter",
     "Gio.MenuItem",
     "Gio.MenuLinkIter",
     "Gio.MenuModel",
+    "Gio.Mount",
+    "Gio.MountMountFlags",
     "Gio.MountOperation",
     "Gio.MountOperationResult",
-    "Gio.NetworkAddress",
+    "Gio.MountUnmountFlags",
+    "Gio.NetworkConnectivity",
+    "Gio.NetworkMonitor",
     "Gio.NetworkService",
     "Gio.NotificationPriority",
     "Gio.OutputStreamSpliceFlags",
     "Gio.PasswordSave",
     "Gio.Permission",
+    "Gio.PropertyAction",
+    "Gio.Proxy",
+    "Gio.ProxyResolver",
+    "Gio.RemoteActionGroup",
     "Gio.Resolver",
+    "Gio.ResolverNameLookupFlags",
     "Gio.ResolverRecordType",
     "Gio.ResourceError",
     "Gio.ResourceLookupFlags",
     "Gio.Seekable",
+    "Gio.SettingsBackend",
     "Gio.SettingsBindFlags",
+    "Gio.SettingsBindGetMapping",
+    "Gio.SettingsBindSetMapping",
+    "Gio.SettingsGetMapping",
     "Gio.SettingsSchema",
     "Gio.SettingsSchemaSource",
     "Gio.SimpleActionGroup",
     "Gio.SimplePermission",
-    "Gio.SocketAddress",
     "Gio.SocketAddressEnumerator",
     "Gio.SocketClient",
     "Gio.SocketClientEvent",
@@ -66,9 +100,9 @@ generate = [
     "Gio.SocketService",
     "Gio.SocketType",
     "Gio.SrvTarget",
+    "Gio.SubprocessFlags",
     "Gio.TcpConnection",
     "Gio.ThreadedSocketService",
-    "Gio.ThemedIcon",
     "Gio.TlsAuthenticationMode",
     "Gio.TlsCertificate",
     "Gio.TlsCertificateFlags",
@@ -84,6 +118,20 @@ generate = [
     "Gio.TlsPasswordFlags",
     "Gio.TlsRehandshakeMode",
     "Gio.TlsServerConnection",
+    "Gio.Volume",
+    "Gio.ZlibCompressor",
+    "Gio.ZlibCompressorFormat",
+    "Gio.ZlibDecompressor",
+]
+
+builders = [
+    "Gio.BufferedInputStream",
+    "Gio.BufferedOutputStream",
+    "Gio.CharsetConverterBuilder",
+    "Gio.ConverterInputStreamBuilder",
+    "Gio.ConverterOutputStreamBuilder",
+    "Gio.DataInputStreamBuilder",
+    "Gio.DataOutputStreamBuilder",
 ]
 
 ignore = [
@@ -91,14 +139,24 @@ ignore = [
 
 manual = [
     "GLib.Bytes",
+    "GLib.DateTime",
     "GLib.Error",
-    "GLib.Variant",
-    "GLib.VariantType",
     "GLib.IOCondition",
+    "GLib.KeyFile",
+    "GLib.MainContext",
+    "GLib.OptionArg",
+    "GLib.OptionFlags",
+    "GLib.Pid",
+    "GLib.Priority",
+    "GLib.Quark",
     "GLib.SeekType",
     "GLib.Source",
-    "GLib.Priority",
+    "GLib.SpawnFlags",
+    "GLib.TimeVal",
+    "GLib.Variant",
+    "GLib.VariantType",
     "GObject.Object",
+    "GObject.Value",
 ]
 
 [[object]]
@@ -111,6 +169,19 @@ status = "generate"
     pattern = "pollable_stream_.+"
     #belong to Stream, works only with PollableStream, need mutable buffer reference
     ignore = true
+    [[object.function]]
+    pattern = "pollable_source_.+"
+    #belong to Stream, works only with PollableStream, need mutable buffer reference
+    ignore = true
+    [[object.function]]
+    name = "unix_is_system_device_path"
+        [[object.function.parameter]]
+        name = "device_path"
+        string_type = "filename"
+    [[object.function]]
+    pattern = "unix_mount.+"
+    #impl UnixMountEntry
+    ignore = true
 
 [[object]]
 name = "Gio.ActionGroup"
@@ -120,14 +191,77 @@ status = "generate"
     ignore = true
 
 [[object]]
+name = "Gio.AppInfo"
+status = "generate"
+    [[object.function]]
+    name = "create_from_commandline"
+        [[object.function.parameter]]
+        name = "commandline"
+        string_type = "os_string"
+    [[object.function]]
+    name = "launch_uris_async"
+    #in array of strings
+    ignore = true
+
+[[object]]
+name = "Gio.AppInfoMonitor"
+status = "generate"
+    [[object.function]]
+    name = "get"
+        [object.function.return]
+        nullable = false
+
+[[object]]
+name = "Gio.AppLaunchContext"
+status = "generate"
+    [[object.function]]
+    name = "get_environment"
+        [object.function.return]
+        string_type = "os_string"
+    [[object.function]]
+    pattern = "(un)?setenv"
+        [[object.function.parameter]]
+        name = "variable"
+        string_type = "os_string"
+        [[object.function.parameter]]
+        name = "value"
+        string_type = "os_string"
+
+[[object]]
 name = "Gio.Application"
 status = "generate"
+manual_traits = ["ApplicationExtManual"]
+generate_builder = true
     [[object.signal]]
     name = "open"
     ignore = true
+    doc_trait_name = "ApplicationExtManual"
     [[object.function]]
     name = "run"
     ignore = true
+    doc_trait_name = "ApplicationExtManual"
+
+[[object]]
+name = "Gio.ApplicationCommandLine"
+status = "generate"
+    [[object.function]]
+    name = "create_file_for_arg"
+        [[object.function.parameter]]
+        name = "arg"
+        string_type = "os_string"
+    [[object.function]]
+    name = "get_arguments"
+        [object.function.return]
+        string_type = "os_string"
+    [[object.function]]
+    name = "get_environ"
+        [object.function.return]
+        string_type = "os_string"
+    [[object.function]]
+    name = "getenv"
+        [[object.function.parameter]]
+        name = "name"
+        string_type = "os_string"
 
 [[object]]
 name = "Gio.BufferedInputStream"
@@ -136,6 +270,48 @@ status = "generate"
     name = "peek"
     #have almost same peek_buffer
     ignore = true
+
+[[object]]
+name = "Gio.BytesIcon"
+status = "generate"
+    [[object.property]]
+    name = "bytes"
+    version = "2.38"
+
+[[object]]
+name = "Gio.Cancellable"
+status = "generate"
+concurrency = "send+sync"
+    [[object.function]]
+    name = "reset"
+    #undefined behaviour
+    ignore = true
+    [[object.function]]
+    name = "source_new"
+    # Needs manual bindings for setting callback, etc
+    ignore = true
+
+[[object]]
+name = "Gio.Converter"
+status = "generate"
+manual_traits = ["ConverterExtManual"]
+    [[object.function]]
+    name = "convert"
+    ignore = true
+    doc_trait_name = "ConverterExtManual"
+
+[[object]]
+name = "Gio.Credentials"
+status = "generate"
+    [[object.function]]
+    name = "get_unix_pid"
+    cfg_condition = "unix"
+    [[object.function]]
+    name = "get_unix_user"
+    cfg_condition = "unix"
+    [[object.function]]
+    name = "set_unix_user"
+    cfg_condition = "unix"
 
 [[object]]
 name = "Gio.DataInputStream"
@@ -151,8 +327,23 @@ status = "generate"
     ignore = true
 
 [[object]]
+name = "Gio.DesktopAppInfo"
+status = "generate"
+cfg_condition = "all(not(windows),not(target_os = \"macos\"))"
+    [[object.function]]
+    name = "search"
+    # returns vec of string
+    ignore = true
+    [[object.function]]
+    name = "launch_uris_as_manager_with_fds"
+    # has to use RawFd / SOCKET
+    ignore = true
+
+[[object]]
 name = "Gio.File"
 status = "generate"
+concurrency = "send+sync"
+manual_traits = ["FileExtManual"]
     [[object.function]]
     name = "new_for_path"
         [object.function.return]
@@ -163,10 +354,16 @@ status = "generate"
         nullable = false
     [[object.function]]
     name = "new_for_commandline_arg"
+        [[object.function.parameter]]
+        name = "arg"
+        string_type = "os_string"
         [object.function.return]
         nullable = false
     [[object.function]]
     name = "new_for_commandline_arg_and_cwd"
+        [[object.function.parameter]]
+        name = "arg"
+        string_type = "os_string"
         [object.function.return]
         nullable = false
     [[object.function]]
@@ -180,22 +377,86 @@ status = "generate"
     name = "find_enclosing_mount_async"
     # Mount
     ignore = true
+    [[object.function]]
+    name = "replace_contents_async"
+    # AsRef
+    ignore = true
+    doc_trait_name = "FileExtManual"
+    [[object.function]]
+    name = "get_uri_scheme"
+        [object.function.return]
+        nullable = false
+    [[object.function]]
+    name = "get_uri"
+        [object.function.return]
+        nullable = false
 
 [[object]]
-name = "Gio.FilterInputStream"
+name = "Gio.FileAttributeMatcher"
 status = "generate"
-    [[object.property]]
-    name = "base-stream"
-    #readonly
+    [[object.function]]
+    name = "enumerate_next"
+    # Better API with `IntoIter`
+    ignore = true
+    [[object.function]]
+    name = "subtract"
+        [[object.function.parameter]]
+        name = "subtract"
+        nullable = true
+
+[[object]]
+name = "Gio.FileEnumerator"
+status = "generate"
+    [[object.function]]
+    name = "iterate"
+    # better with rust iterators
     ignore = true
 
 [[object]]
 name = "Gio.FilterOutputStream"
 status = "generate"
     [[object.property]]
-    name = "base-stream"
-    #readonly
+    name = "close-base-stream"
+    #has get/set function, ConstructOnly
+    generate = ["notify"]
+
+[[object]]
+name =  "Gio.InetAddressMask"
+status = "generate"
+concurrency = "send+sync"
+    [[object.function]]
+    name = "get_address"
+        [object.function.return]
+        nullable = false
+
+[[object]]
+name = "Gio.InetAddress"
+status = "generate"
+concurrency = "send+sync"
+    [[object.function]]
+    name = "new_from_bytes"
+    # broken and needs some closer integration with the corresponding std types
     ignore = true
+
+    [[object.function]]
+    name = "to_bytes"
+    # broken and needs some closer integration with the corresponding std types
+    ignore = true
+
+[[object]]
+name = "Gio.InetSocketAddress"
+status = "generate"
+concurrency = "send+sync"
+
+[[object]]
+name = "Gio.InputStream"
+status = "generate"
+manual_traits = ["InputStreamExtManual"]
+    [[object.function]]
+    pattern = "read(_all)?(_async)?"
+    #mutable buffer
+    ignore = true
+    doc_trait_name = "InputStreamExtManual"
 
 [[object]]
 name = "Gio.IOStream"
@@ -214,12 +475,18 @@ status = "generate"
     ignore = true
 
 [[object]]
-name = "Gio.InputStream"
+name = "Gio.ListStore"
 status = "generate"
+generate_builder = true
+manual_traits = ["ListStoreExtManual"]
     [[object.function]]
-    pattern = "read(_all)?(_async)?"
-    #mutable buffer
+    name = "insert_sorted"
     ignore = true
+    doc_trait_name = "ListStoreExtManual"
+    [[object.function]]
+    name = "sort"
+    ignore = true
+    doc_trait_name = "ListStoreExtManual"
 
 [[object]]
 name = "Gio.MemoryInputStream"
@@ -268,6 +535,10 @@ status = "generate"
     name = "realloc-function"
     #unsupported memory allocators
     ignore = true
+[[object]]
+name = "Gio.NetworkAddress"
+status = "generate"
+concurrency = "send+sync"
 
 [[object]]
 name = "Gio.Notification"
@@ -276,13 +547,68 @@ status = "generate"
 [[object]]
 name = "Gio.OutputStream"
 status = "generate"
+manual_traits = ["OutputStreamExtManual"]
     [[object.function]]
     name = "write_async"
     #AsRef<u8>
     ignore = true
+    doc_trait_name = "OutputStreamExtManual"
     [[object.function]]
     name = "write_all_async"
     #AsRef<u8>
+    ignore = true
+    doc_trait_name = "OutputStreamExtManual"
+    [[object.function]]
+    name = "write_all"
+    # special return value
+    ignore = true
+    doc_trait_name = "OutputStreamExtManual"
+
+[[object]]
+name = "Gio.PollableInputStream"
+status = "generate"
+manual_traits = ["PollableInputStreamExtManual"]
+    [[object.function]]
+    name = "create_source"
+    # manual source implementation
+    ignore = true
+    doc_trait_name = "PollableInputStreamExtManual"
+    [[object.function]]
+    name = "read_nonblocking"
+    # wrong mutability
+    ignore = true
+    doc_trait_name = "PollableInputStreamExtManual"
+
+[[object]]
+name = "Gio.PollableOutputStream"
+status = "generate"
+manual_traits = ["PollableOutputStreamExtManual"]
+    [[object.function]]
+    name = "create_source"
+    # manual source implementation
+    ignore = true
+    doc_trait_name = "PollableOutputStreamExtManual"
+
+[[object]]
+name = "Gio.ProxyAddress"
+status = "generate"
+concurrency = "send+sync"
+    [[object.function]]
+    name = "get_destination_hostname"
+        [object.function.return]
+        nullable = false
+    [[object.function]]
+    name = "get_protocol"
+        [object.function.return]
+        nullable = false
+
+[[object]]
+name = "Gio.Resource"
+status = "generate"
+    [[object.function]]
+    name = "new_from_data"
+    # Requires special alignment, see
+    # https://bugzilla.gnome.org/show_bug.cgi?id=790030
     ignore = true
 
 [[object]]
@@ -291,6 +617,19 @@ status = "generate"
     [[object.signal]]
     name = "writable-change-event"
     inhibit = true
+    [[object.function]]
+    pattern="set_.*"
+        [object.function.return]
+        bool_return_is_error = "Can't set readonly key"
+    [[object.function]]
+    name = "get_value"
+        [object.function.return]
+        nullable = false
+
+[[object]]
+name = "Gio.SettingsSchemaKey"
+status = "generate"
+version = "2.40"
 
 [[object]]
 name = "Gio.SimpleAction"
@@ -319,15 +658,19 @@ status = "generate"
 [[object]]
 name = "Gio.Socket"
 status = "generate"
+concurrency = "send-unique"
+manual_traits = ["SocketExtManual"]
     [[object.function]]
     name = "new_from_fd"
     # has to use RawFd / SOCKET
     ignore = true
+    doc_trait_name = "SocketExtManual"
 
     [[object.function]]
     name = "get_fd"
     # has to use RawFd / SOCKET
     ignore = true
+    doc_trait_name = "SocketExtManual"
 
     [[object.property]]
     name = "fd"
@@ -338,61 +681,94 @@ status = "generate"
     name = "create_source"
     # needs custom impl for Source callback
     ignore = true
+    doc_trait_name = "SocketExtManual"
 
     [[object.function]]
     pattern = "receive.*"
     # &[u8]
     ignore = true
+    doc_trait_name = "SocketExtManual"
 
     [[object.function]]
     pattern = "send.*"
     # &[u8]
     ignore = true
+    doc_trait_name = "SocketExtManual"
 
 [[object]]
-name = "Gio.InetAddress"
+name = "Gio.SocketAddress"
 status = "generate"
-    [[object.function]]
-    name = "equal"
-    # conflicting implementations
-    ignore = true
-
-    [[object.function]]
-    name = "to_string"
-    # conflicting implementations
-    ignore = true
-
-    [[object.function]]
-    name = "new_from_bytes"
-    # broken and needs some closer integration with the corresponding std types
-    ignore = true
-
-    [[object.function]]
-    name = "to_bytes"
-    # broken and needs some closer integration with the corresponding std types
-    ignore = true
+concurrency = "send+sync"
 
 [[object]]
 name = "Gio.SocketListener"
 status = "generate"
+manual_traits = ["SocketListenerExtManual"]
     [[object.function]]
     name = "accept_socket_async"
     # finish function misses nullable return annotation
     ignore = true
+    doc_trait_name = "SocketListenerExtManual"
+
+    [[object.function]]
+    name = "accept_async"
+    # finish function misses nullable return annotation
+    ignore = true
+    doc_trait_name = "SocketListenerExtManual"
 
 [[object]]
-name = "Gio.Resource"
+name = "Gio.Subprocess"
 status = "generate"
     [[object.function]]
-    name = "new_from_data"
-    # Requires special alignment, see
-    # https://bugzilla.gnome.org/show_bug.cgi?id=790030
+    name = "newv"
+        [[object.function.parameter]]
+        name = "argv"
+        string_type = "os_string"
+    [[object.function]]
+    name = "communicate_utf8_async"
     ignore = true
+    [[object.function]]
+    name = "send_signal"
+    cfg_condition = "not(windows)"
 
 [[object]]
-name = "Gio.SettingsSchemaKey"
+name = "Gio.SubprocessLauncher"
 status = "generate"
-version = "2.40"
+    [[object.function]]
+    name = "spawnv"
+        [[object.function.parameter]]
+        name = "argv"
+        string_type = "os_string"
+    [[object.function]]
+    name = "setenv"
+        [[object.function.parameter]]
+        name = "variable"
+        string_type = "os_string"
+        [[object.function.parameter]]
+        name = "value"
+        string_type = "os_string"
+    [[object.function]]
+    name = "unsetenv"
+        [[object.function.parameter]]
+        name = "variable"
+        string_type = "os_string"
+    [[object.function]]
+    pattern = "take_.*"
+    ignore = true
+    [[object.function]]
+    pattern = "set_std.*file_path"
+    cfg_condition = "unix"
+    [[object.function]]
+    name = "set_child_setup"
+    cfg_condition = "unix"
+
+[[object]]
+name = "Gio.ThemedIcon"
+status = "generate"
+    [[object.property]]
+    name = "names"
+    # ConstructOnly
+    generate = ["notify"]
 
 [[object]]
 name = "Gio.TlsPassword"
@@ -406,3 +782,137 @@ status = "generate"
     # missing (element-type guint8) annotation
     name = "set_value"
     ignore = true
+
+[[object]]
+name = "Gio.UnixInputStream"
+status = "generate"
+cfg_condition = "unix"
+manual_traits = ["UnixInputStreamExtManual"]
+    [[object.function]]
+    name = "new"
+    # has to use RawFd
+    ignore = true
+
+    [[object.function]]
+    name = "set_close_fd"
+    # Can cause file descriptor leaks
+    ignore = true
+    doc_trait_name = "UnixInputStreamExtManual"
+
+    [[object.function]]
+    name = "get_fd"
+    # has to use RawFd
+    ignore = true
+    doc_trait_name = "UnixInputStreamExtManual"
+
+    [[object.property]]
+    name = "fd"
+    # has to use RawFd
+    ignore = true
+
+    [[object.property]]
+    name = "close-fd"
+    ignore = true
+
+[[object]]
+name = "Gio.UnixMountEntry"
+status = "generate"
+version = "2.54"
+cfg_condition = "unix"
+    [[object.derive]]
+    name = "Debug"
+
+[[object]]
+name = "Gio.UnixMountPoint"
+status = "generate"
+use_boxed_functions = true
+version = "2.54"
+cfg_condition = "unix"
+    [[object.derive]]
+    name = "Debug"
+    [[object.function]]
+    name = "compare"
+        [[object.function.parameter]]
+        pattern = ".+"
+        const = true
+    [[object.function]]
+    pattern = "get_.*"
+        [[object.function.parameter]]
+        pattern = ".+"
+        const = true
+    [[object.function]]
+    pattern = "guess_.*"
+        [[object.function.parameter]]
+        pattern = ".+"
+        const = true
+    [[object.function]]
+    pattern = "is_.*"
+        [[object.function.parameter]]
+        pattern = ".+"
+        const = true
+
+[[object]]
+name = "Gio.UnixOutputStream"
+status = "generate"
+cfg_condition = "unix"
+manual_traits = ["UnixOutputStreamExtManual"]
+    [[object.function]]
+    name = "new"
+    # has to use RawFd
+    ignore = true
+
+    [[object.function]]
+    name = "set_close_fd"
+    # Can cause file descriptor leaks
+    ignore = true
+    doc_trait_name = "UnixOutputStreamExtManual"
+
+    [[object.function]]
+    name = "get_fd"
+    # has to use RawFd
+    ignore = true
+    doc_trait_name = "UnixOutputStreamExtManual"
+
+    [[object.property]]
+    name = "fd"
+    # has to use RawFd
+    ignore = true
+
+    [[object.property]]
+    name = "close-fd"
+    ignore = true
+
+[[object]]
+name = "Gio.UnixSocketAddress"
+status = "generate"
+concurrency = "send+sync"
+cfg_condition = "unix"
+manual_traits = ["UnixSocketAddressExtManual"]
+    [[object.function]]
+    name = "new"
+    ignore = true
+    [[object.function]]
+    name = "get_path"
+    ignore = true
+    doc_trait_name = "UnixSocketAddressExtManual"
+    [[object.property]]
+    name = "path"
+    ignore = true
+
+[[object]]
+name = "Gio.UnixSocketAddressType"
+status = "generate"
+cfg_condition = "unix"
+
+[[object]]
+name = "Gio.Vfs"
+status = "generate"
+concurrency = "send+sync"
+
+[[object]]
+name = "Gio.VolumeMonitor"
+status = "generate"
+    [[object.function]]
+    name = "get"
+        [object.function.return]
+        nullable = false

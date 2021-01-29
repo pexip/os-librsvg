@@ -3,10 +3,12 @@
 use std::borrow::Cow;
 use std::iter::IntoIterator;
 
-use data::Matrix;
-use traits::{self, Data, Set};
-use {Axes, Color, CurveDefault, Display, Figure, Label, LineType, LineWidth, Plot, PointSize,
-     PointType, Script};
+use crate::data::Matrix;
+use crate::traits::{self, Data, Set};
+use crate::{
+    Axes, Color, CurveDefault, Display, Figure, Label, LineType, LineWidth, Plot, PointSize,
+    PointType, Script,
+};
 
 /// Properties common to simple "curve" like plots
 pub struct Properties {
@@ -259,7 +261,7 @@ where
         configure(&mut props);
 
         let (x_factor, y_factor) =
-            ::scale_factor(&self.axes, props.axes.unwrap_or(::Axes::BottomXLeftY));
+            crate::scale_factor(&self.axes, props.axes.unwrap_or(crate::Axes::BottomXLeftY));
 
         let data = Matrix::new(izip!(x, y), (x_factor, y_factor));
         self.plots.push(Plot::new(data, &props));

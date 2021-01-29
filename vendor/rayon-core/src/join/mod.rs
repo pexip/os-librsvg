@@ -1,11 +1,10 @@
-use latch::{LatchProbe, SpinLatch};
-use log::Event::*;
-use job::StackJob;
-use registry::{self, WorkerThread};
+use crate::job::StackJob;
+use crate::latch::SpinLatch;
+use crate::registry::{self, WorkerThread};
+use crate::unwind;
 use std::any::Any;
-use unwind;
 
-use FnContext;
+use crate::FnContext;
 
 #[cfg(test)]
 mod test;
@@ -92,12 +91,18 @@ mod test;
 /// panic with the same panic value. If both closures panic, `join()`
 /// will panic with the panic value from the first closure.
 pub fn join<A, B, RA, RB>(oper_a: A, oper_b: B) -> (RA, RB)
-    where A: FnOnce() -> RA + Send,
-          B: FnOnce() -> RB + Send,
-          RA: Send,
-          RB: Send
+where
+    A: FnOnce() -> RA + Send,
+    B: FnOnce() -> RB + Send,
+    RA: Send,
+    RB: Send,
 {
-    join_context(|_| oper_a(), |_| oper_b())
+    #[inline]
+    fn call<R>(f: impl FnOnce() -> R) -> impl FnOnce(FnContext) -> R {
+        move |_| f()
+    }
+
+    join_context(call(oper_a), call(oper_b))
 }
 
 /// Identical to `join`, except that the closures have a parameter
@@ -108,24 +113,32 @@ pub fn join<A, B, RA, RB>(oper_a: A, oper_b: B) -> (RA, RB)
 /// `join_context` was called from outside the thread pool to begin
 /// with.
 pub fn join_context<A, B, RA, RB>(oper_a: A, oper_b: B) -> (RA, RB)
-    where A: FnOnce(FnContext) -> RA + Send,
-          B: FnOnce(FnContext) -> RB + Send,
-          RA: Send,
-          RB: Send
+where
+    A: FnOnce(FnContext) -> RA + Send,
+    B: FnOnce(FnContext) -> RB + Send,
+    RA: Send,
+    RB: Send,
 {
-    registry::in_worker(|worker_thread, injected| unsafe {
-        log!(Join { worker: worker_thread.index() });
+    #[inline]
+    fn call_a<R>(f: impl FnOnce(FnContext) -> R, injected: bool) -> impl FnOnce() -> R {
+        move || f(FnContext::new(injected))
+    }
 
+    #[inline]
+    fn call_b<R>(f: impl FnOnce(FnContext) -> R) -> impl FnOnce(bool) -> R {
+        move |migrated| f(FnContext::new(migrated))
+    }
+
+    registry::in_worker(|worker_thread, injected| unsafe {
         // Create virtual wrapper for task b; this all has to be
         // done here so that the stack frame can keep it all live
         // long enough.
-        let job_b = StackJob::new(|migrated| oper_b(FnContext::new(migrated)),
-                                  SpinLatch::new());
+        let job_b = StackJob::new(call_b(oper_b), SpinLatch::new(worker_thread));
         let job_b_ref = job_b.as_job_ref();
         worker_thread.push(job_b_ref);
 
         // Execute task a; hopefully b gets stolen in the meantime.
-        let status_a = unwind::halt_unwinding(move || oper_a(FnContext::new(injected)));
+        let status_a = unwind::halt_unwinding(call_a(oper_a, injected));
         let result_a = match status_a {
             Ok(v) => v,
             Err(err) => join_recover_from_panic(worker_thread, &job_b.latch, err),
@@ -142,24 +155,21 @@ pub fn join_context<A, B, RA, RB>(oper_a: A, oper_b: B) -> (RA, RB)
                     // Found it! Let's run it.
                     //
                     // Note that this could panic, but it's ok if we unwind here.
-                    log!(PoppedRhs { worker: worker_thread.index() });
                     let result_b = job_b.run_inline(injected);
                     return (result_a, result_b);
                 } else {
-                    log!(PoppedJob { worker: worker_thread.index() });
                     worker_thread.execute(job);
                 }
             } else {
                 // Local deque is empty. Time to steal from other
                 // threads.
-                log!(LostJob { worker: worker_thread.index() });
                 worker_thread.wait_until(&job_b.latch);
                 debug_assert!(job_b.latch.probe());
                 break;
             }
         }
 
-        return (result_a, job_b.into_result());
+        (result_a, job_b.into_result())
     })
 }
 
@@ -167,11 +177,11 @@ pub fn join_context<A, B, RA, RB>(oper_a: A, oper_b: B) -> (RA, RB)
 /// B is complete. This is because it may contain references into the
 /// enclosing stack frame(s).
 #[cold] // cold path
-unsafe fn join_recover_from_panic(worker_thread: &WorkerThread,
-                                  job_b_latch: &SpinLatch,
-                                  err: Box<Any + Send>)
-                                  -> !
-{
+unsafe fn join_recover_from_panic(
+    worker_thread: &WorkerThread,
+    job_b_latch: &SpinLatch<'_>,
+    err: Box<dyn Any + Send>,
+) -> ! {
     worker_thread.wait_until(job_b_latch);
     unwind::resume_unwinding(err)
 }

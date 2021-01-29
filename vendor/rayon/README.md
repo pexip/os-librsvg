@@ -2,8 +2,8 @@
 
 [![Rayon crate](https://img.shields.io/crates/v/rayon.svg)](https://crates.io/crates/rayon)
 [![Rayon documentation](https://docs.rs/rayon/badge.svg)](https://docs.rs/rayon)
-[![Travis Status](https://travis-ci.org/rayon-rs/rayon.svg?branch=master)](https://travis-ci.org/rayon-rs/rayon)
-[![Appveyor status](https://ci.appveyor.com/api/projects/status/wre5dkx08gayy8hc/branch/master?svg=true)](https://ci.appveyor.com/project/cuviper/rayon/branch/master)
+![minimum rustc 1.36](https://img.shields.io/badge/rustc-1.36+-red.svg)
+![build status](https://github.com/rayon-rs/rayon/workflows/master/badge.svg)
 [![Join the chat at https://gitter.im/rayon-rs/Lobby](https://badges.gitter.im/rayon-rs/Lobby.svg)](https://gitter.im/rayon-rs/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 Rayon is a data-parallelism library for Rust. It is extremely
@@ -54,7 +54,7 @@ all). In other words, **if your code compiles**, it typically does the
 same thing it did before.
 
 For the most, parallel iterators in particular are guaranteed to
-produce the same results as their sequential counterparts. One caevat:
+produce the same results as their sequential counterparts. One caveat:
 If your iterator has side effects (for example, sending methods to
 other threads through a [Rust channel] or writing to disk), those side
 effects may occur in a different order. Note also that, in some cases,
@@ -71,13 +71,7 @@ as:
 
 ```toml
 [dependencies]
-rayon = "1.0"
-```
-
-and then add the following to to your `lib.rs`:
-
-```rust
-extern crate rayon;
+rayon = "1.5"
 ```
 
 To use the Parallel Iterator APIs, a number of traits have to be in
@@ -90,7 +84,7 @@ just add:
 use rayon::prelude::*;
 ```
 
-Rayon currently requires `rustc 1.13.0` or greater.
+Rayon currently requires `rustc 1.36.0` or greater.
 
 ## Contribution
 
@@ -104,14 +98,14 @@ command to get a visualization of an nbody simulation. To see the
 effect of using Rayon, press `s` to run sequentially and `p` to run in
 parallel.
 
-```
+```text
 > cd rayon-demo
 > cargo run --release -- nbody visualize
 ```
 
 For more information on demos, try:
 
-```
+```text
 > cd rayon-demo
 > cargo run --release -- --help
 ```

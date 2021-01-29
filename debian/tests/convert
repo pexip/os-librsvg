@@ -3,7 +3,5 @@
 set -e
 set -u
 
-: "${AUTOPKGTEST_TMP:="${ADTTMP}"}"
-
 rsvg-convert -o "$AUTOPKGTEST_TMP/example.png" tests/fixtures/api/example.svg
 file "$AUTOPKGTEST_TMP/example.png"

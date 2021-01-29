@@ -1,21 +1,25 @@
-use alga::general::{AbstractGroup, AbstractLoop, AbstractMagma, AbstractMonoid,
-                    AbstractQuasigroup, AbstractSemigroup, Id, Identity, Inverse, Multiplicative,
-                    Real};
-use alga::linear::{self, AffineTransformation, DirectIsometry, Isometry, OrthogonalTransformation,
-                   ProjectiveTransformation, Similarity, Transformation};
+use alga::general::{
+    AbstractGroup, AbstractLoop, AbstractMagma, AbstractMonoid, AbstractQuasigroup,
+    AbstractSemigroup, Id, Identity, Multiplicative, RealField, TwoSidedInverse,
+};
+use alga::linear::{
+    self, AffineTransformation, DirectIsometry, Isometry, OrthogonalTransformation,
+    ProjectiveTransformation, Similarity, Transformation,
+};
 
-use base::{DefaultAllocator, VectorN};
-use base::dimension::DimName;
-use base::allocator::Allocator;
+use crate::base::allocator::Allocator;
+use crate::base::dimension::DimName;
+use crate::base::{DefaultAllocator, VectorN};
 
-use geometry::{Point, Rotation};
+use crate::geometry::{Point, Rotation};
 
 /*
  *
  * Algebraic structures.
  *
  */
-impl<N: Real, D: DimName> Identity<Multiplicative> for Rotation<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> Identity<Multiplicative>
+    for Rotation<N, D>
 where
     DefaultAllocator: Allocator<N, D, D>,
 {
@@ -25,22 +29,25 @@ where
     }
 }
 
-impl<N: Real, D: DimName> Inverse<Multiplicative> for Rotation<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> TwoSidedInverse<Multiplicative>
+    for Rotation<N, D>
 where
     DefaultAllocator: Allocator<N, D, D>,
 {
     #[inline]
-    fn inverse(&self) -> Self {
+    #[must_use = "Did you mean to use two_sided_inverse_mut()?"]
+    fn two_sided_inverse(&self) -> Self {
         self.transpose()
     }
 
     #[inline]
-    fn inverse_mut(&mut self) {
+    fn two_sided_inverse_mut(&mut self) {
         self.transpose_mut()
     }
 }
 
-impl<N: Real, D: DimName> AbstractMagma<Multiplicative> for Rotation<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> AbstractMagma<Multiplicative>
+    for Rotation<N, D>
 where
     DefaultAllocator: Allocator<N, D, D>,
 {
@@ -52,7 +59,7 @@ where
 
 macro_rules! impl_multiplicative_structures(
     ($($marker: ident<$operator: ident>),* $(,)*) => {$(
-        impl<N: Real, D: DimName> $marker<$operator> for Rotation<N, D>
+        impl<N: RealField + simba::scalar::RealField, D: DimName> $marker<$operator> for Rotation<N, D>
             where DefaultAllocator: Allocator<N, D, D> { }
     )*}
 );
@@ -70,37 +77,40 @@ impl_multiplicative_structures!(
  * Transformation groups.
  *
  */
-impl<N: Real, D: DimName> Transformation<Point<N, D>> for Rotation<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> Transformation<Point<N, D>>
+    for Rotation<N, D>
 where
     DefaultAllocator: Allocator<N, D, D> + Allocator<N, D>,
 {
     #[inline]
     fn transform_point(&self, pt: &Point<N, D>) -> Point<N, D> {
-        self * pt
+        self.transform_point(pt)
     }
 
     #[inline]
     fn transform_vector(&self, v: &VectorN<N, D>) -> VectorN<N, D> {
-        self * v
+        self.transform_vector(v)
     }
 }
 
-impl<N: Real, D: DimName> ProjectiveTransformation<Point<N, D>> for Rotation<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> ProjectiveTransformation<Point<N, D>>
+    for Rotation<N, D>
 where
     DefaultAllocator: Allocator<N, D, D> + Allocator<N, D>,
 {
     #[inline]
     fn inverse_transform_point(&self, pt: &Point<N, D>) -> Point<N, D> {
-        Point::from_coordinates(self.inverse_transform_vector(&pt.coords))
+        self.inverse_transform_point(pt)
     }
 
     #[inline]
     fn inverse_transform_vector(&self, v: &VectorN<N, D>) -> VectorN<N, D> {
-        self.matrix().tr_mul(v)
+        self.inverse_transform_vector(v)
     }
 }
 
-impl<N: Real, D: DimName> AffineTransformation<Point<N, D>> for Rotation<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> AffineTransformation<Point<N, D>>
+    for Rotation<N, D>
 where
     DefaultAllocator: Allocator<N, D, D> + Allocator<N, D>,
 {
@@ -144,7 +154,7 @@ where
     }
 }
 
-impl<N: Real, D: DimName> Similarity<Point<N, D>> for Rotation<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> Similarity<Point<N, D>> for Rotation<N, D>
 where
     DefaultAllocator: Allocator<N, D, D> + Allocator<N, D>,
 {
@@ -168,7 +178,7 @@ where
 
 macro_rules! marker_impl(
     ($($Trait: ident),*) => {$(
-        impl<N: Real, D: DimName> $Trait<Point<N, D>> for Rotation<N, D>
+        impl<N: RealField + simba::scalar::RealField, D: DimName> $Trait<Point<N, D>> for Rotation<N, D>
         where DefaultAllocator: Allocator<N, D, D> +
                                 Allocator<N, D> { }
     )*}
@@ -177,7 +187,8 @@ macro_rules! marker_impl(
 marker_impl!(Isometry, DirectIsometry, OrthogonalTransformation);
 
 /// Subgroups of the n-dimensional rotation group `SO(n)`.
-impl<N: Real, D: DimName> linear::Rotation<Point<N, D>> for Rotation<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> linear::Rotation<Point<N, D>>
+    for Rotation<N, D>
 where
     DefaultAllocator: Allocator<N, D, D> + Allocator<N, D>,
 {
@@ -204,7 +215,7 @@ where
 }
 
 /*
-impl<N: Real> Matrix for Rotation<N> {
+impl<N: RealField + simba::scalar::RealField> Matrix for Rotation<N> {
     type Field     = N;
     type Row       = Matrix<N>;
     type Column    = Matrix<N>;
@@ -246,7 +257,7 @@ impl<N: Real> Matrix for Rotation<N> {
     }
 }
 
-impl<N: Real> SquareMatrix for Rotation<N> {
+impl<N: RealField + simba::scalar::RealField> SquareMatrix for Rotation<N> {
     type Vector = Matrix<N>;
 
     #[inline]
@@ -256,7 +267,7 @@ impl<N: Real> SquareMatrix for Rotation<N> {
 
     #[inline]
     fn determinant(&self) -> Self::Field {
-        ::one()
+        crate::one()
     }
 
     #[inline]
@@ -276,5 +287,5 @@ impl<N: Real> SquareMatrix for Rotation<N> {
     }
 }
 
-impl<N: Real> InversibleSquareMatrix for Rotation<N> { }
+impl<N: RealField + simba::scalar::RealField> InversibleSquareMatrix for Rotation<N> { }
 */

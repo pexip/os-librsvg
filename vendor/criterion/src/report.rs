@@ -1,28 +1,30 @@
-use stats::bivariate::Data;
-use stats::bivariate::regression::Slope;
-use stats::univariate::outliers::tukey::LabeledSample;
+use crate::stats::univariate::outliers::tukey::LabeledSample;
+use crate::{csv_report::FileCsvReport, stats::bivariate::regression::Slope};
+use crate::{html::Html, stats::bivariate::Data};
 
-use Estimate;
-use estimate::{Distributions, Estimates, Statistic};
-use format;
-use stats::Distribution;
-use stats::univariate::Sample;
+use crate::estimate::{ChangeDistributions, ChangeEstimates, Distributions, Estimate, Estimates};
+use crate::format;
+use crate::measurement::ValueFormatter;
+use crate::stats::univariate::Sample;
+use crate::stats::Distribution;
+use crate::{PlotConfiguration, Throughput};
 use std::cell::Cell;
 use std::cmp;
 use std::collections::HashSet;
 use std::fmt;
-use std::io::Write;
 use std::io::stdout;
-use {PlotConfiguration, Plotting, Throughput};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 const MAX_DIRECTORY_NAME_LEN: usize = 64;
+const MAX_TITLE_LEN: usize = 100;
 
 pub(crate) struct ComparisonData {
     pub p_value: f64,
     pub t_distribution: Distribution<f64>,
     pub t_value: f64,
-    pub relative_estimates: Estimates,
-    pub relative_distributions: Distributions,
+    pub relative_estimates: ChangeEstimates,
+    pub relative_distributions: ChangeDistributions,
     pub significance_threshold: f64,
     pub noise_threshold: f64,
     pub base_iter_counts: Vec<f64>,
@@ -32,13 +34,21 @@ pub(crate) struct ComparisonData {
 }
 
 pub(crate) struct MeasurementData<'a> {
-    pub iter_counts: &'a Sample<f64>,
-    pub sample_times: &'a Sample<f64>,
+    pub data: Data<'a, f64, f64>,
     pub avg_times: LabeledSample<'a, f64>,
     pub absolute_estimates: Estimates,
     pub distributions: Distributions,
     pub comparison: Option<ComparisonData>,
     pub throughput: Option<Throughput>,
+}
+impl<'a> MeasurementData<'a> {
+    pub fn iter_counts(&self) -> &Sample<f64> {
+        self.data.x()
+    }
+
+    pub fn sample_times(&self) -> &Sample<f64> {
+        self.data.y()
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -48,7 +58,7 @@ pub enum ValueType {
     Value,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct BenchmarkId {
     pub group_id: String,
     pub function_id: Option<String>,
@@ -56,28 +66,41 @@ pub struct BenchmarkId {
     pub throughput: Option<Throughput>,
     full_id: String,
     directory_name: String,
+    title: String,
 }
 
-fn make_filename_safe(string: &str) -> String {
-    let mut string = string
-        .to_owned()
-        .replace("?", "_")
-        .replace("\"", "_")
-        .replace("/", "_")
-        .replace("\\", "_")
-        .replace("*", "_");
-
-    // On Windows, file names are not case-sensitive, so lowercase everything.
-    if cfg!(target_os = "windows") {
-        string = string.to_lowercase();
-    }
-
-    // Truncate to last character boundary before max length...
-    let mut boundary = cmp::min(MAX_DIRECTORY_NAME_LEN, string.len());
-    while !string.is_char_boundary(boundary) {
+fn truncate_to_character_boundary(s: &mut String, max_len: usize) {
+    let mut boundary = cmp::min(max_len, s.len());
+    while !s.is_char_boundary(boundary) {
         boundary -= 1;
     }
-    string.truncate(boundary);
+    s.truncate(boundary);
+}
+
+pub fn make_filename_safe(string: &str) -> String {
+    let mut string = string.replace(
+        &['?', '"', '/', '\\', '*', '<', '>', ':', '|', '^'][..],
+        "_",
+    );
+
+    // Truncate to last character boundary before max length...
+    truncate_to_character_boundary(&mut string, MAX_DIRECTORY_NAME_LEN);
+
+    if cfg!(target_os = "windows") {
+        {
+            string = string
+                // On Windows, spaces in the end of the filename are ignored and will be trimmed.
+                //
+                // Without trimming ourselves, creating a directory `dir ` will silently create
+                // `dir` instead, but then operations on files like `dir /file` will fail.
+                //
+                // Also note that it's important to do this *after* trimming to MAX_DIRECTORY_NAME_LEN,
+                // otherwise it can trim again to a name with a trailing space.
+                .trim_end()
+                // On Windows, file names are not case-sensitive, so lowercase everything.
+                .to_lowercase();
+        }
+    }
 
     string
 }
@@ -95,6 +118,12 @@ impl BenchmarkId {
             (&None, &Some(ref val)) => format!("{}/{}", group_id, val),
             (&None, &None) => group_id.clone(),
         };
+
+        let mut title = full_id.clone();
+        truncate_to_character_boundary(&mut title, MAX_TITLE_LEN);
+        if title != full_id {
+            title.push_str("...");
+        }
 
         let directory_name = match (&function_id, &value_str) {
             (&Some(ref func), &Some(ref val)) => format!(
@@ -123,11 +152,16 @@ impl BenchmarkId {
             throughput,
             full_id,
             directory_name,
+            title,
         }
     }
 
     pub fn id(&self) -> &str {
         &self.full_id
+    }
+
+    pub fn as_title(&self) -> &str {
+        &self.title
     }
 
     pub fn as_directory_name(&self) -> &str {
@@ -136,8 +170,9 @@ impl BenchmarkId {
 
     pub fn as_number(&self) -> Option<f64> {
         match self.throughput {
-            Some(Throughput::Bytes(n)) | Some(Throughput::Elements(n)) => Some(f64::from(n)),
-            None => self.value_str
+            Some(Throughput::Bytes(n)) | Some(Throughput::Elements(n)) => Some(n as f64),
+            None => self
+                .value_str
                 .as_ref()
                 .and_then(|string| string.parse::<f64>().ok()),
         }
@@ -147,7 +182,8 @@ impl BenchmarkId {
         match self.throughput {
             Some(Throughput::Bytes(_)) => Some(ValueType::Bytes),
             Some(Throughput::Elements(_)) => Some(ValueType::Elements),
-            None => self.value_str
+            None => self
+                .value_str
                 .as_ref()
                 .and_then(|string| string.parse::<f64>().ok())
                 .map(|_| ValueType::Value),
@@ -169,14 +205,30 @@ impl BenchmarkId {
             counter += 1;
         }
     }
+
+    pub fn ensure_title_unique(&mut self, existing_titles: &HashSet<String>) {
+        if !existing_titles.contains(self.as_title()) {
+            return;
+        }
+
+        let mut counter = 2;
+        loop {
+            let new_title = format!("{} #{}", self.as_title(), counter);
+            if !existing_titles.contains(&new_title) {
+                self.title = new_title;
+                return;
+            }
+            counter += 1;
+        }
+    }
 }
 impl fmt::Display for BenchmarkId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(self.id())
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_title())
     }
 }
 impl fmt::Debug for BenchmarkId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fn format_opt(opt: &Option<String>) -> String {
             match *opt {
                 Some(ref string) => format!("\"{}\"", string),
@@ -196,14 +248,25 @@ impl fmt::Debug for BenchmarkId {
 }
 
 pub struct ReportContext {
-    pub output_directory: String,
-    pub plotting: Plotting,
+    pub output_directory: PathBuf,
     pub plot_config: PlotConfiguration,
-    pub test_mode: bool,
+}
+impl ReportContext {
+    pub fn report_path<P: AsRef<Path> + ?Sized>(&self, id: &BenchmarkId, file_name: &P) -> PathBuf {
+        let mut path = self.output_directory.clone();
+        path.push(id.as_directory_name());
+        path.push("report");
+        path.push(file_name);
+        path
+    }
 }
 
 pub(crate) trait Report {
+    fn test_start(&self, _id: &BenchmarkId, _context: &ReportContext) {}
+    fn test_pass(&self, _id: &BenchmarkId, _context: &ReportContext) {}
+
     fn benchmark_start(&self, _id: &BenchmarkId, _context: &ReportContext) {}
+    fn profile(&self, _id: &BenchmarkId, _context: &ReportContext, _profile_ns: f64) {}
     fn warmup(&self, _id: &BenchmarkId, _context: &ReportContext, _warmup_ns: f64) {}
     fn terminated(&self, _id: &BenchmarkId, _context: &ReportContext) {}
     fn analysis(&self, _id: &BenchmarkId, _context: &ReportContext) {}
@@ -220,81 +283,84 @@ pub(crate) trait Report {
         &self,
         _id: &BenchmarkId,
         _context: &ReportContext,
-        _measurements: &MeasurementData,
+        _measurements: &MeasurementData<'_>,
+        _formatter: &dyn ValueFormatter,
     ) {
     }
-    fn summarize(&self, _context: &ReportContext, _all_ids: &[BenchmarkId]) {}
+    fn summarize(
+        &self,
+        _context: &ReportContext,
+        _all_ids: &[BenchmarkId],
+        _formatter: &dyn ValueFormatter,
+    ) {
+    }
     fn final_summary(&self, _context: &ReportContext) {}
+    fn group_separator(&self) {}
 }
 
 pub(crate) struct Reports {
-    reports: Vec<Box<Report>>,
+    pub(crate) cli_enabled: bool,
+    pub(crate) cli: CliReport,
+    pub(crate) bencher_enabled: bool,
+    pub(crate) bencher: BencherReport,
+    pub(crate) csv_enabled: bool,
+    pub(crate) csv: FileCsvReport,
+    pub(crate) html_enabled: bool,
+    pub(crate) html: Html,
 }
-impl Reports {
-    pub fn new(reports: Vec<Box<Report>>) -> Reports {
-        Reports { reports }
-    }
+macro_rules! reports_impl {
+    (fn $name:ident(&self, $($argn:ident: $argt:ty),*)) => {
+        fn $name(&self, $($argn: $argt),* ) {
+            if self.cli_enabled {
+                self.cli.$name($($argn),*);
+            }
+            if self.bencher_enabled {
+                self.bencher.$name($($argn),*);
+            }
+            if self.csv_enabled {
+                self.csv.$name($($argn),*);
+            }
+            if self.html_enabled {
+                self.html.$name($($argn),*);
+            }
+        }
+    };
 }
+
 impl Report for Reports {
-    fn benchmark_start(&self, id: &BenchmarkId, context: &ReportContext) {
-        for report in &self.reports {
-            report.benchmark_start(id, context);
-        }
-    }
-
-    fn warmup(&self, id: &BenchmarkId, context: &ReportContext, warmup_ns: f64) {
-        for report in &self.reports {
-            report.warmup(id, context, warmup_ns);
-        }
-    }
-
-    fn terminated(&self, id: &BenchmarkId, context: &ReportContext) {
-        for report in &self.reports {
-            report.terminated(id, context);
-        }
-    }
-
-    fn analysis(&self, id: &BenchmarkId, context: &ReportContext) {
-        for report in &self.reports {
-            report.analysis(id, context);
-        }
-    }
-
-    fn measurement_start(
+    reports_impl!(fn test_start(&self, id: &BenchmarkId, context: &ReportContext));
+    reports_impl!(fn test_pass(&self, id: &BenchmarkId, context: &ReportContext));
+    reports_impl!(fn benchmark_start(&self, id: &BenchmarkId, context: &ReportContext));
+    reports_impl!(fn profile(&self, id: &BenchmarkId, context: &ReportContext, profile_ns: f64));
+    reports_impl!(fn warmup(&self, id: &BenchmarkId, context: &ReportContext, warmup_ns: f64));
+    reports_impl!(fn terminated(&self, id: &BenchmarkId, context: &ReportContext));
+    reports_impl!(fn analysis(&self, id: &BenchmarkId, context: &ReportContext));
+    reports_impl!(fn measurement_start(
         &self,
         id: &BenchmarkId,
         context: &ReportContext,
         sample_count: u64,
         estimate_ns: f64,
-        iter_count: u64,
-    ) {
-        for report in &self.reports {
-            report.measurement_start(id, context, sample_count, estimate_ns, iter_count);
-        }
-    }
-
+        iter_count: u64
+    ));
+    reports_impl!(
     fn measurement_complete(
         &self,
         id: &BenchmarkId,
         context: &ReportContext,
-        measurements: &MeasurementData,
-    ) {
-        for report in &self.reports {
-            report.measurement_complete(id, context, measurements);
-        }
-    }
+        measurements: &MeasurementData<'_>,
+        formatter: &dyn ValueFormatter
+    ));
+    reports_impl!(
+    fn summarize(
+        &self,
+        context: &ReportContext,
+        all_ids: &[BenchmarkId],
+        formatter: &dyn ValueFormatter
+    ));
 
-    fn summarize(&self, context: &ReportContext, all_ids: &[BenchmarkId]) {
-        for report in &self.reports {
-            report.summarize(context, all_ids);
-        }
-    }
-
-    fn final_summary(&self, context: &ReportContext) {
-        for report in &self.reports {
-            report.final_summary(context);
-        }
-    }
+    reports_impl!(fn final_summary(&self, context: &ReportContext));
+    reports_impl!(fn group_separator(&self, ));
 }
 
 pub(crate) struct CliReport {
@@ -329,8 +395,8 @@ impl CliReport {
         }
     }
 
-    //Passing a String is the common case here.
-    #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
+    // Passing a String is the common case here.
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
     fn print_overwritable(&self, s: String) {
         if self.enable_text_overwrite {
             self.last_line_len.set(s.len());
@@ -381,10 +447,10 @@ impl CliReport {
         }
     }
 
-    pub fn outliers(&self, sample: &LabeledSample<f64>) {
+    pub fn outliers(&self, sample: &LabeledSample<'_, f64>) {
         let (los, lom, _, him, his) = sample.count();
         let noutliers = los + lom + him + his;
-        let sample_size = sample.as_slice().len();
+        let sample_size = sample.len();
 
         if noutliers == 0 {
             return;
@@ -415,12 +481,24 @@ impl CliReport {
     }
 }
 impl Report for CliReport {
-    fn benchmark_start(&self, id: &BenchmarkId, ctx: &ReportContext) {
-        if ctx.test_mode {
-            println!("Testing {}", id);
-        } else {
-            self.print_overwritable(format!("Benchmarking {}", id));
-        }
+    fn test_start(&self, id: &BenchmarkId, _: &ReportContext) {
+        println!("Testing {}", id);
+    }
+    fn test_pass(&self, _: &BenchmarkId, _: &ReportContext) {
+        println!("Success");
+    }
+
+    fn benchmark_start(&self, id: &BenchmarkId, _: &ReportContext) {
+        self.print_overwritable(format!("Benchmarking {}", id));
+    }
+
+    fn profile(&self, id: &BenchmarkId, _: &ReportContext, warmup_ns: f64) {
+        self.text_overwrite();
+        self.print_overwritable(format!(
+            "Benchmarking {}: Profiling for {}",
+            id,
+            format::time(warmup_ns)
+        ));
     }
 
     fn warmup(&self, id: &BenchmarkId, _: &ReportContext, warmup_ns: f64) {
@@ -432,13 +510,9 @@ impl Report for CliReport {
         ));
     }
 
-    fn terminated(&self, id: &BenchmarkId, ctx: &ReportContext) {
-        if ctx.test_mode {
-            println!("Success");
-        } else {
-            self.text_overwrite();
-            println!("Benchmarking {}: Complete (Analysis Disabled)", id);
-        }
+    fn terminated(&self, id: &BenchmarkId, _: &ReportContext) {
+        self.text_overwrite();
+        println!("Benchmarking {}: Complete (Analysis Disabled)", id);
     }
 
     fn analysis(&self, id: &BenchmarkId, _: &ReportContext) {
@@ -470,19 +544,21 @@ impl Report for CliReport {
         ));
     }
 
-    fn measurement_complete(&self, id: &BenchmarkId, _: &ReportContext, meas: &MeasurementData) {
+    fn measurement_complete(
+        &self,
+        id: &BenchmarkId,
+        _: &ReportContext,
+        meas: &MeasurementData<'_>,
+        formatter: &dyn ValueFormatter,
+    ) {
         self.text_overwrite();
 
-        let slope_estimate = meas.absolute_estimates[&Statistic::Slope];
+        let typical_estimate = &meas.absolute_estimates.typical();
 
         {
-            let mut id = id.id().to_owned();
+            let mut id = id.as_title().to_owned();
 
             if id.len() > 23 {
-                if id.len() > 80 {
-                    id.truncate(77);
-                    id.push_str("...");
-                }
                 println!("{}", self.green(id.clone()));
                 id.clear();
             }
@@ -492,9 +568,13 @@ impl Report for CliReport {
                 "{}{}time:   [{} {} {}]",
                 self.green(id),
                 " ".repeat(24 - id_len),
-                self.faint(format::time(slope_estimate.confidence_interval.lower_bound)),
-                self.bold(format::time(slope_estimate.point_estimate)),
-                self.faint(format::time(slope_estimate.confidence_interval.upper_bound))
+                self.faint(
+                    formatter.format_value(typical_estimate.confidence_interval.lower_bound)
+                ),
+                self.bold(formatter.format_value(typical_estimate.point_estimate)),
+                self.faint(
+                    formatter.format_value(typical_estimate.confidence_interval.upper_bound)
+                )
             );
         }
 
@@ -502,26 +582,28 @@ impl Report for CliReport {
             println!(
                 "{}thrpt:  [{} {} {}]",
                 " ".repeat(24),
-                self.faint(format::throughput(
+                self.faint(formatter.format_throughput(
                     throughput,
-                    slope_estimate.confidence_interval.upper_bound
+                    typical_estimate.confidence_interval.upper_bound
                 )),
-                self.bold(format::throughput(
+                self.bold(formatter.format_throughput(throughput, typical_estimate.point_estimate)),
+                self.faint(formatter.format_throughput(
                     throughput,
-                    slope_estimate.point_estimate
-                )),
-                self.faint(format::throughput(
-                    throughput,
-                    slope_estimate.confidence_interval.lower_bound
+                    typical_estimate.confidence_interval.lower_bound
                 )),
             )
         }
 
         if let Some(ref comp) = meas.comparison {
             let different_mean = comp.p_value < comp.significance_threshold;
-            let mean_est = comp.relative_estimates[&Statistic::Mean];
+            let mean_est = &comp.relative_estimates.mean;
             let point_estimate = mean_est.point_estimate;
             let mut point_estimate_str = format::change(point_estimate, true);
+            // The change in throughput is related to the change in timing. Reducing the timing by
+            // 50% increases the throughput by 100%.
+            let to_thrpt_estimate = |ratio: f64| 1.0 / (1.0 + ratio) - 1.0;
+            let mut thrpt_point_estimate_str =
+                format::change(to_thrpt_estimate(point_estimate), true);
             let explanation_str: String;
 
             if !different_mean {
@@ -531,11 +613,13 @@ impl Report for CliReport {
                 match comparison {
                     ComparisonResult::Improved => {
                         point_estimate_str = self.green(self.bold(point_estimate_str));
+                        thrpt_point_estimate_str = self.green(self.bold(thrpt_point_estimate_str));
                         explanation_str =
                             format!("Performance has {}.", self.green("improved".to_owned()));
                     }
                     ComparisonResult::Regressed => {
                         point_estimate_str = self.red(self.bold(point_estimate_str));
+                        thrpt_point_estimate_str = self.red(self.bold(thrpt_point_estimate_str));
                         explanation_str =
                             format!("Performance has {}.", self.red("regressed".to_owned()));
                     }
@@ -545,62 +629,140 @@ impl Report for CliReport {
                 }
             }
 
-            println!(
-                "{}change: [{} {} {}] (p = {:.2} {} {:.2})",
-                " ".repeat(24),
-                self.faint(format::change(
-                    mean_est.confidence_interval.lower_bound,
-                    true
-                )),
-                point_estimate_str,
-                self.faint(format::change(
-                    mean_est.confidence_interval.upper_bound,
-                    true
-                )),
-                comp.p_value,
-                if different_mean { "<" } else { ">" },
-                comp.significance_threshold
-            );
+            if meas.throughput.is_some() {
+                println!("{}change:", " ".repeat(17));
+
+                println!(
+                    "{}time:   [{} {} {}] (p = {:.2} {} {:.2})",
+                    " ".repeat(24),
+                    self.faint(format::change(
+                        mean_est.confidence_interval.lower_bound,
+                        true
+                    )),
+                    point_estimate_str,
+                    self.faint(format::change(
+                        mean_est.confidence_interval.upper_bound,
+                        true
+                    )),
+                    comp.p_value,
+                    if different_mean { "<" } else { ">" },
+                    comp.significance_threshold
+                );
+                println!(
+                    "{}thrpt:  [{} {} {}]",
+                    " ".repeat(24),
+                    self.faint(format::change(
+                        to_thrpt_estimate(mean_est.confidence_interval.upper_bound),
+                        true
+                    )),
+                    thrpt_point_estimate_str,
+                    self.faint(format::change(
+                        to_thrpt_estimate(mean_est.confidence_interval.lower_bound),
+                        true
+                    )),
+                );
+            } else {
+                println!(
+                    "{}change: [{} {} {}] (p = {:.2} {} {:.2})",
+                    " ".repeat(24),
+                    self.faint(format::change(
+                        mean_est.confidence_interval.lower_bound,
+                        true
+                    )),
+                    point_estimate_str,
+                    self.faint(format::change(
+                        mean_est.confidence_interval.upper_bound,
+                        true
+                    )),
+                    comp.p_value,
+                    if different_mean { "<" } else { ">" },
+                    comp.significance_threshold
+                );
+            }
+
             println!("{}{}", " ".repeat(24), explanation_str);
         }
 
         self.outliers(&meas.avg_times);
 
         if self.verbose {
-            let data = Data::new(meas.iter_counts.as_slice(), meas.sample_times.as_slice());
-            let slope_estimate = &meas.absolute_estimates[&Statistic::Slope];
-
-            fn format_short_estimate(estimate: &Estimate) -> String {
+            let format_short_estimate = |estimate: &Estimate| -> String {
                 format!(
                     "[{} {}]",
-                    format::time(estimate.confidence_interval.lower_bound),
-                    format::time(estimate.confidence_interval.upper_bound)
+                    formatter.format_value(estimate.confidence_interval.lower_bound),
+                    formatter.format_value(estimate.confidence_interval.upper_bound)
                 )
-            }
+            };
 
-            println!(
-                "{:<7}{} {:<15}[{:0.7} {:0.7}]",
-                "slope",
-                format_short_estimate(slope_estimate),
-                "R^2",
-                Slope(slope_estimate.confidence_interval.lower_bound).r_squared(data),
-                Slope(slope_estimate.confidence_interval.upper_bound).r_squared(data),
-            );
+            let data = &meas.data;
+            if let Some(slope_estimate) = meas.absolute_estimates.slope.as_ref() {
+                println!(
+                    "{:<7}{} {:<15}[{:0.7} {:0.7}]",
+                    "slope",
+                    format_short_estimate(slope_estimate),
+                    "R^2",
+                    Slope(slope_estimate.confidence_interval.lower_bound).r_squared(data),
+                    Slope(slope_estimate.confidence_interval.upper_bound).r_squared(data),
+                );
+            }
             println!(
                 "{:<7}{} {:<15}{}",
                 "mean",
-                format_short_estimate(&meas.absolute_estimates[&Statistic::Mean]),
+                format_short_estimate(&meas.absolute_estimates.mean),
                 "std. dev.",
-                format_short_estimate(&meas.absolute_estimates[&Statistic::StdDev]),
+                format_short_estimate(&meas.absolute_estimates.std_dev),
             );
             println!(
                 "{:<7}{} {:<15}{}",
                 "median",
-                format_short_estimate(&meas.absolute_estimates[&Statistic::Median]),
+                format_short_estimate(&meas.absolute_estimates.median),
                 "med. abs. dev.",
-                format_short_estimate(&meas.absolute_estimates[&Statistic::MedianAbsDev]),
+                format_short_estimate(&meas.absolute_estimates.median_abs_dev),
             );
         }
+    }
+
+    fn group_separator(&self) {
+        println!();
+    }
+}
+
+pub struct BencherReport;
+impl Report for BencherReport {
+    fn measurement_start(
+        &self,
+        id: &BenchmarkId,
+        _context: &ReportContext,
+        _sample_count: u64,
+        _estimate_ns: f64,
+        _iter_count: u64,
+    ) {
+        print!("test {} ... ", id);
+    }
+
+    fn measurement_complete(
+        &self,
+        _id: &BenchmarkId,
+        _: &ReportContext,
+        meas: &MeasurementData<'_>,
+        formatter: &dyn ValueFormatter,
+    ) {
+        let mut values = [
+            meas.absolute_estimates.median.point_estimate,
+            meas.absolute_estimates.std_dev.point_estimate,
+        ];
+        let unit = formatter.scale_for_machines(&mut values);
+
+        println!(
+            "bench: {:>11} {}/iter (+/- {})",
+            format::integer(values[0]),
+            unit,
+            format::integer(values[1])
+        );
+    }
+
+    fn group_separator(&self) {
+        println!();
     }
 }
 
@@ -611,7 +773,7 @@ enum ComparisonResult {
 }
 
 fn compare_to_threshold(estimate: &Estimate, noise: f64) -> ComparisonResult {
-    let ci = estimate.confidence_interval;
+    let ci = &estimate.confidence_interval;
     let lb = ci.lower_bound;
     let ub = ci.upper_bound;
 
@@ -670,5 +832,16 @@ mod test {
         new_id.ensure_directory_name_unique(&directories);
         assert_eq!("group/function/value_3", new_id.as_directory_name());
         directories.insert(new_id.as_directory_name().to_owned());
+    }
+    #[test]
+    fn test_benchmark_id_make_long_directory_name_unique() {
+        let long_name = (0..MAX_DIRECTORY_NAME_LEN).map(|_| 'a').collect::<String>();
+        let existing_id = BenchmarkId::new(long_name, None, None, None);
+        let mut directories = HashSet::new();
+        directories.insert(existing_id.as_directory_name().to_owned());
+
+        let mut new_id = existing_id.clone();
+        new_id.ensure_directory_name_unique(&directories);
+        assert_ne!(existing_id.as_directory_name(), new_id.as_directory_name());
     }
 }

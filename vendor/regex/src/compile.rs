@@ -1,30 +1,22 @@
-// Copyright 2014-2016 The Rust Project Developers. See the COPYRIGHT
-// file at the top-level directory of this distribution and at
-// http://rust-lang.org/COPYRIGHT.
-//
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
-// except according to those terms.
-
 use std::collections::HashMap;
+use std::fmt;
 use std::iter;
 use std::result;
 use std::sync::Arc;
 
-use syntax::is_word_byte;
 use syntax::hir::{self, Hir};
-use utf8_ranges::{Utf8Range, Utf8Sequence, Utf8Sequences};
+use syntax::is_word_byte;
+use syntax::utf8::{Utf8Range, Utf8Sequence, Utf8Sequences};
 
 use prog::{
-    Program, Inst, InstPtr, EmptyLook,
-    InstSave, InstSplit, InstEmptyLook, InstChar, InstRanges, InstBytes,
+    EmptyLook, Inst, InstBytes, InstChar, InstEmptyLook, InstPtr, InstRanges,
+    InstSave, InstSplit, Program,
 };
 
 use Error;
 
 type Result = result::Result<Patch, Error>;
+type ResultOrEmpty = result::Result<Option<Patch>, Error>;
 
 #[derive(Debug)]
 struct Patch {
@@ -34,6 +26,9 @@ struct Patch {
 
 /// A compiler translates a regular expression AST to a sequence of
 /// instructions. The sequence of instructions represents an NFA.
+// `Compiler` is only public via the `internal` module, so avoid deriving
+// `Debug`.
+#[allow(missing_debug_implementations)]
 pub struct Compiler {
     insts: Vec<MaybeInst>,
     compiled: Program,
@@ -73,7 +68,7 @@ impl Compiler {
     /// If bytes is true, then the program is compiled as a byte based
     /// automaton, which incorporates UTF-8 decoding into the machine. If it's
     /// false, then the automaton is Unicode scalar value based, e.g., an
-    /// engine utilizing such an automaton is resposible for UTF-8 decoding.
+    /// engine utilizing such an automaton is responsible for UTF-8 decoding.
     ///
     /// The specific invariant is that when returning a byte based machine,
     /// the neither the `Char` nor `Ranges` instructions are produced.
@@ -119,11 +114,8 @@ impl Compiler {
     /// The compiler is guaranteed to succeed unless the program exceeds the
     /// specified size limit. If the size limit is exceeded, then compilation
     /// stops and returns an error.
-    pub fn compile(
-        mut self,
-        exprs: &[Hir],
-    ) -> result::Result<Program, Error> {
-        debug_assert!(exprs.len() >= 1);
+    pub fn compile(mut self, exprs: &[Hir]) -> result::Result<Program, Error> {
+        debug_assert!(!exprs.is_empty());
         self.num_exprs = exprs.len();
         if exprs.len() == 1 {
             self.compile_one(&exprs[0])
@@ -145,7 +137,7 @@ impl Compiler {
             self.compiled.start = dotstar_patch.entry;
         }
         self.compiled.captures = vec![None];
-        let patch = self.c_capture(0, expr)?;
+        let patch = self.c_capture(0, expr)?.unwrap_or(self.next_inst());
         if self.compiled.needs_dotstar() {
             self.fill(dotstar_patch.hole, patch.entry);
         } else {
@@ -180,14 +172,16 @@ impl Compiler {
         for (i, expr) in exprs[0..exprs.len() - 1].iter().enumerate() {
             self.fill_to_next(prev_hole);
             let split = self.push_split_hole();
-            let Patch { hole, entry } = self.c_capture(0, expr)?;
+            let Patch { hole, entry } =
+                self.c_capture(0, expr)?.unwrap_or(self.next_inst());
             self.fill_to_next(hole);
             self.compiled.matches.push(self.insts.len());
             self.push_compiled(Inst::Match(i));
             prev_hole = self.fill_split(split, Some(entry), None);
         }
         let i = exprs.len() - 1;
-        let Patch { hole, entry } = self.c_capture(0, &exprs[i])?;
+        let Patch { hole, entry } =
+            self.c_capture(0, &exprs[i])?.unwrap_or(self.next_inst());
         self.fill(prev_hole, entry);
         self.fill_to_next(hole);
         self.compiled.matches.push(self.insts.len());
@@ -232,7 +226,7 @@ impl Compiler {
     ///                                         hole
     /// ```
     ///
-    /// To compile two expressions, e1 and e2, concatinated together we
+    /// To compile two expressions, e1 and e2, concatenated together we
     /// would do:
     ///
     /// ```ignore
@@ -255,23 +249,22 @@ impl Compiler {
     /// method you will see that it does exactly this, though it handles
     /// a list of expressions rather than just the two that we use for
     /// an example.
-    fn c(&mut self, expr: &Hir) -> Result {
+    ///
+    /// Ok(None) is returned when an expression is compiled to no
+    /// instruction, and so no patch.entry value makes sense.
+    fn c(&mut self, expr: &Hir) -> ResultOrEmpty {
         use prog;
         use syntax::hir::HirKind::*;
 
         self.check_size()?;
         match *expr.kind() {
-            Empty => Ok(Patch { hole: Hole::None, entry: self.insts.len() }),
-            Literal(hir::Literal::Unicode(c)) => {
-                self.c_literal(&[c])
-            }
+            Empty => Ok(None),
+            Literal(hir::Literal::Unicode(c)) => self.c_char(c),
             Literal(hir::Literal::Byte(b)) => {
                 assert!(self.compiled.uses_bytes());
-                self.c_bytes(&[b])
+                self.c_byte(b)
             }
-            Class(hir::Class::Unicode(ref cls)) => {
-                self.c_class(cls.ranges())
-            }
+            Class(hir::Class::Unicode(ref cls)) => self.c_class(cls.ranges()),
             Class(hir::Class::Bytes(ref cls)) => {
                 if self.compiled.uses_bytes() {
                     self.c_class_bytes(cls.ranges())
@@ -314,11 +307,25 @@ impl Compiler {
                 self.c_empty_look(prog::EmptyLook::EndText)
             }
             WordBoundary(hir::WordBoundary::Unicode) => {
+                if !cfg!(feature = "unicode-perl") {
+                    return Err(Error::Syntax(
+                        "Unicode word boundaries are unavailable when \
+                         the unicode-perl feature is disabled"
+                            .to_string(),
+                    ));
+                }
                 self.compiled.has_unicode_word_boundary = true;
                 self.byte_classes.set_word_boundary();
                 self.c_empty_look(prog::EmptyLook::WordBoundary)
             }
             WordBoundary(hir::WordBoundary::UnicodeNegate) => {
+                if !cfg!(feature = "unicode-perl") {
+                    return Err(Error::Syntax(
+                        "Unicode word boundaries are unavailable when \
+                         the unicode-perl feature is disabled"
+                            .to_string(),
+                    ));
+                }
                 self.compiled.has_unicode_word_boundary = true;
                 self.byte_classes.set_word_boundary();
                 self.c_empty_look(prog::EmptyLook::NotWordBoundary)
@@ -331,25 +338,23 @@ impl Compiler {
                 self.byte_classes.set_word_boundary();
                 self.c_empty_look(prog::EmptyLook::NotWordBoundaryAscii)
             }
-            Group(ref g) => {
-                match g.kind {
-                    hir::GroupKind::NonCapturing => self.c(&g.hir),
-                    hir::GroupKind::CaptureIndex(index) => {
-                        if index as usize >= self.compiled.captures.len() {
-                            self.compiled.captures.push(None);
-                        }
-                        self.c_capture(2 * index as usize, &g.hir)
+            Group(ref g) => match g.kind {
+                hir::GroupKind::NonCapturing => self.c(&g.hir),
+                hir::GroupKind::CaptureIndex(index) => {
+                    if index as usize >= self.compiled.captures.len() {
+                        self.compiled.captures.push(None);
                     }
-                    hir::GroupKind::CaptureName { index, ref name } => {
-                        if index as usize >= self.compiled.captures.len() {
-                            let n = name.to_string();
-                            self.compiled.captures.push(Some(n.clone()));
-                            self.capture_name_idx.insert(n, index as usize);
-                        }
-                        self.c_capture(2 * index as usize, &g.hir)
-                    }
+                    self.c_capture(2 * index as usize, &g.hir)
                 }
-            }
+                hir::GroupKind::CaptureName { index, ref name } => {
+                    if index as usize >= self.compiled.captures.len() {
+                        let n = name.to_string();
+                        self.compiled.captures.push(Some(n.clone()));
+                        self.capture_name_idx.insert(n, index as usize);
+                    }
+                    self.c_capture(2 * index as usize, &g.hir)
+                }
+            },
             Concat(ref es) => {
                 if self.compiled.is_reverse {
                     self.c_concat(es.iter().rev())
@@ -362,7 +367,7 @@ impl Compiler {
         }
     }
 
-    fn c_capture(&mut self, first_slot: usize, expr: &Hir) -> Result {
+    fn c_capture(&mut self, first_slot: usize, expr: &Hir) -> ResultOrEmpty {
         if self.num_exprs > 1 || self.compiled.is_dfa {
             // Don't ever compile Save instructions for regex sets because
             // they are never used. They are also never used in DFA programs
@@ -371,11 +376,11 @@ impl Compiler {
         } else {
             let entry = self.insts.len();
             let hole = self.push_hole(InstHole::Save { slot: first_slot });
-            let patch = self.c(expr)?;
+            let patch = self.c(expr)?.unwrap_or(self.next_inst());
             self.fill(hole, patch.entry);
             self.fill_to_next(patch.hole);
             let hole = self.push_hole(InstHole::Save { slot: first_slot + 1 });
-            Ok(Patch { hole: hole, entry: entry })
+            Ok(Some(Patch { hole: hole, entry: entry }))
         }
     }
 
@@ -386,44 +391,38 @@ impl Compiler {
                 greedy: false,
                 hir: Box::new(Hir::any(true)),
             }))?
+            .unwrap()
         } else {
             self.c(&Hir::repetition(hir::Repetition {
                 kind: hir::RepetitionKind::ZeroOrMore,
                 greedy: false,
                 hir: Box::new(Hir::any(false)),
             }))?
+            .unwrap()
         })
     }
 
-    fn c_literal(&mut self, chars: &[char]) -> Result {
-        debug_assert!(!chars.is_empty());
-        let mut chars: Box<Iterator<Item=&char>> =
-            if self.compiled.is_reverse {
-                Box::new(chars.iter().rev())
+    fn c_char(&mut self, c: char) -> ResultOrEmpty {
+        if self.compiled.uses_bytes() {
+            if c.is_ascii() {
+                let b = c as u8;
+                let hole =
+                    self.push_hole(InstHole::Bytes { start: b, end: b });
+                self.byte_classes.set_range(b, b);
+                Ok(Some(Patch { hole, entry: self.insts.len() - 1 }))
             } else {
-                Box::new(chars.iter())
-            };
-        let first = *chars.next().expect("non-empty literal");
-        let Patch { mut hole, entry } = self.c_char(first)?;
-        for &c in chars {
-            let p = self.c_char(c)?;
-            self.fill(hole, p.entry);
-            hole = p.hole;
+                self.c_class(&[hir::ClassUnicodeRange::new(c, c)])
+            }
+        } else {
+            let hole = self.push_hole(InstHole::Char { c: c });
+            Ok(Some(Patch { hole, entry: self.insts.len() - 1 }))
         }
-        Ok(Patch { hole: hole, entry: entry })
     }
 
-    fn c_char(&mut self, c: char) -> Result {
-        self.c_class(&[hir::ClassUnicodeRange::new(c, c)])
-    }
-
-    fn c_class(&mut self, ranges: &[hir::ClassUnicodeRange]) -> Result {
+    fn c_class(&mut self, ranges: &[hir::ClassUnicodeRange]) -> ResultOrEmpty {
         assert!(!ranges.is_empty());
         if self.compiled.uses_bytes() {
-            CompileClass {
-                c: self,
-                ranges: ranges,
-            }.compile()
+            Ok(Some(CompileClass { c: self, ranges: ranges }.compile()?))
         } else {
             let ranges: Vec<(char, char)> =
                 ranges.iter().map(|r| (r.start(), r.end())).collect();
@@ -432,33 +431,18 @@ impl Compiler {
             } else {
                 self.push_hole(InstHole::Ranges { ranges: ranges })
             };
-            Ok(Patch { hole: hole, entry: self.insts.len() - 1 })
+            Ok(Some(Patch { hole: hole, entry: self.insts.len() - 1 }))
         }
     }
 
-    fn c_bytes(&mut self, bytes: &[u8]) -> Result {
-        debug_assert!(!bytes.is_empty());
-        let mut bytes: Box<Iterator<Item=&u8>> =
-            if self.compiled.is_reverse {
-                Box::new(bytes.iter().rev())
-            } else {
-                Box::new(bytes.iter())
-            };
-        let first = *bytes.next().expect("non-empty literal");
-        let Patch { mut hole, entry } = self.c_byte(first)?;
-        for &b in bytes {
-            let p = self.c_byte(b)?;
-            self.fill(hole, p.entry);
-            hole = p.hole;
-        }
-        Ok(Patch { hole: hole, entry: entry })
-    }
-
-    fn c_byte(&mut self, b: u8) -> Result {
+    fn c_byte(&mut self, b: u8) -> ResultOrEmpty {
         self.c_class_bytes(&[hir::ClassBytesRange::new(b, b)])
     }
 
-    fn c_class_bytes(&mut self, ranges: &[hir::ClassBytesRange]) -> Result {
+    fn c_class_bytes(
+        &mut self,
+        ranges: &[hir::ClassBytesRange],
+    ) -> ResultOrEmpty {
         debug_assert!(!ranges.is_empty());
 
         let first_split_entry = self.insts.len();
@@ -470,46 +454,55 @@ impl Compiler {
             let next = self.insts.len();
             self.byte_classes.set_range(r.start(), r.end());
             holes.push(self.push_hole(InstHole::Bytes {
-                start: r.start(), end: r.end(),
+                start: r.start(),
+                end: r.end(),
             }));
             prev_hole = self.fill_split(split, Some(next), None);
         }
         let next = self.insts.len();
         let r = &ranges[ranges.len() - 1];
         self.byte_classes.set_range(r.start(), r.end());
-        holes.push(self.push_hole(InstHole::Bytes {
-            start: r.start(), end: r.end(),
-        }));
+        holes.push(
+            self.push_hole(InstHole::Bytes { start: r.start(), end: r.end() }),
+        );
         self.fill(prev_hole, next);
-        Ok(Patch { hole: Hole::Many(holes), entry: first_split_entry })
+        Ok(Some(Patch { hole: Hole::Many(holes), entry: first_split_entry }))
     }
 
-    fn c_empty_look(&mut self, look: EmptyLook) -> Result {
+    fn c_empty_look(&mut self, look: EmptyLook) -> ResultOrEmpty {
         let hole = self.push_hole(InstHole::EmptyLook { look: look });
-        Ok(Patch { hole: hole, entry: self.insts.len() - 1 })
+        Ok(Some(Patch { hole: hole, entry: self.insts.len() - 1 }))
     }
 
-    fn c_concat<'a, I>(&mut self, exprs: I) -> Result
-            where I: IntoIterator<Item=&'a Hir> {
+    fn c_concat<'a, I>(&mut self, exprs: I) -> ResultOrEmpty
+    where
+        I: IntoIterator<Item = &'a Hir>,
+    {
         let mut exprs = exprs.into_iter();
-        let first = match exprs.next() {
-            Some(expr) => expr,
-            None => {
-                return Ok(Patch { hole: Hole::None, entry: self.insts.len() })
+        let Patch { mut hole, entry } = loop {
+            match exprs.next() {
+                None => return Ok(None),
+                Some(e) => {
+                    if let Some(p) = self.c(e)? {
+                        break p;
+                    }
+                }
             }
         };
-        let Patch { mut hole, entry } = self.c(first)?;
         for e in exprs {
-            let p = self.c(e)?;
-            self.fill(hole, p.entry);
-            hole = p.hole;
+            if let Some(p) = self.c(e)? {
+                self.fill(hole, p.entry);
+                hole = p.hole;
+            }
         }
-        Ok(Patch { hole: hole, entry: entry })
+        Ok(Some(Patch { hole: hole, entry: entry }))
     }
 
-    fn c_alternate(&mut self, exprs: &[Hir]) -> Result {
+    fn c_alternate(&mut self, exprs: &[Hir]) -> ResultOrEmpty {
         debug_assert!(
-            exprs.len() >= 2, "alternates must have at least 2 exprs");
+            exprs.len() >= 2,
+            "alternates must have at least 2 exprs"
+        );
 
         // Initial entry point is always the first split.
         let first_split_entry = self.insts.len();
@@ -518,39 +511,43 @@ impl Compiler {
         // patched to point to the same location.
         let mut holes = vec![];
 
-        let mut prev_hole = Hole::None;
+        // true indicates that the hole is a split where we want to fill
+        // the second branch.
+        let mut prev_hole = (Hole::None, false);
         for e in &exprs[0..exprs.len() - 1] {
-            self.fill_to_next(prev_hole);
-            let split = self.push_split_hole();
-            let prev_entry = self.insts.len();
-            let Patch { hole, entry } = self.c(e)?;
-            if prev_entry == self.insts.len() {
-                // TODO(burntsushi): It is kind of silly that we don't support
-                // empty-subexpressions in alternates, but it is supremely
-                // awkward to support them in the existing compiler
-                // infrastructure. This entire compiler needs to be thrown out
-                // anyway, so don't feel too bad.
-                return Err(Error::Syntax(
-                    "alternations cannot currently contain \
-                     empty sub-expressions".to_string()));
+            if prev_hole.1 {
+                let next = self.insts.len();
+                self.fill_split(prev_hole.0, None, Some(next));
+            } else {
+                self.fill_to_next(prev_hole.0);
             }
+            let split = self.push_split_hole();
+            if let Some(Patch { hole, entry }) = self.c(e)? {
+                holes.push(hole);
+                prev_hole = (self.fill_split(split, Some(entry), None), false);
+            } else {
+                let (split1, split2) = split.dup_one();
+                holes.push(split1);
+                prev_hole = (split2, true);
+            }
+        }
+        if let Some(Patch { hole, entry }) = self.c(&exprs[exprs.len() - 1])? {
             holes.push(hole);
-            prev_hole = self.fill_split(split, Some(entry), None);
+            if prev_hole.1 {
+                self.fill_split(prev_hole.0, None, Some(entry));
+            } else {
+                self.fill(prev_hole.0, entry);
+            }
+        } else {
+            // We ignore prev_hole.1. When it's true, it means we have two
+            // empty branches both pushing prev_hole.0 into holes, so both
+            // branches will go to the same place anyway.
+            holes.push(prev_hole.0);
         }
-        let prev_entry = self.insts.len();
-        let Patch { hole, entry } = self.c(&exprs[exprs.len() - 1])?;
-        if prev_entry == self.insts.len() {
-            // TODO(burntsushi): See TODO above.
-            return Err(Error::Syntax(
-                "alternations cannot currently contain \
-                 empty sub-expressions".to_string()));
-        }
-        holes.push(hole);
-        self.fill(prev_hole, entry);
-        Ok(Patch { hole: Hole::Many(holes), entry: first_split_entry })
+        Ok(Some(Patch { hole: Hole::Many(holes), entry: first_split_entry }))
     }
 
-    fn c_repeat(&mut self, rep: &hir::Repetition) -> Result {
+    fn c_repeat(&mut self, rep: &hir::Repetition) -> ResultOrEmpty {
         use syntax::hir::RepetitionKind::*;
         match rep.kind {
             ZeroOrOne => self.c_repeat_zero_or_one(&rep.hir, rep.greedy),
@@ -568,24 +565,37 @@ impl Compiler {
         }
     }
 
-    fn c_repeat_zero_or_one(&mut self, expr: &Hir, greedy: bool) -> Result {
+    fn c_repeat_zero_or_one(
+        &mut self,
+        expr: &Hir,
+        greedy: bool,
+    ) -> ResultOrEmpty {
         let split_entry = self.insts.len();
         let split = self.push_split_hole();
-        let Patch { hole: hole_rep, entry: entry_rep } = self.c(expr)?;
-
+        let Patch { hole: hole_rep, entry: entry_rep } = match self.c(expr)? {
+            Some(p) => p,
+            None => return self.pop_split_hole(),
+        };
         let split_hole = if greedy {
             self.fill_split(split, Some(entry_rep), None)
         } else {
             self.fill_split(split, None, Some(entry_rep))
         };
         let holes = vec![hole_rep, split_hole];
-        Ok(Patch { hole: Hole::Many(holes), entry: split_entry })
+        Ok(Some(Patch { hole: Hole::Many(holes), entry: split_entry }))
     }
 
-    fn c_repeat_zero_or_more(&mut self, expr: &Hir, greedy: bool) -> Result {
+    fn c_repeat_zero_or_more(
+        &mut self,
+        expr: &Hir,
+        greedy: bool,
+    ) -> ResultOrEmpty {
         let split_entry = self.insts.len();
         let split = self.push_split_hole();
-        let Patch { hole: hole_rep, entry: entry_rep } = self.c(expr)?;
+        let Patch { hole: hole_rep, entry: entry_rep } = match self.c(expr)? {
+            Some(p) => p,
+            None => return self.pop_split_hole(),
+        };
 
         self.fill(hole_rep, split_entry);
         let split_hole = if greedy {
@@ -593,11 +603,18 @@ impl Compiler {
         } else {
             self.fill_split(split, None, Some(entry_rep))
         };
-        Ok(Patch { hole: split_hole, entry: split_entry })
+        Ok(Some(Patch { hole: split_hole, entry: split_entry }))
     }
 
-    fn c_repeat_one_or_more(&mut self, expr: &Hir, greedy: bool) -> Result {
-        let Patch { hole: hole_rep, entry: entry_rep } = self.c(expr)?;
+    fn c_repeat_one_or_more(
+        &mut self,
+        expr: &Hir,
+        greedy: bool,
+    ) -> ResultOrEmpty {
+        let Patch { hole: hole_rep, entry: entry_rep } = match self.c(expr)? {
+            Some(p) => p,
+            None => return Ok(None),
+        };
         self.fill_to_next(hole_rep);
         let split = self.push_split_hole();
 
@@ -606,7 +623,7 @@ impl Compiler {
         } else {
             self.fill_split(split, None, Some(entry_rep))
         };
-        Ok(Patch { hole: split_hole, entry: entry_rep })
+        Ok(Some(Patch { hole: split_hole, entry: entry_rep }))
     }
 
     fn c_repeat_range_min_or_more(
@@ -614,12 +631,20 @@ impl Compiler {
         expr: &Hir,
         greedy: bool,
         min: u32,
-    ) -> Result {
+    ) -> ResultOrEmpty {
         let min = u32_to_usize(min);
-        let patch_concat = self.c_concat(iter::repeat(expr).take(min))?;
-        let patch_rep = self.c_repeat_zero_or_more(expr, greedy)?;
-        self.fill(patch_concat.hole, patch_rep.entry);
-        Ok(Patch { hole: patch_rep.hole, entry: patch_concat.entry })
+        // Using next_inst() is ok, because we can't return it (concat would
+        // have to return Some(_) while c_repeat_range_min_or_more returns
+        // None).
+        let patch_concat = self
+            .c_concat(iter::repeat(expr).take(min))?
+            .unwrap_or(self.next_inst());
+        if let Some(patch_rep) = self.c_repeat_zero_or_more(expr, greedy)? {
+            self.fill(patch_concat.hole, patch_rep.entry);
+            Ok(Some(Patch { hole: patch_rep.hole, entry: patch_concat.entry }))
+        } else {
+            Ok(None)
+        }
     }
 
     fn c_repeat_range(
@@ -628,13 +653,17 @@ impl Compiler {
         greedy: bool,
         min: u32,
         max: u32,
-    ) -> Result {
+    ) -> ResultOrEmpty {
         let (min, max) = (u32_to_usize(min), u32_to_usize(max));
+        debug_assert!(min <= max);
         let patch_concat = self.c_concat(iter::repeat(expr).take(min))?;
-        let initial_entry = patch_concat.entry;
         if min == max {
             return Ok(patch_concat);
         }
+        // Same reasoning as in c_repeat_range_min_or_more (we know that min <
+        // max at this point).
+        let patch_concat = patch_concat.unwrap_or(self.next_inst());
+        let initial_entry = patch_concat.entry;
         // It is much simpler to compile, e.g., `a{2,5}` as:
         //
         //     aaa?a?a?
@@ -659,7 +688,10 @@ impl Compiler {
         for _ in min..max {
             self.fill_to_next(prev_hole);
             let split = self.push_split_hole();
-            let Patch { hole, entry } = self.c(expr)?;
+            let Patch { hole, entry } = match self.c(expr)? {
+                Some(p) => p,
+                None => return self.pop_split_hole(),
+            };
             prev_hole = hole;
             if greedy {
                 holes.push(self.fill_split(split, Some(entry), None));
@@ -668,7 +700,14 @@ impl Compiler {
             }
         }
         holes.push(prev_hole);
-        Ok(Patch { hole: Hole::Many(holes), entry: initial_entry })
+        Ok(Some(Patch { hole: Hole::Many(holes), entry: initial_entry }))
+    }
+
+    /// Can be used as a default value for the c_* functions when the call to
+    /// c_function is followed by inserting at least one instruction that is
+    /// always executed after the ones written by the c* function.
+    fn next_inst(&self) -> Patch {
+        Patch { hole: Hole::None, entry: self.insts.len() }
     }
 
     fn fill(&mut self, hole: Hole, goto: InstPtr) {
@@ -698,24 +737,24 @@ impl Compiler {
     ) -> Hole {
         match hole {
             Hole::None => Hole::None,
-            Hole::One(pc) => {
-                match (goto1, goto2) {
-                    (Some(goto1), Some(goto2)) => {
-                        self.insts[pc].fill_split(goto1, goto2);
-                        Hole::None
-                    }
-                    (Some(goto1), None) => {
-                        self.insts[pc].half_fill_split_goto1(goto1);
-                        Hole::One(pc)
-                    }
-                    (None, Some(goto2)) => {
-                        self.insts[pc].half_fill_split_goto2(goto2);
-                        Hole::One(pc)
-                    }
-                    (None, None) => unreachable!("at least one of the split \
-                                                  holes must be filled"),
+            Hole::One(pc) => match (goto1, goto2) {
+                (Some(goto1), Some(goto2)) => {
+                    self.insts[pc].fill_split(goto1, goto2);
+                    Hole::None
                 }
-            }
+                (Some(goto1), None) => {
+                    self.insts[pc].half_fill_split_goto1(goto1);
+                    Hole::One(pc)
+                }
+                (None, Some(goto2)) => {
+                    self.insts[pc].half_fill_split_goto2(goto2);
+                    Hole::One(pc)
+                }
+                (None, None) => unreachable!(
+                    "at least one of the split \
+                     holes must be filled"
+                ),
+            },
             Hole::Many(holes) => {
                 let mut new_holes = vec![];
                 for hole in holes {
@@ -748,6 +787,11 @@ impl Compiler {
         Hole::One(hole)
     }
 
+    fn pop_split_hole(&mut self) -> ResultOrEmpty {
+        self.insts.pop();
+        Ok(None)
+    }
+
     fn check_size(&self) -> result::Result<(), Error> {
         use std::mem::size_of;
 
@@ -766,6 +810,17 @@ enum Hole {
     Many(Vec<Hole>),
 }
 
+impl Hole {
+    fn dup_one(self) -> (Self, Self) {
+        match self {
+            Hole::One(pc) => (Hole::One(pc), Hole::One(pc)),
+            Hole::None | Hole::Many(_) => {
+                unreachable!("must be called on single hole")
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 enum MaybeInst {
     Compiled(Inst),
@@ -777,18 +832,30 @@ enum MaybeInst {
 
 impl MaybeInst {
     fn fill(&mut self, goto: InstPtr) {
-        let filled = match *self {
-            MaybeInst::Uncompiled(ref inst) => inst.fill(goto),
+        let maybeinst = match *self {
+            MaybeInst::Split => MaybeInst::Split1(goto),
+            MaybeInst::Uncompiled(ref inst) => {
+                MaybeInst::Compiled(inst.fill(goto))
+            }
             MaybeInst::Split1(goto1) => {
-                Inst::Split(InstSplit { goto1: goto1, goto2: goto })
+                MaybeInst::Compiled(Inst::Split(InstSplit {
+                    goto1: goto1,
+                    goto2: goto,
+                }))
             }
             MaybeInst::Split2(goto2) => {
-                Inst::Split(InstSplit { goto1: goto, goto2: goto2 })
+                MaybeInst::Compiled(Inst::Split(InstSplit {
+                    goto1: goto,
+                    goto2: goto2,
+                }))
             }
-            _ => unreachable!("not all instructions were compiled! \
-                               found uncompiled instruction: {:?}", self),
+            _ => unreachable!(
+                "not all instructions were compiled! \
+                 found uncompiled instruction: {:?}",
+                self
+            ),
         };
-        *self = MaybeInst::Compiled(filled);
+        *self = maybeinst;
     }
 
     fn fill_split(&mut self, goto1: InstPtr, goto2: InstPtr) {
@@ -796,8 +863,11 @@ impl MaybeInst {
             MaybeInst::Split => {
                 Inst::Split(InstSplit { goto1: goto1, goto2: goto2 })
             }
-            _ => unreachable!("must be called on Split instruction, \
-                               instead it was called on: {:?}", self),
+            _ => unreachable!(
+                "must be called on Split instruction, \
+                 instead it was called on: {:?}",
+                self
+            ),
         };
         *self = MaybeInst::Compiled(filled);
     }
@@ -805,8 +875,11 @@ impl MaybeInst {
     fn half_fill_split_goto1(&mut self, goto1: InstPtr) {
         let half_filled = match *self {
             MaybeInst::Split => goto1,
-            _ => unreachable!("must be called on Split instruction, \
-                               instead it was called on: {:?}", self),
+            _ => unreachable!(
+                "must be called on Split instruction, \
+                 instead it was called on: {:?}",
+                self
+            ),
         };
         *self = MaybeInst::Split1(half_filled);
     }
@@ -814,8 +887,11 @@ impl MaybeInst {
     fn half_fill_split_goto2(&mut self, goto2: InstPtr) {
         let half_filled = match *self {
             MaybeInst::Split => goto2,
-            _ => unreachable!("must be called on Split instruction, \
-                               instead it was called on: {:?}", self),
+            _ => unreachable!(
+                "must be called on Split instruction, \
+                 instead it was called on: {:?}",
+                self
+            ),
         };
         *self = MaybeInst::Split2(half_filled);
     }
@@ -823,8 +899,11 @@ impl MaybeInst {
     fn unwrap(self) -> Inst {
         match self {
             MaybeInst::Compiled(inst) => inst,
-            _ => unreachable!("must be called on a compiled instruction, \
-                               instead it was called on: {:?}", self),
+            _ => unreachable!(
+                "must be called on a compiled instruction, \
+                 instead it was called on: {:?}",
+                self
+            ),
         }
     }
 }
@@ -841,27 +920,19 @@ enum InstHole {
 impl InstHole {
     fn fill(&self, goto: InstPtr) -> Inst {
         match *self {
-            InstHole::Save { slot } => Inst::Save(InstSave {
-                goto: goto,
-                slot: slot,
-            }),
-            InstHole::EmptyLook { look } => Inst::EmptyLook(InstEmptyLook {
-                goto: goto,
-                look: look,
-            }),
-            InstHole::Char { c } => Inst::Char(InstChar {
-                goto: goto,
-                c: c,
-            }),
-            InstHole::Ranges { ref ranges } => Inst::Ranges(InstRanges {
-                goto: goto,
-                ranges: ranges.clone(),
-            }),
-            InstHole::Bytes { start, end } => Inst::Bytes(InstBytes {
-                goto: goto,
-                start: start,
-                end: end,
-            }),
+            InstHole::Save { slot } => {
+                Inst::Save(InstSave { goto: goto, slot: slot })
+            }
+            InstHole::EmptyLook { look } => {
+                Inst::EmptyLook(InstEmptyLook { goto: goto, look: look })
+            }
+            InstHole::Char { c } => Inst::Char(InstChar { goto: goto, c: c }),
+            InstHole::Ranges { ref ranges } => {
+                Inst::Ranges(InstRanges { goto: goto, ranges: ranges.clone() })
+            }
+            InstHole::Bytes { start, end } => {
+                Inst::Bytes(InstBytes { goto: goto, start: start, end: end })
+            }
         }
     }
 }
@@ -904,15 +975,13 @@ impl<'a, 'b> CompileClass<'a, 'b> {
                     last_split = self.c.push_split_hole();
                     let Patch { hole, entry } = self.c_utf8_seq(&utf8_seq)?;
                     holes.push(hole);
-                    last_split = self.c.fill_split(last_split, Some(entry), None);
+                    last_split =
+                        self.c.fill_split(last_split, Some(entry), None);
                 }
             }
         }
         self.c.utf8_seqs = Some(utf8_seqs);
-        Ok(Patch {
-            hole: Hole::Many(holes),
-            entry: initial_entry.unwrap(),
-        })
+        Ok(Patch { hole: Hole::Many(holes), entry: initial_entry.unwrap() })
     }
 
     fn c_utf8_seq(&mut self, seq: &Utf8Sequence) -> Result {
@@ -924,7 +993,9 @@ impl<'a, 'b> CompileClass<'a, 'b> {
     }
 
     fn c_utf8_seq_<'r, I>(&mut self, seq: I) -> Result
-            where I: IntoIterator<Item=&'r Utf8Range> {
+    where
+        I: IntoIterator<Item = &'r Utf8Range>,
+    {
         // The initial instruction for each UTF-8 sequence should be the same.
         let mut from_inst = ::std::usize::MAX;
         let mut last_hole = Hole::None;
@@ -980,20 +1051,20 @@ impl<'a, 'b> CompileClass<'a, 'b> {
 ///
 /// Note that a HashMap could be trivially used for this, but we don't need its
 /// overhead. Some small bounded space (LRU style) is more than enough.
+///
+/// This uses similar idea to [`SparseSet`](../sparse/struct.SparseSet.html),
+/// except it uses hashes as original indices and then compares full keys for
+/// validation against `dense` array.
+#[derive(Debug)]
 struct SuffixCache {
-    table: Vec<SuffixCacheEntry>,
-    // Every time the cache is cleared, we increment the version number instead
-    // of actually zeroing memory. Since we store a copy of the current version
-    // in every element, all we need to do is make sure to invalidate any stale
-    // entries upon access. This saves quite a bit of time!
-    version: usize,
+    sparse: Box<[usize]>,
+    dense: Vec<SuffixCacheEntry>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 struct SuffixCacheEntry {
     key: SuffixCacheKey,
     pc: InstPtr,
-    version: usize,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -1006,28 +1077,26 @@ struct SuffixCacheKey {
 impl SuffixCache {
     fn new(size: usize) -> Self {
         SuffixCache {
-            table: vec![SuffixCacheEntry::default(); size],
-            version: 0,
+            sparse: vec![0usize; size].into(),
+            dense: Vec::with_capacity(size),
         }
     }
 
     fn get(&mut self, key: SuffixCacheKey, pc: InstPtr) -> Option<InstPtr> {
-        let h = self.hash(&key);
-        let e = self.table[h];
-        if e.key == key && e.version == self.version {
-            Some(e.pc)
-        } else {
-            self.table[h] = SuffixCacheEntry {
-                key: key,
-                pc: pc,
-                version: self.version,
-            };
-            None
+        let hash = self.hash(&key);
+        let pos = &mut self.sparse[hash];
+        if let Some(entry) = self.dense.get(*pos) {
+            if entry.key == key {
+                return Some(entry.pc);
+            }
         }
+        *pos = self.dense.len();
+        self.dense.push(SuffixCacheEntry { key: key, pc: pc });
+        None
     }
 
     fn clear(&mut self) {
-        self.version += 1;
+        self.dense.clear();
     }
 
     fn hash(&self, suffix: &SuffixCacheKey) -> usize {
@@ -1038,7 +1107,7 @@ impl SuffixCache {
         h = (h ^ (suffix.from_inst as u64)).wrapping_mul(FNV_PRIME);
         h = (h ^ (suffix.start as u64)).wrapping_mul(FNV_PRIME);
         h = (h ^ (suffix.end as u64)).wrapping_mul(FNV_PRIME);
-        (h as usize) % self.table.len()
+        (h as usize) % self.sparse.len()
     }
 }
 
@@ -1092,6 +1161,12 @@ impl ByteClassSet {
             i += 1;
         }
         byte_classes
+    }
+}
+
+impl fmt::Debug for ByteClassSet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("ByteClassSet").field(&&self.0[..]).finish()
     }
 }
 

@@ -1,12 +1,12 @@
-use crossbeam_deque::{Deque, Stealer, Steal};
+use crossbeam_deque::{Steal, Stealer, Worker};
 
-use std::thread::yield_now;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Mutex, TryLockError};
-use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering};
+use std::thread::yield_now;
 
-use iter::ParallelIterator;
-use iter::plumbing::{UnindexedConsumer, UnindexedProducer, bridge_unindexed, Folder};
-use current_num_threads;
+use crate::current_num_threads;
+use crate::iter::plumbing::{bridge_unindexed, Folder, UnindexedConsumer, UnindexedProducer};
+use crate::iter::ParallelIterator;
 
 /// Conversion trait to convert an `Iterator` to a `ParallelIterator`.
 ///
@@ -44,17 +44,16 @@ use current_num_threads;
 /// assert_eq!(&*output, &["one!", "three!", "two!"]);
 /// ```
 pub trait ParallelBridge: Sized {
-    /// Create a bridge from this type to a `ParallelIterator`.
+    /// Creates a bridge from this type to a `ParallelIterator`.
     fn par_bridge(self) -> IterBridge<Self>;
 }
 
 impl<T: Iterator + Send> ParallelBridge for T
-    where T::Item: Send
+where
+    T::Item: Send,
 {
     fn par_bridge(self) -> IterBridge<Self> {
-        IterBridge {
-            iter: self,
-        }
+        IterBridge { iter: self }
     }
 }
 
@@ -70,32 +69,37 @@ pub struct IterBridge<Iter> {
 }
 
 impl<Iter: Iterator + Send> ParallelIterator for IterBridge<Iter>
-    where Iter::Item: Send
+where
+    Iter::Item: Send,
 {
     type Item = Iter::Item;
 
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
-        where C: UnindexedConsumer<Self::Item>
+    where
+        C: UnindexedConsumer<Self::Item>,
     {
         let split_count = AtomicUsize::new(current_num_threads());
-        let deque = Deque::new();
-        let stealer = deque.stealer();
+        let worker = Worker::new_fifo();
+        let stealer = worker.stealer();
         let done = AtomicBool::new(false);
-        let iter = Mutex::new((self.iter, deque));
+        let iter = Mutex::new((self.iter, worker));
 
-        bridge_unindexed(IterParallelProducer {
-            split_count: &split_count,
-            done: &done,
-            iter: &iter,
-            items: stealer,
-        }, consumer)
+        bridge_unindexed(
+            IterParallelProducer {
+                split_count: &split_count,
+                done: &done,
+                iter: &iter,
+                items: stealer,
+            },
+            consumer,
+        )
     }
 }
 
-struct IterParallelProducer<'a, Iter: Iterator + 'a> {
+struct IterParallelProducer<'a, Iter: Iterator> {
     split_count: &'a AtomicUsize,
     done: &'a AtomicBool,
-    iter: &'a Mutex<(Iter, Deque<Iter::Item>)>,
+    iter: &'a Mutex<(Iter, Worker<Iter::Item>)>,
     items: Stealer<Iter::Item>,
 }
 
@@ -112,7 +116,8 @@ impl<'a, Iter: Iterator + 'a> Clone for IterParallelProducer<'a, Iter> {
 }
 
 impl<'a, Iter: Iterator + Send + 'a> UnindexedProducer for IterParallelProducer<'a, Iter>
-    where Iter::Item: Send
+where
+    Iter::Item: Send,
 {
     type Item = Iter::Item;
 
@@ -123,7 +128,9 @@ impl<'a, Iter: Iterator + Send + 'a> UnindexedProducer for IterParallelProducer<
             let done = self.done.load(Ordering::SeqCst);
             match count.checked_sub(1) {
                 Some(new_count) if !done => {
-                    let last_count = self.split_count.compare_and_swap(count, new_count, Ordering::SeqCst);
+                    let last_count =
+                        self.split_count
+                            .compare_and_swap(count, new_count, Ordering::SeqCst);
                     if last_count == count {
                         return (self.clone(), Some(self));
                     } else {
@@ -138,11 +145,12 @@ impl<'a, Iter: Iterator + Send + 'a> UnindexedProducer for IterParallelProducer<
     }
 
     fn fold_with<F>(self, mut folder: F) -> F
-        where F: Folder<Self::Item>
+    where
+        F: Folder<Self::Item>,
     {
         loop {
             match self.items.steal() {
-                Steal::Data(it) => {
+                Steal::Success(it) => {
                     folder = folder.consume(it);
                     if folder.full() {
                         return folder;
@@ -159,11 +167,15 @@ impl<'a, Iter: Iterator + Send + 'a> UnindexedProducer for IterParallelProducer<
                                 let count = current_num_threads();
                                 let count = (count * count) * 2;
 
-                                let (ref mut iter, ref deque) = *guard;
+                                let (ref mut iter, ref worker) = *guard;
 
-                                while deque.len() < count {
+                                // while worker.len() < count {
+                                // FIXME the new deque doesn't let us count items.  We can just
+                                // push a number of items, but that doesn't consider active
+                                // stealers elsewhere.
+                                for _ in 0..count {
                                     if let Some(it) = iter.next() {
-                                        deque.push(it);
+                                        worker.push(it);
                                     } else {
                                         self.done.store(true, Ordering::SeqCst);
                                         break;

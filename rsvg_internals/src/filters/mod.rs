@@ -1,21 +1,24 @@
-use std::cell::{Cell, RefCell};
+//! Entry point for the CSS filters infrastructure.
+
+use cssparser::{BasicParseError, Parser};
+use markup5ever::{expanded_name, local_name, namespace_url, ns};
 use std::ops::Deref;
 use std::time::Instant;
 
-use cairo::{self, MatrixTrait};
-use owning_ref::RcRef;
-
-use attributes::Attribute;
-use coord_units::CoordUnits;
-use drawing_ctx::DrawingCtx;
-use error::{RenderingError, ValueErrorKind};
-use handle::RsvgHandle;
-use length::{Length, LengthDir, LengthUnit};
-use node::{NodeResult, NodeTrait, NodeType, RsvgNode};
-use parsers::{parse_and_validate, ParseError};
-use property_bag::PropertyBag;
-use state::{ColorInterpolationFilters, ComputedValues};
-use surface_utils::shared_surface::{SharedImageSurface, SurfaceType};
+use crate::attributes::Attributes;
+use crate::bbox::BoundingBox;
+use crate::coord_units::CoordUnits;
+use crate::document::AcquiredNodes;
+use crate::drawing_ctx::DrawingCtx;
+use crate::element::{Draw, Element, ElementResult, SetAttributes};
+use crate::error::{ParseError, RenderingError};
+use crate::length::*;
+use crate::node::{CascadedValues, Node, NodeBorrow};
+use crate::parsers::{CustomIdent, Parse, ParseValue};
+use crate::properties::ComputedValues;
+use crate::property_defs::ColorInterpolationFilters;
+use crate::surface_utils::shared_surface::{SharedImageSurface, SurfaceType};
+use crate::transform::Transform;
 
 mod bounds;
 use self::bounds::BoundsBuilder;
@@ -26,39 +29,18 @@ use self::context::{FilterContext, FilterInput, FilterResult};
 mod error;
 use self::error::FilterError;
 
-mod input;
-use self::input::Input;
-
-pub mod node;
-use self::node::NodeFilter;
-
-pub mod blend;
-pub mod color_matrix;
-pub mod component_transfer;
-pub mod composite;
-pub mod convolve_matrix;
-pub mod displacement_map;
-pub mod flood;
-pub mod gaussian_blur;
-pub mod image;
-pub mod light;
-pub mod merge;
-pub mod morphology;
-pub mod offset;
-pub mod tile;
-pub mod turbulence;
-
 /// A filter primitive interface.
-trait Filter: NodeTrait {
+pub trait FilterEffect: SetAttributes + Draw {
     /// Renders this filter primitive.
     ///
     /// If this filter primitive can't be rendered for whatever reason (for instance, a required
     /// property hasn't been provided), an error is returned.
     fn render(
         &self,
-        node: &RsvgNode,
+        node: &Node,
         ctx: &FilterContext,
-        draw_ctx: &mut DrawingCtx<'_>,
+        acquired_nodes: &mut AcquiredNodes,
+        draw_ctx: &mut DrawingCtx,
     ) -> Result<FilterResult, FilterError>;
 
     /// Returns `true` if this filter primitive is affected by the `color-interpolation-filters`
@@ -69,109 +51,170 @@ trait Filter: NodeTrait {
     fn is_affected_by_color_interpolation_filters(&self) -> bool;
 }
 
+// Filter Effects do not need to draw themselves
+impl<T: FilterEffect> Draw for T {}
+
+pub mod blend;
+pub mod color_matrix;
+pub mod component_transfer;
+pub mod composite;
+pub mod convolve_matrix;
+pub mod displacement_map;
+pub mod flood;
+pub mod gaussian_blur;
+pub mod image;
+pub mod lighting;
+pub mod merge;
+pub mod morphology;
+pub mod offset;
+pub mod tile;
+pub mod turbulence;
+
 /// The base filter primitive node containing common properties.
 struct Primitive {
-    x: Cell<Option<Length>>,
-    y: Cell<Option<Length>>,
-    width: Cell<Option<Length>>,
-    height: Cell<Option<Length>>,
-    result: RefCell<Option<String>>,
+    x: Option<Length<Horizontal>>,
+    y: Option<Length<Vertical>>,
+    width: Option<Length<Horizontal>>,
+    height: Option<Length<Vertical>>,
+    result: Option<CustomIdent>,
+}
+
+/// An enumeration of possible inputs for a filter primitive.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum Input {
+    SourceGraphic,
+    SourceAlpha,
+    BackgroundImage,
+    BackgroundAlpha,
+    FillPaint,
+    StrokePaint,
+    FilterOutput(CustomIdent),
+}
+
+impl Parse for Input {
+    fn parse<'i>(parser: &mut Parser<'i, '_>) -> Result<Self, ParseError<'i>> {
+        parser
+            .try_parse(|p| {
+                Ok(parse_identifiers!(
+                    p,
+                    "SourceGraphic" => Input::SourceGraphic,
+                    "SourceAlpha" => Input::SourceAlpha,
+                    "BackgroundImage" => Input::BackgroundImage,
+                    "BackgroundAlpha" => Input::BackgroundAlpha,
+                    "FillPaint" => Input::FillPaint,
+                    "StrokePaint" => Input::StrokePaint,
+                )?)
+            })
+            .or_else(|_: BasicParseError| {
+                let ident = CustomIdent::parse(parser)?;
+                Ok(Input::FilterOutput(ident))
+            })
+    }
 }
 
 /// The base node for filter primitives which accept input.
 struct PrimitiveWithInput {
     base: Primitive,
-    in_: RefCell<Option<Input>>,
+    in_: Option<Input>,
 }
 
 impl Primitive {
     /// Constructs a new `Primitive` with empty properties.
     #[inline]
-    fn new<T: Filter>() -> Primitive {
+    fn new<T: FilterEffect>() -> Primitive {
         Primitive {
-            x: Cell::new(None),
-            y: Cell::new(None),
-            width: Cell::new(None),
-            height: Cell::new(None),
-            result: RefCell::new(None),
+            x: None,
+            y: None,
+            width: None,
+            height: None,
+            result: None,
         }
     }
 
-    /// Returns the `BoundsBuilder` for bounds computation.
+    /// Validates attributes and returns the `BoundsBuilder` for bounds computation.
     #[inline]
-    fn get_bounds<'a>(&self, ctx: &'a FilterContext) -> BoundsBuilder<'a> {
-        BoundsBuilder::new(
-            ctx,
-            self.x.get(),
-            self.y.get(),
-            self.width.get(),
-            self.height.get(),
-        )
-    }
-}
-
-impl NodeTrait for Primitive {
-    fn set_atts(
+    fn get_bounds<'a>(
         &self,
-        node: &RsvgNode,
-        _: *const RsvgHandle,
-        pbag: &PropertyBag<'_>,
-    ) -> NodeResult {
-        // With ObjectBoundingBox, only fractions and percents are allowed.
-        let primitiveunits = node
-            .get_parent()
+        ctx: &'a FilterContext,
+        parent: Option<&Node>,
+    ) -> Result<BoundsBuilder<'a>, FilterError> {
+        let primitiveunits = parent
             .and_then(|parent| {
-                if parent.get_type() == NodeType::Filter {
-                    Some(parent.with_impl(|f: &NodeFilter| f.primitiveunits.get()))
-                } else {
-                    None
+                assert!(parent.is_element());
+                match *parent.borrow_element() {
+                    Element::Filter(ref f) => Some(f.get_primitive_units()),
+                    _ => None,
                 }
             })
             .unwrap_or(CoordUnits::UserSpaceOnUse);
 
+        // With ObjectBoundingBox, only fractions and percents are allowed.
         let no_units_allowed = primitiveunits == CoordUnits::ObjectBoundingBox;
-        let check_units = |length: Length| {
+
+        let check_units_horizontal = |length: Length<Horizontal>| {
             if !no_units_allowed {
                 return Ok(length);
             }
 
             match length.unit {
-                LengthUnit::Default | LengthUnit::Percent => Ok(length),
-                _ => Err(ValueErrorKind::Parse(ParseError::new(
-                    "unit identifiers are not allowed with primitiveUnits set to objectBoundingBox",
-                ))),
+                LengthUnit::Px | LengthUnit::Percent => Ok(length),
+                _ => Err(FilterError::InvalidUnits),
             }
         };
-        let check_units_and_ensure_nonnegative =
-            |length: Length| check_units(length).and_then(Length::check_nonnegative);
 
-        for (_key, attr, value) in pbag.iter() {
-            match attr {
-                Attribute::X => self.x.set(Some(parse_and_validate(
-                    "x",
-                    value,
-                    LengthDir::Horizontal,
-                    check_units,
-                )?)),
-                Attribute::Y => self.y.set(Some(parse_and_validate(
-                    "y",
-                    value,
-                    LengthDir::Vertical,
-                    check_units,
-                )?)),
-                Attribute::Width => self.width.set(Some(parse_and_validate(
-                    "width",
-                    value,
-                    LengthDir::Horizontal,
-                    check_units_and_ensure_nonnegative,
-                )?)),
-                Attribute::Height => self.height.set(Some(parse_and_validate(
-                    "height",
-                    value,
-                    LengthDir::Vertical,
-                    check_units_and_ensure_nonnegative,
-                )?)),
-                Attribute::Result => *self.result.borrow_mut() = Some(value.to_string()),
+        let check_units_vertical = |length: Length<Vertical>| {
+            if !no_units_allowed {
+                return Ok(length);
+            }
+
+            match length.unit {
+                LengthUnit::Px | LengthUnit::Percent => Ok(length),
+                _ => Err(FilterError::InvalidUnits),
+            }
+        };
+
+        if let Some(x) = self.x {
+            check_units_horizontal(x)?;
+        }
+
+        if let Some(y) = self.y {
+            check_units_vertical(y)?;
+        }
+
+        if let Some(w) = self.width {
+            check_units_horizontal(w)?;
+        }
+
+        if let Some(h) = self.height {
+            check_units_vertical(h)?;
+        }
+
+        Ok(BoundsBuilder::new(
+            ctx,
+            self.x,
+            self.y,
+            self.width,
+            self.height,
+        ))
+    }
+}
+
+impl SetAttributes for Primitive {
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        for (attr, value) in attrs.iter() {
+            match attr.expanded() {
+                expanded_name!("", "x") => self.x = Some(attr.parse(value)?),
+                expanded_name!("", "y") => self.y = Some(attr.parse(value)?),
+                expanded_name!("", "width") => {
+                    self.width = Some(
+                        attr.parse_and_validate(value, Length::<Horizontal>::check_nonnegative)?,
+                    )
+                }
+                expanded_name!("", "height") => {
+                    self.height =
+                        Some(attr.parse_and_validate(value, Length::<Vertical>::check_nonnegative)?)
+                }
+                expanded_name!("", "result") => self.result = Some(attr.parse(value)?),
                 _ => (),
             }
         }
@@ -183,10 +226,10 @@ impl NodeTrait for Primitive {
 impl PrimitiveWithInput {
     /// Constructs a new `PrimitiveWithInput` with empty properties.
     #[inline]
-    fn new<T: Filter>() -> PrimitiveWithInput {
+    fn new<T: FilterEffect>() -> PrimitiveWithInput {
         PrimitiveWithInput {
             base: Primitive::new::<T>(),
-            in_: RefCell::new(None),
+            in_: None,
         }
     }
 
@@ -195,27 +238,21 @@ impl PrimitiveWithInput {
     fn get_input(
         &self,
         ctx: &FilterContext,
-        draw_ctx: &mut DrawingCtx<'_>,
+        acquired_nodes: &mut AcquiredNodes,
+        draw_ctx: &mut DrawingCtx,
     ) -> Result<FilterInput, FilterError> {
-        ctx.get_input(draw_ctx, self.in_.borrow().as_ref())
+        ctx.get_input(acquired_nodes, draw_ctx, self.in_.as_ref())
     }
 }
 
-impl NodeTrait for PrimitiveWithInput {
-    fn set_atts(
-        &self,
-        node: &RsvgNode,
-        handle: *const RsvgHandle,
-        pbag: &PropertyBag<'_>,
-    ) -> NodeResult {
-        self.base.set_atts(node, handle, pbag)?;
+impl SetAttributes for PrimitiveWithInput {
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        self.base.set_attributes(attrs)?;
 
-        for (_key, attr, value) in pbag.iter() {
-            match attr {
-                Attribute::In => drop(self.in_.replace(Some(Input::parse(Attribute::In, value)?))),
-                _ => (),
-            }
-        }
+        self.in_ = attrs
+            .iter()
+            .find(|(attr, _)| attr.expanded() == expanded_name!("", "in"))
+            .and_then(|(attr, value)| attr.parse(value).ok());
 
         Ok(())
     }
@@ -232,126 +269,73 @@ impl Deref for PrimitiveWithInput {
 
 /// Applies a filter and returns the resulting surface.
 pub fn render(
-    filter_node: &RsvgNode,
+    filter_node: &Node,
     computed_from_node_being_filtered: &ComputedValues,
-    source: &cairo::ImageSurface,
-    draw_ctx: &mut DrawingCtx<'_>,
-) -> Result<cairo::ImageSurface, RenderingError> {
+    source_surface: SharedImageSurface,
+    acquired_nodes: &mut AcquiredNodes,
+    draw_ctx: &mut DrawingCtx,
+    transform: Transform,
+    node_bbox: BoundingBox,
+) -> Result<SharedImageSurface, RenderingError> {
     let filter_node = &*filter_node;
-    assert_eq!(filter_node.get_type(), NodeType::Filter);
-    assert!(!filter_node.is_in_error());
+    assert!(is_element_of_type!(filter_node, Filter));
 
-    // The source surface has multiple references. We need to copy it to a new surface to have a
-    // unique reference to be able to safely access the pixel data.
-    let source_surface = cairo::ImageSurface::create(
-        cairo::Format::ARgb32,
-        source.get_width(),
-        source.get_height(),
-    )?;
-    {
-        let cr = cairo::Context::new(&source_surface);
-        cr.set_source_surface(source, 0f64, 0f64);
-        cr.paint();
+    if filter_node.borrow_element().is_in_error() {
+        return Ok(source_surface);
     }
-    let source_surface = SharedImageSurface::new(source_surface, SurfaceType::SRgb)?;
 
     let mut filter_ctx = FilterContext::new(
         filter_node,
         computed_from_node_being_filtered,
         source_surface,
         draw_ctx,
+        transform,
+        node_bbox,
     );
 
     // If paffine is non-invertible, we won't draw anything. Also bbox combining in bounds
     // computations will panic due to non-invertible martrix.
-    if filter_ctx.paffine().try_invert().is_err() {
-        return Ok(filter_ctx.into_output()?.into_image_surface()?);
+    if !filter_ctx.paffine().is_invertible() {
+        return Ok(filter_ctx.into_output()?);
     }
 
     let primitives = filter_node
         .children()
+        .filter(|c| c.is_element())
         // Skip nodes in error.
         .filter(|c| {
-            let in_error = c.is_in_error();
+            let in_error = c.borrow_element().is_in_error();
 
             if in_error {
-                rsvg_log!(
-                    "(ignoring filter primitive {} because it is in error)",
-                    c.get_human_readable_name()
-                );
+                rsvg_log!("(ignoring filter primitive {} because it is in error)", c);
             }
 
             !in_error
         })
+        // Keep only filter primitives (those that implement the Filter trait)
+        .filter(|c| c.borrow_element().as_filter_effect().is_some())
         // Check if the node wants linear RGB.
         .map(|c| {
             let linear_rgb = {
-                let cascaded = c.get_cascaded_values();
+                let cascaded = CascadedValues::new_from_node(&c);
                 let values = cascaded.get();
 
-                values.color_interpolation_filters == ColorInterpolationFilters::LinearRgb
+                values.color_interpolation_filters() == ColorInterpolationFilters::LinearRgb
             };
 
             (c, linear_rgb)
-        })
-        .filter_map(|(c, linear_rgb)| {
-            let rr = RcRef::new(c)
-                .try_map(|c| {
-                    // Go through the filter primitives and see if the node is one of them.
-                    #[inline]
-                    fn as_filter<T: Filter>(x: &T) -> &Filter {
-                        x
-                    }
-
-                    // Unfortunately it's not possible to downcast to a trait object. If we could
-                    // attach arbitrary data to nodes it would really help here. Previously that
-                    // arbitrary data was in form of RsvgCNodeImpl, but that was heavily tuned for
-                    // storing C pointers with all subsequent downsides.
-                    macro_rules! try_downcasting_to_filter {
-                        ($c:expr; $($t:ty),+$(,)*) => ({
-                            let mut filter = None;
-                            $(
-                                filter = filter.or_else(|| $c.get_impl::<$t>().map(as_filter));
-                            )+
-                            filter
-                        })
-                    }
-
-                    let filter = try_downcasting_to_filter!(c;
-                        blend::Blend,
-                        color_matrix::ColorMatrix,
-                        component_transfer::ComponentTransfer,
-                        composite::Composite,
-                        convolve_matrix::ConvolveMatrix,
-                        displacement_map::DisplacementMap,
-                        flood::Flood,
-                        gaussian_blur::GaussianBlur,
-                        image::Image,
-                        light::lighting::Lighting,
-                        merge::Merge,
-                        morphology::Morphology,
-                        offset::Offset,
-                        tile::Tile,
-                        turbulence::Turbulence,
-                    );
-                    filter.ok_or(())
-                })
-                .ok();
-
-            rr.map(|rr| (rr, linear_rgb))
         });
 
-    for (rr, linear_rgb) in primitives {
+    for (c, linear_rgb) in primitives {
+        let elt = c.borrow_element();
+        let filter = elt.as_filter_effect().unwrap();
+
         let mut render = |filter_ctx: &mut FilterContext| {
-            if let Err(err) = rr
-                .render(rr.owner(), filter_ctx, draw_ctx)
+            if let Err(err) = filter
+                .render(&c, filter_ctx, acquired_nodes, draw_ctx)
                 .and_then(|result| filter_ctx.store_result(result))
             {
-                rsvg_log!(
-                    "(filter primitive {} returned an error: {})",
-                    rr.owner().get_human_readable_name(),
-                    err
-                );
+                rsvg_log!("(filter primitive {} returned an error: {})", c, err);
 
                 // Exit early on Cairo errors. Continue rendering otherwise.
                 if let FilterError::CairoError(status) = err {
@@ -364,7 +348,7 @@ pub fn render(
 
         let start = Instant::now();
 
-        if rr.is_affected_by_color_interpolation_filters() && linear_rgb {
+        if filter.is_affected_by_color_interpolation_filters() && linear_rgb {
             filter_ctx.with_linear_rgb(render)?;
         } else {
             render(&mut filter_ctx)?;
@@ -373,10 +357,19 @@ pub fn render(
         let elapsed = start.elapsed();
         rsvg_log!(
             "(rendered filter primitive {} in\n    {} seconds)",
-            rr.owner().get_human_readable_name(),
+            c,
             elapsed.as_secs() as f64 + f64::from(elapsed.subsec_nanos()) / 1e9
         );
     }
 
-    Ok(filter_ctx.into_output()?.into_image_surface()?)
+    Ok(filter_ctx.into_output()?)
+}
+
+impl From<ColorInterpolationFilters> for SurfaceType {
+    fn from(c: ColorInterpolationFilters) -> Self {
+        match c {
+            ColorInterpolationFilters::LinearRgb => SurfaceType::LinearRgb,
+            _ => SurfaceType::SRgb,
+        }
+    }
 }

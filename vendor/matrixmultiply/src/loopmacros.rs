@@ -1,20 +1,10 @@
-// Copyright 2016 bluss
+// Copyright 2016 - 2018 Ulrik Sverdrup "bluss"
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-
-macro_rules! if_cfg {
-    ($id:ident, $type_:ty, $x:expr, $y:expr) => {{
-        #[cfg($id)]
-        const TMP: $type_ = $x;
-        #[cfg(not($id))]
-        const TMP: $type_ = $y;
-        TMP
-    }}
-}
 
 // Unroll only in non-debug builds
 
@@ -30,6 +20,14 @@ macro_rules! repeat {
     (8 $e:expr) => { $e;$e; $e;$e; $e;$e; $e;$e; };
 }
 
+#[cfg(debug_assertions)]
+macro_rules! loop4 {
+    ($i:ident, $e:expr) => {
+        for $i in 0..4 { $e }
+    }
+}
+
+#[cfg(not(debug_assertions))]
 macro_rules! loop4 {
     ($i:ident, $e:expr) => {{
         let $i = 0; $e;
@@ -77,5 +75,37 @@ macro_rules! unroll_by {
         for _ in 0..k % $by {
             $e
         }
+    }}
+}
+
+#[allow(unused)]
+#[cfg(debug_assertions)]
+macro_rules! unroll_by_with_last {
+    ($by:tt => $ntimes:expr, $is_last:ident, $e:expr) => {{
+        let k = $ntimes - 1;
+        let $is_last = false;
+        for _ in 0..k {
+            $e;
+        }
+        let $is_last = true;
+        #[allow(unused_assignments)]
+        $e;
+    }}
+}
+
+#[cfg(not(debug_assertions))]
+macro_rules! unroll_by_with_last {
+    ($by:tt => $ntimes:expr, $is_last:ident, $e:expr) => {{
+        let k = $ntimes - 1;
+        let $is_last = false;
+        for _ in 0..k / $by {
+            repeat!($by $e);
+        }
+        for _ in 0..k % $by {
+            $e;
+        }
+        let $is_last = true;
+        #[allow(unused_assignments)]
+        $e;
     }}
 }

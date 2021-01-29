@@ -1,4 +1,4 @@
-//! This crate implements a structure that can be used as a generic array type.use
+//! This crate implements a structure that can be used as a generic array type.
 //! Core Rust array types `[T; N]` can't be used generically with
 //! respect to `N`, so for example this:
 //!
@@ -41,31 +41,35 @@
 
 #[cfg(feature = "serde")]
 extern crate serde;
+
+#[cfg(test)]
+extern crate bincode;
+
 pub extern crate typenum;
 
 mod hex;
 mod impls;
 
 #[cfg(feature = "serde")]
-pub mod impl_serde;
+mod impl_serde;
 
-use core::{mem, ptr, slice};
 use core::iter::FromIterator;
 use core::marker::PhantomData;
 use core::mem::ManuallyDrop;
 use core::ops::{Deref, DerefMut};
+use core::{mem, ptr, slice};
 use typenum::bit::{B0, B1};
 use typenum::uint::{UInt, UTerm, Unsigned};
 
 #[cfg_attr(test, macro_use)]
 pub mod arr;
+pub mod functional;
 pub mod iter;
 pub mod sequence;
-pub mod functional;
 
-use functional::*;
-pub use iter::GenericArrayIter;
-use sequence::*;
+use self::functional::*;
+pub use self::iter::GenericArrayIter;
+use self::sequence::*;
 
 /// Trait making `GenericArray` work, marking types to be used as length of an array
 pub unsafe trait ArrayLength<T>: Unsigned {
@@ -134,6 +138,7 @@ unsafe impl<T, N: ArrayLength<T>> ArrayLength<T> for UInt<N, B1> {
 
 /// Struct representing a generic array - `GenericArray<T, N>` works like [T; N]
 #[allow(dead_code)]
+#[repr(transparent)]
 pub struct GenericArray<T, U: ArrayLength<T>> {
     data: U::ArrayType,
 }
@@ -147,6 +152,7 @@ where
 {
     type Target = [T];
 
+    #[inline(always)]
     fn deref(&self) -> &[T] {
         unsafe { slice::from_raw_parts(self as *const Self as *const T, N::to_usize()) }
     }
@@ -156,6 +162,7 @@ impl<T, N> DerefMut for GenericArray<T, N>
 where
     N: ArrayLength<T>,
 {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut [T] {
         unsafe { slice::from_raw_parts_mut(self as *mut Self as *mut T, N::to_usize()) }
     }
@@ -294,11 +301,13 @@ where
             {
                 let (destination_iter, position) = destination.iter_position();
 
-                for (src, dst) in iter.into_iter().zip(destination_iter) {
-                    ptr::write(dst, src);
+                iter.into_iter()
+                    .zip(destination_iter)
+                    .for_each(|(src, dst)| {
+                        ptr::write(dst, src);
 
-                    *position += 1;
-                }
+                        *position += 1;
+                    });
             }
 
             if destination.position < N::to_usize() {
@@ -337,11 +346,11 @@ where
             {
                 let (destination_iter, position) = destination.iter_position();
 
-                for (i, dst) in destination_iter.enumerate() {
+                destination_iter.enumerate().for_each(|(i, dst)| {
                     ptr::write(dst, f(i));
 
                     *position += 1;
-                }
+                });
             }
 
             destination.into_inner()
@@ -355,8 +364,8 @@ where
         mut f: F,
     ) -> MappedSequence<GenericArray<B, Self::Length>, B, U>
     where
-        GenericArray<B, Self::Length>: GenericSequence<B, Length = Self::Length>
-            + MappedGenericSequence<B, U>,
+        GenericArray<B, Self::Length>:
+            GenericSequence<B, Length = Self::Length> + MappedGenericSequence<B, U>,
         Self: MappedGenericSequence<T, U>,
         Self::Length: ArrayLength<B> + ArrayLength<U>,
         F: FnMut(B, Self::Item) -> U,
@@ -566,11 +575,11 @@ where
                 {
                     let (destination_iter, position) = destination.iter_position();
 
-                    for (dst, src) in destination_iter.zip(iter.into_iter()) {
+                    destination_iter.zip(iter).for_each(|(dst, src)| {
                         ptr::write(dst, src);
 
                         *position += 1;
-                    }
+                    });
                 }
 
                 Some(destination.into_inner())
@@ -610,7 +619,7 @@ mod test {
 
     #[test]
     fn test_assembly() {
-        use functional::*;
+        use crate::functional::*;
 
         let a = black_box(arr![i32; 1, 3, 5, 7]);
         let b = black_box(arr![i32; 2, 4, 6, 8]);

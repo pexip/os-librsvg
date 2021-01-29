@@ -1,0 +1,20 @@
+From: Olivier Tilloy <olivier.tilloy@canonical.com>
+Date: Mon, 11 May 2020 13:58:36 +0100
+Subject: enable thin LTO
+
+(full LTO is not used because of https://github.com/rust-lang/rust/issues/66118).
+See https://gitlab.gnome.org/GNOME/librsvg/-/commit/7ad034d.
+---
+ Cargo.toml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Cargo.toml b/Cargo.toml
+index 818fa62..921a4c3 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -7,4 +7,5 @@ members = [
+ ]
+ 
+ [profile.release]
++lto = 'thin'
+ debug = true

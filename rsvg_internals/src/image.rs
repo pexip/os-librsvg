@@ -1,81 +1,52 @@
-use cairo;
-use cairo::{MatrixTrait, Pattern};
-use std::cell::{Cell, RefCell};
+//! The `image` element.
 
-use aspect_ratio::AspectRatio;
-use attributes::Attribute;
-use bbox::BoundingBox;
-use drawing_ctx::DrawingCtx;
-use error::{NodeError, RenderingError};
-use float_eq_cairo::ApproxEqCairo;
-use handle::{self, RsvgHandle};
-use length::*;
-use node::*;
-use parsers::{parse, parse_and_validate};
-use property_bag::PropertyBag;
+use markup5ever::{expanded_name, local_name, namespace_url, ns};
 
-pub struct NodeImage {
-    aspect: Cell<AspectRatio>,
-    x: Cell<Length>,
-    y: Cell<Length>,
-    w: Cell<Length>,
-    h: Cell<Length>,
-    surface: RefCell<Option<cairo::ImageSurface>>,
+use crate::allowed_url::Href;
+use crate::aspect_ratio::AspectRatio;
+use crate::attributes::Attributes;
+use crate::bbox::BoundingBox;
+use crate::document::AcquiredNodes;
+use crate::drawing_ctx::DrawingCtx;
+use crate::element::{Draw, ElementResult, SetAttributes};
+use crate::error::*;
+use crate::href::{is_href, set_href};
+use crate::length::*;
+use crate::node::{CascadedValues, Node};
+use crate::parsers::ParseValue;
+use crate::rect::Rect;
+
+#[derive(Default)]
+pub struct Image {
+    x: Length<Horizontal>,
+    y: Length<Vertical>,
+    width: Length<Horizontal>,
+    height: Length<Vertical>,
+    aspect: AspectRatio,
+    href: Option<Href>,
 }
 
-impl NodeImage {
-    pub fn new() -> NodeImage {
-        NodeImage {
-            aspect: Cell::new(AspectRatio::default()),
-            x: Cell::new(Length::default()),
-            y: Cell::new(Length::default()),
-            w: Cell::new(Length::default()),
-            h: Cell::new(Length::default()),
-            surface: RefCell::new(None),
-        }
-    }
-}
-
-impl NodeTrait for NodeImage {
-    fn set_atts(
-        &self,
-        node: &RsvgNode,
-        handle: *const RsvgHandle,
-        pbag: &PropertyBag<'_>,
-    ) -> NodeResult {
-        // SVG element has overflow:hidden
-        // https://www.w3.org/TR/SVG/styling.html#UAStyleSheet
-        node.set_overflow_hidden();
-
-        for (_key, attr, value) in pbag.iter() {
-            match attr {
-                Attribute::X => self.x.set(parse("x", value, LengthDir::Horizontal)?),
-                Attribute::Y => self.y.set(parse("y", value, LengthDir::Vertical)?),
-                Attribute::Width => self.w.set(parse_and_validate(
-                    "width",
-                    value,
-                    LengthDir::Horizontal,
-                    Length::check_nonnegative,
-                )?),
-                Attribute::Height => self.h.set(parse_and_validate(
-                    "height",
-                    value,
-                    LengthDir::Vertical,
-                    Length::check_nonnegative,
-                )?),
-
-                Attribute::PreserveAspectRatio => {
-                    self.aspect.set(parse("preserveAspectRatio", value, ())?)
+impl SetAttributes for Image {
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        for (attr, value) in attrs.iter() {
+            match attr.expanded() {
+                expanded_name!("", "x") => self.x = attr.parse(value)?,
+                expanded_name!("", "y") => self.y = attr.parse(value)?,
+                expanded_name!("", "width") => {
+                    self.width = attr.parse_and_validate(value, Length::check_nonnegative)?
                 }
+                expanded_name!("", "height") => {
+                    self.height = attr.parse_and_validate(value, Length::check_nonnegative)?
+                }
+                expanded_name!("", "preserveAspectRatio") => self.aspect = attr.parse(value)?,
 
-                Attribute::XlinkHref | Attribute::Path => {
-                    // "path" is used by some older Adobe Illustrator versions
+                // "path" is used by some older Adobe Illustrator versions
+                ref a if is_href(a) || *a == expanded_name!("", "path") => {
+                    let href = Href::parse(value)
+                        .map_err(|_| ValueErrorKind::parse_error("could not parse href"))
+                        .attribute(attr.clone())?;
 
-                    *self.surface.borrow_mut() = Some(
-                        // FIXME: translate the error better here
-                        handle::image_surface_new_from_href(handle as *mut _, value)
-                            .map_err(|_| NodeError::value_error(attr, "could not load image"))?,
-                    );
+                    set_href(a, &mut self.href, href);
                 }
 
                 _ => (),
@@ -84,95 +55,52 @@ impl NodeTrait for NodeImage {
 
         Ok(())
     }
+}
 
+impl Draw for Image {
     fn draw(
         &self,
-        node: &RsvgNode,
+        node: &Node,
+        acquired_nodes: &mut AcquiredNodes,
         cascaded: &CascadedValues<'_>,
-        draw_ctx: &mut DrawingCtx<'_>,
+        draw_ctx: &mut DrawingCtx,
         clipping: bool,
-    ) -> Result<(), RenderingError> {
+    ) -> Result<BoundingBox, RenderingError> {
+        let surface = match self.href {
+            Some(Href::PlainUrl(ref url)) => match acquired_nodes.lookup_image(url) {
+                Ok(surf) => surf,
+                Err(e) => {
+                    rsvg_log!("could not load image \"{}\": {}", url, e);
+                    return Ok(draw_ctx.empty_bbox());
+                }
+            },
+            Some(_) => {
+                rsvg_log!(
+                    "not rendering {} because its href cannot contain a fragment identifier",
+                    node
+                );
+
+                return Ok(draw_ctx.empty_bbox());
+            }
+            None => return Ok(draw_ctx.empty_bbox()),
+        };
+
         let values = cascaded.get();
 
-        if let Some(ref surface) = *self.surface.borrow() {
-            let params = draw_ctx.get_view_params();
+        let params = draw_ctx.get_view_params();
+        let x = self.x.normalize(&values, &params);
+        let y = self.y.normalize(&values, &params);
+        let w = self.width.normalize(&values, &params);
+        let h = self.height.normalize(&values, &params);
 
-            let x = self.x.get().normalize(values, &params);
-            let y = self.y.get().normalize(values, &params);
-            let w = self.w.get().normalize(values, &params);
-            let h = self.h.get().normalize(values, &params);
-
-            if w.approx_eq_cairo(&0.0) || h.approx_eq_cairo(&0.0) {
-                return Ok(());
-            }
-
-            draw_ctx.with_discrete_layer(node, values, clipping, &mut |dc| {
-                let aspect = self.aspect.get();
-
-                if !values.is_overflow() && aspect.is_slice() {
-                    dc.clip(x, y, w, h);
-                }
-
-                // The bounding box for <image> is decided by the values of x, y, w, h and not by
-                // the final computed image bounds.
-                let bbox = BoundingBox::new(&dc.get_cairo_context().get_matrix()).with_rect(Some(
-                    cairo::Rectangle {
-                        x,
-                        y,
-                        width: w,
-                        height: h,
-                    },
-                ));
-
-                let width = surface.get_width();
-                let height = surface.get_height();
-                if clipping || width == 0 || height == 0 {
-                    return Ok(());
-                }
-
-                let width = f64::from(width);
-                let height = f64::from(height);
-
-                let (x, y, w, h) = aspect.compute(width, height, x, y, w, h);
-
-                let cr = dc.get_cairo_context();
-
-                cr.save();
-
-                dc.set_affine_on_cr(&cr);
-                cr.scale(w / width, h / height);
-                let x = x * width / w;
-                let y = y * height / h;
-
-                cr.set_operator(cairo::Operator::from(values.comp_op));
-
-                // We need to set extend appropriately, so can't use cr.set_source_surface().
-                //
-                // If extend is left at its default value (None), then bilinear scaling uses
-                // transparency outside of the image producing incorrect results.
-                // For example, in svg1.1/filters-blend-01-b.svgthere's a completely
-                // opaque 100×1 image of a gradient scaled to 100×98 which ends up
-                // transparent almost everywhere without this fix (which it shouldn't).
-                let ptn = cairo::SurfacePattern::create(&surface);
-                let mut matrix = cairo::Matrix::identity();
-                matrix.translate(-x, -y);
-                ptn.set_matrix(matrix);
-                ptn.set_extend(cairo::Extend::Pad);
-                cr.set_source(&ptn);
-
-                // Clip is needed due to extend being set to pad.
-                cr.rectangle(x, y, width, height);
-                cr.clip();
-
-                cr.paint();
-
-                cr.restore();
-
-                dc.insert_bbox(&bbox);
-                Ok(())
-            })
-        } else {
-            Ok(())
-        }
+        draw_ctx.draw_image(
+            &surface,
+            Rect::new(x, y, x + w, y + h),
+            self.aspect,
+            node,
+            acquired_nodes,
+            values,
+            clipping,
+        )
     }
 }

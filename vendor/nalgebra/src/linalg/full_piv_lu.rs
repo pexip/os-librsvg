@@ -1,42 +1,34 @@
 #[cfg(feature = "serde-serialize")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use alga::general::Real;
-use allocator::Allocator;
-use base::{DefaultAllocator, Matrix, MatrixMN, MatrixN};
-use constraint::{SameNumberOfRows, ShapeConstraint};
-use dimension::{Dim, DimMin, DimMinimum};
-use storage::{Storage, StorageMut};
+use crate::allocator::Allocator;
+use crate::base::{DefaultAllocator, Matrix, MatrixMN, MatrixN};
+use crate::constraint::{SameNumberOfRows, ShapeConstraint};
+use crate::dimension::{Dim, DimMin, DimMinimum};
+use crate::storage::{Storage, StorageMut};
+use simba::scalar::ComplexField;
 
-use linalg::lu;
-use linalg::PermutationSequence;
+use crate::linalg::lu;
+use crate::linalg::PermutationSequence;
 
 /// LU decomposition with full row and column pivoting.
 #[cfg_attr(feature = "serde-serialize", derive(Serialize, Deserialize))]
 #[cfg_attr(
     feature = "serde-serialize",
-    serde(
-        bound(
-            serialize = "DefaultAllocator: Allocator<N, R, C> +
+    serde(bound(serialize = "DefaultAllocator: Allocator<N, R, C> +
                            Allocator<(usize, usize), DimMinimum<R, C>>,
          MatrixMN<N, R, C>: Serialize,
-         PermutationSequence<DimMinimum<R, C>>: Serialize"
-        )
-    )
+         PermutationSequence<DimMinimum<R, C>>: Serialize"))
 )]
 #[cfg_attr(
     feature = "serde-serialize",
-    serde(
-        bound(
-            deserialize = "DefaultAllocator: Allocator<N, R, C> +
+    serde(bound(deserialize = "DefaultAllocator: Allocator<N, R, C> +
                            Allocator<(usize, usize), DimMinimum<R, C>>,
          MatrixMN<N, R, C>: Deserialize<'de>,
-         PermutationSequence<DimMinimum<R, C>>: Deserialize<'de>"
-        )
-    )
+         PermutationSequence<DimMinimum<R, C>>: Deserialize<'de>"))
 )]
 #[derive(Clone, Debug)]
-pub struct FullPivLU<N: Real, R: DimMin<C>, C: Dim>
+pub struct FullPivLU<N: ComplexField, R: DimMin<C>, C: Dim>
 where
     DefaultAllocator: Allocator<N, R, C> + Allocator<(usize, usize), DimMinimum<R, C>>,
 {
@@ -45,7 +37,7 @@ where
     q: PermutationSequence<DimMinimum<R, C>>,
 }
 
-impl<N: Real, R: DimMin<C>, C: Dim> Copy for FullPivLU<N, R, C>
+impl<N: ComplexField, R: DimMin<C>, C: Dim> Copy for FullPivLU<N, R, C>
 where
     DefaultAllocator: Allocator<N, R, C> + Allocator<(usize, usize), DimMinimum<R, C>>,
     MatrixMN<N, R, C>: Copy,
@@ -53,7 +45,7 @@ where
 {
 }
 
-impl<N: Real, R: DimMin<C>, C: Dim> FullPivLU<N, R, C>
+impl<N: ComplexField, R: DimMin<C>, C: Dim> FullPivLU<N, R, C>
 where
     DefaultAllocator: Allocator<N, R, C> + Allocator<(usize, usize), DimMinimum<R, C>>,
 {
@@ -68,7 +60,7 @@ where
         let mut q = PermutationSequence::identity_generic(min_nrows_ncols);
 
         if min_nrows_ncols.value() == 0 {
-            return FullPivLU {
+            return Self {
                 lu: matrix,
                 p: p,
                 q: q,
@@ -76,7 +68,7 @@ where
         }
 
         for i in 0..min_nrows_ncols.value() {
-            let piv = matrix.slice_range(i.., i..).iamax_full();
+            let piv = matrix.slice_range(i.., i..).icamax_full();
             let row_piv = piv.0 + i;
             let col_piv = piv.1 + i;
             let diag = matrix[(row_piv, col_piv)];
@@ -98,7 +90,7 @@ where
             }
         }
 
-        FullPivLU {
+        Self {
             lu: matrix,
             p: p,
             q: q,
@@ -168,7 +160,7 @@ where
     }
 }
 
-impl<N: Real, D: DimMin<D, Output = D>> FullPivLU<N, D, D>
+impl<N: ComplexField, D: DimMin<D, Output = D>> FullPivLU<N, D, D>
 where
     DefaultAllocator: Allocator<N, D, D> + Allocator<(usize, usize), D>,
 {
@@ -180,7 +172,7 @@ where
         b: &Matrix<N, R2, C2, S2>,
     ) -> Option<MatrixMN<N, R2, C2>>
     where
-        S2: StorageMut<N, R2, C2>,
+        S2: Storage<N, R2, C2>,
         ShapeConstraint: SameNumberOfRows<R2, D>,
         DefaultAllocator: Allocator<N, R2, C2>,
     {
@@ -264,7 +256,7 @@ where
         let mut res = self.lu[(dim - 1, dim - 1)];
         if !res.is_zero() {
             for i in 0..dim - 1 {
-                res *= unsafe { *self.lu.get_unchecked(i, i) };
+                res *= unsafe { *self.lu.get_unchecked((i, i)) };
             }
 
             res * self.p.determinant() * self.q.determinant()
@@ -274,7 +266,7 @@ where
     }
 }
 
-impl<N: Real, R: DimMin<C>, C: Dim, S: Storage<N, R, C>> Matrix<N, R, C, S>
+impl<N: ComplexField, R: DimMin<C>, C: Dim, S: Storage<N, R, C>> Matrix<N, R, C, S>
 where
     DefaultAllocator: Allocator<N, R, C> + Allocator<(usize, usize), DimMinimum<R, C>>,
 {

@@ -1,8 +1,6 @@
-extern crate rand;
-extern crate rayon;
-
-use rand::{Rng, SeedableRng, XorShiftRng};
 use rand::distributions::Standard;
+use rand::{Rng, SeedableRng};
+use rand_xorshift::XorShiftRng;
 use rayon::prelude::*;
 
 fn seeded_rng() -> XorShiftRng {
@@ -13,7 +11,7 @@ fn seeded_rng() -> XorShiftRng {
 
 #[test]
 pub fn execute_strings() {
-    let mut rng = seeded_rng();
+    let rng = seeded_rng();
     let s: String = rng.sample_iter::<char, _>(&Standard).take(1024).collect();
 
     let par_chars: String = s.par_chars().collect();
@@ -44,20 +42,22 @@ pub fn execute_strings() {
 pub fn execute_strings_split() {
     // char testcases from examples in `str::split` etc.,
     // plus a large self-test for good measure.
-    let tests = vec![("Mary had a little lamb", ' '),
-                     ("", 'X'),
-                     ("lionXXtigerXleopard", 'X'),
-                     ("||||a||b|c", '|'),
-                     ("(///)", '/'),
-                     ("010", '0'),
-                     ("    a  b c", ' '),
-                     ("A.B.", '.'),
-                     ("A..B..", '.'),
-                     ("foo\r\nbar\n\nbaz\n", '\n'),
-                     ("foo\nbar\n\r\nbaz", '\n'),
-                     ("A few words", ' '),
-                     (" Mary   had\ta\u{2009}little  \n\t lamb", ' '),
-                     (include_str!("str.rs"), ' ')];
+    let tests = vec![
+        ("Mary had a little lamb", ' '),
+        ("", 'X'),
+        ("lionXXtigerXleopard", 'X'),
+        ("||||a||b|c", '|'),
+        ("(///)", '/'),
+        ("010", '0'),
+        ("    a  b c", ' '),
+        ("A.B.", '.'),
+        ("A..B..", '.'),
+        ("foo\r\nbar\n\nbaz\n", '\n'),
+        ("foo\nbar\n\r\nbaz", '\n'),
+        ("A few words", ' '),
+        (" Mary   had\ta\u{2009}little  \n\t lamb", ' '),
+        (include_str!("str.rs"), ' '),
+    ];
 
     for &(string, separator) in &tests {
         let serial: Vec<_> = string.split(separator).collect();

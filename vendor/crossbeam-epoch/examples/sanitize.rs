@@ -1,16 +1,13 @@
-extern crate crossbeam_epoch as epoch;
-extern crate rand;
-
-use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::{AcqRel, Acquire, Relaxed};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
 use std::thread;
+use std::time::{Duration, Instant};
 
-use epoch::{Atomic, Collector, Handle, Owned, Shared};
+use crossbeam_epoch::{self as epoch, Atomic, Collector, LocalHandle, Owned, Shared};
 use rand::Rng;
 
-fn worker(a: Arc<Atomic<AtomicUsize>>, handle: Handle) -> usize {
+fn worker(a: Arc<Atomic<AtomicUsize>>, handle: LocalHandle) -> usize {
     let mut rng = rand::thread_rng();
     let mut sum = 0;
 
@@ -28,15 +25,13 @@ fn worker(a: Arc<Atomic<AtomicUsize>>, handle: Handle) -> usize {
             let val = if rng.gen() {
                 let p = a.swap(Owned::new(AtomicUsize::new(sum)), AcqRel, guard);
                 unsafe {
-                    guard.defer(move || p.into_owned());
+                    guard.defer_destroy(p);
                     guard.flush();
                     p.deref().load(Relaxed)
                 }
             } else {
                 let p = a.load(Acquire, guard);
-                unsafe {
-                    p.deref().fetch_add(sum, Relaxed)
-                }
+                unsafe { p.deref().fetch_add(sum, Relaxed) }
             };
 
             sum = sum.wrapping_add(val);
@@ -54,8 +49,8 @@ fn main() {
         let threads = (0..16)
             .map(|_| {
                 let a = a.clone();
-                let h = collector.handle();
-                thread::spawn(move || worker(a, h))
+                let c = collector.clone();
+                thread::spawn(move || worker(a, c.register()))
             })
             .collect::<Vec<_>>();
 
@@ -64,7 +59,8 @@ fn main() {
         }
 
         unsafe {
-            a.swap(Shared::null(), AcqRel, epoch::unprotected()).into_owned();
+            a.swap(Shared::null(), AcqRel, epoch::unprotected())
+                .into_owned();
         }
     }
 }

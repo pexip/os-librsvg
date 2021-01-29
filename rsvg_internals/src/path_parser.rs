@@ -1,14 +1,198 @@
-use path_builder::*;
+//! Parser for SVG path data.
+
 use std::error::Error;
-use std::fmt::{self, Display, Formatter};
+use std::fmt;
 use std::iter::Enumerate;
 use std::str;
-use std::str::Chars;
+use std::str::Bytes;
+
+use crate::path_builder::*;
+
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub enum Token {
+    // pub to allow benchmarking
+    Number(f64),
+    Flag(bool),
+    Command(u8),
+    Comma,
+}
+
+use crate::path_parser::Token::{Comma, Command, Flag, Number};
+
+#[derive(Debug)]
+pub struct Lexer<'a> {
+    // pub to allow benchmarking
+    input: &'a [u8],
+    ci: Enumerate<Bytes<'a>>,
+    current: Option<(usize, u8)>,
+    flags_required: u8,
+}
+
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub enum LexError {
+    // pub to allow benchmarking
+    ParseFloatError,
+    UnexpectedByte(u8),
+    UnexpectedEof,
+}
+
+impl<'a> Lexer<'_> {
+    pub fn new(input: &'a str) -> Lexer {
+        let mut ci = input.bytes().enumerate();
+        let current = ci.next();
+        Lexer {
+            input: input.as_bytes(),
+            ci,
+            current,
+            flags_required: 0,
+        }
+    }
+
+    // The way Flag tokens work is a little annoying. We don't have
+    // any way to distinguish between numbers and flags without context
+    // from the parser. The only time we need to return flags is within the
+    // argument sequence of an elliptical arc, and then we need 2 in a row
+    // or it's an error. So, when the parser gets to that point, it calls
+    // this method and we switch from our usual mode of handling digits as
+    // numbers to looking for two 'flag' characters (either 0 or 1) in a row
+    // (with optional intervening whitespace, and possibly comma tokens.)
+    // Every time we find a flag we decrement flags_required.
+    pub fn require_flags(&mut self) {
+        self.flags_required = 2;
+    }
+
+    fn current_pos(&mut self) -> usize {
+        match self.current {
+            None => self.input.len(),
+            Some((pos, _)) => pos,
+        }
+    }
+
+    fn advance(&mut self) {
+        self.current = self.ci.next();
+    }
+
+    fn advance_over_whitespace(&mut self) -> bool {
+        let mut found_some = false;
+        while self.current.is_some() && self.current.unwrap().1.is_ascii_whitespace() {
+            found_some = true;
+            self.current = self.ci.next();
+        }
+        found_some
+    }
+
+    fn advance_over_optional(&mut self, needle: u8) -> bool {
+        match self.current {
+            Some((_, c)) if c == needle => {
+                self.advance();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn advance_over_digits(&mut self) -> bool {
+        let mut found_some = false;
+        while self.current.is_some() && self.current.unwrap().1.is_ascii_digit() {
+            found_some = true;
+            self.current = self.ci.next();
+        }
+        found_some
+    }
+
+    fn advance_over_simple_number(&mut self) -> bool {
+        let _ = self.advance_over_optional(b'-') || self.advance_over_optional(b'+');
+        let found_digit = self.advance_over_digits();
+        let _ = self.advance_over_optional(b'.');
+        self.advance_over_digits() || found_digit
+    }
+
+    fn match_number(&mut self) -> Result<Token, LexError> {
+        // remember the beginning
+        let (start_pos, _) = self.current.unwrap();
+        if !self.advance_over_simple_number() && start_pos != self.current_pos() {
+            match self.current {
+                None => return Err(LexError::UnexpectedEof),
+                Some((_pos, c)) => return Err(LexError::UnexpectedByte(c)),
+            }
+        }
+        if self.advance_over_optional(b'e') || self.advance_over_optional(b'E') {
+            let _ = self.advance_over_optional(b'-') || self.advance_over_optional(b'+');
+            let _ = self.advance_over_digits();
+        }
+        let end_pos = match self.current {
+            None => self.input.len(),
+            Some((i, _)) => i,
+        };
+
+        // If you need path parsing to be faster, you can do from_utf8_unchecked to
+        // avoid re-validating all the chars, and std::str::parse<i*> calls are
+        // faster than std::str::parse<f64> for numbers that are not floats.
+
+        // bare unwrap here should be safe since we've already checked all the bytes
+        // in the range
+        match std::str::from_utf8(&self.input[start_pos..end_pos])
+            .unwrap()
+            .parse::<f64>()
+        {
+            Ok(n) => Ok(Number(n)),
+            Err(_e) => Err(LexError::ParseFloatError),
+        }
+    }
+}
+
+impl Iterator for Lexer<'_> {
+    type Item = (usize, Result<Token, LexError>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // eat whitespace
+        self.advance_over_whitespace();
+
+        match self.current {
+            // commas are separators
+            Some((pos, c)) if c == b',' => {
+                self.advance();
+                Some((pos, Ok(Comma)))
+            }
+
+            // alphabetic chars are commands
+            Some((pos, c)) if c.is_ascii_alphabetic() => {
+                let token = Command(c);
+                self.advance();
+                Some((pos, Ok(token)))
+            }
+
+            Some((pos, c)) if self.flags_required > 0 && c.is_ascii_digit() => match c {
+                b'0' => {
+                    self.flags_required -= 1;
+                    self.advance();
+                    Some((pos, Ok(Flag(false))))
+                }
+                b'1' => {
+                    self.flags_required -= 1;
+                    self.advance();
+                    Some((pos, Ok(Flag(true))))
+                }
+                _ => Some((pos, Err(LexError::UnexpectedByte(c)))),
+            },
+
+            Some((pos, c)) if c.is_ascii_digit() || c == b'-' || c == b'+' || c == b'.' => {
+                Some((pos, self.match_number()))
+            }
+
+            Some((pos, c)) => {
+                self.advance();
+                Some((pos, Err(LexError::UnexpectedByte(c))))
+            }
+
+            None => None,
+        }
+    }
+}
 
 struct PathParser<'b> {
-    chars_enumerator: Enumerate<Chars<'b>>,
-    lookahead: Option<char>,    // None if we are in EOF
-    current_pos: Option<usize>, // None if the string hasn't been scanned
+    tokens: Lexer<'b>,
+    current_pos_and_token: Option<(usize, Result<Token, LexError>)>,
 
     builder: &'b mut PathBuilder,
 
@@ -36,7 +220,7 @@ struct PathParser<'b> {
 // as specified in https://www.w3.org/TR/SVG/paths.html#PathDataBNF
 // Some peculiarities:
 //
-// - SVG allows optional commas inside coordiante pairs, and between
+// - SVG allows optional commas inside coordinate pairs, and between
 // coordinate pairs.  So, for example, these are equivalent:
 //
 //     M 10 20 30 40
@@ -57,10 +241,11 @@ struct PathParser<'b> {
 //     M 0.1 -2 300 -4
 impl<'b> PathParser<'b> {
     fn new(builder: &'b mut PathBuilder, path_str: &'b str) -> PathParser<'b> {
+        let mut lexer = Lexer::new(path_str);
+        let pt = lexer.next();
         PathParser {
-            chars_enumerator: path_str.chars().enumerate(),
-            lookahead: None,
-            current_pos: None,
+            tokens: lexer,
+            current_pos_and_token: pt,
 
             builder,
 
@@ -78,218 +263,143 @@ impl<'b> PathParser<'b> {
         }
     }
 
-    fn parse(&mut self) -> Result<(), ParseError> {
-        self.getchar();
+    // Our match_* methods all either consume the token we requested
+    // and return the unwrapped value, or return an error without
+    // advancing the token stream.
+    //
+    // You can safely use them to probe for a particular kind of token,
+    // fail to match it, and try some other type.
 
-        self.optional_whitespace()?;
+    fn match_command(&mut self) -> Result<u8, ParseError> {
+        let result = match &self.current_pos_and_token {
+            Some((_, Ok(Command(c)))) => Ok(*c),
+            Some((pos, Ok(t))) => Err(ParseError::new(*pos, UnexpectedToken(*t))),
+            Some((pos, Err(e))) => Err(ParseError::new(*pos, LexError(*e))),
+            None => Err(ParseError::new(self.tokens.input.len(), UnexpectedEof)),
+        };
+        if result.is_ok() {
+            self.current_pos_and_token = self.tokens.next();
+        }
+        result
+    }
+
+    fn match_number(&mut self) -> Result<f64, ParseError> {
+        let result = match &self.current_pos_and_token {
+            Some((_, Ok(Number(n)))) => Ok(*n),
+            Some((pos, Ok(t))) => Err(ParseError::new(*pos, UnexpectedToken(*t))),
+            Some((pos, Err(e))) => Err(ParseError::new(*pos, LexError(*e))),
+            None => Err(ParseError::new(self.tokens.input.len(), UnexpectedEof)),
+        };
+        if result.is_ok() {
+            self.current_pos_and_token = self.tokens.next();
+        }
+        result
+    }
+
+    fn match_number_and_flags(&mut self) -> Result<(f64, bool, bool), ParseError> {
+        // We can't just do self.match_number() here, because we have to
+        // tell the lexer, if we do find a number, to switch to looking for flags
+        // before we advance it to the next token. Otherwise it will treat the flag
+        // characters as numbers.
+        //
+        // So, first we do the guts of match_number...
+        let n = match &self.current_pos_and_token {
+            Some((_, Ok(Number(n)))) => Ok(*n),
+            Some((pos, Ok(t))) => Err(ParseError::new(*pos, UnexpectedToken(*t))),
+            Some((pos, Err(e))) => Err(ParseError::new(*pos, LexError(*e))),
+            None => Err(ParseError::new(self.tokens.input.len(), UnexpectedEof)),
+        }?;
+
+        // Then we tell the lexer that we're going to need to find Flag tokens,
+        // *then* we can advance the token stream.
+        self.tokens.require_flags();
+        self.current_pos_and_token = self.tokens.next();
+
+        self.eat_optional_comma();
+        let f1 = self.match_flag()?;
+
+        self.eat_optional_comma();
+        let f2 = self.match_flag()?;
+
+        Ok((n, f1, f2))
+    }
+
+    fn match_comma(&mut self) -> Result<(), ParseError> {
+        let result = match &self.current_pos_and_token {
+            Some((_, Ok(Comma))) => Ok(()),
+            Some((pos, Ok(t))) => Err(ParseError::new(*pos, UnexpectedToken(*t))),
+            Some((pos, Err(e))) => Err(ParseError::new(*pos, LexError(*e))),
+            None => Err(ParseError::new(self.tokens.input.len(), UnexpectedEof)),
+        };
+        if result.is_ok() {
+            self.current_pos_and_token = self.tokens.next();
+        }
+        result
+    }
+
+    fn eat_optional_comma(&mut self) {
+        let _ = self.match_comma();
+    }
+
+    // Convenience function; like match_number, but eats a leading comma if present.
+    fn match_comma_number(&mut self) -> Result<f64, ParseError> {
+        self.eat_optional_comma();
+        self.match_number()
+    }
+
+    fn match_flag(&mut self) -> Result<bool, ParseError> {
+        let result = match self.current_pos_and_token {
+            Some((_, Ok(Flag(f)))) => Ok(f),
+            Some((pos, Ok(t))) => Err(ParseError::new(pos, UnexpectedToken(t))),
+            Some((pos, Err(e))) => Err(ParseError::new(pos, LexError(e))),
+            None => Err(ParseError::new(self.tokens.input.len(), UnexpectedEof)),
+        };
+        if result.is_ok() {
+            self.current_pos_and_token = self.tokens.next();
+        }
+        result
+    }
+
+    // peek_* methods are the twins of match_*, but don't consume the token, and so
+    // can't return ParseError
+
+    fn peek_command(&mut self) -> Option<u8> {
+        match &self.current_pos_and_token {
+            Some((_, Ok(Command(c)))) => Some(*c),
+            _ => None,
+        }
+    }
+
+    fn peek_number(&mut self) -> Option<f64> {
+        match &self.current_pos_and_token {
+            Some((_, Ok(Number(n)))) => Some(*n),
+            _ => None,
+        }
+    }
+
+    // This is the entry point for parsing a given blob of path data.
+    // All the parsing just uses various match_* methods to consume tokens
+    // and retrieve the values.
+    fn parse(&mut self) -> Result<(), ParseError> {
+        if self.current_pos_and_token.is_none() {
+            return Ok(());
+        }
+
         self.moveto_drawto_command_groups()
     }
 
-    fn getchar(&mut self) {
-        if let Some((pos, c)) = self.chars_enumerator.next() {
-            self.lookahead = Some(c);
-            self.current_pos = Some(pos);
-        } else {
-            // We got to EOF; make current_pos point to the position after the last char in the
-            // string
-            self.lookahead = None;
-            if self.current_pos.is_none() {
-                self.current_pos = Some(0);
-            } else {
-                self.current_pos = Some(self.current_pos.unwrap() + 1);
-            }
-        }
-    }
-
     fn error(&self, kind: ErrorKind) -> ParseError {
-        ParseError {
-            position: self.current_pos.unwrap(),
-            kind,
-        }
-    }
-
-    fn match_char(&mut self, c: char) -> bool {
-        if let Some(x) = self.lookahead {
-            if c == x {
-                self.getchar();
-                return true;
-            }
-        }
-
-        false
-    }
-
-    fn whitespace(&mut self) -> Result<(), ParseError> {
-        if let Some(c) = self.lookahead {
-            if c.is_whitespace() {
-                assert!(self.match_char(c));
-
-                while let Some(c) = self.lookahead {
-                    if c.is_whitespace() {
-                        assert!(self.match_char(c));
-                        continue;
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn optional_whitespace(&mut self) -> Result<(), ParseError> {
-        let _ = self.whitespace();
-        Ok(())
-    }
-
-    fn optional_comma_whitespace(&mut self) -> Result<(), ParseError> {
-        self.optional_whitespace()?;
-        if self.lookahead_is(',') {
-            self.match_char(',');
-            self.optional_whitespace()?;
-        }
-        Ok(())
-    }
-
-    fn lookahead_is(&self, c: char) -> bool {
-        if let Some(x) = self.lookahead {
-            if x == c {
-                return true;
-            }
-        }
-
-        false
-    }
-
-    fn lookahead_is_digit(&self, d: &mut char) -> bool {
-        if let Some(c) = self.lookahead {
-            if c.is_digit(10) {
-                *d = c;
-                return true;
-            }
-        }
-
-        false
-    }
-
-    fn lookahead_is_start_of_number(&mut self) -> bool {
-        let mut c = ' ';
-        self.lookahead_is_digit(&mut c)
-            || self.lookahead_is('.')
-            || self.lookahead_is('+')
-            || self.lookahead_is('-')
-    }
-
-    fn number(&mut self) -> Result<f64, ParseError> {
-        let mut sign: f64;
-
-        sign = 1.0;
-
-        if self.match_char('+') {
-            sign = 1.0;
-        } else if self.match_char('-') {
-            sign = -1.0;
-        }
-
-        let mut has_integer_part = false;
-        let mut value: f64;
-        let mut exponent_sign: f64;
-        let mut exponent: Option<f64>;
-
-        value = 0.0;
-        exponent_sign = 1.0;
-        exponent = None;
-
-        let mut c: char = ' ';
-
-        if self.lookahead_is_digit(&mut c) || self.lookahead_is('.') {
-            // Integer part
-            while self.lookahead_is_digit(&mut c) {
-                has_integer_part = true;
-                value = value * 10.0 + f64::from(char_to_digit(c));
-
-                assert!(self.match_char(c));
-            }
-
-            // Fractional part
-            if self.match_char('.') {
-                let mut fraction: f64 = 1.0;
-
-                let mut c: char = ' ';
-
-                if !has_integer_part {
-                    if !self.lookahead_is_digit(&mut c) {
-                        return Err(self.error(ErrorKind::UnexpectedToken));
-                    }
-                }
-
-                while self.lookahead_is_digit(&mut c) {
-                    fraction /= 10.0;
-                    value += fraction * f64::from(char_to_digit(c));
-
-                    assert!(self.match_char(c));
-                }
-            }
-
-            if self.match_char('E') || self.match_char('e') {
-                // exponent sign
-                if self.match_char('+') {
-                    exponent_sign = 1.0;
-                } else if self.match_char('-') {
-                    exponent_sign = -1.0;
-                }
-
-                // exponent
-                let mut c: char = ' ';
-
-                if self.lookahead_is_digit(&mut c) {
-                    let mut exp = 0.0;
-
-                    while self.lookahead_is_digit(&mut c) {
-                        exp = exp * 10.0 + f64::from(char_to_digit(c));
-
-                        assert!(self.match_char(c));
-                    }
-
-                    exponent = Some(exp);
-                } else if self.lookahead.is_some() {
-                    return Err(self.error(ErrorKind::UnexpectedToken));
-                } else {
-                    return Err(self.error(ErrorKind::UnexpectedEof));
-                }
-            }
-
-            if let Some(exp) = exponent {
-                Ok(sign * value * 10.0f64.powf(exp * exponent_sign))
-            } else {
-                Ok(sign * value)
-            }
-        } else if self.lookahead.is_some() {
-            Err(self.error(ErrorKind::UnexpectedToken))
-        } else {
-            Err(self.error(ErrorKind::UnexpectedEof))
-        }
-    }
-
-    fn flag(&mut self) -> Result<bool, ParseError> {
-        if self.match_char('0') {
-            Ok(false)
-        } else if self.match_char('1') {
-            Ok(true)
-        } else if self.lookahead.is_some() {
-            Err(self.error(ErrorKind::UnexpectedToken))
-        } else {
-            Err(self.error(ErrorKind::UnexpectedEof))
+        match self.current_pos_and_token {
+            Some((pos, _)) => ParseError {
+                position: pos,
+                kind,
+            },
+            None => ParseError { position: 0, kind }, // FIXME: ???
         }
     }
 
     fn coordinate_pair(&mut self) -> Result<(f64, f64), ParseError> {
-        let a = self.number()?;
-        self.optional_comma_whitespace()?;
-        let b = self.number()?;
-
-        Ok((a, b))
+        Ok((self.match_number()?, self.match_comma_number()?))
     }
 
     fn set_current_point(&mut self, x: f64, y: f64) {
@@ -387,37 +497,6 @@ impl<'b> PathParser<'b> {
         );
     }
 
-    fn emit_close_path(&mut self) {
-        let (x, y) = (self.subpath_start_x, self.subpath_start_y);
-        self.set_current_point(x, y);
-
-        self.builder.close_path();
-    }
-
-    fn lineto_argument_sequence(&mut self, absolute: bool) -> Result<(), ParseError> {
-        loop {
-            let (mut x, mut y) = self.coordinate_pair()?;
-
-            if !absolute {
-                x += self.current_x;
-                y += self.current_y;
-            }
-
-            self.emit_line_to(x, y);
-
-            self.whitespace()?;
-
-            if self.lookahead_is(',') {
-                assert!(self.match_char(','));
-                self.optional_whitespace()?;
-            } else if !self.lookahead_is_start_of_number() {
-                break;
-            }
-        }
-
-        Ok(())
-    }
-
     fn moveto_argument_sequence(
         &mut self,
         absolute: bool,
@@ -436,13 +515,7 @@ impl<'b> PathParser<'b> {
             self.emit_move_to(x, y);
         }
 
-        self.whitespace()?;
-
-        if self.lookahead_is(',') {
-            assert!(self.match_char(','));
-            self.optional_whitespace()?;
-            self.lineto_argument_sequence(absolute)
-        } else if self.lookahead_is_start_of_number() {
+        if self.match_comma().is_ok() || self.peek_number().is_some() {
             self.lineto_argument_sequence(absolute)
         } else {
             Ok(())
@@ -450,27 +523,15 @@ impl<'b> PathParser<'b> {
     }
 
     fn moveto(&mut self, is_initial_moveto: bool) -> Result<(), ParseError> {
-        if self.lookahead_is('M') || self.lookahead_is('m') {
-            let absolute = if self.match_char('M') {
-                true
-            } else {
-                assert!(self.match_char('m'));
-                false
-            };
-
-            self.optional_whitespace()?;
-            self.moveto_argument_sequence(absolute, is_initial_moveto)
-        } else if self.lookahead.is_some() {
-            Err(self.error(ErrorKind::UnexpectedToken))
-        } else {
-            Err(self.error(ErrorKind::UnexpectedEof))
+        match self.match_command()? {
+            b'M' => self.moveto_argument_sequence(true, is_initial_moveto),
+            b'm' => self.moveto_argument_sequence(false, is_initial_moveto),
+            c => Err(self.error(ErrorKind::UnexpectedCommand(c))),
         }
     }
 
     fn moveto_drawto_command_group(&mut self, is_initial_moveto: bool) -> Result<(), ParseError> {
         self.moveto(is_initial_moveto)?;
-        self.optional_whitespace()?;
-
         self.optional_drawto_commands().map(|_| ())
     }
 
@@ -481,8 +542,7 @@ impl<'b> PathParser<'b> {
             self.moveto_drawto_command_group(initial)?;
             initial = false;
 
-            self.optional_whitespace()?;
-            if self.lookahead.is_none() {
+            if self.current_pos_and_token.is_none() {
                 break;
             }
         }
@@ -492,54 +552,117 @@ impl<'b> PathParser<'b> {
 
     fn optional_drawto_commands(&mut self) -> Result<bool, ParseError> {
         while self.drawto_command()? {
-            self.optional_whitespace()?;
+            // everything happens in the drawto_command() calls.
         }
 
         Ok(false)
     }
 
+    // FIXME: This should not just fail to match 'M' and 'm', but make sure the
+    // command is in the set of drawto command characters.
+    fn match_if_drawto_command_with_absolute(&mut self) -> Option<(u8, bool)> {
+        let cmd = self.peek_command();
+        let result = match cmd {
+            Some(b'M') => None,
+            Some(b'm') => None,
+            Some(c) => {
+                let c_up = c.to_ascii_uppercase();
+                if c == c_up {
+                    Some((c_up, true))
+                } else {
+                    Some((c_up, false))
+                }
+            }
+            _ => None,
+        };
+        if result.is_some() {
+            let _ = self.match_command();
+        }
+        result
+    }
+
     fn drawto_command(&mut self) -> Result<bool, ParseError> {
-        Ok(self.close_path()?
-            || self.line_to()?
-            || self.horizontal_line_to()?
-            || self.vertical_line_to()?
-            || self.curve_to()?
-            || self.smooth_curve_to()?
-            || self.quadratic_bezier_curve_to()?
-            || self.smooth_quadratic_bezier_curve_to()?
-            || self.elliptical_arc()?)
-    }
-
-    fn close_path(&mut self) -> Result<bool, ParseError> {
-        if self.match_char('Z') || self.match_char('z') {
-            self.emit_close_path();
-            Ok(true)
-        } else {
-            Ok(false)
+        match self.match_if_drawto_command_with_absolute() {
+            Some((b'Z', _)) => {
+                self.emit_close_path();
+                Ok(true)
+            }
+            Some((b'L', abs)) => {
+                self.lineto_argument_sequence(abs)?;
+                Ok(true)
+            }
+            Some((b'H', abs)) => {
+                self.horizontal_lineto_argument_sequence(abs)?;
+                Ok(true)
+            }
+            Some((b'V', abs)) => {
+                self.vertical_lineto_argument_sequence(abs)?;
+                Ok(true)
+            }
+            Some((b'C', abs)) => {
+                self.curveto_argument_sequence(abs)?;
+                Ok(true)
+            }
+            Some((b'S', abs)) => {
+                self.smooth_curveto_argument_sequence(abs)?;
+                Ok(true)
+            }
+            Some((b'Q', abs)) => {
+                self.quadratic_curveto_argument_sequence(abs)?;
+                Ok(true)
+            }
+            Some((b'T', abs)) => {
+                self.smooth_quadratic_curveto_argument_sequence(abs)?;
+                Ok(true)
+            }
+            Some((b'A', abs)) => {
+                self.elliptical_arc_argument_sequence(abs)?;
+                Ok(true)
+            }
+            _ => Ok(false),
         }
     }
 
-    fn line_to(&mut self) -> Result<bool, ParseError> {
-        if self.lookahead_is('L') || self.lookahead_is('l') {
-            let absolute = if self.match_char('L') {
-                true
-            } else {
-                assert!(self.match_char('l'));
-                false
-            };
+    fn emit_close_path(&mut self) {
+        let (x, y) = (self.subpath_start_x, self.subpath_start_y);
+        self.set_current_point(x, y);
 
-            self.optional_whitespace()?;
+        self.builder.close_path();
+    }
 
-            self.lineto_argument_sequence(absolute)?;
-            Ok(true)
+    fn should_break_arg_sequence(&mut self) -> bool {
+        if self.match_comma().is_ok() {
+            // if there is a comma (indicating we should continue to loop), eat the comma
+            // so we're ready at the next start of the loop to process the next token.
+            false
         } else {
-            Ok(false)
+            // continue to process args in the sequence unless the next token is a comma
+            self.peek_number().is_none()
         }
+    }
+
+    fn lineto_argument_sequence(&mut self, absolute: bool) -> Result<(), ParseError> {
+        loop {
+            let (mut x, mut y) = self.coordinate_pair()?;
+
+            if !absolute {
+                x += self.current_x;
+                y += self.current_y;
+            }
+
+            self.emit_line_to(x, y);
+
+            if self.should_break_arg_sequence() {
+                break;
+            }
+        }
+
+        Ok(())
     }
 
     fn horizontal_lineto_argument_sequence(&mut self, absolute: bool) -> Result<(), ParseError> {
         loop {
-            let mut x = self.number()?;
+            let mut x = self.match_number()?;
 
             if !absolute {
                 x += self.current_x;
@@ -549,12 +672,7 @@ impl<'b> PathParser<'b> {
 
             self.emit_line_to(x, y);
 
-            self.whitespace()?;
-
-            if self.lookahead_is(',') {
-                assert!(self.match_char(','));
-                self.optional_whitespace()?;
-            } else if !self.lookahead_is_start_of_number() {
+            if self.should_break_arg_sequence() {
                 break;
             }
         }
@@ -562,27 +680,9 @@ impl<'b> PathParser<'b> {
         Ok(())
     }
 
-    fn horizontal_line_to(&mut self) -> Result<bool, ParseError> {
-        if self.lookahead_is('H') || self.lookahead_is('h') {
-            let absolute = if self.match_char('H') {
-                true
-            } else {
-                assert!(self.match_char('h'));
-                false
-            };
-
-            self.optional_whitespace()?;
-
-            self.horizontal_lineto_argument_sequence(absolute)?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
     fn vertical_lineto_argument_sequence(&mut self, absolute: bool) -> Result<(), ParseError> {
         loop {
-            let mut y = self.number()?;
+            let mut y = self.match_number()?;
 
             if !absolute {
                 y += self.current_y;
@@ -592,12 +692,7 @@ impl<'b> PathParser<'b> {
 
             self.emit_line_to(x, y);
 
-            self.whitespace()?;
-
-            if self.lookahead_is(',') {
-                assert!(self.match_char(','));
-                self.optional_whitespace()?;
-            } else if !self.lookahead_is_start_of_number() {
+            if self.should_break_arg_sequence() {
                 break;
             }
         }
@@ -605,34 +700,14 @@ impl<'b> PathParser<'b> {
         Ok(())
     }
 
-    fn vertical_line_to(&mut self) -> Result<bool, ParseError> {
-        if self.lookahead_is('V') || self.lookahead_is('v') {
-            let absolute = if self.match_char('V') {
-                true
-            } else {
-                assert!(self.match_char('v'));
-                false
-            };
-
-            self.optional_whitespace()?;
-
-            self.vertical_lineto_argument_sequence(absolute)?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
     fn curveto_argument_sequence(&mut self, absolute: bool) -> Result<(), ParseError> {
         loop {
             let (mut x2, mut y2) = self.coordinate_pair()?;
 
-            self.optional_comma_whitespace()?;
-
+            self.eat_optional_comma();
             let (mut x3, mut y3) = self.coordinate_pair()?;
 
-            self.optional_comma_whitespace()?;
-
+            self.eat_optional_comma();
             let (mut x4, mut y4) = self.coordinate_pair()?;
 
             if !absolute {
@@ -646,12 +721,7 @@ impl<'b> PathParser<'b> {
 
             self.emit_curve_to(x2, y2, x3, y3, x4, y4);
 
-            self.whitespace()?;
-
-            if self.lookahead_is(',') {
-                assert!(self.match_char(','));
-                self.optional_whitespace()?;
-            } else if !self.lookahead_is_start_of_number() {
+            if self.should_break_arg_sequence() {
                 break;
             }
         }
@@ -662,9 +732,7 @@ impl<'b> PathParser<'b> {
     fn smooth_curveto_argument_sequence(&mut self, absolute: bool) -> Result<(), ParseError> {
         loop {
             let (mut x3, mut y3) = self.coordinate_pair()?;
-
-            self.optional_comma_whitespace()?;
-
+            self.eat_optional_comma();
             let (mut x4, mut y4) = self.coordinate_pair()?;
 
             if !absolute {
@@ -681,12 +749,7 @@ impl<'b> PathParser<'b> {
 
             self.emit_curve_to(x2, y2, x3, y3, x4, y4);
 
-            self.whitespace()?;
-
-            if self.lookahead_is(',') {
-                assert!(self.match_char(','));
-                self.optional_whitespace()?;
-            } else if !self.lookahead_is_start_of_number() {
+            if self.should_break_arg_sequence() {
                 break;
             }
         }
@@ -694,48 +757,10 @@ impl<'b> PathParser<'b> {
         Ok(())
     }
 
-    fn curve_to(&mut self) -> Result<bool, ParseError> {
-        if self.lookahead_is('C') || self.lookahead_is('c') {
-            let absolute = if self.match_char('C') {
-                true
-            } else {
-                assert!(self.match_char('c'));
-                false
-            };
-
-            self.optional_whitespace()?;
-
-            self.curveto_argument_sequence(absolute)?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
-    fn smooth_curve_to(&mut self) -> Result<bool, ParseError> {
-        if self.lookahead_is('S') || self.lookahead_is('s') {
-            let absolute = if self.match_char('S') {
-                true
-            } else {
-                assert!(self.match_char('s'));
-                false
-            };
-
-            self.optional_whitespace()?;
-
-            self.smooth_curveto_argument_sequence(absolute)?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
     fn quadratic_curveto_argument_sequence(&mut self, absolute: bool) -> Result<(), ParseError> {
         loop {
             let (mut a, mut b) = self.coordinate_pair()?;
-
-            self.optional_comma_whitespace()?;
-
+            self.eat_optional_comma();
             let (mut c, mut d) = self.coordinate_pair()?;
 
             if !absolute {
@@ -747,35 +772,12 @@ impl<'b> PathParser<'b> {
 
             self.emit_quadratic_curve_to(a, b, c, d);
 
-            self.whitespace()?;
-
-            if self.lookahead_is(',') {
-                assert!(self.match_char(','));
-                self.optional_whitespace()?;
-            } else if !self.lookahead_is_start_of_number() {
+            if self.should_break_arg_sequence() {
                 break;
             }
         }
 
         Ok(())
-    }
-
-    fn quadratic_bezier_curve_to(&mut self) -> Result<bool, ParseError> {
-        if self.lookahead_is('Q') || self.lookahead_is('q') {
-            let absolute = if self.match_char('Q') {
-                true
-            } else {
-                assert!(self.match_char('q'));
-                false
-            };
-
-            self.optional_whitespace()?;
-
-            self.quadratic_curveto_argument_sequence(absolute)?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
     }
 
     fn smooth_quadratic_curveto_argument_sequence(
@@ -797,12 +799,7 @@ impl<'b> PathParser<'b> {
 
             self.emit_quadratic_curve_to(a, b, c, d);
 
-            self.whitespace()?;
-
-            if self.lookahead_is(',') {
-                assert!(self.match_char(','));
-                self.optional_whitespace()?;
-            } else if !self.lookahead_is_start_of_number() {
+            if self.should_break_arg_sequence() {
                 break;
             }
         }
@@ -810,49 +807,19 @@ impl<'b> PathParser<'b> {
         Ok(())
     }
 
-    fn smooth_quadratic_bezier_curve_to(&mut self) -> Result<bool, ParseError> {
-        if self.lookahead_is('T') || self.lookahead_is('t') {
-            let absolute = if self.match_char('T') {
-                true
-            } else {
-                assert!(self.match_char('t'));
-                false
-            };
-
-            self.optional_whitespace()?;
-
-            self.smooth_quadratic_curveto_argument_sequence(absolute)?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
     fn elliptical_arc_argument_sequence(&mut self, absolute: bool) -> Result<(), ParseError> {
         loop {
-            let rx = self.number()?.abs();
+            let rx = self.match_number()?.abs();
+            let ry = self.match_comma_number()?.abs();
 
-            self.optional_comma_whitespace()?;
+            self.eat_optional_comma();
+            let (x_axis_rotation, f1, f2) = self.match_number_and_flags()?;
 
-            let ry = self.number()?.abs();
+            let large_arc = LargeArc(f1);
 
-            self.optional_comma_whitespace()?;
+            let sweep = if f2 { Sweep::Positive } else { Sweep::Negative };
 
-            let x_axis_rotation = self.number()?;
-
-            self.optional_comma_whitespace()?;
-
-            let large_arc = LargeArc(self.flag()?);
-
-            self.optional_comma_whitespace()?;
-
-            let sweep = if self.flag()? {
-                Sweep::Positive
-            } else {
-                Sweep::Negative
-            };
-
-            self.optional_comma_whitespace()?;
+            self.eat_optional_comma();
 
             let (mut x, mut y) = self.coordinate_pair()?;
 
@@ -863,46 +830,21 @@ impl<'b> PathParser<'b> {
 
             self.emit_arc(rx, ry, x_axis_rotation, large_arc, sweep, x, y);
 
-            self.whitespace()?;
-
-            if self.lookahead_is(',') {
-                assert!(self.match_char(','));
-                self.optional_whitespace()?;
-            } else if !self.lookahead_is_start_of_number() {
+            if self.should_break_arg_sequence() {
                 break;
             }
         }
 
         Ok(())
     }
-
-    fn elliptical_arc(&mut self) -> Result<bool, ParseError> {
-        if self.lookahead_is('A') || self.lookahead_is('a') {
-            let absolute = if self.match_char('A') {
-                true
-            } else {
-                assert!(self.match_char('a'));
-                false
-            };
-
-            self.optional_whitespace()?;
-
-            self.elliptical_arc_argument_sequence(absolute)?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-}
-
-fn char_to_digit(c: char) -> i32 {
-    c as i32 - '0' as i32
 }
 
 #[derive(Debug, PartialEq)]
 pub enum ErrorKind {
-    UnexpectedToken,
+    UnexpectedToken(Token),
+    UnexpectedCommand(u8),
     UnexpectedEof,
+    LexError(LexError),
 }
 
 #[derive(Debug, PartialEq)]
@@ -911,23 +853,28 @@ pub struct ParseError {
     pub kind: ErrorKind,
 }
 
-impl Error for ParseError {
-    fn description(&self) -> &str {
-        match self.kind {
-            ErrorKind::UnexpectedToken => "unexpected token",
-            ErrorKind::UnexpectedEof => "unexpected end of data",
+impl Error for ParseError {}
+
+impl ParseError {
+    fn new(pos: usize, k: ErrorKind) -> ParseError {
+        ParseError {
+            position: pos,
+            kind: k,
         }
     }
 }
 
-impl Display for ParseError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "error at position {}: {}",
-            self.position,
-            self.description()
-        )
+use crate::path_parser::ErrorKind::*;
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let description = match self.kind {
+            UnexpectedToken(_t) => "unexpected token",
+            UnexpectedCommand(_c) => "unexpected command",
+            UnexpectedEof => "unexpected end of data",
+            LexError(_le) => "error processing token",
+        };
+        write!(f, "error at position {}: {}", self.position, description)
     }
 }
 
@@ -941,7 +888,7 @@ pub fn parse_path_into_builder(
 }
 
 #[cfg(test)]
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 mod tests {
     use super::*;
 
@@ -972,12 +919,13 @@ mod tests {
     ) {
         let expected_result = make_parse_result(error_pos_str, expected_error_kind);
 
-        let mut builder = PathBuilder::new();
+        let mut builder = PathBuilder::default();
         let result = parse_path_into_builder(path_str, &mut builder);
 
-        let commands = builder.get_path_commands();
+        let path = builder.into_path();
+        let commands = path.iter().collect::<Vec<_>>();
 
-        assert_eq!(expected_commands, commands);
+        assert_eq!(expected_commands, commands.as_slice());
         assert_eq!(expected_result, result);
     }
 
@@ -997,6 +945,21 @@ mod tests {
         })
     }
 
+    fn arc(x2: f64, y2: f64, xr: f64, large_arc: bool, sweep: bool,
+           x3: f64, y3: f64, x4: f64, y4: f64) -> PathCommand {
+        PathCommand::Arc(EllipticalArc {
+            r: (x2, y2),
+            x_axis_rotation: xr,
+            large_arc: LargeArc(large_arc),
+            sweep: match sweep {
+                true => Sweep::Positive,
+                false => Sweep::Negative,
+            },
+            from: (x3, y3),
+            to: (x4, y4),
+        })
+    }
+
     fn closepath() -> PathCommand {
         PathCommand::ClosePath
     }
@@ -1005,9 +968,9 @@ mod tests {
     fn handles_empty_data() {
         test_parser(
             "",
-            "^",
+            "",
             &Vec::<PathCommand>::new(),
-            Some(ErrorKind::UnexpectedEof),
+            None,
         );
     }
 
@@ -1089,57 +1052,78 @@ mod tests {
             &vec![moveto(-1010.0, -0.00020)],
             None,
         );
+
+        test_parser(
+            "M1e2.5", // a decimal after exponent start the next number
+            "",
+            &vec![moveto(100.0, 0.5)],
+            None,
+        );
+
+        test_parser(
+            "M1e-2.5", // but we are allowed a sign after exponent
+            "",
+            &vec![moveto(0.01, 0.5)],
+            None,
+        );
+
+        test_parser(
+            "M1e+2.5", // but we are allowed a sign after exponent
+            "",
+            &vec![moveto(100.0, 0.5)],
+            None,
+        );
     }
 
     #[test]
     fn detects_bogus_numbers() {
         test_parser(
             "M+",
-            "  ^",
+            " ^",
             &vec![],
-            Some(ErrorKind::UnexpectedEof),
+            Some(ErrorKind::LexError(LexError::UnexpectedEof)),
         );
 
         test_parser(
             "M-",
-            "  ^",
+            " ^",
             &vec![],
-            Some(ErrorKind::UnexpectedEof),
+            Some(ErrorKind::LexError(LexError::UnexpectedEof)),
         );
 
         test_parser(
             "M+x",
-            "  ^",
+            " ^",
             &vec![],
-            Some(ErrorKind::UnexpectedToken),
+            Some(ErrorKind::LexError(LexError::UnexpectedByte(b'x'))),
         );
 
         test_parser(
             "M10e",
-            "    ^",
+            " ^",
             &vec![],
-            Some(ErrorKind::UnexpectedEof),
+            Some(ErrorKind::LexError(LexError::ParseFloatError)),
         );
 
         test_parser(
             "M10ex",
-            "    ^",
+            " ^",
             &vec![],
-            Some(ErrorKind::UnexpectedToken),
+            Some(ErrorKind::LexError(LexError::ParseFloatError)),
         );
 
         test_parser(
             "M10e-",
-            "     ^",
+            " ^",
             &vec![],
-            Some(ErrorKind::UnexpectedEof),
+            Some(ErrorKind::LexError(LexError::ParseFloatError)),
         );
 
         test_parser(
             "M10e+x",
-            "     ^",
+            " ^",
             &vec![],
-            Some(ErrorKind::UnexpectedToken),
+            Some(ErrorKind::LexError(LexError::ParseFloatError)),
         );
     }
 
@@ -1287,6 +1271,18 @@ mod tests {
             "m10 20 30 40",
             "",
             &vec![moveto(10.0, 20.0), lineto(40.0, 60.0)],
+            None,
+        );
+    }
+
+    #[test]
+    fn handles_relative_moveto_with_relative_lineto_sequence() {
+        test_parser(
+            //          1     2    3    4   5
+            "m 46,447 l 0,0.5 -1,0 -1,0 0,1 0,12",
+            "",
+            &vec![moveto(46.0, 447.0), lineto(46.0, 447.5), lineto(45.0, 447.5),
+                  lineto(44.0, 447.5), lineto(44.0, 448.5), lineto(44.0, 460.5)],
             None,
         );
     }
@@ -1660,6 +1656,48 @@ mod tests {
     }
 
     #[test]
+    fn handles_elliptical_arc() {
+        // no space required between arc flags
+        test_parser("M 1 2 A 1 2 3 00 6 7",
+                    "",
+                    &vec![moveto(1.0, 2.0),
+                          arc(1.0, 2.0, 3.0, false, false, 1.0, 2.0, 6.0, 7.0)],
+                    None);
+        // or after...
+        test_parser("M 1 2 A 1 2 3 016 7",
+                    "",
+                    &vec![moveto(1.0, 2.0),
+                          arc(1.0, 2.0, 3.0, false, true, 1.0, 2.0, 6.0, 7.0)],
+                    None);
+        // commas and whitespace are optionally allowed
+        test_parser("M 1 2 A 1 2 3 10,6 7",
+                    "",
+                    &vec![moveto(1.0, 2.0),
+                          arc(1.0, 2.0, 3.0, true, false, 1.0, 2.0, 6.0, 7.0)],
+                    None);
+        test_parser("M 1 2 A 1 2 3 1,16, 7",
+                    "",
+                    &vec![moveto(1.0, 2.0),
+                          arc(1.0, 2.0, 3.0, true, true, 1.0, 2.0, 6.0, 7.0)],
+                    None);
+        test_parser("M 1 2 A 1 2 3 1,1 6 7",
+                    "",
+                    &vec![moveto(1.0, 2.0),
+                          arc(1.0, 2.0, 3.0, true, true, 1.0, 2.0, 6.0, 7.0)],
+                    None);
+        test_parser("M 1 2 A 1 2 3 1 1 6 7",
+                    "",
+                    &vec![moveto(1.0, 2.0),
+                          arc(1.0, 2.0, 3.0, true, true, 1.0, 2.0, 6.0, 7.0)],
+                    None);
+        test_parser("M 1 2 A 1 2 3 1 16 7",
+                    "",
+                    &vec![moveto(1.0, 2.0),
+                          arc(1.0, 2.0, 3.0, true, true, 1.0, 2.0, 6.0, 7.0)],
+                    None);
+    }
+
+    #[test]
     fn handles_close_path() {
         test_parser("M10 20 Z", "", &vec![moveto(10.0, 20.0), closepath()], None);
 
@@ -1682,9 +1720,9 @@ mod tests {
     fn first_command_must_be_moveto() {
         test_parser(
             "  L10 20",
-            "  ^",
+            "   ^", // FIXME: why is this not at position 2?
             &vec![],
-            Some(ErrorKind::UnexpectedToken),
+            Some(ErrorKind::UnexpectedCommand(b'L')),
         );
     }
 
@@ -1701,7 +1739,7 @@ mod tests {
             "M,",
             " ^",
             &vec![],
-            Some(ErrorKind::UnexpectedToken),
+            Some(ErrorKind::UnexpectedToken(Comma)),
         );
 
         test_parser(
@@ -1722,14 +1760,14 @@ mod tests {
             "M10x",
             "   ^",
             &vec![],
-            Some(ErrorKind::UnexpectedToken),
+            Some(ErrorKind::UnexpectedToken(Command(b'x'))),
         );
 
         test_parser(
             "M10,x",
             "    ^",
             &vec![],
-            Some(ErrorKind::UnexpectedToken),
+            Some(ErrorKind::UnexpectedToken(Command(b'x'))),
         );
     }
 
@@ -1753,7 +1791,7 @@ mod tests {
             "M10-20-30 x",
             "          ^",
             &vec![moveto(10.0, -20.0)],
-            Some(ErrorKind::UnexpectedToken),
+            Some(ErrorKind::UnexpectedToken(Command(b'x'))),
         );
     }
 
@@ -1763,14 +1801,14 @@ mod tests {
             "M10-20z10",
             "       ^",
             &vec![moveto(10.0, -20.0), closepath()],
-            Some(ErrorKind::UnexpectedToken),
+            Some(ErrorKind::UnexpectedToken(Number(10.0))),
         );
 
         test_parser(
             "M10-20z,",
             "       ^",
             &vec![moveto(10.0, -20.0), closepath()],
-            Some(ErrorKind::UnexpectedToken),
+            Some(ErrorKind::UnexpectedToken(Comma)),
         );
     }
 
@@ -1811,7 +1849,7 @@ mod tests {
             "M10-20H,",
             "       ^",
             &vec![moveto(10.0, -20.0)],
-            Some(ErrorKind::UnexpectedToken),
+            Some(ErrorKind::UnexpectedToken(Comma)),
         );
 
         test_parser(
@@ -1835,7 +1873,7 @@ mod tests {
             "M10-20v,",
             "       ^",
             &vec![moveto(10.0, -20.0)],
-            Some(ErrorKind::UnexpectedToken),
+            Some(ErrorKind::UnexpectedToken(Comma)),
         );
 
         test_parser(
@@ -2133,7 +2171,7 @@ mod tests {
             "M10-20A1 2 3 4",
             "             ^",
             &vec![moveto(10.0, -20.0)],
-            Some(ErrorKind::UnexpectedToken),
+            Some(ErrorKind::LexError(LexError::UnexpectedByte(b'4'))),
         );
 
         test_parser(
@@ -2153,7 +2191,7 @@ mod tests {
             "M10-20A1 2 3 1 5",
             "               ^",
             &vec![moveto(10.0, -20.0)],
-            Some(ErrorKind::UnexpectedToken),
+            Some(ErrorKind::LexError(LexError::UnexpectedByte(b'5'))),
         );
 
         test_parser(
@@ -2182,13 +2220,17 @@ mod tests {
             Some(ErrorKind::UnexpectedEof),
         );
 
-        // FIXME: we need tests for arcs
-        //
-        // test_parser("M10-20A1 2 3,1,1,6,7,",
-        //             "                     ^",
-        //             &vec![moveto(10.0, -20.0)
-        //                   arc(...)],
-        //             Some(ErrorKind::UnexpectedEof));
+        // no non 0|1 chars allowed for flags
+        test_parser("M 1 2 A 1 2 3 1.0 0.0 6 7",
+                    "               ^",
+                    &vec![moveto(1.0, 2.0)],
+                    Some(ErrorKind::UnexpectedToken(Number(0.0))));
+
+        test_parser("M10-20A1 2 3,1,1,6,7,",
+                    "                     ^",
+                    &vec![moveto(10.0, -20.0),
+                          arc(1.0, 2.0, 3.0, true, true, 10.0, -20.0, 6.0, 7.0)],
+                    Some(ErrorKind::UnexpectedEof));
     }
 
     #[test]
@@ -2196,9 +2238,9 @@ mod tests {
         // https://gitlab.gnome.org/GNOME/librsvg/issues/345
         test_parser(
             "M.. 1,0 0,100000",
-            "  ^",
+            " ^", // FIXME: we have to report position of error in lexer errors to make this right
             &vec![],
-            Some(ErrorKind::UnexpectedToken),
+            Some(ErrorKind::LexError(LexError::UnexpectedByte(b'.'))),
         );
     }
 }

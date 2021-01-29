@@ -1,6 +1,4 @@
-// Copyright 2018 The Rust Project Developers. See the COPYRIGHT
-// file at the top-level directory of this distribution and at
-// https://rust-lang.org/COPYRIGHT.
+// Copyright 2018 Developers of the Rand project.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
 // https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
@@ -16,13 +14,21 @@
 //!
 //! ```
 //! use rand::prelude::*;
-//! # let _ = StdRng::from_entropy();
-//! # let mut r = SmallRng::from_rng(thread_rng()).unwrap();
+//! # let mut r = StdRng::from_rng(thread_rng()).unwrap();
 //! # let _: f32 = r.gen();
 //! ```
 
-#[doc(no_inline)] pub use distributions::Distribution;
-#[doc(no_inline)] pub use rngs::{SmallRng, StdRng};
-#[doc(no_inline)] #[cfg(feature="std")] pub use rngs::ThreadRng;
-#[doc(no_inline)] pub use {Rng, RngCore, CryptoRng, SeedableRng};
-#[doc(no_inline)] #[cfg(feature="std")] pub use {FromEntropy, random, thread_rng};
+#[doc(no_inline)] pub use crate::distributions::Distribution;
+#[cfg(feature = "small_rng")]
+#[doc(no_inline)]
+pub use crate::rngs::SmallRng;
+#[cfg(feature = "std_rng")]
+#[doc(no_inline)] pub use crate::rngs::StdRng;
+#[doc(no_inline)]
+#[cfg(all(feature = "std", feature = "std_rng"))]
+pub use crate::rngs::ThreadRng;
+#[doc(no_inline)] pub use crate::seq::{IteratorRandom, SliceRandom};
+#[doc(no_inline)]
+#[cfg(all(feature = "std", feature = "std_rng"))]
+pub use crate::{random, thread_rng};
+#[doc(no_inline)] pub use crate::{CryptoRng, Rng, RngCore, SeedableRng};

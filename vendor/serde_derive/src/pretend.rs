@@ -52,8 +52,8 @@ fn pretend_fields_used(cont: &Container) -> TokenStream {
     let type_ident = &cont.ident;
     let (_, ty_generics, _) = cont.generics.split_for_impl();
 
-    let patterns = match cont.data {
-        Data::Enum(ref variants) => variants
+    let patterns = match &cont.data {
+        Data::Enum(variants) => variants
             .iter()
             .filter_map(|variant| match variant.style {
                 Style::Struct => {
@@ -62,8 +62,9 @@ fn pretend_fields_used(cont: &Container) -> TokenStream {
                     Some(quote!(#type_ident::#variant_ident #pat))
                 }
                 _ => None,
-            }).collect::<Vec<_>>(),
-        Data::Struct(Style::Struct, ref fields) => {
+            })
+            .collect::<Vec<_>>(),
+        Data::Struct(Style::Struct, fields) => {
             let pat = struct_pattern(fields);
             vec![quote!(#type_ident #pat)]
         }
@@ -73,9 +74,9 @@ fn pretend_fields_used(cont: &Container) -> TokenStream {
     };
 
     quote! {
-        match _serde::export::None::<#type_ident #ty_generics> {
+        match _serde::__private::None::<#type_ident #ty_generics> {
             #(
-                _serde::export::Some(#patterns) => {}
+                _serde::__private::Some(#patterns) => {}
             )*
             _ => {}
         }
@@ -92,8 +93,8 @@ fn pretend_fields_used(cont: &Container) -> TokenStream {
 //     }
 //
 fn pretend_variants_used(cont: &Container) -> TokenStream {
-    let variants = match cont.data {
-        Data::Enum(ref variants) => variants,
+    let variants = match &cont.data {
+        Data::Enum(variants) => variants,
         Data::Struct(_, _) => {
             return quote!();
         }
@@ -119,8 +120,8 @@ fn pretend_variants_used(cont: &Container) -> TokenStream {
         };
 
         quote! {
-            match _serde::export::None {
-                _serde::export::Some((#(#placeholders,)*)) => {
+            match _serde::__private::None {
+                _serde::__private::Some((#(#placeholders,)*)) => {
                     let _ = #type_ident::#variant_ident #turbofish #pat;
                 }
                 _ => {}

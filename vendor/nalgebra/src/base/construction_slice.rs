@@ -1,7 +1,8 @@
-use base::dimension::{Dim, DimName, Dynamic, U1};
-use base::matrix_slice::{SliceStorage, SliceStorageMut};
-use base::{MatrixSliceMN, MatrixSliceMutMN, Scalar};
+use crate::base::dimension::{Dim, DimName, Dynamic, U1};
+use crate::base::matrix_slice::{SliceStorage, SliceStorageMut};
+use crate::base::{MatrixSliceMN, MatrixSliceMutMN, Scalar};
 
+use num_rational::Ratio;
 /*
  *
  * Slice constructors.
@@ -103,6 +104,28 @@ impl<'a, N: Scalar, R: Dim, C: Dim, RStride: Dim, CStride: Dim>
             "Matrix slice: input data buffer to small."
         );
 
+        assert!(
+            {
+                let nrows = nrows.value();
+                let ncols = ncols.value();
+                let rstride = rstride.value();
+                let cstride = cstride.value();
+
+                nrows * ncols <= 1
+                    || match (rstride, cstride) {
+                        (0, 0) => false,      // otherwise: matrix[(0, 0)] == index[(nrows - 1, ncols - 1)],
+                        (0, _) => nrows <= 1, // otherwise: matrix[(0, 0)] == index[(nrows - 1, 0)],
+                        (_, 0) => ncols <= 1, // otherwise: matrix[(0, 0)] == index[(0, ncols - 1)],
+                        (_, _) => {
+                            // otherwise: matrix[(0, numer)] == index[(denom, 0)]
+                            let ratio = Ratio::new(rstride, cstride);
+                            nrows <= *ratio.denom() || ncols <= *ratio.numer()
+                        }
+                    }
+            },
+            "Matrix slice: dimensions and strides result in aliased indices."
+        );
+
         unsafe {
             Self::from_slice_with_strides_generic_unchecked(data, 0, nrows, ncols, rstride, cstride)
         }
@@ -197,9 +220,9 @@ macro_rules! impl_constructors(
 
 // FIXME: this is not very pretty. We could find a better call syntax.
 impl_constructors!(R, C;                         // Arguments for Matrix<N, ..., S>
-                   => R: DimName, => C: DimName; // Type parameters for impl<N, ..., S>
-                   R::name(), C::name();         // Arguments for `_generic` constructors.
-                   ); // Arguments for non-generic constructors.
+=> R: DimName, => C: DimName; // Type parameters for impl<N, ..., S>
+R::name(), C::name();         // Arguments for `_generic` constructors.
+); // Arguments for non-generic constructors.
 
 impl_constructors!(R, Dynamic;
                    => R: DimName;
@@ -256,9 +279,9 @@ macro_rules! impl_constructors_mut(
 
 // FIXME: this is not very pretty. We could find a better call syntax.
 impl_constructors_mut!(R, C;                         // Arguments for Matrix<N, ..., S>
-                       => R: DimName, => C: DimName; // Type parameters for impl<N, ..., S>
-                       R::name(), C::name();         // Arguments for `_generic` constructors.
-                       ); // Arguments for non-generic constructors.
+=> R: DimName, => C: DimName; // Type parameters for impl<N, ..., S>
+R::name(), C::name();         // Arguments for `_generic` constructors.
+); // Arguments for non-generic constructors.
 
 impl_constructors_mut!(R, Dynamic;
                        => R: DimName;

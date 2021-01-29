@@ -10,11 +10,11 @@ applications using it to use rsvg_handle_new instead.
  1 file changed, 7 insertions(+)
 
 diff --git a/librsvg/rsvg-handle.c b/librsvg/rsvg-handle.c
-index ecdffdf..e9285aa 100644
+index 95364db..3226c89 100644
 --- a/librsvg/rsvg-handle.c
 +++ b/librsvg/rsvg-handle.c
-@@ -405,6 +405,13 @@ rsvg_handle_free (RsvgHandle * handle)
-     g_object_unref (handle);
+@@ -437,6 +437,13 @@ rsvg_handle_free (RsvgHandle *handle)
+     rsvg_rust_handle_free (handle);
  }
  
 +/* Debian-specific, for compatibility with old ABI */

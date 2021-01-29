@@ -57,6 +57,9 @@
 //! `ObjectExt` and `gtk::WidgetExt`), which are blanketly implemented for all
 //! their subtypes.
 //!
+//! You can create new subclasses of `Object` or other object types. Look at
+//! the module's documentation for further details and a code example.
+//!
 //! # Under the hood
 //!
 //! GLib-based libraries largely operate on pointers to various boxed or
@@ -71,71 +74,51 @@
 //! conversions between high level Rust types (including the aforementioned
 //! wrappers) and their FFI counterparts.
 
-#![cfg_attr(feature = "cargo-clippy", allow(doc_markdown))]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::unreadable_literal)]
 
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate lazy_static;
 extern crate libc;
-extern crate glib_sys as ffi;
-extern crate gobject_sys as gobject_ffi;
 
-use std::ffi::CStr;
+#[doc(hidden)]
+pub extern crate glib_sys;
+#[doc(hidden)]
+pub extern crate gobject_sys;
+
+extern crate futures_channel;
+extern crate futures_core;
+extern crate futures_executor;
+extern crate futures_task;
+extern crate futures_util;
+
+pub use byte_array::ByteArray;
 pub use bytes::Bytes;
 pub use closure::Closure;
-pub use error::{Error, BoolError};
+pub use error::{BoolError, Error};
 pub use file_error::FileError;
 pub use object::{
-    Cast,
-    IsA,
-    Object,
-    ObjectExt,
-    WeakRef,
+    Cast, InitiallyUnowned, InitiallyUnownedClass, IsA, IsClassFor, Object, ObjectClass, ObjectExt,
+    ObjectType, SendWeakRef, WeakRef,
 };
 pub use signal::{
-    SignalHandlerId,
-    signal_handler_block,
-    signal_handler_unblock,
-    signal_stop_emission,
-    signal_stop_emission_by_name
+    signal_handler_block, signal_handler_disconnect, signal_handler_unblock,
+    signal_stop_emission_by_name, SignalHandlerId,
 };
+use std::ffi::CStr;
+pub use string::String;
 
-pub use types::{
-    StaticType,
-    Type,
-};
-pub use value::{
-    ToValue,
-    ToSendValue,
-    TypedValue,
-    SendValue,
-    Value,
-    AnyValue,
-    AnySendValue,
-};
-pub use variant::{
-    StaticVariantType,
-    ToVariant,
-    Variant,
-};
-pub use variant_type::{
-    VariantTy,
-    VariantType,
-};
-pub use time_val::{
-    TimeVal,
-    get_current_time,
-};
-pub use enums::{
-    UserDirectory,
-    EnumClass,
-    EnumValue,
-    FlagsClass,
-    FlagsValue,
-    FlagsBuilder,
-};
+pub use enums::{EnumClass, EnumValue, FlagsBuilder, FlagsClass, FlagsValue, UserDirectory};
+pub use time_val::{get_current_time, TimeVal};
+pub use types::{StaticType, Type};
+pub use value::{SendValue, ToSendValue, ToValue, TypedValue, Value};
+pub use variant::{StaticVariantType, ToVariant, Variant};
+pub use variant_type::{VariantTy, VariantType};
 
+#[macro_use]
+pub mod clone;
 #[macro_use]
 pub mod wrapper;
 #[macro_use]
@@ -143,38 +126,124 @@ pub mod boxed;
 #[macro_use]
 pub mod shared;
 #[macro_use]
+pub mod error;
+#[macro_use]
 pub mod object;
 
-pub use auto::*;
 pub use auto::functions::*;
-#[cfg_attr(feature = "cargo-clippy", allow(let_and_return))]
-#[cfg_attr(feature = "cargo-clippy", allow(let_unit_value))]
-#[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
+pub use auto::*;
+#[allow(clippy::let_and_return)]
+#[allow(clippy::let_unit_value)]
+#[allow(clippy::too_many_arguments)]
 #[allow(non_upper_case_globals)]
 mod auto;
 
+pub use gobject::*;
+mod gobject;
+
+mod byte_array;
 mod bytes;
 pub mod char;
+mod string;
 pub use char::*;
 mod checksum;
 pub mod closure;
-pub mod error;
 mod enums;
 mod file_error;
+mod functions;
+pub use functions::*;
 mod key_file;
 pub mod prelude;
 pub mod signal;
 pub mod source;
 pub use source::*;
 mod time_val;
+#[macro_use]
 pub mod translate;
+mod gstring;
+pub use gstring::GString;
 pub mod types;
 mod utils;
 pub use utils::*;
+mod main_context;
+mod main_context_channel;
 pub mod value;
 pub mod variant;
 mod variant_type;
-mod main_context;
-mod date_time;
+pub use main_context_channel::{Receiver, Sender, SyncSender};
 mod date;
 pub use date::Date;
+mod value_array;
+pub use value_array::ValueArray;
+mod param_spec;
+pub use param_spec::ParamSpec;
+mod quark;
+pub use quark::Quark;
+
+pub mod send_unique;
+pub use send_unique::{SendUnique, SendUniqueCell};
+
+#[macro_use]
+pub mod subclass;
+
+mod main_context_futures;
+mod source_futures;
+pub use source_futures::*;
+
+mod thread_pool;
+pub use thread_pool::ThreadPool;
+
+// Actual thread IDs can be reused by the OS once the old thread finished.
+// This works around it by using our own counter for threads.
+//
+// Taken from the fragile crate
+use std::sync::atomic::{AtomicUsize, Ordering};
+fn next_thread_id() -> usize {
+    static mut COUNTER: AtomicUsize = AtomicUsize::new(0);
+    unsafe { COUNTER.fetch_add(1, Ordering::SeqCst) }
+}
+
+pub(crate) fn get_thread_id() -> usize {
+    thread_local!(static THREAD_ID: usize = next_thread_id());
+    THREAD_ID.with(|&x| x)
+}
+
+pub(crate) struct ThreadGuard<T> {
+    thread_id: usize,
+    value: T,
+}
+
+impl<T> ThreadGuard<T> {
+    pub(crate) fn new(value: T) -> Self {
+        Self {
+            thread_id: get_thread_id(),
+            value,
+        }
+    }
+
+    pub(crate) fn get_ref(&self) -> &T {
+        if self.thread_id != get_thread_id() {
+            panic!("Value accessed from different thread than where it was created");
+        }
+
+        &self.value
+    }
+
+    pub(crate) fn get_mut(&mut self) -> &mut T {
+        if self.thread_id != get_thread_id() {
+            panic!("Value accessed from different thread than where it was created");
+        }
+
+        &mut self.value
+    }
+}
+
+impl<T> Drop for ThreadGuard<T> {
+    fn drop(&mut self) {
+        if self.thread_id != get_thread_id() {
+            panic!("Value dropped on a different thread than where it was created");
+        }
+    }
+}
+
+unsafe impl<T> Send for ThreadGuard<T> {}

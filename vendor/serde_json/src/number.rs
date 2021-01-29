@@ -1,35 +1,22 @@
-// Copyright 2017 Serde Developers
-//
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
-// except according to those terms.
-
-use error::Error;
+use crate::de::ParserNumber;
+use crate::error::Error;
+use crate::lib::*;
 use serde::de::{self, Unexpected, Visitor};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt::{self, Debug, Display};
+use serde::{
+    forward_to_deserialize_any, serde_if_integer128, Deserialize, Deserializer, Serialize,
+    Serializer,
+};
 
 #[cfg(feature = "arbitrary_precision")]
-use itoa;
-#[cfg(feature = "arbitrary_precision")]
-use ryu;
+use crate::error::ErrorCode;
 #[cfg(feature = "arbitrary_precision")]
 use serde::de::{IntoDeserializer, MapAccess};
 
-use de::ParserNumber;
-
 #[cfg(feature = "arbitrary_precision")]
-use error::ErrorCode;
-
-#[cfg(feature = "arbitrary_precision")]
-/// Not public API. Should be pub(crate).
-#[doc(hidden)]
-pub const TOKEN: &'static str = "$serde_json::private::Number";
+pub(crate) const TOKEN: &str = "$serde_json::private::Number";
 
 /// Represents a JSON number, whether integer or floating point.
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct Number {
     n: N,
 }
@@ -44,6 +31,10 @@ enum N {
     Float(f64),
 }
 
+// Implementing Eq is fine since any float values are always finite.
+#[cfg(not(feature = "arbitrary_precision"))]
+impl Eq for N {}
+
 #[cfg(feature = "arbitrary_precision")]
 type N = String;
 
@@ -54,11 +45,9 @@ impl Number {
     /// For any Number on which `is_i64` returns true, `as_i64` is guaranteed to
     /// return the integer value.
     ///
-    /// ```rust
-    /// # #[macro_use]
-    /// # extern crate serde_json;
+    /// ```
+    /// # use serde_json::json;
     /// #
-    /// # fn main() {
     /// let big = i64::max_value() as u64 + 10;
     /// let v = json!({ "a": 64, "b": big, "c": 256.0 });
     ///
@@ -69,7 +58,6 @@ impl Number {
     ///
     /// // Numbers with a decimal point are not considered integers.
     /// assert!(!v["c"].is_i64());
-    /// # }
     /// ```
     #[inline]
     pub fn is_i64(&self) -> bool {
@@ -88,11 +76,9 @@ impl Number {
     /// For any Number on which `is_u64` returns true, `as_u64` is guaranteed to
     /// return the integer value.
     ///
-    /// ```rust
-    /// # #[macro_use]
-    /// # extern crate serde_json;
+    /// ```
+    /// # use serde_json::json;
     /// #
-    /// # fn main() {
     /// let v = json!({ "a": 64, "b": -64, "c": 256.0 });
     ///
     /// assert!(v["a"].is_u64());
@@ -102,7 +88,6 @@ impl Number {
     ///
     /// // Numbers with a decimal point are not considered integers.
     /// assert!(!v["c"].is_u64());
-    /// # }
     /// ```
     #[inline]
     pub fn is_u64(&self) -> bool {
@@ -123,11 +108,9 @@ impl Number {
     /// Currently this function returns true if and only if both `is_i64` and
     /// `is_u64` return false but this is not a guarantee in the future.
     ///
-    /// ```rust
-    /// # #[macro_use]
-    /// # extern crate serde_json;
+    /// ```
+    /// # use serde_json::json;
     /// #
-    /// # fn main() {
     /// let v = json!({ "a": 256.0, "b": 64, "c": -64 });
     ///
     /// assert!(v["a"].is_f64());
@@ -135,7 +118,6 @@ impl Number {
     /// // Integers.
     /// assert!(!v["b"].is_f64());
     /// assert!(!v["c"].is_f64());
-    /// # }
     /// ```
     #[inline]
     pub fn is_f64(&self) -> bool {
@@ -158,28 +140,27 @@ impl Number {
     /// If the `Number` is an integer, represent it as i64 if possible. Returns
     /// None otherwise.
     ///
-    /// ```rust
-    /// # #[macro_use]
-    /// # extern crate serde_json;
+    /// ```
+    /// # use serde_json::json;
     /// #
-    /// # fn main() {
     /// let big = i64::max_value() as u64 + 10;
     /// let v = json!({ "a": 64, "b": big, "c": 256.0 });
     ///
     /// assert_eq!(v["a"].as_i64(), Some(64));
     /// assert_eq!(v["b"].as_i64(), None);
     /// assert_eq!(v["c"].as_i64(), None);
-    /// # }
     /// ```
     #[inline]
     pub fn as_i64(&self) -> Option<i64> {
         #[cfg(not(feature = "arbitrary_precision"))]
         match self.n {
-            N::PosInt(n) => if n <= i64::max_value() as u64 {
-                Some(n as i64)
-            } else {
-                None
-            },
+            N::PosInt(n) => {
+                if n <= i64::max_value() as u64 {
+                    Some(n as i64)
+                } else {
+                    None
+                }
+            }
             N::NegInt(n) => Some(n),
             N::Float(_) => None,
         }
@@ -190,17 +171,14 @@ impl Number {
     /// If the `Number` is an integer, represent it as u64 if possible. Returns
     /// None otherwise.
     ///
-    /// ```rust
-    /// # #[macro_use]
-    /// # extern crate serde_json;
+    /// ```
+    /// # use serde_json::json;
     /// #
-    /// # fn main() {
     /// let v = json!({ "a": 64, "b": -64, "c": 256.0 });
     ///
     /// assert_eq!(v["a"].as_u64(), Some(64));
     /// assert_eq!(v["b"].as_u64(), None);
     /// assert_eq!(v["c"].as_u64(), None);
-    /// # }
     /// ```
     #[inline]
     pub fn as_u64(&self) -> Option<u64> {
@@ -215,17 +193,14 @@ impl Number {
 
     /// Represents the number as f64 if possible. Returns None otherwise.
     ///
-    /// ```rust
-    /// # #[macro_use]
-    /// # extern crate serde_json;
+    /// ```
+    /// # use serde_json::json;
     /// #
-    /// # fn main() {
     /// let v = json!({ "a": 256.0, "b": 64, "c": -64 });
     ///
     /// assert_eq!(v["a"].as_f64(), Some(256.0));
     /// assert_eq!(v["b"].as_f64(), Some(64.0));
     /// assert_eq!(v["c"].as_f64(), Some(-64.0));
-    /// # }
     /// ```
     #[inline]
     pub fn as_f64(&self) -> Option<f64> {
@@ -236,13 +211,13 @@ impl Number {
             N::Float(n) => Some(n),
         }
         #[cfg(feature = "arbitrary_precision")]
-        self.n.parse().ok()
+        self.n.parse::<f64>().ok().filter(|float| float.is_finite())
     }
 
     /// Converts a finite `f64` to a `Number`. Infinite or NaN values are not JSON
     /// numbers.
     ///
-    /// ```rust
+    /// ```
     /// # use std::f64;
     /// #
     /// # use serde_json::Number;
@@ -261,10 +236,10 @@ impl Number {
                 }
                 #[cfg(feature = "arbitrary_precision")]
                 {
-                    ryu::Buffer::new().format(f).to_owned()
+                    ryu::Buffer::new().format_finite(f).to_owned()
                 }
             };
-            Some(Number { n: n })
+            Some(Number { n })
         } else {
             None
         }
@@ -275,7 +250,7 @@ impl Number {
     #[doc(hidden)]
     #[inline]
     pub fn from_string_unchecked(n: String) -> Self {
-        Number { n: n }
+        Number { n }
     }
 }
 
@@ -315,7 +290,10 @@ impl Debug for Number {
 
     #[cfg(feature = "arbitrary_precision")]
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "Number({})", &self.n)
+        formatter
+            .debug_tuple("Number")
+            .field(&format_args!("{}", self.n))
+            .finish()
     }
 }
 
@@ -458,7 +436,7 @@ impl<'de> de::Deserialize<'de> for NumberFromString {
             where
                 E: de::Error,
             {
-                let n = try!(s.parse().map_err(de::Error::custom));
+                let n = tri!(s.parse().map_err(de::Error::custom));
                 Ok(NumberFromString { value: n })
             }
         }
@@ -497,7 +475,7 @@ macro_rules! deserialize_any {
             } else if let Some(i) = self.as_i64() {
                 return visitor.visit_i64(i);
             } else if let Some(f) = self.as_f64() {
-                if f.to_string() == self.n {
+                if ryu::Buffer::new().format_finite(f) == self.n || f.to_string() == self.n {
                     return visitor.visit_f64(f);
                 }
             }
@@ -534,7 +512,7 @@ macro_rules! deserialize_number {
         {
             visitor.$visit(self.n.parse().map_err(|_| invalid_number())?)
         }
-    }
+    };
 }
 
 impl<'de> Deserializer<'de> for Number {
@@ -594,9 +572,7 @@ impl<'de, 'a> Deserializer<'de> for &'a Number {
 }
 
 #[cfg(feature = "arbitrary_precision")]
-// Not public API. Should be pub(crate).
-#[doc(hidden)]
-pub struct NumberDeserializer {
+pub(crate) struct NumberDeserializer {
     pub number: Option<String>,
 }
 
@@ -679,7 +655,7 @@ impl From<ParserNumber> for Number {
             #[cfg(feature = "arbitrary_precision")]
             ParserNumber::String(s) => s,
         };
-        Number { n: n }
+        Number { n }
     }
 }
 
@@ -699,7 +675,7 @@ macro_rules! impl_from_unsigned {
                             itoa::Buffer::new().format(u).to_owned()
                         }
                     };
-                    Number { n: n }
+                    Number { n }
                 }
             }
         )*
@@ -728,7 +704,7 @@ macro_rules! impl_from_signed {
                             itoa::Buffer::new().format(i).to_owned()
                         }
                     };
-                    Number { n: n }
+                    Number { n }
                 }
             }
         )*
@@ -738,12 +714,25 @@ macro_rules! impl_from_signed {
 impl_from_unsigned!(u8, u16, u32, u64, usize);
 impl_from_signed!(i8, i16, i32, i64, isize);
 
+#[cfg(feature = "arbitrary_precision")]
+serde_if_integer128! {
+    impl From<i128> for Number {
+        fn from(i: i128) -> Self {
+            Number { n: i.to_string() }
+        }
+    }
+
+    impl From<u128> for Number {
+        fn from(u: u128) -> Self {
+            Number { n: u.to_string() }
+        }
+    }
+}
+
 impl Number {
     #[cfg(not(feature = "arbitrary_precision"))]
-    // Not public API. Should be pub(crate).
-    #[doc(hidden)]
     #[cold]
-    pub fn unexpected(&self) -> Unexpected {
+    pub(crate) fn unexpected(&self) -> Unexpected {
         match self.n {
             N::PosInt(u) => Unexpected::Unsigned(u),
             N::NegInt(i) => Unexpected::Signed(i),
@@ -752,10 +741,8 @@ impl Number {
     }
 
     #[cfg(feature = "arbitrary_precision")]
-    // Not public API. Should be pub(crate).
-    #[doc(hidden)]
     #[cold]
-    pub fn unexpected(&self) -> Unexpected {
+    pub(crate) fn unexpected(&self) -> Unexpected {
         Unexpected::Other("number")
     }
 }

@@ -1,5 +1,5 @@
 // The Computer Language Benchmarks Game
-// http://benchmarksgame.alioth.debian.org/
+// https://benchmarksgame-team.pages.debian.net/benchmarksgame/
 //
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
@@ -11,7 +11,11 @@ use std::io::{self, Read};
 use std::sync::Arc;
 use std::thread;
 
-macro_rules! regex { ($re:expr) => { ::regex::Regex::new($re).unwrap() } }
+macro_rules! regex {
+    ($re:expr) => {
+        ::regex::Regex::new($re).unwrap()
+    };
+}
 
 fn main() {
     let mut seq = String::with_capacity(51 * (1 << 20));

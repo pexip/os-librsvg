@@ -1,35 +1,27 @@
 #[cfg(feature = "serde-serialize")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use alga::general::ClosedNeg;
 use num::One;
+use simba::scalar::ClosedNeg;
 
-use allocator::Allocator;
-use base::{DefaultAllocator, Matrix, Scalar, VectorN};
+use crate::allocator::Allocator;
+use crate::base::{DefaultAllocator, Matrix, Scalar, VectorN};
 #[cfg(any(feature = "std", feature = "alloc"))]
-use dimension::Dynamic;
-use dimension::{Dim, DimName, U1};
-use storage::StorageMut;
+use crate::dimension::Dynamic;
+use crate::dimension::{Dim, DimName, U1};
+use crate::storage::StorageMut;
 
 /// A sequence of row or column permutations.
 #[cfg_attr(feature = "serde-serialize", derive(Serialize, Deserialize))]
 #[cfg_attr(
     feature = "serde-serialize",
-    serde(
-        bound(
-            serialize = "DefaultAllocator: Allocator<(usize, usize), D>,
-         VectorN<(usize, usize), D>: Serialize"
-        )
-    )
+    serde(bound(serialize = "DefaultAllocator: Allocator<(usize, usize), D>,
+         VectorN<(usize, usize), D>: Serialize"))
 )]
 #[cfg_attr(
     feature = "serde-serialize",
-    serde(
-        bound(
-            deserialize = "DefaultAllocator: Allocator<(usize, usize), D>,
-         VectorN<(usize, usize), D>: Deserialize<'de>"
-        )
-    )
+    serde(bound(deserialize = "DefaultAllocator: Allocator<(usize, usize), D>,
+         VectorN<(usize, usize), D>: Deserialize<'de>"))
 )]
 #[derive(Clone, Debug)]
 pub struct PermutationSequence<D: Dim>
@@ -78,7 +70,7 @@ where
     #[inline]
     pub fn identity_generic(dim: D) -> Self {
         unsafe {
-            PermutationSequence {
+            Self {
                 len: 0,
                 ipiv: VectorN::new_uninitialized_generic(dim, U1),
             }

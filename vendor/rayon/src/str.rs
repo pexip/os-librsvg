@@ -13,10 +13,9 @@
 //!
 //! [std::str]: https://doc.rust-lang.org/stable/std/str/
 
-use iter::*;
-use iter::plumbing::*;
-use split_producer::*;
-
+use crate::iter::plumbing::*;
+use crate::iter::*;
+use crate::split_producer::*;
 
 /// Test if a byte is the start of a UTF-8 character.
 /// (extracted from `str::is_char_boundary`)
@@ -37,7 +36,8 @@ fn find_char_midpoint(chars: &str) -> usize {
     let (left, right) = chars.as_bytes().split_at(mid);
     match right.iter().cloned().position(is_char_boundary) {
         Some(i) => mid + i,
-        None => left.iter()
+        None => left
+            .iter()
             .cloned()
             .rposition(is_char_boundary)
             .unwrap_or(0),
@@ -55,7 +55,6 @@ fn split(chars: &str) -> Option<(&str, &str)> {
     }
 }
 
-
 /// Parallel extensions for strings.
 pub trait ParallelString {
     /// Returns a plain string slice, which is used to implement the rest of
@@ -71,8 +70,10 @@ pub trait ParallelString {
     /// let max = "hello".par_chars().max_by_key(|c| *c as i32);
     /// assert_eq!(Some('o'), max);
     /// ```
-    fn par_chars(&self) -> Chars {
-        Chars { chars: self.as_parallel_string() }
+    fn par_chars(&self) -> Chars<'_> {
+        Chars {
+            chars: self.as_parallel_string(),
+        }
     }
 
     /// Returns a parallel iterator over the characters of a string, with their positions.
@@ -84,8 +85,10 @@ pub trait ParallelString {
     /// let min = "hello".par_char_indices().min_by_key(|&(_i, c)| c as i32);
     /// assert_eq!(Some((1, 'e')), min);
     /// ```
-    fn par_char_indices(&self) -> CharIndices {
-        CharIndices { chars: self.as_parallel_string() }
+    fn par_char_indices(&self) -> CharIndices<'_> {
+        CharIndices {
+            chars: self.as_parallel_string(),
+        }
     }
 
     /// Returns a parallel iterator over the bytes of a string.
@@ -102,8 +105,10 @@ pub trait ParallelString {
     /// let max = "hello".par_bytes().max();
     /// assert_eq!(Some(b'o'), max);
     /// ```
-    fn par_bytes(&self) -> Bytes {
-        Bytes { chars: self.as_parallel_string() }
+    fn par_bytes(&self) -> Bytes<'_> {
+        Bytes {
+            chars: self.as_parallel_string(),
+        }
     }
 
     /// Returns a parallel iterator over a string encoded as UTF-16.
@@ -124,8 +129,10 @@ pub trait ParallelString {
     /// let utf16_len = text.par_encode_utf16().count();
     /// assert!(utf16_len <= utf8_len);
     /// ```
-    fn par_encode_utf16(&self) -> EncodeUtf16 {
-        EncodeUtf16 { chars: self.as_parallel_string() }
+    fn par_encode_utf16(&self) -> EncodeUtf16<'_> {
+        EncodeUtf16 {
+            chars: self.as_parallel_string(),
+        }
     }
 
     /// Returns a parallel iterator over substrings separated by a
@@ -144,7 +151,7 @@ pub trait ParallelString {
     ///    .sum();
     /// assert_eq!(10, total);
     /// ```
-    fn par_split<P: Pattern>(&self, separator: P) -> Split<P> {
+    fn par_split<P: Pattern>(&self, separator: P) -> Split<'_, P> {
         Split::new(self.as_parallel_string(), separator)
     }
 
@@ -165,7 +172,7 @@ pub trait ParallelString {
     ///     .collect();
     /// assert_eq!(vec!["", "", "1 + 3", " * 2"], parts);
     /// ```
-    fn par_split_terminator<P: Pattern>(&self, terminator: P) -> SplitTerminator<P> {
+    fn par_split_terminator<P: Pattern>(&self, terminator: P) -> SplitTerminator<'_, P> {
         SplitTerminator::new(self.as_parallel_string(), terminator)
     }
 
@@ -184,7 +191,7 @@ pub trait ParallelString {
     ///     .collect();
     /// assert_eq!(vec![11, 7], lengths);
     /// ```
-    fn par_lines(&self) -> Lines {
+    fn par_lines(&self) -> Lines<'_> {
         Lines(self.as_parallel_string())
     }
 
@@ -203,7 +210,7 @@ pub trait ParallelString {
     ///     .max_by_key(|word| word.len());
     /// assert_eq!(Some("longest"), longest);
     /// ```
-    fn par_split_whitespace(&self) -> SplitWhitespace {
+    fn par_split_whitespace(&self) -> SplitWhitespace<'_> {
         SplitWhitespace(self.as_parallel_string())
     }
 
@@ -223,8 +230,11 @@ pub trait ParallelString {
     ///    .sum();
     /// assert_eq!(10, total);
     /// ```
-    fn par_matches<P: Pattern>(&self, pattern: P) -> Matches<P> {
-        Matches { chars: self.as_parallel_string(), pattern: pattern }
+    fn par_matches<P: Pattern>(&self, pattern: P) -> Matches<'_, P> {
+        Matches {
+            chars: self.as_parallel_string(),
+            pattern,
+        }
     }
 
     /// Returns a parallel iterator over substrings that match a given character
@@ -242,8 +252,11 @@ pub trait ParallelString {
     ///    .collect();
     /// assert_eq!(digits, vec![(0, "1"), (3, "2"), (14, "3"), (17, "4")]);
     /// ```
-    fn par_match_indices<P: Pattern>(&self, pattern: P) -> MatchIndices<P> {
-        MatchIndices { chars: self.as_parallel_string(), pattern: pattern }
+    fn par_match_indices<P: Pattern>(&self, pattern: P) -> MatchIndices<'_, P> {
+        MatchIndices {
+            chars: self.as_parallel_string(),
+            pattern,
+        }
     }
 }
 
@@ -254,7 +267,6 @@ impl ParallelString for str {
     }
 }
 
-
 // /////////////////////////////////////////////////////////////////////////
 
 /// We hide the `Pattern` trait in a private module, as its API is not meant
@@ -262,29 +274,37 @@ impl ParallelString for str {
 /// would be nicer to have its basic existence and implementors public while
 /// keeping all of the methods private.
 mod private {
-    use iter::plumbing::Folder;
+    use crate::iter::plumbing::Folder;
 
     /// Pattern-matching trait for `ParallelString`, somewhat like a mix of
     /// `std::str::pattern::{Pattern, Searcher}`.
     ///
     /// Implementing this trait is not permitted outside of `rayon`.
     pub trait Pattern: Sized + Sync + Send {
-        private_decl!{}
-        fn find_in(&self, &str) -> Option<usize>;
-        fn rfind_in(&self, &str) -> Option<usize>;
-        fn is_suffix_of(&self, &str) -> bool;
-        fn fold_splits<'ch, F>(&self, &'ch str, folder: F, skip_last: bool) -> F
-            where F: Folder<&'ch str>;
-        fn fold_matches<'ch, F>(&self, &'ch str, folder: F) -> F
-            where F: Folder<&'ch str>;
-        fn fold_match_indices<'ch, F>(&self, &'ch str, folder: F, base: usize) -> F
-            where F: Folder<(usize, &'ch str)>;
+        private_decl! {}
+        fn find_in(&self, haystack: &str) -> Option<usize>;
+        fn rfind_in(&self, haystack: &str) -> Option<usize>;
+        fn is_suffix_of(&self, haystack: &str) -> bool;
+        fn fold_splits<'ch, F>(&self, haystack: &'ch str, folder: F, skip_last: bool) -> F
+        where
+            F: Folder<&'ch str>;
+        fn fold_matches<'ch, F>(&self, haystack: &'ch str, folder: F) -> F
+        where
+            F: Folder<&'ch str>;
+        fn fold_match_indices<'ch, F>(&self, haystack: &'ch str, folder: F, base: usize) -> F
+        where
+            F: Folder<(usize, &'ch str)>;
     }
 }
 use self::private::Pattern;
 
+#[inline]
+fn offset<T>(base: usize) -> impl Fn((usize, T)) -> (usize, T) {
+    move |(i, x)| (base + i, x)
+}
+
 impl Pattern for char {
-    private_impl!{}
+    private_impl! {}
 
     #[inline]
     fn find_in(&self, chars: &str) -> Option<usize> {
@@ -302,7 +322,8 @@ impl Pattern for char {
     }
 
     fn fold_splits<'ch, F>(&self, chars: &'ch str, folder: F, skip_last: bool) -> F
-        where F: Folder<&'ch str>
+    where
+        F: Folder<&'ch str>,
     {
         let mut split = chars.split(*self);
         if skip_last {
@@ -312,20 +333,22 @@ impl Pattern for char {
     }
 
     fn fold_matches<'ch, F>(&self, chars: &'ch str, folder: F) -> F
-        where F: Folder<&'ch str>
+    where
+        F: Folder<&'ch str>,
     {
         folder.consume_iter(chars.matches(*self))
     }
 
     fn fold_match_indices<'ch, F>(&self, chars: &'ch str, folder: F, base: usize) -> F
-        where F: Folder<(usize, &'ch str)>
+    where
+        F: Folder<(usize, &'ch str)>,
     {
-        folder.consume_iter(chars.match_indices(*self).map(move |(i, s)| (base + i, s)))
+        folder.consume_iter(chars.match_indices(*self).map(offset(base)))
     }
 }
 
 impl<FN: Sync + Send + Fn(char) -> bool> Pattern for FN {
-    private_impl!{}
+    private_impl! {}
 
     fn find_in(&self, chars: &str) -> Option<usize> {
         chars.find(self)
@@ -340,7 +363,8 @@ impl<FN: Sync + Send + Fn(char) -> bool> Pattern for FN {
     }
 
     fn fold_splits<'ch, F>(&self, chars: &'ch str, folder: F, skip_last: bool) -> F
-        where F: Folder<&'ch str>
+    where
+        F: Folder<&'ch str>,
     {
         let mut split = chars.split(self);
         if skip_last {
@@ -350,18 +374,19 @@ impl<FN: Sync + Send + Fn(char) -> bool> Pattern for FN {
     }
 
     fn fold_matches<'ch, F>(&self, chars: &'ch str, folder: F) -> F
-        where F: Folder<&'ch str>
+    where
+        F: Folder<&'ch str>,
     {
         folder.consume_iter(chars.matches(self))
     }
 
     fn fold_match_indices<'ch, F>(&self, chars: &'ch str, folder: F, base: usize) -> F
-        where F: Folder<(usize, &'ch str)>
+    where
+        F: Folder<(usize, &'ch str)>,
     {
-        folder.consume_iter(chars.match_indices(self).map(move |(i, s)| (base + i, s)))
+        folder.consume_iter(chars.match_indices(self).map(offset(base)))
     }
 }
-
 
 // /////////////////////////////////////////////////////////////////////////
 
@@ -379,7 +404,8 @@ impl<'ch> ParallelIterator for Chars<'ch> {
     type Item = char;
 
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
-        where C: UnindexedConsumer<Self::Item>
+    where
+        C: UnindexedConsumer<Self::Item>,
     {
         bridge_unindexed(CharsProducer { chars: self.chars }, consumer)
     }
@@ -399,12 +425,12 @@ impl<'ch> UnindexedProducer for CharsProducer<'ch> {
     }
 
     fn fold_with<F>(self, folder: F) -> F
-        where F: Folder<Self::Item>
+    where
+        F: Folder<Self::Item>,
     {
         folder.consume_iter(self.chars.chars())
     }
 }
-
 
 // /////////////////////////////////////////////////////////////////////////
 
@@ -423,9 +449,13 @@ impl<'ch> ParallelIterator for CharIndices<'ch> {
     type Item = (usize, char);
 
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
-        where C: UnindexedConsumer<Self::Item>
+    where
+        C: UnindexedConsumer<Self::Item>,
     {
-        let producer = CharIndicesProducer { index: 0, chars: self.chars };
+        let producer = CharIndicesProducer {
+            index: 0,
+            chars: self.chars,
+        };
         bridge_unindexed(producer, consumer)
     }
 }
@@ -450,13 +480,13 @@ impl<'ch> UnindexedProducer for CharIndicesProducer<'ch> {
     }
 
     fn fold_with<F>(self, folder: F) -> F
-        where F: Folder<Self::Item>
+    where
+        F: Folder<Self::Item>,
     {
         let base = self.index;
-        folder.consume_iter(self.chars.char_indices().map(move |(i, c)| (base + i, c)))
+        folder.consume_iter(self.chars.char_indices().map(offset(base)))
     }
 }
-
 
 // /////////////////////////////////////////////////////////////////////////
 
@@ -474,7 +504,8 @@ impl<'ch> ParallelIterator for Bytes<'ch> {
     type Item = u8;
 
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
-        where C: UnindexedConsumer<Self::Item>
+    where
+        C: UnindexedConsumer<Self::Item>,
     {
         bridge_unindexed(BytesProducer { chars: self.chars }, consumer)
     }
@@ -494,7 +525,8 @@ impl<'ch> UnindexedProducer for BytesProducer<'ch> {
     }
 
     fn fold_with<F>(self, folder: F) -> F
-        where F: Folder<Self::Item>
+    where
+        F: Folder<Self::Item>,
     {
         folder.consume_iter(self.chars.bytes())
     }
@@ -516,7 +548,8 @@ impl<'ch> ParallelIterator for EncodeUtf16<'ch> {
     type Item = u16;
 
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
-        where C: UnindexedConsumer<Self::Item>
+    where
+        C: UnindexedConsumer<Self::Item>,
     {
         bridge_unindexed(EncodeUtf16Producer { chars: self.chars }, consumer)
     }
@@ -536,12 +569,12 @@ impl<'ch> UnindexedProducer for EncodeUtf16Producer<'ch> {
     }
 
     fn fold_with<F>(self, folder: F) -> F
-        where F: Folder<Self::Item>
+    where
+        F: Folder<Self::Item>,
     {
         folder.consume_iter(self.chars.encode_utf16())
     }
 }
-
 
 // /////////////////////////////////////////////////////////////////////////
 
@@ -554,10 +587,7 @@ pub struct Split<'ch, P: Pattern> {
 
 impl<'ch, P: Pattern> Split<'ch, P> {
     fn new(chars: &'ch str, separator: P) -> Self {
-        Split {
-            chars: chars,
-            separator: separator,
-        }
+        Split { chars, separator }
     }
 }
 
@@ -565,7 +595,8 @@ impl<'ch, P: Pattern> ParallelIterator for Split<'ch, P> {
     type Item = &'ch str;
 
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
-        where C: UnindexedConsumer<Self::Item>
+    where
+        C: UnindexedConsumer<Self::Item>,
     {
         let producer = SplitProducer::new(self.chars, &self.separator);
         bridge_unindexed(producer, consumer)
@@ -599,12 +630,12 @@ impl<'ch, P: Pattern> Fissile<P> for &'ch str {
     }
 
     fn fold_splits<F>(self, separator: &P, folder: F, skip_last: bool) -> F
-        where F: Folder<Self>
+    where
+        F: Folder<Self>,
     {
         separator.fold_splits(self, folder, skip_last)
     }
 }
-
 
 // /////////////////////////////////////////////////////////////////////////
 
@@ -615,17 +646,14 @@ pub struct SplitTerminator<'ch, P: Pattern> {
     terminator: P,
 }
 
-struct SplitTerminatorProducer<'ch, 'sep, P: Pattern + 'sep> {
+struct SplitTerminatorProducer<'ch, 'sep, P: Pattern> {
     splitter: SplitProducer<'sep, P, &'ch str>,
     skip_last: bool,
 }
 
 impl<'ch, P: Pattern> SplitTerminator<'ch, P> {
     fn new(chars: &'ch str, terminator: P) -> Self {
-        SplitTerminator {
-            chars: chars,
-            terminator: terminator,
-        }
+        SplitTerminator { chars, terminator }
     }
 }
 
@@ -642,7 +670,8 @@ impl<'ch, P: Pattern> ParallelIterator for SplitTerminator<'ch, P> {
     type Item = &'ch str;
 
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
-        where C: UnindexedConsumer<Self::Item>
+    where
+        C: UnindexedConsumer<Self::Item>,
     {
         let producer = SplitTerminatorProducer::new(self.chars, &self.terminator);
         bridge_unindexed(producer, consumer)
@@ -660,19 +689,19 @@ impl<'ch, 'sep, P: Pattern + 'sep> UnindexedProducer for SplitTerminatorProducer
             self.skip_last = false;
             SplitTerminatorProducer {
                 splitter: right,
-                skip_last: skip_last,
+                skip_last,
             }
         });
         (self, right)
     }
 
     fn fold_with<F>(self, folder: F) -> F
-        where F: Folder<Self::Item>
+    where
+        F: Folder<Self::Item>,
     {
         self.splitter.fold_with(folder, self.skip_last)
     }
 }
-
 
 // /////////////////////////////////////////////////////////////////////////
 
@@ -680,23 +709,28 @@ impl<'ch, 'sep, P: Pattern + 'sep> UnindexedProducer for SplitTerminatorProducer
 #[derive(Debug, Clone)]
 pub struct Lines<'ch>(&'ch str);
 
+#[inline]
+fn no_carriage_return(line: &str) -> &str {
+    if line.ends_with('\r') {
+        &line[..line.len() - 1]
+    } else {
+        line
+    }
+}
+
 impl<'ch> ParallelIterator for Lines<'ch> {
     type Item = &'ch str;
 
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
-        where C: UnindexedConsumer<Self::Item>
+    where
+        C: UnindexedConsumer<Self::Item>,
     {
         self.0
             .par_split_terminator('\n')
-            .map(|line| if line.ends_with('\r') {
-                     &line[..line.len() - 1]
-                 } else {
-                     line
-                 })
+            .map(no_carriage_return)
             .drive_unindexed(consumer)
     }
 }
-
 
 // /////////////////////////////////////////////////////////////////////////
 
@@ -704,19 +738,24 @@ impl<'ch> ParallelIterator for Lines<'ch> {
 #[derive(Debug, Clone)]
 pub struct SplitWhitespace<'ch>(&'ch str);
 
+#[inline]
+fn not_empty(s: &&str) -> bool {
+    !s.is_empty()
+}
+
 impl<'ch> ParallelIterator for SplitWhitespace<'ch> {
     type Item = &'ch str;
 
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
-        where C: UnindexedConsumer<Self::Item>
+    where
+        C: UnindexedConsumer<Self::Item>,
     {
         self.0
             .par_split(char::is_whitespace)
-            .filter(|string| !string.is_empty())
+            .filter(not_empty)
             .drive_unindexed(consumer)
     }
 }
-
 
 // /////////////////////////////////////////////////////////////////////////
 
@@ -727,7 +766,7 @@ pub struct Matches<'ch, P: Pattern> {
     pattern: P,
 }
 
-struct MatchesProducer<'ch, 'pat, P: Pattern + 'pat> {
+struct MatchesProducer<'ch, 'pat, P: Pattern> {
     chars: &'ch str,
     pattern: &'pat P,
 }
@@ -736,9 +775,13 @@ impl<'ch, P: Pattern> ParallelIterator for Matches<'ch, P> {
     type Item = &'ch str;
 
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
-        where C: UnindexedConsumer<Self::Item>
+    where
+        C: UnindexedConsumer<Self::Item>,
     {
-        let producer = MatchesProducer { chars: self.chars, pattern: &self.pattern };
+        let producer = MatchesProducer {
+            chars: self.chars,
+            pattern: &self.pattern,
+        };
         bridge_unindexed(producer, consumer)
     }
 }
@@ -763,12 +806,12 @@ impl<'ch, 'pat, P: Pattern> UnindexedProducer for MatchesProducer<'ch, 'pat, P> 
     }
 
     fn fold_with<F>(self, folder: F) -> F
-        where F: Folder<Self::Item>
+    where
+        F: Folder<Self::Item>,
     {
         self.pattern.fold_matches(self.chars, folder)
     }
 }
-
 
 // /////////////////////////////////////////////////////////////////////////
 
@@ -779,7 +822,7 @@ pub struct MatchIndices<'ch, P: Pattern> {
     pattern: P,
 }
 
-struct MatchIndicesProducer<'ch, 'pat, P: Pattern + 'pat> {
+struct MatchIndicesProducer<'ch, 'pat, P: Pattern> {
     index: usize,
     chars: &'ch str,
     pattern: &'pat P,
@@ -789,7 +832,8 @@ impl<'ch, P: Pattern> ParallelIterator for MatchIndices<'ch, P> {
     type Item = (usize, &'ch str);
 
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
-        where C: UnindexedConsumer<Self::Item>
+    where
+        C: UnindexedConsumer<Self::Item>,
     {
         let producer = MatchIndicesProducer {
             index: 0,
@@ -821,8 +865,10 @@ impl<'ch, 'pat, P: Pattern> UnindexedProducer for MatchIndicesProducer<'ch, 'pat
     }
 
     fn fold_with<F>(self, folder: F) -> F
-        where F: Folder<Self::Item>
+    where
+        F: Folder<Self::Item>,
     {
-        self.pattern.fold_match_indices(self.chars, folder, self.index)
+        self.pattern
+            .fold_match_indices(self.chars, folder, self.index)
     }
 }

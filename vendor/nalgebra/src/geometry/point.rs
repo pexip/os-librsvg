@@ -7,19 +7,21 @@ use std::hash;
 use std::io::{Result as IOResult, Write};
 
 #[cfg(feature = "serde-serialize")]
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[cfg(feature = "abomonation-serialize")]
 use abomonation::Abomonation;
 
-use base::allocator::Allocator;
-use base::dimension::{DimName, DimNameAdd, DimNameSum, U1};
-use base::iter::{MatrixIter, MatrixIterMut};
-use base::{DefaultAllocator, Scalar, VectorN};
+use simba::simd::SimdPartialOrd;
+
+use crate::base::allocator::Allocator;
+use crate::base::dimension::{DimName, DimNameAdd, DimNameSum, U1};
+use crate::base::iter::{MatrixIter, MatrixIterMut};
+use crate::base::{DefaultAllocator, Scalar, VectorN};
 
 /// A point in a n-dimensional euclidean space.
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Point<N: Scalar, D: DimName>
 where
     DefaultAllocator: Allocator<N, D>,
@@ -38,22 +40,11 @@ where
     }
 }
 
-impl<N: Scalar, D: DimName> Copy for Point<N, D>
+impl<N: Scalar + Copy, D: DimName> Copy for Point<N, D>
 where
     DefaultAllocator: Allocator<N, D>,
     <DefaultAllocator as Allocator<N, D>>::Buffer: Copy,
 {
-}
-
-impl<N: Scalar, D: DimName> Clone for Point<N, D>
-where
-    DefaultAllocator: Allocator<N, D>,
-    <DefaultAllocator as Allocator<N, D>>::Buffer: Clone,
-{
-    #[inline]
-    fn clone(&self) -> Self {
-        Point::from_coordinates(self.coords.clone())
-    }
 }
 
 #[cfg(feature = "serde-serialize")]
@@ -82,7 +73,7 @@ where
     {
         let coords = VectorN::<N, D>::deserialize(deserializer)?;
 
-        Ok(Point::from_coordinates(coords))
+        Ok(Self::from(coords))
     }
 }
 
@@ -111,14 +102,21 @@ impl<N: Scalar, D: DimName> Point<N, D>
 where
     DefaultAllocator: Allocator<N, D>,
 {
-    /// Clones this point into one that owns its data.
-    #[inline]
-    pub fn clone(&self) -> Point<N, D> {
-        Point::from_coordinates(self.coords.clone_owned())
-    }
-
     /// Converts this point into a vector in homogeneous coordinates, i.e., appends a `1` at the
     /// end of it.
+    ///
+    /// This is the same as `.into()`.
+    ///
+    /// # Example
+    /// ```
+    /// # use nalgebra::{Point2, Point3, Vector3, Vector4};
+    /// let p = Point2::new(10.0, 20.0);
+    /// assert_eq!(p.to_homogeneous(), Vector3::new(10.0, 20.0, 1.0));
+    ///
+    /// // This works in any dimension.
+    /// let p = Point3::new(10.0, 20.0, 30.0);
+    /// assert_eq!(p.to_homogeneous(), Vector4::new(10.0, 20.0, 30.0, 1.0));
+    /// ```
     #[inline]
     pub fn to_homogeneous(&self) -> VectorN<N, DimNameSum<D, U1>>
     where
@@ -134,12 +132,24 @@ where
     }
 
     /// Creates a new point with the given coordinates.
+    #[deprecated(note = "Use Point::from(vector) instead.")]
     #[inline]
-    pub fn from_coordinates(coords: VectorN<N, D>) -> Point<N, D> {
-        Point { coords: coords }
+    pub fn from_coordinates(coords: VectorN<N, D>) -> Self {
+        Self { coords: coords }
     }
 
     /// The dimension of this point.
+    ///
+    /// # Example
+    /// ```
+    /// # use nalgebra::{Point2, Point3};
+    /// let p = Point2::new(1.0, 2.0);
+    /// assert_eq!(p.len(), 2);
+    ///
+    /// // This works in any dimension.
+    /// let p = Point3::new(10.0, 20.0, 30.0);
+    /// assert_eq!(p.len(), 3);
+    /// ```
     #[inline]
     pub fn len(&self) -> usize {
         self.coords.len()
@@ -148,11 +158,23 @@ where
     /// The stride of this point. This is the number of buffer element separating each component of
     /// this point.
     #[inline]
+    #[deprecated(note = "This methods is no longer significant and will always return 1.")]
     pub fn stride(&self) -> usize {
         self.coords.strides().0
     }
 
     /// Iterates through this point coordinates.
+    ///
+    /// # Example
+    /// ```
+    /// # use nalgebra::Point3;
+    /// let p = Point3::new(1.0, 2.0, 3.0);
+    /// let mut it = p.iter().cloned();
+    ///
+    /// assert_eq!(it.next(), Some(1.0));
+    /// assert_eq!(it.next(), Some(2.0));
+    /// assert_eq!(it.next(), Some(3.0));
+    /// assert_eq!(it.next(), None);
     #[inline]
     pub fn iter(&self) -> MatrixIter<N, D, U1, <DefaultAllocator as Allocator<N, D>>::Buffer> {
         self.coords.iter()
@@ -165,6 +187,17 @@ where
     }
 
     /// Mutably iterates through this point coordinates.
+    ///
+    /// # Example
+    /// ```
+    /// # use nalgebra::Point3;
+    /// let mut p = Point3::new(1.0, 2.0, 3.0);
+    ///
+    /// for e in p.iter_mut() {
+    ///     *e *= 10.0;
+    /// }
+    ///
+    /// assert_eq!(p, Point3::new(10.0, 20.0, 30.0));
     #[inline]
     pub fn iter_mut(
         &mut self,
@@ -241,11 +274,7 @@ where
     }
 }
 
-impl<N: Scalar + Eq, D: DimName> Eq for Point<N, D>
-where
-    DefaultAllocator: Allocator<N, D>,
-{
-}
+impl<N: Scalar + Eq, D: DimName> Eq for Point<N, D> where DefaultAllocator: Allocator<N, D> {}
 
 impl<N: Scalar, D: DimName> PartialEq for Point<N, D>
 where
@@ -288,6 +317,33 @@ where
 }
 
 /*
+ * inf/sup
+ */
+impl<N: Scalar + SimdPartialOrd, D: DimName> Point<N, D>
+where
+    DefaultAllocator: Allocator<N, D>,
+{
+    /// Computes the infimum (aka. componentwise min) of two points.
+    #[inline]
+    pub fn inf(&self, other: &Self) -> Point<N, D> {
+        self.coords.inf(&other.coords).into()
+    }
+
+    /// Computes the supremum (aka. componentwise max) of two points.
+    #[inline]
+    pub fn sup(&self, other: &Self) -> Point<N, D> {
+        self.coords.sup(&other.coords).into()
+    }
+
+    /// Computes the (infimum, supremum) of two points.
+    #[inline]
+    pub fn inf_sup(&self, other: &Self) -> (Point<N, D>, Point<N, D>) {
+        let (inf, sup) = self.coords.inf_sup(&other.coords);
+        (inf.into(), sup.into())
+    }
+}
+
+/*
  *
  * Display
  *
@@ -297,14 +353,14 @@ where
     DefaultAllocator: Allocator<N, D>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        try!(write!(f, "{{"));
+        write!(f, "{{")?;
 
         let mut it = self.coords.iter();
 
-        try!(write!(f, "{}", *it.next().unwrap()));
+        write!(f, "{}", *it.next().unwrap())?;
 
         for comp in it {
-            try!(write!(f, ", {}", *comp));
+            write!(f, ", {}", *comp)?;
         }
 
         write!(f, "}}")

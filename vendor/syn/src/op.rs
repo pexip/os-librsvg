@@ -1,17 +1,9 @@
-// Copyright 2018 Syn Developers
-//
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
-// except according to those terms.
-
 ast_enum! {
     /// A binary operator: `+`, `+=`, `&`.
     ///
-    /// *This type is available if Syn is built with the `"derive"` or `"full"`
+    /// *This type is available only if Syn is built with the `"derive"` or `"full"`
     /// feature.*
-    #[cfg_attr(feature = "clone-impls", derive(Copy))]
+    #[cfg_attr(doc_cfg, doc(cfg(any(feature = "full", feature = "derive"))))]
     pub enum BinOp {
         /// The `+` operator (addition)
         Add(Token![+]),
@@ -75,9 +67,9 @@ ast_enum! {
 ast_enum! {
     /// A unary operator: `*`, `!`, `-`.
     ///
-    /// *This type is available if Syn is built with the `"derive"` or `"full"`
+    /// *This type is available only if Syn is built with the `"derive"` or `"full"`
     /// feature.*
-    #[cfg_attr(feature = "clone-impls", derive(Copy))]
+    #[cfg_attr(doc_cfg, doc(cfg(any(feature = "full", feature = "derive"))))]
     pub enum UnOp {
         /// The `*` operator for dereferencing
         Deref(Token![*]),
@@ -91,8 +83,7 @@ ast_enum! {
 #[cfg(feature = "parsing")]
 pub mod parsing {
     use super::*;
-
-    use parse::{Parse, ParseStream, Result};
+    use crate::parse::{Parse, ParseStream, Result};
 
     fn parse_binop(input: ParseStream) -> Result<BinOp> {
         if input.peek(Token![&&]) {
@@ -136,6 +127,7 @@ pub mod parsing {
         }
     }
 
+    #[cfg_attr(doc_cfg, doc(cfg(feature = "parsing")))]
     impl Parse for BinOp {
         #[cfg(not(feature = "full"))]
         fn parse(input: ParseStream) -> Result<Self> {
@@ -170,6 +162,7 @@ pub mod parsing {
         }
     }
 
+    #[cfg_attr(doc_cfg, doc(cfg(feature = "parsing")))]
     impl Parse for UnOp {
         fn parse(input: ParseStream) -> Result<Self> {
             let lookahead = input.lookahead1();
@@ -192,47 +185,49 @@ mod printing {
     use proc_macro2::TokenStream;
     use quote::ToTokens;
 
+    #[cfg_attr(doc_cfg, doc(cfg(feature = "printing")))]
     impl ToTokens for BinOp {
         fn to_tokens(&self, tokens: &mut TokenStream) {
-            match *self {
-                BinOp::Add(ref t) => t.to_tokens(tokens),
-                BinOp::Sub(ref t) => t.to_tokens(tokens),
-                BinOp::Mul(ref t) => t.to_tokens(tokens),
-                BinOp::Div(ref t) => t.to_tokens(tokens),
-                BinOp::Rem(ref t) => t.to_tokens(tokens),
-                BinOp::And(ref t) => t.to_tokens(tokens),
-                BinOp::Or(ref t) => t.to_tokens(tokens),
-                BinOp::BitXor(ref t) => t.to_tokens(tokens),
-                BinOp::BitAnd(ref t) => t.to_tokens(tokens),
-                BinOp::BitOr(ref t) => t.to_tokens(tokens),
-                BinOp::Shl(ref t) => t.to_tokens(tokens),
-                BinOp::Shr(ref t) => t.to_tokens(tokens),
-                BinOp::Eq(ref t) => t.to_tokens(tokens),
-                BinOp::Lt(ref t) => t.to_tokens(tokens),
-                BinOp::Le(ref t) => t.to_tokens(tokens),
-                BinOp::Ne(ref t) => t.to_tokens(tokens),
-                BinOp::Ge(ref t) => t.to_tokens(tokens),
-                BinOp::Gt(ref t) => t.to_tokens(tokens),
-                BinOp::AddEq(ref t) => t.to_tokens(tokens),
-                BinOp::SubEq(ref t) => t.to_tokens(tokens),
-                BinOp::MulEq(ref t) => t.to_tokens(tokens),
-                BinOp::DivEq(ref t) => t.to_tokens(tokens),
-                BinOp::RemEq(ref t) => t.to_tokens(tokens),
-                BinOp::BitXorEq(ref t) => t.to_tokens(tokens),
-                BinOp::BitAndEq(ref t) => t.to_tokens(tokens),
-                BinOp::BitOrEq(ref t) => t.to_tokens(tokens),
-                BinOp::ShlEq(ref t) => t.to_tokens(tokens),
-                BinOp::ShrEq(ref t) => t.to_tokens(tokens),
+            match self {
+                BinOp::Add(t) => t.to_tokens(tokens),
+                BinOp::Sub(t) => t.to_tokens(tokens),
+                BinOp::Mul(t) => t.to_tokens(tokens),
+                BinOp::Div(t) => t.to_tokens(tokens),
+                BinOp::Rem(t) => t.to_tokens(tokens),
+                BinOp::And(t) => t.to_tokens(tokens),
+                BinOp::Or(t) => t.to_tokens(tokens),
+                BinOp::BitXor(t) => t.to_tokens(tokens),
+                BinOp::BitAnd(t) => t.to_tokens(tokens),
+                BinOp::BitOr(t) => t.to_tokens(tokens),
+                BinOp::Shl(t) => t.to_tokens(tokens),
+                BinOp::Shr(t) => t.to_tokens(tokens),
+                BinOp::Eq(t) => t.to_tokens(tokens),
+                BinOp::Lt(t) => t.to_tokens(tokens),
+                BinOp::Le(t) => t.to_tokens(tokens),
+                BinOp::Ne(t) => t.to_tokens(tokens),
+                BinOp::Ge(t) => t.to_tokens(tokens),
+                BinOp::Gt(t) => t.to_tokens(tokens),
+                BinOp::AddEq(t) => t.to_tokens(tokens),
+                BinOp::SubEq(t) => t.to_tokens(tokens),
+                BinOp::MulEq(t) => t.to_tokens(tokens),
+                BinOp::DivEq(t) => t.to_tokens(tokens),
+                BinOp::RemEq(t) => t.to_tokens(tokens),
+                BinOp::BitXorEq(t) => t.to_tokens(tokens),
+                BinOp::BitAndEq(t) => t.to_tokens(tokens),
+                BinOp::BitOrEq(t) => t.to_tokens(tokens),
+                BinOp::ShlEq(t) => t.to_tokens(tokens),
+                BinOp::ShrEq(t) => t.to_tokens(tokens),
             }
         }
     }
 
+    #[cfg_attr(doc_cfg, doc(cfg(feature = "printing")))]
     impl ToTokens for UnOp {
         fn to_tokens(&self, tokens: &mut TokenStream) {
-            match *self {
-                UnOp::Deref(ref t) => t.to_tokens(tokens),
-                UnOp::Not(ref t) => t.to_tokens(tokens),
-                UnOp::Neg(ref t) => t.to_tokens(tokens),
+            match self {
+                UnOp::Deref(t) => t.to_tokens(tokens),
+                UnOp::Not(t) => t.to_tokens(tokens),
+                UnOp::Neg(t) => t.to_tokens(tokens),
             }
         }
     }

@@ -1,18 +1,8 @@
-use libc;
+//! Miscellaneous utilities.
 
+use std::borrow::Cow;
 use std::ffi::CStr;
 use std::str;
-
-// In paint servers (patterns, gradients, etc.), we have an
-// Option<String> for fallback names.  This is a utility function to
-// clone one of those.
-pub fn clone_fallback_name(fallback: &Option<String>) -> Option<String> {
-    if let Some(ref fallback_name) = *fallback {
-        Some(fallback_name.clone())
-    } else {
-        None
-    }
-}
 
 /// Converts a `char *` which is known to be valid UTF-8 into a `&str`
 ///
@@ -24,6 +14,22 @@ pub unsafe fn utf8_cstr<'a>(s: *const libc::c_char) -> &'a str {
     assert!(!s.is_null());
 
     str::from_utf8_unchecked(CStr::from_ptr(s).to_bytes())
+}
+
+pub unsafe fn opt_utf8_cstr<'a>(s: *const libc::c_char) -> Option<&'a str> {
+    if s.is_null() {
+        None
+    } else {
+        Some(utf8_cstr(s))
+    }
+}
+
+/// Error-tolerant C string import
+pub unsafe fn cstr<'a>(s: *const libc::c_char) -> Cow<'a, str> {
+    if s.is_null() {
+        return Cow::Borrowed("(null)");
+    }
+    CStr::from_ptr(s).to_string_lossy()
 }
 
 pub fn clamp<T: PartialOrd>(val: T, low: T, high: T) -> T {

@@ -24,23 +24,27 @@ get_test_filename (const char *basename) {
 }
 
 static void
-test_non_svg_element (void)
+test_loading_error (gconstpointer data)
 {
-    char *filename = get_test_filename ("335-non-svg-element.svg");
+    const char *basename = data;
+    char *filename = get_test_filename (basename);
     RsvgHandle *handle;
     GError *error = NULL;
 
     handle = rsvg_handle_new_from_file (filename, &error);
     g_free (filename);
 
-    g_assert (handle == NULL);
-    g_assert (g_error_matches (error, RSVG_ERROR, RSVG_ERROR_FAILED));
+    g_assert_null (handle);
+    g_assert_error (error, RSVG_ERROR, RSVG_ERROR_FAILED);
+
+    g_error_free (error);
 }
 
 static void
-test_instancing_limit (void)
+test_instancing_limit (gconstpointer data)
 {
-    char *filename = get_test_filename ("323-nested-use.svg");
+    const char *basename = data;
+    char *filename = get_test_filename (basename);
     RsvgHandle *handle;
     GError *error = NULL;
     cairo_surface_t *surf;
@@ -48,13 +52,14 @@ test_instancing_limit (void)
 
     handle = rsvg_handle_new_from_file (filename, &error);
     g_free (filename);
-    g_assert (handle != NULL);
-    g_assert (error == NULL);
+
+    g_assert_nonnull (handle);
+    g_assert_no_error (error);
 
     surf = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, 1, 11);
     cr = cairo_create (surf);
 
-    g_assert (!rsvg_handle_render_cairo (handle, cr));
+    g_assert_false (rsvg_handle_render_cairo (handle, cr));
 
     g_object_unref (handle);
 }
@@ -64,8 +69,39 @@ main (int argc, char **argv)
 {
     g_test_init (&argc, &argv, NULL);
 
-    g_test_add_func ("/errors/non_svg_element", test_non_svg_element);
-    g_test_add_func ("/errors/instancing_limit", test_instancing_limit);
+    g_test_add_data_func_full ("/errors/non_svg_element",
+                               "335-non-svg-element.svg",
+                               test_loading_error,
+                               NULL);
+
+    g_test_add_data_func_full ("/errors/instancing_limit/323-nested-use.svg",
+                               "323-nested-use.svg",
+                               test_instancing_limit,
+                               NULL);
+
+    g_test_add_data_func_full ("/errors/instancing_limit/515-pattern-billion-laughs.svg",
+                               "515-pattern-billion-laughs.svg",
+                               test_instancing_limit,
+                               NULL);
+
+    g_test_add_data_func_full ("/errors/instancing_limit/308-use-self-ref.svg",
+                               "308-use-self-ref.svg",
+                               test_instancing_limit,
+                               NULL);
+    g_test_add_data_func_full ("/errors/instancing_limit/308-recursive-use.svg",
+                               "308-recursive-use.svg",
+                               test_instancing_limit,
+                               NULL);
+    g_test_add_data_func_full ("/errors/instancing_limit/308-doubly-recursive-use.svg",
+                               "308-doubly-recursive-use.svg",
+                               test_instancing_limit,
+                               NULL);
+
+    g_test_add_data_func_full ("/errors/515-too-many-elements.svgz",
+                               "515-too-many-elements.svgz",
+                               test_loading_error,
+                               NULL);
+
 
     return g_test_run ();
 }

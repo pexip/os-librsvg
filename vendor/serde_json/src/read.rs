@@ -1,23 +1,18 @@
-// Copyright 2017 Serde Developers
-//
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
-// except according to those terms.
+use crate::error::{Error, ErrorCode, Result};
+use crate::lib::ops::Deref;
+use crate::lib::*;
 
-use std::ops::Deref;
-use std::{char, cmp, io, str};
+#[cfg(feature = "std")]
+use crate::io;
+#[cfg(feature = "std")]
+use crate::iter::LineColIterator;
 
+#[cfg(feature = "raw_value")]
+use crate::raw::BorrowedRawDeserializer;
+#[cfg(all(feature = "raw_value", feature = "std"))]
+use crate::raw::OwnedRawDeserializer;
 #[cfg(feature = "raw_value")]
 use serde::de::Visitor;
-
-use iter::LineColIterator;
-
-use error::{Error, ErrorCode, Result};
-
-#[cfg(feature = "raw_value")]
-use raw::{BorrowedRawDeserializer, OwnedRawDeserializer};
 
 /// Trait used by the deserializer for iterating over input. This is manually
 /// "specialized" for iterating over &[u8]. Once feature(specialization) is
@@ -27,9 +22,9 @@ use raw::{BorrowedRawDeserializer, OwnedRawDeserializer};
 /// `serde_json`.
 pub trait Read<'de>: private::Sealed {
     #[doc(hidden)]
-    fn next(&mut self) -> io::Result<Option<u8>>;
+    fn next(&mut self) -> Result<Option<u8>>;
     #[doc(hidden)]
-    fn peek(&mut self) -> io::Result<Option<u8>>;
+    fn peek(&mut self) -> Result<Option<u8>>;
 
     /// Only valid after a call to peek(). Discards the peeked byte.
     #[doc(hidden)]
@@ -102,6 +97,18 @@ pub trait Read<'de>: private::Sealed {
     fn end_raw_buffering<V>(&mut self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>;
+
+    /// Whether StreamDeserializer::next needs to check the failed flag. True
+    /// for IoRead, false for StrRead and SliceRead which can track failure by
+    /// truncating their input slice to avoid the extra check on every next
+    /// call.
+    #[doc(hidden)]
+    const should_early_return_if_failed: bool;
+
+    /// Mark a persistent failure of StreamDeserializer, either by setting the
+    /// flag or by truncating the input data.
+    #[doc(hidden)]
+    fn set_failed(&mut self, failed: &mut bool);
 }
 
 pub struct Position {
@@ -109,12 +116,18 @@ pub struct Position {
     pub column: usize,
 }
 
-pub enum Reference<'b, 'c, T: ?Sized + 'static> {
+pub enum Reference<'b, 'c, T>
+where
+    T: ?Sized + 'static,
+{
     Borrowed(&'b T),
     Copied(&'c T),
 }
 
-impl<'b, 'c, T: ?Sized + 'static> Deref for Reference<'b, 'c, T> {
+impl<'b, 'c, T> Deref for Reference<'b, 'c, T>
+where
+    T: ?Sized + 'static,
+{
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -126,6 +139,7 @@ impl<'b, 'c, T: ?Sized + 'static> Deref for Reference<'b, 'c, T> {
 }
 
 /// JSON input source that reads from a std::io input stream.
+#[cfg(feature = "std")]
 pub struct IoRead<R>
 where
     R: io::Read,
@@ -165,32 +179,26 @@ mod private {
 
 //////////////////////////////////////////////////////////////////////////////
 
+#[cfg(feature = "std")]
 impl<R> IoRead<R>
 where
     R: io::Read,
 {
     /// Create a JSON input source to read from a std::io input stream.
     pub fn new(reader: R) -> Self {
-        #[cfg(not(feature = "raw_value"))]
-        {
-            IoRead {
-                iter: LineColIterator::new(reader.bytes()),
-                ch: None,
-            }
-        }
-        #[cfg(feature = "raw_value")]
-        {
-            IoRead {
-                iter: LineColIterator::new(reader.bytes()),
-                ch: None,
-                raw_buffer: None,
-            }
+        IoRead {
+            iter: LineColIterator::new(reader.bytes()),
+            ch: None,
+            #[cfg(feature = "raw_value")]
+            raw_buffer: None,
         }
     }
 }
 
+#[cfg(feature = "std")]
 impl<R> private::Sealed for IoRead<R> where R: io::Read {}
 
+#[cfg(feature = "std")]
 impl<R> IoRead<R>
 where
     R: io::Read,
@@ -206,7 +214,7 @@ where
         F: FnOnce(&'s Self, &'s [u8]) -> Result<T>,
     {
         loop {
-            let ch = try!(next_or_eof(self));
+            let ch = tri!(next_or_eof(self));
             if !ESCAPE[ch as usize] {
                 scratch.push(ch);
                 continue;
@@ -216,7 +224,7 @@ where
                     return result(self, scratch);
                 }
                 b'\\' => {
-                    try!(parse_escape(self, scratch));
+                    tri!(parse_escape(self, scratch));
                 }
                 _ => {
                     if validate {
@@ -229,12 +237,13 @@ where
     }
 }
 
+#[cfg(feature = "std")]
 impl<'de, R> Read<'de> for IoRead<R>
 where
     R: io::Read,
 {
     #[inline]
-    fn next(&mut self) -> io::Result<Option<u8>> {
+    fn next(&mut self) -> Result<Option<u8>> {
         match self.ch.take() {
             Some(ch) => {
                 #[cfg(feature = "raw_value")]
@@ -246,7 +255,7 @@ where
                 Ok(Some(ch))
             }
             None => match self.iter.next() {
-                Some(Err(err)) => Err(err),
+                Some(Err(err)) => Err(Error::io(err)),
                 Some(Ok(ch)) => {
                     #[cfg(feature = "raw_value")]
                     {
@@ -262,11 +271,11 @@ where
     }
 
     #[inline]
-    fn peek(&mut self) -> io::Result<Option<u8>> {
+    fn peek(&mut self) -> Result<Option<u8>> {
         match self.ch {
             Some(ch) => Ok(Some(ch)),
             None => match self.iter.next() {
-                Some(Err(err)) => Err(err),
+                Some(Err(err)) => Err(Error::io(err)),
                 Some(Ok(ch)) => {
                     self.ch = Some(ch);
                     Ok(self.ch)
@@ -326,7 +335,7 @@ where
 
     fn ignore_str(&mut self) -> Result<()> {
         loop {
-            let ch = try!(next_or_eof(self));
+            let ch = tri!(next_or_eof(self));
             if !ESCAPE[ch as usize] {
                 continue;
             }
@@ -335,7 +344,7 @@ where
                     return Ok(());
                 }
                 b'\\' => {
-                    try!(ignore_escape(self));
+                    tri!(ignore_escape(self));
                 }
                 _ => {
                     return error(self, ErrorCode::ControlCharacterWhileParsingString);
@@ -347,7 +356,7 @@ where
     fn decode_hex_escape(&mut self) -> Result<u16> {
         let mut n = 0;
         for _ in 0..4 {
-            match decode_hex_val(try!(next_or_eof(self))) {
+            match decode_hex_val(tri!(next_or_eof(self))) {
                 None => return error(self, ErrorCode::InvalidEscape),
                 Some(val) => {
                     n = (n << 4) + val;
@@ -369,7 +378,17 @@ where
     {
         let raw = self.raw_buffer.take().unwrap();
         let raw = String::from_utf8(raw).unwrap();
-        visitor.visit_map(OwnedRawDeserializer { raw_value: Some(raw) })
+        visitor.visit_map(OwnedRawDeserializer {
+            raw_value: Some(raw),
+        })
+    }
+
+    const should_early_return_if_failed: bool = true;
+
+    #[inline]
+    #[cold]
+    fn set_failed(&mut self, failed: &mut bool) {
+        *failed = true;
     }
 }
 
@@ -378,20 +397,11 @@ where
 impl<'a> SliceRead<'a> {
     /// Create a JSON input source to read from a slice of bytes.
     pub fn new(slice: &'a [u8]) -> Self {
-        #[cfg(not(feature = "raw_value"))]
-        {
-            SliceRead {
-                slice: slice,
-                index: 0,
-            }
-        }
-        #[cfg(feature = "raw_value")]
-        {
-            SliceRead {
-                slice: slice,
-                index: 0,
-                raw_buffering_start_index: 0,
-            }
+        SliceRead {
+            slice,
+            index: 0,
+            #[cfg(feature = "raw_value")]
+            raw_buffering_start_index: 0,
         }
     }
 
@@ -414,14 +424,14 @@ impl<'a> SliceRead<'a> {
     /// The big optimization here over IoRead is that if the string contains no
     /// backslash escape sequences, the returned &str is a slice of the raw JSON
     /// data so we avoid copying into the scratch space.
-    fn parse_str_bytes<'s, T: ?Sized, F>(
+    fn parse_str_bytes<'s, T, F>(
         &'s mut self,
         scratch: &'s mut Vec<u8>,
         validate: bool,
         result: F,
     ) -> Result<Reference<'a, 's, T>>
     where
-        T: 's,
+        T: ?Sized + 's,
         F: for<'f> FnOnce(&'s Self, &'f [u8]) -> Result<&'f T>,
     {
         // Index of the first byte not yet copied into the scratch space.
@@ -451,14 +461,14 @@ impl<'a> SliceRead<'a> {
                 b'\\' => {
                     scratch.extend_from_slice(&self.slice[start..self.index]);
                     self.index += 1;
-                    try!(parse_escape(self, scratch));
+                    tri!(parse_escape(self, scratch));
                     start = self.index;
                 }
                 _ => {
+                    self.index += 1;
                     if validate {
                         return error(self, ErrorCode::ControlCharacterWhileParsingString);
                     }
-                    self.index += 1;
                 }
             }
         }
@@ -469,7 +479,7 @@ impl<'a> private::Sealed for SliceRead<'a> {}
 
 impl<'a> Read<'a> for SliceRead<'a> {
     #[inline]
-    fn next(&mut self) -> io::Result<Option<u8>> {
+    fn next(&mut self) -> Result<Option<u8>> {
         // `Ok(self.slice.get(self.index).map(|ch| { self.index += 1; *ch }))`
         // is about 10% slower.
         Ok(if self.index < self.slice.len() {
@@ -482,7 +492,7 @@ impl<'a> Read<'a> for SliceRead<'a> {
     }
 
     #[inline]
-    fn peek(&mut self) -> io::Result<Option<u8>> {
+    fn peek(&mut self) -> Result<Option<u8>> {
         // `Ok(self.slice.get(self.index).map(|ch| *ch))` is about 10% slower
         // for some reason.
         Ok(if self.index < self.slice.len() {
@@ -537,7 +547,7 @@ impl<'a> Read<'a> for SliceRead<'a> {
                 }
                 b'\\' => {
                     self.index += 1;
-                    try!(ignore_escape(self));
+                    tri!(ignore_escape(self));
                 }
                 _ => {
                     return error(self, ErrorCode::ControlCharacterWhileParsingString);
@@ -548,17 +558,20 @@ impl<'a> Read<'a> for SliceRead<'a> {
 
     fn decode_hex_escape(&mut self) -> Result<u16> {
         if self.index + 4 > self.slice.len() {
+            self.index = self.slice.len();
             return error(self, ErrorCode::EofWhileParsingString);
         }
+
         let mut n = 0;
         for _ in 0..4 {
-            match decode_hex_val(self.slice[self.index]) {
+            let ch = decode_hex_val(self.slice[self.index]);
+            self.index += 1;
+            match ch {
                 None => return error(self, ErrorCode::InvalidEscape),
                 Some(val) => {
                     n = (n << 4) + val;
                 }
             }
-            self.index += 1;
         }
         Ok(n)
     }
@@ -575,7 +588,17 @@ impl<'a> Read<'a> for SliceRead<'a> {
     {
         let raw = &self.slice[self.raw_buffering_start_index..self.index];
         let raw = str::from_utf8(raw).unwrap();
-        visitor.visit_map(BorrowedRawDeserializer { raw_value: Some(raw) })
+        visitor.visit_map(BorrowedRawDeserializer {
+            raw_value: Some(raw),
+        })
+    }
+
+    const should_early_return_if_failed: bool = false;
+
+    #[inline]
+    #[cold]
+    fn set_failed(&mut self, _failed: &mut bool) {
+        self.slice = &self.slice[..self.index];
     }
 }
 
@@ -584,18 +607,10 @@ impl<'a> Read<'a> for SliceRead<'a> {
 impl<'a> StrRead<'a> {
     /// Create a JSON input source to read from a UTF-8 string.
     pub fn new(s: &'a str) -> Self {
-        #[cfg(not(feature = "raw_value"))]
-        {
-            StrRead {
-                delegate: SliceRead::new(s.as_bytes()),
-            }
-        }
-        #[cfg(feature = "raw_value")]
-        {
-            StrRead {
-                delegate: SliceRead::new(s.as_bytes()),
-                data: s,
-            }
+        StrRead {
+            delegate: SliceRead::new(s.as_bytes()),
+            #[cfg(feature = "raw_value")]
+            data: s,
         }
     }
 }
@@ -604,12 +619,12 @@ impl<'a> private::Sealed for StrRead<'a> {}
 
 impl<'a> Read<'a> for StrRead<'a> {
     #[inline]
-    fn next(&mut self) -> io::Result<Option<u8>> {
+    fn next(&mut self) -> Result<Option<u8>> {
         self.delegate.next()
     }
 
     #[inline]
-    fn peek(&mut self) -> io::Result<Option<u8>> {
+    fn peek(&mut self) -> Result<Option<u8>> {
         self.delegate.peek()
     }
 
@@ -664,48 +679,140 @@ impl<'a> Read<'a> for StrRead<'a> {
         V: Visitor<'a>,
     {
         let raw = &self.data[self.delegate.raw_buffering_start_index..self.delegate.index];
-        visitor.visit_map(BorrowedRawDeserializer { raw_value: Some(raw) })
+        visitor.visit_map(BorrowedRawDeserializer {
+            raw_value: Some(raw),
+        })
+    }
+
+    const should_early_return_if_failed: bool = false;
+
+    #[inline]
+    #[cold]
+    fn set_failed(&mut self, failed: &mut bool) {
+        self.delegate.set_failed(failed);
     }
 }
 
 //////////////////////////////////////////////////////////////////////////////
 
-const CT: bool = true; // control character \x00...\x1F
-const QU: bool = true; // quote \x22
-const BS: bool = true; // backslash \x5C
-const O: bool = false; // allow unescaped
+impl<'a, 'de, R> private::Sealed for &'a mut R where R: Read<'de> {}
+
+impl<'a, 'de, R> Read<'de> for &'a mut R
+where
+    R: Read<'de>,
+{
+    fn next(&mut self) -> Result<Option<u8>> {
+        R::next(self)
+    }
+
+    fn peek(&mut self) -> Result<Option<u8>> {
+        R::peek(self)
+    }
+
+    fn discard(&mut self) {
+        R::discard(self)
+    }
+
+    fn position(&self) -> Position {
+        R::position(self)
+    }
+
+    fn peek_position(&self) -> Position {
+        R::peek_position(self)
+    }
+
+    fn byte_offset(&self) -> usize {
+        R::byte_offset(self)
+    }
+
+    fn parse_str<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'de, 's, str>> {
+        R::parse_str(self, scratch)
+    }
+
+    fn parse_str_raw<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'de, 's, [u8]>> {
+        R::parse_str_raw(self, scratch)
+    }
+
+    fn ignore_str(&mut self) -> Result<()> {
+        R::ignore_str(self)
+    }
+
+    fn decode_hex_escape(&mut self) -> Result<u16> {
+        R::decode_hex_escape(self)
+    }
+
+    #[cfg(feature = "raw_value")]
+    fn begin_raw_buffering(&mut self) {
+        R::begin_raw_buffering(self)
+    }
+
+    #[cfg(feature = "raw_value")]
+    fn end_raw_buffering<V>(&mut self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        R::end_raw_buffering(self, visitor)
+    }
+
+    const should_early_return_if_failed: bool = R::should_early_return_if_failed;
+
+    fn set_failed(&mut self, failed: &mut bool) {
+        R::set_failed(self, failed)
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////
+
+/// Marker for whether StreamDeserializer can implement FusedIterator.
+pub trait Fused: private::Sealed {}
+impl<'a> Fused for SliceRead<'a> {}
+impl<'a> Fused for StrRead<'a> {}
 
 // Lookup table of bytes that must be escaped. A value of true at index i means
 // that byte i requires an escape sequence in the input.
-#[cfg_attr(rustfmt, rustfmt_skip)]
-static ESCAPE: [bool; 256] = [
-    //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
-    CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, // 0
-    CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, // 1
-     O,  O, QU,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O, // 2
-     O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O, // 3
-     O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O, // 4
-     O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O, BS,  O,  O,  O, // 5
-     O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O, // 6
-     O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O, // 7
-     O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O, // 8
-     O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O, // 9
-     O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O, // A
-     O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O, // B
-     O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O, // C
-     O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O, // D
-     O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O, // E
-     O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O,  O, // F
-];
+static ESCAPE: [bool; 256] = {
+    const CT: bool = true; // control character \x00..=\x1F
+    const QU: bool = true; // quote \x22
+    const BS: bool = true; // backslash \x5C
+    const __: bool = false; // allow unescaped
+    [
+        //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+        CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, // 0
+        CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, // 1
+        __, __, QU, __, __, __, __, __, __, __, __, __, __, __, __, __, // 2
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 3
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
+        __, __, __, __, __, __, __, __, __, __, __, __, BS, __, __, __, // 5
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // B
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
+    ]
+};
 
-fn next_or_eof<'de, R: ?Sized + Read<'de>>(read: &mut R) -> Result<u8> {
-    match try!(read.next().map_err(Error::io)) {
+fn next_or_eof<'de, R>(read: &mut R) -> Result<u8>
+where
+    R: ?Sized + Read<'de>,
+{
+    match tri!(read.next()) {
         Some(b) => Ok(b),
         None => error(read, ErrorCode::EofWhileParsingString),
     }
 }
 
-fn error<'de, R: ?Sized + Read<'de>, T>(read: &R, reason: ErrorCode) -> Result<T> {
+fn error<'de, R, T>(read: &R, reason: ErrorCode) -> Result<T>
+where
+    R: ?Sized + Read<'de>,
+{
     let position = read.position();
     Err(Error::syntax(reason, position.line, position.column))
 }
@@ -717,7 +824,7 @@ fn as_str<'de, 's, R: Read<'de>>(read: &R, slice: &'s [u8]) -> Result<&'s str> {
 /// Parses a JSON escape sequence and appends it into the scratch space. Assumes
 /// the previous byte read was a backslash.
 fn parse_escape<'de, R: Read<'de>>(read: &mut R, scratch: &mut Vec<u8>) -> Result<()> {
-    let ch = try!(next_or_eof(read));
+    let ch = tri!(next_or_eof(read));
 
     match ch {
         b'"' => scratch.push(b'"'),
@@ -729,22 +836,22 @@ fn parse_escape<'de, R: Read<'de>>(read: &mut R, scratch: &mut Vec<u8>) -> Resul
         b'r' => scratch.push(b'\r'),
         b't' => scratch.push(b'\t'),
         b'u' => {
-            let c = match try!(read.decode_hex_escape()) {
-                0xDC00...0xDFFF => {
+            let c = match tri!(read.decode_hex_escape()) {
+                0xDC00..=0xDFFF => {
                     return error(read, ErrorCode::LoneLeadingSurrogateInHexEscape);
                 }
 
                 // Non-BMP characters are encoded as a sequence of
                 // two hex escapes, representing UTF-16 surrogates.
-                n1 @ 0xD800...0xDBFF => {
-                    if try!(next_or_eof(read)) != b'\\' {
+                n1 @ 0xD800..=0xDBFF => {
+                    if tri!(next_or_eof(read)) != b'\\' {
                         return error(read, ErrorCode::UnexpectedEndOfHexEscape);
                     }
-                    if try!(next_or_eof(read)) != b'u' {
+                    if tri!(next_or_eof(read)) != b'u' {
                         return error(read, ErrorCode::UnexpectedEndOfHexEscape);
                     }
 
-                    let n2 = try!(read.decode_hex_escape());
+                    let n2 = tri!(read.decode_hex_escape());
 
                     if n2 < 0xDC00 || n2 > 0xDFFF {
                         return error(read, ErrorCode::LoneLeadingSurrogateInHexEscape);
@@ -780,28 +887,31 @@ fn parse_escape<'de, R: Read<'de>>(read: &mut R, scratch: &mut Vec<u8>) -> Resul
 
 /// Parses a JSON escape sequence and discards the value. Assumes the previous
 /// byte read was a backslash.
-fn ignore_escape<'de, R: ?Sized + Read<'de>>(read: &mut R) -> Result<()> {
-    let ch = try!(next_or_eof(read));
+fn ignore_escape<'de, R>(read: &mut R) -> Result<()>
+where
+    R: ?Sized + Read<'de>,
+{
+    let ch = tri!(next_or_eof(read));
 
     match ch {
         b'"' | b'\\' | b'/' | b'b' | b'f' | b'n' | b'r' | b't' => {}
         b'u' => {
-            let n = match try!(read.decode_hex_escape()) {
-                0xDC00...0xDFFF => {
+            let n = match tri!(read.decode_hex_escape()) {
+                0xDC00..=0xDFFF => {
                     return error(read, ErrorCode::LoneLeadingSurrogateInHexEscape);
                 }
 
                 // Non-BMP characters are encoded as a sequence of
                 // two hex escapes, representing UTF-16 surrogates.
-                n1 @ 0xD800...0xDBFF => {
-                    if try!(next_or_eof(read)) != b'\\' {
+                n1 @ 0xD800..=0xDBFF => {
+                    if tri!(next_or_eof(read)) != b'\\' {
                         return error(read, ErrorCode::UnexpectedEndOfHexEscape);
                     }
-                    if try!(next_or_eof(read)) != b'u' {
+                    if tri!(next_or_eof(read)) != b'u' {
                         return error(read, ErrorCode::UnexpectedEndOfHexEscape);
                     }
 
-                    let n2 = try!(read.decode_hex_escape());
+                    let n2 = tri!(read.decode_hex_escape());
 
                     if n2 < 0xDC00 || n2 > 0xDFFF {
                         return error(read, ErrorCode::LoneLeadingSurrogateInHexEscape);
@@ -825,26 +935,28 @@ fn ignore_escape<'de, R: ?Sized + Read<'de>>(read: &mut R) -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
-static HEX: [u8; 256] = [
-    //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
-   255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255, // 0
-   255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255, // 1
-   255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255, // 2
-     0,  1,  2,  3,  4,  5,  6,  7,  8,  9,255,255,255,255,255,255, // 3
-   255, 10, 11, 12, 13, 14, 15,255,255,255,255,255,255,255,255,255, // 4
-   255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255, // 5
-   255, 10, 11, 12, 13, 14, 15,255,255,255,255,255,255,255,255,255, // 6
-   255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255, // 7
-   255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255, // 8
-   255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255, // 9
-   255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255, // A
-   255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255, // B
-   255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255, // C
-   255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255, // D
-   255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255, // E
-   255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255, // F
-];
+static HEX: [u8; 256] = {
+    const __: u8 = 255; // not a hex digit
+    [
+        //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 0
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 1
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 2
+        00, 01, 02, 03, 04, 05, 06, 07, 08, 09, __, __, __, __, __, __, // 3
+        __, 10, 11, 12, 13, 14, 15, __, __, __, __, __, __, __, __, __, // 4
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 5
+        __, 10, 11, 12, 13, 14, 15, __, __, __, __, __, __, __, __, __, // 6
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // B
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
+    ]
+};
 
 fn decode_hex_val(val: u8) -> Option<u16> {
     let n = HEX[val as usize] as u16;
