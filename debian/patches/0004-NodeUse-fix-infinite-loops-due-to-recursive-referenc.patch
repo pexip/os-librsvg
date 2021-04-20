@@ -1,0 +1,331 @@
+From 9f3432763bfe42f91415abb45bdcc89e0c8a355c Mon Sep 17 00:00:00 2001
+From: Federico Mena Quintero <federico@gnome.org>
+Date: Wed, 26 Feb 2020 17:46:05 -0600
+Subject: [PATCH 4/5] NodeUse: fix infinite loops due to recursive references
+ of "use" elements
+
+---
+ rsvg_internals/src/drawing_ctx.rs             |   4 -
+ rsvg_internals/src/structure.rs               |  19 ++-
+ tests/errors.c                                |  42 +++++-
+ .../errors/308-doubly-recursive-use.svg       |  13 ++
+ tests/fixtures/errors/308-recursive-use.svg   |   9 ++
+ tests/fixtures/errors/308-use-self-ref.svg    |   7 +
+ .../errors/515-pattern-billion-laughs.svg     | 130 ++++++++++++++++++
+ 7 files changed, 207 insertions(+), 17 deletions(-)
+ create mode 100644 tests/fixtures/errors/308-doubly-recursive-use.svg
+ create mode 100644 tests/fixtures/errors/308-recursive-use.svg
+ create mode 100644 tests/fixtures/errors/308-use-self-ref.svg
+ create mode 100644 tests/fixtures/errors/515-pattern-billion-laughs.svg
+
+diff --git a/rsvg_internals/src/drawing_ctx.rs b/rsvg_internals/src/drawing_ctx.rs
+index 6dfadc8e..890b1ac2 100644
+--- a/rsvg_internals/src/drawing_ctx.rs
++++ b/rsvg_internals/src/drawing_ctx.rs
+@@ -865,10 +865,6 @@ impl<'a> DrawingCtx<'a> {
+         }
+     }
+ 
+-    pub fn increase_num_elements_rendered_through_use(&mut self, n: usize) {
+-        self.num_elements_acquired += n;
+-    }
+-
+     fn check_limits(&self) -> Result<(), RenderingError> {
+         if self.num_elements_acquired > limits::MAX_REFERENCED_ELEMENTS {
+             Err(RenderingError::MaxReferencesExceeded)
+diff --git a/rsvg_internals/src/structure.rs b/rsvg_internals/src/structure.rs
+index f384413e..b7e53ce2 100644
+--- a/rsvg_internals/src/structure.rs
++++ b/rsvg_internals/src/structure.rs
+@@ -297,6 +297,18 @@ impl NodeTrait for NodeUse {
+ 
+         let uri = link.as_ref().unwrap();
+ 
++        // <use> is an element that is used directly, unlike
++        // <pattern>, which is used through a fill="url(#...)"
++        // reference.  However, <use> will always reference another
++        // element, potentially itself or an ancestor of itself (or
++        // another <use> which references the first one, etc.).  So,
++        // we acquire the <use> element itself so that circular
++        // references can be caught.
++        let self_acquired = draw_ctx.acquire_node_ref(node);
++        if self_acquired.is_none() {
++            return Err(RenderingError::CircularReference);
++        }
++
+         let child = if let Some(acquired) = draw_ctx.get_acquired_node(uri) {
+             // Here we clone the acquired child, so that we can drop the AcquiredNode as
+             // early as possible.  This is so that the child's drawing method will be able
+@@ -311,13 +323,6 @@ impl NodeTrait for NodeUse {
+             return Ok(());
+         };
+ 
+-        if Node::is_ancestor(child.clone(), node.clone()) {
+-            // or, if we're <use>'ing ourselves
+-            return Err(RenderingError::CircularReference);
+-        }
+-
+-        draw_ctx.increase_num_elements_rendered_through_use(1);
+-
+         let params = draw_ctx.get_view_params();
+ 
+         let nx = self.x.get().normalize(values, &params);
+diff --git a/tests/errors.c b/tests/errors.c
+index bdf6db7b..85663004 100644
+--- a/tests/errors.c
++++ b/tests/errors.c
+@@ -24,9 +24,10 @@ get_test_filename (const char *basename) {
+ }
+ 
+ static void
+-test_non_svg_element (void)
++test_loading_error (gconstpointer data)
+ {
+-    char *filename = get_test_filename ("335-non-svg-element.svg");
++    const char *basename = data;
++    char *filename = get_test_filename (basename);
+     RsvgHandle *handle;
+     GError *error = NULL;
+ 
+@@ -35,12 +36,15 @@ test_non_svg_element (void)
+ 
+     g_assert (handle == NULL);
+     g_assert (g_error_matches (error, RSVG_ERROR, RSVG_ERROR_FAILED));
++
++    g_error_free (error);
+ }
+ 
+ static void
+-test_instancing_limit (void)
++test_instancing_limit (gconstpointer data)
+ {
+-    char *filename = get_test_filename ("323-nested-use.svg");
++    const char *basename = data;
++    char *filename = get_test_filename (basename);
+     RsvgHandle *handle;
+     GError *error = NULL;
+     cairo_surface_t *surf;
+@@ -64,8 +68,34 @@ main (int argc, char **argv)
+ {
+     g_test_init (&argc, &argv, NULL);
+ 
+-    g_test_add_func ("/errors/non_svg_element", test_non_svg_element);
+-    g_test_add_func ("/errors/instancing_limit", test_instancing_limit);
++    g_test_add_data_func_full ("/errors/non_svg_element",
++                               "335-non-svg-element.svg",
++                               test_loading_error,
++                               NULL);
++
++    g_test_add_data_func_full ("/errors/instancing_limit/323-nested-use.svg",
++                               "323-nested-use.svg",
++                               test_instancing_limit,
++                               NULL);
++
++    g_test_add_data_func_full ("/errors/instancing_limit/515-pattern-billion-laughs.svg",
++                               "515-pattern-billion-laughs.svg",
++                               test_instancing_limit,
++                               NULL);
++
++    g_test_add_data_func_full ("/errors/instancing_limit/308-use-self-ref.svg",
++                               "308-use-self-ref.svg",
++                               test_instancing_limit,
++                               NULL);
++    g_test_add_data_func_full ("/errors/instancing_limit/308-recursive-use.svg",
++                               "308-recursive-use.svg",
++                               test_instancing_limit,
++                               NULL);
++    g_test_add_data_func_full ("/errors/instancing_limit/308-doubly-recursive-use.svg",
++                               "308-doubly-recursive-use.svg",
++                               test_instancing_limit,
++                               NULL);
++
+ 
+     return g_test_run ();
+ }
+diff --git a/tests/fixtures/errors/308-doubly-recursive-use.svg b/tests/fixtures/errors/308-doubly-recursive-use.svg
+new file mode 100644
+index 00000000..9b248a6f
+--- /dev/null
++++ b/tests/fixtures/errors/308-doubly-recursive-use.svg
+@@ -0,0 +1,13 @@
++<svg>
++  <defs>
++    <g id="one">
++      <use xlink:href="#two"/>
++    </g>
++
++    <g id="two">
++      <use xlink:href="#one"/>
++    </g>
++  </defs>
++
++  <use xlink:href="#one"/>
++</svg>
+diff --git a/tests/fixtures/errors/308-recursive-use.svg b/tests/fixtures/errors/308-recursive-use.svg
+new file mode 100644
+index 00000000..f5d00bf2
+--- /dev/null
++++ b/tests/fixtures/errors/308-recursive-use.svg
+@@ -0,0 +1,9 @@
++<svg>
++  <defs>
++    <g id="one">
++      <use xlink:href="#one"/>
++    </g>
++  </defs>
++
++  <use xlink:href="#one"/>
++</svg>
+diff --git a/tests/fixtures/errors/308-use-self-ref.svg b/tests/fixtures/errors/308-use-self-ref.svg
+new file mode 100644
+index 00000000..dbf14c54
+--- /dev/null
++++ b/tests/fixtures/errors/308-use-self-ref.svg
+@@ -0,0 +1,7 @@
++<svg>
++  <defs>
++    <use id="one" xlink:href="#one"/>
++  </defs>
++
++  <use xlink:href="#one"/>
++</svg>
+diff --git a/tests/fixtures/errors/515-pattern-billion-laughs.svg b/tests/fixtures/errors/515-pattern-billion-laughs.svg
+new file mode 100644
+index 00000000..1cb6cbe8
+--- /dev/null
++++ b/tests/fixtures/errors/515-pattern-billion-laughs.svg
+@@ -0,0 +1,130 @@
++<?xml version="1.0" standalone="no"?>
++<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" 
++  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
++<svg width="40cm" height="20cm" viewBox="0 0 800 400" version="1.1"
++     xmlns="http://www.w3.org/2000/svg">
++  <defs>
++    <pattern id="z" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="scale(10,10)">
++      <rect x="0" y="0" width="20" height="20" fill="url(#i)" stroke="yellow"/>
++    </pattern>
++	
++	<pattern id="i" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="scale(0.5,0.5)">
++      <rect x="0" y="0" width="20" height="20" fill="url(#h)" stroke="green" />
++	  <rect x="1" y="1" width="20" height="20" fill="url(#h)" stroke="brown" />
++	  <rect x="2" y="2" width="20" height="20" fill="url(#h)" stroke="pink" />
++	  <rect x="3" y="3" width="20" height="20" fill="url(#h)" stroke="grey" />
++	  <rect x="4" y="3" width="20" height="20" fill="url(#h)" stroke="cyan" />
++	  <rect x="5" y="3" width="20" height="20" fill="url(#h)" stroke="green" />
++	  <rect x="6" y="3" width="20" height="20" fill="url(#h)" stroke="brown" />
++	  <rect x="7" y="3" width="20" height="20" fill="url(#h)" stroke="pink" />
++	  <rect x="8" y="3" width="20" height="20" fill="url(#h)" stroke="grey" />
++	  <rect x="9" y="3" width="20" height="20" fill="url(#h)" stroke="cyan" />
++    </pattern>
++	
++	<pattern id="h" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="scale(0.5,0.5)">
++      <rect x="0" y="0" width="20" height="20" fill="url(#g)" stroke="green" />
++	  <rect x="1" y="1" width="20" height="20" fill="url(#g)" stroke="brown" />
++	  <rect x="2" y="2" width="20" height="20" fill="url(#g)" stroke="pink" />
++	  <rect x="3" y="3" width="20" height="20" fill="url(#g)" stroke="grey" />
++	  <rect x="4" y="3" width="20" height="20" fill="url(#g)" stroke="cyan" />
++	  <rect x="5" y="3" width="20" height="20" fill="url(#g)" stroke="green" />
++	  <rect x="6" y="3" width="20" height="20" fill="url(#g)" stroke="brown" />
++	  <rect x="7" y="3" width="20" height="20" fill="url(#g)" stroke="pink" />
++	  <rect x="8" y="3" width="20" height="20" fill="url(#g)" stroke="grey" />
++	  <rect x="9" y="3" width="20" height="20" fill="url(#g)" stroke="cyan" />
++    </pattern>
++	
++	<pattern id="g" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="scale(0.5,0.5)">
++      <rect x="0" y="0" width="20" height="20" fill="url(#f)" stroke="green" />
++	  <rect x="1" y="1" width="20" height="20" fill="url(#f)" stroke="brown" />
++	  <rect x="2" y="2" width="20" height="20" fill="url(#f)" stroke="pink" />
++	  <rect x="3" y="3" width="20" height="20" fill="url(#f)" stroke="grey" />
++	  <rect x="4" y="3" width="20" height="20" fill="url(#f)" stroke="cyan" />
++	  <rect x="5" y="3" width="20" height="20" fill="url(#f)" stroke="green" />
++	  <rect x="6" y="3" width="20" height="20" fill="url(#f)" stroke="brown" />
++	  <rect x="7" y="3" width="20" height="20" fill="url(#f)" stroke="pink" />
++	  <rect x="8" y="3" width="20" height="20" fill="url(#f)" stroke="grey" />
++	  <rect x="9" y="3" width="20" height="20" fill="url(#f)" stroke="cyan" />
++    </pattern>
++	
++	<pattern id="f" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="scale(0.5,0.5)">
++      <rect x="0" y="0" width="20" height="20" fill="url(#e)" stroke="green" />
++	  <rect x="1" y="1" width="20" height="20" fill="url(#e)" stroke="brown" />
++	  <rect x="2" y="2" width="20" height="20" fill="url(#e)" stroke="pink" />
++	  <rect x="3" y="3" width="20" height="20" fill="url(#e)" stroke="grey" />
++	  <rect x="4" y="3" width="20" height="20" fill="url(#e)" stroke="cyan" />
++	  <rect x="5" y="3" width="20" height="20" fill="url(#e)" stroke="green" />
++	  <rect x="6" y="3" width="20" height="20" fill="url(#e)" stroke="brown" />
++	  <rect x="7" y="3" width="20" height="20" fill="url(#e)" stroke="pink" />
++	  <rect x="8" y="3" width="20" height="20" fill="url(#e)" stroke="grey" />
++	  <rect x="9" y="3" width="20" height="20" fill="url(#e)" stroke="cyan" />
++    </pattern>
++	
++	<pattern id="e" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="scale(0.5,0.5)">
++      <rect x="0" y="0" width="20" height="20" fill="url(#d)" stroke="green" />
++	  <rect x="1" y="1" width="20" height="20" fill="url(#d)" stroke="brown" />
++	  <rect x="2" y="2" width="20" height="20" fill="url(#d)" stroke="pink" />
++	  <rect x="3" y="3" width="20" height="20" fill="url(#d)" stroke="grey" />
++	  <rect x="4" y="3" width="20" height="20" fill="url(#d)" stroke="cyan" />
++	  <rect x="5" y="3" width="20" height="20" fill="url(#d)" stroke="green" />
++	  <rect x="6" y="3" width="20" height="20" fill="url(#d)" stroke="brown" />
++	  <rect x="7" y="3" width="20" height="20" fill="url(#d)" stroke="pink" />
++	  <rect x="8" y="3" width="20" height="20" fill="url(#d)" stroke="grey" />
++	  <rect x="9" y="3" width="20" height="20" fill="url(#d)" stroke="cyan" />
++    </pattern>
++	
++    <pattern id="d" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="scale(0.5,0.5)">
++      <rect x="0" y="0" width="20" height="20" fill="url(#c)" stroke="green" />
++	  <rect x="1" y="1" width="20" height="20" fill="url(#c)" stroke="brown" />
++	  <rect x="2" y="2" width="20" height="20" fill="url(#c)" stroke="pink" />
++	  <rect x="3" y="3" width="20" height="20" fill="url(#c)" stroke="grey" />
++	  <rect x="4" y="3" width="20" height="20" fill="url(#c)" stroke="cyan" />
++	  <rect x="5" y="3" width="20" height="20" fill="url(#c)" stroke="green" />
++	  <rect x="6" y="3" width="20" height="20" fill="url(#c)" stroke="brown" />
++	  <rect x="7" y="3" width="20" height="20" fill="url(#c)" stroke="pink" />
++	  <rect x="8" y="3" width="20" height="20" fill="url(#c)" stroke="grey" />
++	  <rect x="9" y="3" width="20" height="20" fill="url(#c)" stroke="cyan" />
++    </pattern>
++    <pattern id="c" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="scale(0.5,0.5)">
++      <rect x="0" y="0" width="20" height="20" fill="url(#b)" stroke="green" />
++	  <rect x="1" y="1" width="20" height="20" fill="url(#b)" stroke="brown" />
++	  <rect x="2" y="2" width="20" height="20" fill="url(#b)" stroke="pink" />
++	  <rect x="3" y="3" width="20" height="20" fill="url(#b)" stroke="grey" />
++	  <rect x="4" y="3" width="20" height="20" fill="url(#b)" stroke="cyan" />
++	  <rect x="5" y="3" width="20" height="20" fill="url(#b)" stroke="green" />
++	  <rect x="6" y="3" width="20" height="20" fill="url(#b)" stroke="brown" />
++	  <rect x="7" y="3" width="20" height="20" fill="url(#b)" stroke="pink" />
++	  <rect x="8" y="3" width="20" height="20" fill="url(#b)" stroke="grey" />
++	  <rect x="9" y="3" width="20" height="20" fill="url(#b)" stroke="cyan" />
++    </pattern>
++    <pattern id="b" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="scale(0.5,0.5)">
++	  <rect x="0" y="0" width="20" height="20" fill="url(#a)" stroke="green" />
++	  <rect x="1" y="1" width="20" height="20" fill="url(#a)" stroke="brown" />
++	  <rect x="2" y="2" width="20" height="20" fill="url(#a)" stroke="pink" />
++	  <rect x="3" y="3" width="20" height="20" fill="url(#a)" stroke="grey" />
++	  <rect x="4" y="3" width="20" height="20" fill="url(#a)" stroke="cyan" />
++	  <rect x="5" y="3" width="20" height="20" fill="url(#a)" stroke="green" />
++	  <rect x="6" y="3" width="20" height="20" fill="url(#a)" stroke="brown" />
++	  <rect x="7" y="3" width="20" height="20" fill="url(#a)" stroke="pink" />
++	  <rect x="8" y="3" width="20" height="20" fill="url(#a)" stroke="grey" />
++	  <rect x="9" y="3" width="20" height="20" fill="url(#a)" stroke="cyan" />
++	  
++    </pattern>
++    <pattern id="a" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="scale(0.5,0.5)">
++      <rect x="0" y="0" width="20" height="20" fill="none" stroke="green" />
++	  <rect x="1" y="1" width="20" height="20" fill="none" stroke="brown" />
++	  <rect x="2" y="2" width="20" height="20" fill="none" stroke="pink" />
++	  <rect x="3" y="3" width="20" height="20" fill="none" stroke="grey" />
++	  <rect x="4" y="3" width="20" height="20" fill="none" stroke="cyan" />
++	  <rect x="5" y="3" width="20" height="20" fill="none" stroke="green" />
++	  <rect x="6" y="3" width="20" height="20" fill="none" stroke="brown" />
++	  <rect x="7" y="3" width="20" height="20" fill="none" stroke="pink" />
++	  <rect x="8" y="3" width="20" height="20" fill="none" stroke="grey" />
++	  <rect x="9" y="3" width="20" height="20" fill="none" stroke="cyan" />
++    </pattern>
++  </defs>
++
++  <ellipse fill="url(#z)" stroke="black" stroke-width="5"  
++           cx="400" cy="200" rx="350" ry="150" />
++		   
++</svg>
+\ No newline at end of file
+-- 
+2.20.1
+

@@ -2,3 +2,11 @@
 typenum-i386-ftbfs.patch
 i386-rounding-errors.patch
 keep-positive-radii.patch
+0001-limits.rs-New-file-move-the-constant-for-maximum-ins.patch
+0002-Rename-num_elements_rendered_through_use-to-num_elem.patch
+0003-Keep-track-of-the-number-of-referenced-nodes.patch
+0004-NodeUse-fix-infinite-loops-due-to-recursive-referenc.patch
+0005-Limit-the-number-of-loaded-elements.patch
+nalgebra-borrow-mutable-immutable.patch
+Don-t-drop-nodes-recursively-to-avoid-stack-over.patch
+cssparser-dont-assign-to-borrowed-variable.patch
