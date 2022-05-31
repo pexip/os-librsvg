@@ -21,7 +21,7 @@ test_infinite_loop (gconstpointer data)
 
         surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, 10, 10);
         cr = cairo_create (surface);
-        g_assert (rsvg_handle_render_cairo (handle, cr));
+        g_assert (!rsvg_handle_render_cairo (handle, cr));
 
         cairo_surface_destroy (surface);
         cairo_destroy (cr);
@@ -63,8 +63,6 @@ main (int argc, char *argv[])
     }
 
     result = g_test_run ();
-
-    rsvg_cleanup ();
 
     return result;
 }

@@ -2,18 +2,157 @@
 All notable changes to `nalgebra`, starting with the version 0.6.0 will be
 documented here.
 
-This project adheres to [Semantic Versioning](http://semver.org/).
+This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.17.0] - WIP
+## [0.22.0] - WIP
 
 ### Added
-  * Add swizzling up to dimension 3. For example, you can do `v.zxy()` as an equivalent to `Vector3::new(v.z, v.x, v.w)`.
+ * `Cholesky::new_unchecked` which build a Cholesky decomposition without checking that its input is
+ positive-definite. It can be use with SIMD types.
+ * The `Default` trait is now implemented for matrices, and quaternions. They are all filled with zeros,
+ except for `UnitQuaternion` which is initialized with the identity.
+ * Matrix exponential `matrix.exp()`.
+ 
+
+## [0.21.0]
+In this release, we are no longer relying on traits from the __alga__ crate for our generic code.
+Instead, we use traits from the new [simba](https://crates.io/crates/simba) crate which are both
+simpler, and allow for significant optimizations like AoSoA SIMD. 
+
+Refer to the [monthly Rustsim blogpost](https://www.rustsim.org/blog/2020/04/01/this-month-in-rustsim/)
+for details about this switch and its benefits.
+
+### Added
+ * It is now possible to use SIMD types like `simba::f32x4` as scalar types for nalgebra's matrices and
+   geometric types.
+### Modified
+ * Use of traits like `alga::general::{RealField, ComplexField}` have now been replaced by
+  `simba::scalar::{RealField, ComplexField}`.
+ * The implementation of traits from the __alga__ crate (and well as the dependency to _alga__) are now
+   omitted unless the `alga` cargo feature is activated.
+### Removed
+ * The `Neg` unary operator is no longer implemented for `UnitComplex` and `UnitQuaternion`. This caused
+   hard-to-track errors when we mistakenly write, e.g., `-q * v` instead of `-(q * v)`.
+ * The `na::convert_unchecked` is no longer marked as unsafe.
+ 
+## [0.20.0]
+### Added
+  * `cholesky.rank_one_update(...)` which performs a rank-one update on the cholesky decomposition of a matrix.
+  * `From<&Matrix>` is now implemented for matrix slices.
+  * `.try_set_magnitude(...)` which sets the magnitude of a vector, while keeping its direction.
+  * Implementations of `From` and `Into` for the conversion between matrix slices and standard (`&[N]` `&mut [N]`) slices.
+  
+### Modified
+  * We started some major changes in order to allow non-Copy types to be used as scalar types inside of matrices/vectors.
+
+## [0.19.0]
+### Added
+  * `.remove_rows_at` and `remove_columns_at` which removes a set of rows or columns (specified by indices) from a matrix.
+  * Several formatting traits have been implemented for all matrices/vectors: `LowerExp`, `UpperExp`, `Octal`, `LowerHex`,
+  `UpperHex`, `Binary`, `Pointer`.
+  * `UnitQuaternion::quaternions_mean(...)` which computes the mean rotation of a set of unit quaternions. This implements
+  the algorithm from _Oshman, Yaakov, and Avishy Carmi, "Attitude estimation from vector observations using a genetic-algorithm-embedded quaternion particle filter."
+
+### Modified
+  * It is now possible to get the `min/max` element of unsigned integer matrices.
+
+### Added to nalgebra-glm
+  * Some infinite and reversed perspectives: `::infinite_perspective_rh_no`, `::infinite_perspective_rh_zo`,
+  `::reversed_perspective_rh_zo`, and `::reversed_infinite_perspective_rh_zo`.
+
+## [0.18.0]
+This release adds full complex number support to nalgebra. This includes all common vector/matrix operations as well
+as matrix decomposition. This excludes geometric type (like `Isometry`, `Rotation`, `Translation`, etc.) from the
+`geometry` module.
+
+### Added
+#### Quaternion and geometric operations
+  * Add trigonometric functions for quaternions: `.cos, .sin, .tan, .acos, .asin, .atan, .cosh, .sinh, .tanh, .acosh, .asinh, .atanh`.
+  * Add geometric algebra operations for quaternions: `.inner, .outer, .project, .rejection`
+  * Add `.left_div, .right_div` for quaternions.
+  * Add `.renormalize` to `Unit<...>` and `Rotation3` to correct potential drift due to repeated operations.
+    Those drifts could cause them not to be pure rotations anymore.
+  
+#### Convolution
+  * `.convolve_full(kernel)` returns the convolution of `self` by `kernel`.
+  * `.convolve_valid(kernel)` returns the convolution of `self` by `kernel` after removal of all the elements relying on zero-padding.
+  * `.convolve_same(kernel)` returns the convolution of `self` by `kernel` with a result of the same size as `self`.
+  
+#### Complex number support
+  * Add the `::from_matrix` constructor too all rotation types to extract a rotation from a raw matrix.
+  * Add the `::from_matrix_eps` constructor too all rotation types to extract a rotation from a raw matrix. This takes
+    more argument than `::from_matrix` to control the convergence of the underlying optimization algorithm.
+  * Add `.camax()` which returns the matrix component with the greatest L1-norm.
+  * Add `.camin()` which returns the matrix component with the smallest L1-norm.
+  * Add `.ad_mul(b)` for matrix-multiplication of `self.adjoint() * b`.
+  * Add `.ad_mul_to(b)` which is the same as `.ad_mul` but with a provided matrix to be filled with the result of the multiplication.
+  * Add BLAS operations involving complex conjugation (following similar names as the original BLAS spec):
+      * `.dotc(rhs)` equal to  `self.adjoint() * rhs`.
+      * `.gerc(alpha, x, y, beta)` equivalent to `self = alpha * x * y.adjoint() + beta * self`
+      * `.hegerc` which is like `gerc` but for Hermitian matrices.
+      * `.syger` which is the new name of `.ger_symm` which is equivalent to `self = alpha * x * y.transpose() + beta * self`.
+      * `.sygemv` which is the new name of `.gemv_symm` which is equivalent to `self = alpha * a * x + beta * self` with `a` symmetric.
+      * `.hegemv(alpha, a, x, beta)` which is like `.sygemv` but with `a` Hermitian.
+      * `.gemv_ad(alpha, a, x, beta)` which is equivalent to `self = alpha * a.adjoint() * x + beta * self`.
+      * `.gemm_ad(alpha, a, b, beta)` which is equivalent to `self = alpha * a.adjoint() * b + beta * self`.
+      * `.icamax()` which returns the index of the complex vector component with the greatest L1-norm.
+
+Note that all the other BLAS operation will continue to work for all fields, including floats and complex numbers.
+
+### Renamed
+  * `RealSchur` has been renamed `Schur` because it can now work with complex matrices.
+
+
+## [0.17.0]
+
+### Added
+  * Add swizzling up to dimension 3 for vectors. For example, you can do `v.zxy()` as an equivalent to `Vector3::new(v.z, v.x, v.y)`.
+  * Add swizzling up to dimension 3 for points. For example, you can do `p.zxy()` as an equivalent to `Point3::new(p.z, p.x, p.y)`.
   * Add `.copy_from_slice` to copy matrix components from a slice in column-major order.
   * Add `.dot` to quaternions.
   * Add `.zip_zip_map` for iterating on three matrices simultaneously, and applying a closure to them.
   * Add `.slerp` and `.try_slerp` to unit vectors.
+  * Add `.lerp` to vectors.
   * Add `.to_projective` and `.as_projective` to `Perspective3` and `Orthographic3` in order to
   use them as `Projective3` structures.
+  * Add `From/Into` impls to allow the conversion of any transformation type to a matrix.
+  * Add `Into` impls to convert a matrix slice into an owned matrix.
+  * Add `Point*::from_slice` to create a point from a slice.
+  * Add `.map_with_location` to matrices to apply a map which passes the component indices to the user-defined closure alongside
+  the component itself.
+  * Add impl `From<Vector>` for `Point`.
+  * Add impl `From<Vector4>` for `Quaternion`.
+  * Add impl `From<Vector>` for `Translation`.
+  * Add the `::from_vec` constructor to construct a matrix from a `Vec` (a `DMatrix` will reuse the original `Vec`
+  as-is for its storage).
+  * Add `.to_homogeneous` to square matrices (and with dimensions higher than 1x1). This will increase their number of row
+  and columns by 1. The new column and row are filled with 0, except for the diagonal element which is set to 1.
+  * Implement `Extend<Vec>` for matrices with a dynamic storage. The provided `Vec` is assumed to represent a column-major
+  matrix with the same number of rows as the one being extended. This will effectively append new columns on the right of
+  the matrix being extended.
+  * Implement `Extend<Vec>` for vectors with a dynamic storage. This will concatenate the vector with the given `Vec`.
+  * Implement `Extend<Matrix<...>>` for matrices with dynamic storage. This will concatenate the columns of both matrices.
+  * Implement `Into<Vec>` for the `MatrixVec` storage.
+  * Implement `Hash` for all matrices.
+  * Add a `.len()` method to retrieve the size of a `MatrixVec`.
+
+### Modified
+  * The orthographic projection no longer require that `bottom < top`, that `left < right`, and that `znear < zfar`. The
+  only restriction now ith that they must not be equal (in which case the projection would be singular).
+  * The `Point::from_coordinates` methods is deprecated. Use `Point::from` instead.
+  * The `.transform_point` and `.transform_vector` methods are now inherent methods for matrices so that the user does not have to
+  explicitly import the `Transform` trait from the alga crate.
+  * Renamed the matrix storage types: `MatrixArray` -> `ArrayStorage` and `MatrixVec` -> `VecStorage`.
+  * Renamed `.unwrap()` to `.into_inner()` for geometric types that wrap another type.
+    This is for the case of `Unit`, `Transform`, `Orthographic3`, `Perspective3`, `Rotation`.
+  * Deprecate several functions at the root of the crate (replaced by methods).
+
+### Removed
+    * Remove the `Deref` impl for `MatrixVec` as it could cause hard-to-understand compilation errors.
+
+### nalgebra-glm
+  * Add several alternative projection computations, e.g., `ortho_lh`, `ortho_lh_no`, `perspective_lh`, etc.
+  * Add features matching those of nalgebra, in particular: `serde-serialize`, `abmonation-serialize`, std` (enabled by default).
 
 ## [0.16.0]
 All dependencies have been updated to their latest versions.
@@ -28,7 +167,7 @@ All dependencies have been updated to their latest versions.
 
 ## [0.15.0]
 The most notable change of this release is the support for using part of the library without the rust standard
-library (i.e. it supports `#![no_std]`). See the corresponding [documentation](http://nalgebra.org/wasm_and_embedded_programming/).
+library (i.e. it supports `#![no_std]`). See the corresponding [documentation](https://nalgebra.org/wasm_and_embedded_programming/).
 ### Modified
   * Rename the `core` module to `base` to avoid conflicts with the `core` crate implicitly imported when
     `#![no_std]` is enabled.
@@ -95,7 +234,7 @@ This adds support for serialization using the
     example, a step of, say, 3 on previous versions should now bet set to 2.
 
 ### Modified
-  * The trait `Axpy` has been replaced by a metod `.axpy`.
+  * The trait `Axpy` has been replaced by a method `.axpy`.
   * The alias `MatrixNM` is now deprecated. Use `MatrixMN` instead (we
     reordered M and N to be in alphabetical order).
   * In-place componentwise multiplication and division
@@ -160,7 +299,7 @@ Matrix edition:
   * `.set_diagonal(...)` sets the matrix diagonal.
   * `.set_row(...)` sets a selected row.
   * `.set_column(...)` sets a selected column.
-  * `.fill_lower_triangle(...)` fills some sub-diagonals bellow the main diagonal with a value.
+  * `.fill_lower_triangle(...)` fills some sub-diagonals below the main diagonal with a value.
   * `.fill_upper_triangle(...)` fills some sub-diagonals above the main diagonal with a value.
   * `.swap_rows(...)` swaps two rows.
   * `.swap_columns(...)` swaps two columns.
@@ -193,7 +332,7 @@ The main change of this release is the update of the dependency serde to 1.0.
    elements.)
 
 ## [0.11.0]
-The [website](http://nalgebra.org) has been fully rewritten and gives a good
+The [website](https://nalgebra.org) has been fully rewritten and gives a good
 overview of all the added/modified features.
 
 This version is a major rewrite of the library. Major changes are:
@@ -215,9 +354,9 @@ This version is a major rewrite of the library. Major changes are:
 
 ### Added
 Lots of features including rectangular matrices, slices, and Serde
-serialization. Refer to the brand new [website](http://nalgebra.org) for more
+serialization. Refer to the brand new [website](https://nalgebra.org) for more
 details. The following free-functions have been added as well:
-  * `::id()` that returns the universal [identity element](http://nalgebra.org/performance_tricks/#the-id-type)
+  * `::id()` that returns the universal [identity element](https://nalgebra.org/performance_tricks/#the-id-type)
     of type `Id`.
   * `::inf_sup()` that returns both the infimum and supremum of a value at the
     same time.
@@ -376,7 +515,7 @@ crate for vectors, rotations and points. To enable them, activate the
 
 ## [0.6.0]
 **Announcement:** a users forum has been created for `nalgebra`, `ncollide`, and `nphysics`. See
-you [there](http://users.nphysics.org)!
+you [there](https://users.nphysics.org)!
 
 ### Added
   * Added a dependency to [generic-array](https://crates.io/crates/generic-array). Feature-gated:

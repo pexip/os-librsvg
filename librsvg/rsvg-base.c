@@ -6,39 +6,38 @@
    Copyright (C) 2000 Eazel, Inc.
    Copyright (C) 2002 Dom Lachowicz <cinamod@hotmail.com>
 
-   This program is free software; you can redistribute it and/or
-   modify it under the terms of the GNU Library General Public License as
-   published by the Free Software Foundation; either version 2 of the
-   License, or (at your option) any later version.
+   This library is free software; you can redistribute it and/or
+   modify it under the terms of the GNU Lesser General Public
+   License as published by the Free Software Foundation; either
+   version 2.1 of the License, or (at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
+   This library is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-   Library General Public License for more details.
+   Lesser General Public License for more details.
 
-   You should have received a copy of the GNU Library General Public
-   License along with this program; if not, write to the
-   Free Software Foundation, Inc., 59 Temple Place - Suite 330,
-   Boston, MA 02111-1307, USA.
+   You should have received a copy of the GNU Lesser General Public
+   License along with this library; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
    Author: Raph Levien <raph@artofcode.com>
 */
 
 #include "config.h"
 
-#include "rsvg-private.h"
+#include "rsvg.h"
 #include "rsvg-css.h"
 
-/*
- * This is configurable at runtime
- */
-#define RSVG_DEFAULT_DPI_X 90.0
-#define RSVG_DEFAULT_DPI_Y 90.0
+/* Implemented in rsvg_internals/src/dpi.rs */
+extern void rsvg_rust_set_default_dpi_x_y(double dpi_x, double dpi_y);
 
-G_GNUC_INTERNAL
-double rsvg_internal_dpi_x = RSVG_DEFAULT_DPI_X;
-G_GNUC_INTERNAL
-double rsvg_internal_dpi_y = RSVG_DEFAULT_DPI_Y;
+/* Implemented in rsvg_internals/src/error.rs */
+extern GQuark rsvg_rust_error_quark (void);
+
+/* Implemented in librsvg/c_api.rs */
+extern void rsvg_rust_init (void);
+extern void rsvg_rust_term (void);
+extern void rsvg_rust_cleanup (void);
 
 /**
  * rsvg_error_quark:
@@ -50,9 +49,7 @@ double rsvg_internal_dpi_y = RSVG_DEFAULT_DPI_Y;
 GQuark
 rsvg_error_quark (void)
 {
-    /* don't use from_static_string(), since librsvg might be used in a module
-       that's ultimately unloaded */
-    return g_quark_from_string ("rsvg-error-quark");
+    return rsvg_rust_error_quark ();
 }
 
 /**
@@ -72,7 +69,7 @@ rsvg_error_quark (void)
 void
 rsvg_set_default_dpi (double dpi)
 {
-    rsvg_set_default_dpi_x_y (dpi, dpi);
+    rsvg_rust_set_default_dpi_x_y (dpi, dpi);
 }
 
 /**
@@ -93,15 +90,7 @@ rsvg_set_default_dpi (double dpi)
 void
 rsvg_set_default_dpi_x_y (double dpi_x, double dpi_y)
 {
-    if (dpi_x <= 0.)
-        rsvg_internal_dpi_x = RSVG_DEFAULT_DPI_X;
-    else
-        rsvg_internal_dpi_x = dpi_x;
-
-    if (dpi_y <= 0.)
-        rsvg_internal_dpi_y = RSVG_DEFAULT_DPI_Y;
-    else
-        rsvg_internal_dpi_y = dpi_y;
+    rsvg_rust_set_default_dpi_x_y (dpi_x, dpi_y);
 }
 
 /**
@@ -115,6 +104,7 @@ rsvg_set_default_dpi_x_y (double dpi_x, double dpi_y)
 void
 rsvg_init (void)
 {
+    rsvg_rust_init ();
 }
 
 /**
@@ -128,26 +118,20 @@ rsvg_init (void)
 void
 rsvg_term (void)
 {
+    rsvg_rust_term ();
 }
 
 /**
  * rsvg_cleanup:
  *
- * This function should not be called from normal programs.
- * See xmlCleanupParser() for more information.
+ * Deprecated: 2.46: No-op. This function should not be called from normal programs.
  *
  * Since: 2.36
  **/
 void
 rsvg_cleanup (void)
 {
-    xmlCleanupParser ();
-}
-
-void
-rsvg_return_if_fail_warning (const char *pretty_function, const char *expression, GError ** error)
-{
-    g_set_error (error, RSVG_ERROR, 0, _("%s: assertion `%s' failed"), pretty_function, expression);
+    rsvg_rust_cleanup ();
 }
 
 /* This is defined like this so that we can export the Rust function... just for

@@ -6,20 +6,19 @@
    Copyright (C) 2000 Eazel, Inc.
    Copyright (C) 2002 Dom Lachowicz <cinamod@hotmail.com>
 
-   This program is free software; you can redistribute it and/or
-   modify it under the terms of the GNU Library General Public License as
-   published by the Free Software Foundation; either version 2 of the
-   License, or (at your option) any later version.
+   This library is free software; you can redistribute it and/or
+   modify it under the terms of the GNU Lesser General Public
+   License as published by the Free Software Foundation; either
+   version 2.1 of the License, or (at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
+   This library is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-   Library General Public License for more details.
+   Lesser General Public License for more details.
 
-   You should have received a copy of the GNU Library General Public
-   License along with this program; if not, write to the
-   Free Software Foundation, Inc., 59 Temple Place - Suite 330,
-   Boston, MA 02111-1307, USA.
+   You should have received a copy of the GNU Lesser General Public
+   License along with this library; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
    Author: Raph Levien <raph@artofcode.com>
 */
@@ -28,17 +27,15 @@
 
 #include <glib.h>
 
-#ifdef RSVG_COMPILATION
-#include <pango/pango.h>
-#include "rsvg-private.h"
+/* Override to export public/semi-public APIs */
+#ifndef RSVG_API
+# define RSVG_API
 #endif
 
 G_BEGIN_DECLS
 
 /* Keep this in sync with rust/src/color.rs:ColorKind */
 typedef enum {
-    RSVG_CSS_COLOR_SPEC_INHERIT,
-    RSVG_CSS_COLOR_SPEC_CURRENT_COLOR,
     RSVG_CSS_COLOR_SPEC_ARGB,
     RSVG_CSS_COLOR_PARSE_ERROR
 } RsvgCssColorKind;
@@ -50,6 +47,7 @@ typedef struct {
 } RsvgCssColorSpec;
 
 /* This one is semi-public for mis-use in rsvg-convert */
+RSVG_API
 RsvgCssColorSpec rsvg_css_parse_color_ (const char *str);
 
 #ifdef RSVG_COMPILATION

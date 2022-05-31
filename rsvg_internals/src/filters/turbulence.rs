@@ -1,24 +1,21 @@
-use std::cell::Cell;
+use cssparser::Parser;
+use markup5ever::{expanded_name, local_name, namespace_url, ns};
 
-use cairo::{self, ImageSurface, MatrixTrait};
-
-use attributes::Attribute;
-use drawing_ctx::DrawingCtx;
-use error::NodeError;
-use handle::RsvgHandle;
-use node::{NodeResult, NodeTrait, RsvgNode};
-use parsers::{self, ParseError};
-use property_bag::PropertyBag;
-use state::ColorInterpolationFilters;
-use surface_utils::{
-    shared_surface::{SharedImageSurface, SurfaceType},
-    ImageSurfaceDataExt,
-    Pixel,
+use crate::attributes::Attributes;
+use crate::document::AcquiredNodes;
+use crate::drawing_ctx::DrawingCtx;
+use crate::element::{ElementResult, SetAttributes};
+use crate::error::*;
+use crate::node::{CascadedValues, Node};
+use crate::parsers::{NumberOptionalNumber, Parse, ParseValue};
+use crate::surface_utils::{
+    shared_surface::{ExclusiveImageSurface, SurfaceType},
+    ImageSurfaceDataExt, Pixel,
 };
-use util::clamp;
+use crate::util::clamp;
 
 use super::context::{FilterContext, FilterOutput, FilterResult};
-use super::{Filter, FilterError, Primitive};
+use super::{FilterEffect, FilterError, Primitive};
 
 /// Enumeration of the tile stitching modes.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -35,70 +32,62 @@ enum NoiseType {
 }
 
 /// The `feTurbulence` filter primitive.
-pub struct Turbulence {
+pub struct FeTurbulence {
     base: Primitive,
-    base_frequency: Cell<(f64, f64)>,
-    num_octaves: Cell<i32>,
-    seed: Cell<i32>,
-    stitch_tiles: Cell<StitchTiles>,
-    type_: Cell<NoiseType>,
+    base_frequency: (f64, f64),
+    num_octaves: i32,
+    seed: i32,
+    stitch_tiles: StitchTiles,
+    type_: NoiseType,
 }
 
-impl Turbulence {
+impl Default for FeTurbulence {
     /// Constructs a new `Turbulence` with empty properties.
     #[inline]
-    pub fn new() -> Turbulence {
-        Turbulence {
+    fn default() -> FeTurbulence {
+        FeTurbulence {
             base: Primitive::new::<Self>(),
-            base_frequency: Cell::new((0.0, 0.0)),
-            num_octaves: Cell::new(1),
-            seed: Cell::new(0),
-            stitch_tiles: Cell::new(StitchTiles::NoStitch),
-            type_: Cell::new(NoiseType::Turbulence),
+            base_frequency: (0.0, 0.0),
+            num_octaves: 1,
+            seed: 0,
+            stitch_tiles: StitchTiles::NoStitch,
+            type_: NoiseType::Turbulence,
         }
     }
 }
 
-impl NodeTrait for Turbulence {
-    #[inline]
-    fn set_atts(
-        &self,
-        node: &RsvgNode,
-        handle: *const RsvgHandle,
-        pbag: &PropertyBag<'_>,
-    ) -> NodeResult {
-        self.base.set_atts(node, handle, pbag)?;
+impl SetAttributes for FeTurbulence {
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        self.base.set_attributes(attrs)?;
 
-        for (_key, attr, value) in pbag.iter() {
-            match attr {
-                Attribute::BaseFrequency => self.base_frequency.set(
-                    parsers::number_optional_number(value)
-                        .map_err(|err| NodeError::attribute_error(attr, err))
-                        .and_then(|(x, y)| {
-                            if x >= 0.0 && y >= 0.0 {
-                                Ok((x, y))
+        for (attr, value) in attrs.iter() {
+            match attr.expanded() {
+                expanded_name!("", "baseFrequency") => {
+                    let NumberOptionalNumber(x, y) =
+                        attr.parse_and_validate(value, |v: NumberOptionalNumber<f64>| {
+                            if v.0 >= 0.0 && v.1 >= 0.0 {
+                                Ok(v)
                             } else {
-                                Err(NodeError::value_error(attr, "values can't be negative"))
+                                Err(ValueErrorKind::value_error("values can't be negative"))
                             }
-                        })?,
-                ),
-                Attribute::NumOctaves => self.num_octaves.set(
-                    parsers::integer(value).map_err(|err| NodeError::attribute_error(attr, err))?,
-                ),
+                        })?;
+
+                    self.base_frequency = (x, y);
+                }
+                expanded_name!("", "numOctaves") => {
+                    self.num_octaves = attr.parse(value)?;
+                }
                 // Yes, seed needs to be parsed as a number and then truncated.
-                Attribute::Seed => self.seed.set(
-                    parsers::number(value)
-                        .map(|x| {
-                            clamp(
-                                x.trunc(),
-                                f64::from(i32::min_value()),
-                                f64::from(i32::max_value()),
-                            ) as i32
-                        })
-                        .map_err(|err| NodeError::attribute_error(attr, err))?,
-                ),
-                Attribute::StitchTiles => self.stitch_tiles.set(StitchTiles::parse(attr, value)?),
-                Attribute::Type => self.type_.set(NoiseType::parse(attr, value)?),
+                expanded_name!("", "seed") => {
+                    let v: f64 = attr.parse(value)?;
+                    self.seed = clamp(
+                        v.trunc(),
+                        f64::from(i32::min_value()),
+                        f64::from(i32::max_value()),
+                    ) as i32;
+                }
+                expanded_name!("", "stitchTiles") => self.stitch_tiles = attr.parse(value)?,
+                expanded_name!("", "type") => self.type_ = attr.parse(value)?,
                 _ => (),
             }
         }
@@ -221,6 +210,8 @@ impl NoiseGenerator {
     }
 
     fn noise2(&self, color_channel: usize, vec: [f64; 2], stitch_info: Option<StitchInfo>) -> f64 {
+        #![allow(clippy::many_single_char_names)]
+
         const BM: usize = 0xff;
 
         let s_curve = |t| t * t * (3. - 2. * t);
@@ -262,8 +253,8 @@ impl NoiseGenerator {
         let b10 = self.lattice_selector[j + by0];
         let b01 = self.lattice_selector[i + by1];
         let b11 = self.lattice_selector[j + by1];
-        let sx = f64::from(s_curve(rx0));
-        let sy = f64::from(s_curve(ry0));
+        let sx = s_curve(rx0);
+        let sy = s_curve(ry0);
         let q = self.gradient[color_channel][b00];
         let u = rx0 * q[0] + ry0 * q[1];
         let q = self.gradient[color_channel][b10];
@@ -340,41 +331,46 @@ impl NoiseGenerator {
     }
 }
 
-impl Filter for Turbulence {
+impl FilterEffect for FeTurbulence {
     fn render(
         &self,
-        node: &RsvgNode,
+        node: &Node,
         ctx: &FilterContext,
-        draw_ctx: &mut DrawingCtx<'_>,
+        _acquired_nodes: &mut AcquiredNodes,
+        draw_ctx: &mut DrawingCtx,
     ) -> Result<FilterResult, FilterError> {
-        let bounds = self.base.get_bounds(ctx).into_irect(draw_ctx);
+        let bounds = self
+            .base
+            .get_bounds(ctx, node.parent().as_ref())?
+            .into_irect(draw_ctx);
 
-        let mut affine = ctx.paffine();
-        affine.invert();
+        let affine = ctx.paffine().invert().unwrap();
 
-        let type_ = self.type_.get();
         let noise_generator = NoiseGenerator::new(
-            self.seed.get(),
-            self.base_frequency.get(),
-            self.num_octaves.get(),
-            type_,
-            self.stitch_tiles.get(),
-            f64::from(bounds.x1 - bounds.x0),
-            f64::from(bounds.y1 - bounds.y0),
+            self.seed,
+            self.base_frequency,
+            self.num_octaves,
+            self.type_,
+            self.stitch_tiles,
+            f64::from(bounds.width()),
+            f64::from(bounds.height()),
         );
 
-        let mut output_surface = ImageSurface::create(
-            cairo::Format::ARgb32,
+        let cascaded = CascadedValues::new_from_node(node);
+        let values = cascaded.get();
+        // The generated color values are in the color space determined by
+        // color-interpolation-filters.
+        let surface_type = SurfaceType::from(values.color_interpolation_filters());
+
+        let mut surface = ExclusiveImageSurface::new(
             ctx.source_graphic().width(),
             ctx.source_graphic().height(),
+            surface_type,
         )?;
 
-        let output_stride = output_surface.get_stride() as usize;
-        {
-            let mut output_data = output_surface.get_data().unwrap();
-
-            for y in bounds.y0..bounds.y1 {
-                for x in bounds.x0..bounds.x1 {
+        surface.modify(&mut |data, stride| {
+            for y in bounds.y_range() {
+                for x in bounds.x_range() {
                     let point = affine.transform_point(f64::from(x), f64::from(y));
                     let point = [point.0, point.1];
 
@@ -386,7 +382,7 @@ impl Filter for Turbulence {
                             f64::from(y - bounds.y0),
                         );
 
-                        let v = match type_ {
+                        let v = match self.type_ {
                             NoiseType::FractalNoise => (v * 255.0 + 255.0) / 2.0,
                             NoiseType::Turbulence => v * 255.0,
                         };
@@ -402,26 +398,15 @@ impl Filter for Turbulence {
                     }
                     .premultiply();
 
-                    output_data.set_pixel(output_stride, pixel, x as u32, y as u32);
+                    data.set_pixel(stride, pixel, x as u32, y as u32);
                 }
             }
-        }
-
-        let cascaded = node.get_cascaded_values();
-        let values = cascaded.get();
-        // The generated color values are in the color space determined by
-        // color-interpolation-filters.
-        let surface_type =
-            if values.color_interpolation_filters == ColorInterpolationFilters::LinearRgb {
-                SurfaceType::LinearRgb
-            } else {
-                SurfaceType::SRgb
-            };
+        });
 
         Ok(FilterResult {
-            name: self.base.result.borrow().clone(),
+            name: self.base.result.clone(),
             output: FilterOutput {
-                surface: SharedImageSurface::new(output_surface, surface_type)?,
+                surface: surface.share()?,
                 bounds,
             },
         })
@@ -433,29 +418,23 @@ impl Filter for Turbulence {
     }
 }
 
-impl StitchTiles {
-    fn parse(attr: Attribute, s: &str) -> Result<Self, NodeError> {
-        match s {
-            "stitch" => Ok(StitchTiles::Stitch),
-            "noStitch" => Ok(StitchTiles::NoStitch),
-            _ => Err(NodeError::parse_error(
-                attr,
-                ParseError::new("invalid value"),
-            )),
-        }
+impl Parse for StitchTiles {
+    fn parse<'i>(parser: &mut Parser<'i, '_>) -> Result<Self, ParseError<'i>> {
+        Ok(parse_identifiers!(
+            parser,
+            "stitch" => StitchTiles::Stitch,
+            "noStitch" => StitchTiles::NoStitch,
+        )?)
     }
 }
 
-impl NoiseType {
-    fn parse(attr: Attribute, s: &str) -> Result<Self, NodeError> {
-        match s {
-            "fractalNoise" => Ok(NoiseType::FractalNoise),
-            "turbulence" => Ok(NoiseType::Turbulence),
-            _ => Err(NodeError::parse_error(
-                attr,
-                ParseError::new("invalid value"),
-            )),
-        }
+impl Parse for NoiseType {
+    fn parse<'i>(parser: &mut Parser<'i, '_>) -> Result<Self, ParseError<'i>> {
+        Ok(parse_identifiers!(
+            parser,
+            "fractalNoise" => NoiseType::FractalNoise,
+            "turbulence" => NoiseType::Turbulence,
+        )?)
     }
 }
 

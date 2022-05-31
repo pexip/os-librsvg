@@ -3,7 +3,7 @@
 # When uploading crates to the registry Cargo will automatically
 # "normalize" Cargo.toml files for maximal compatibility
 # with all versions of Cargo and also rewrite `path` dependencies
-# to registry (e.g. crates.io) dependencies
+# to registry (e.g., crates.io) dependencies
 #
 # If you believe there's an error in this file please file an
 # issue against the rust-lang/cargo repository. If you're
@@ -12,7 +12,7 @@
 
 [package]
 name = "glib-sys"
-version = "0.6.0"
+version = "0.9.1"
 authors = ["The Gtk-rs Project Developers"]
 build = "build.rs"
 links = "glib"
@@ -21,26 +21,30 @@ homepage = "http://gtk-rs.org/"
 keywords = ["glib", "ffi", "gtk-rs", "gnome"]
 license = "MIT"
 repository = "https://github.com/gtk-rs/sys"
+[package.metadata.docs.rs]
+features = ["dox"]
 
 [lib]
 name = "glib_sys"
-[dependencies.bitflags]
-version = "1.0"
-
 [dependencies.libc]
 version = "0.2"
+[dev-dependencies.shell-words]
+version = "0.1.0"
+
+[dev-dependencies.tempfile]
+version = "3"
 [build-dependencies.pkg-config]
 version = "0.3.7"
 
 [features]
 dox = []
-v2_34 = []
-v2_36 = ["v2_34"]
-v2_38 = ["v2_36"]
-v2_40 = ["v2_38"]
-v2_44 = ["v2_40"]
+v2_44 = []
 v2_46 = ["v2_44"]
 v2_48 = ["v2_46"]
 v2_50 = ["v2_48"]
 v2_52 = ["v2_50"]
 v2_54 = ["v2_52"]
+v2_56 = ["v2_54"]
+v2_58 = ["v2_56"]
+v2_60 = ["v2_58"]
+v2_62 = ["v2_60"]

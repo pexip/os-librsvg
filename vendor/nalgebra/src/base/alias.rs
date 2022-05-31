@@ -1,10 +1,10 @@
 #[cfg(any(feature = "alloc", feature = "std"))]
-use base::dimension::Dynamic;
-use base::dimension::{U1, U2, U3, U4, U5, U6};
+use crate::base::dimension::Dynamic;
+use crate::base::dimension::{U1, U2, U3, U4, U5, U6};
+use crate::base::storage::Owned;
 #[cfg(any(feature = "std", feature = "alloc"))]
-use base::matrix_vec::MatrixVec;
-use base::storage::Owned;
-use base::Matrix;
+use crate::base::vec_storage::VecStorage;
+use crate::base::Matrix;
 
 /*
  *
@@ -13,14 +13,14 @@ use base::Matrix;
  *
  *
  */
-/// A staticaly sized column-major matrix with `R` rows and `C` columns.
+/// A statically sized column-major matrix with `R` rows and `C` columns.
 #[deprecated(note = "This matrix name contains a typo. Use MatrixMN instead.")]
 pub type MatrixNM<N, R, C> = Matrix<N, R, C, Owned<N, R, C>>;
 
-/// A staticaly sized column-major matrix with `R` rows and `C` columns.
+/// A statically sized column-major matrix with `R` rows and `C` columns.
 pub type MatrixMN<N, R, C> = Matrix<N, R, C, Owned<N, R, C>>;
 
-/// A staticaly sized column-major square matrix with `D` rows and columns.
+/// A statically sized column-major square matrix with `D` rows and columns.
 pub type MatrixN<N, D> = MatrixMN<N, D, D>;
 
 /// A dynamically sized column-major matrix.
@@ -119,7 +119,7 @@ pub type Matrix6x5<N> = MatrixMN<N, U6, U5>;
  */
 /// A dynamically sized column vector.
 #[cfg(any(feature = "std", feature = "alloc"))]
-pub type DVector<N> = Matrix<N, Dynamic, U1, MatrixVec<N, Dynamic, U1>>;
+pub type DVector<N> = Matrix<N, Dynamic, U1, VecStorage<N, Dynamic, U1>>;
 
 /// A statically sized D-dimensional column vector.
 pub type VectorN<N, D> = MatrixMN<N, D, U1>;
@@ -146,7 +146,7 @@ pub type Vector6<N> = VectorN<N, U6>;
  */
 /// A dynamically sized row vector.
 #[cfg(any(feature = "std", feature = "alloc"))]
-pub type RowDVector<N> = Matrix<N, U1, Dynamic, MatrixVec<N, U1, Dynamic>>;
+pub type RowDVector<N> = Matrix<N, U1, Dynamic, VecStorage<N, U1, Dynamic>>;
 
 /// A statically sized D-dimensional row vector.
 pub type RowVectorN<N, D> = MatrixMN<N, U1, D>;

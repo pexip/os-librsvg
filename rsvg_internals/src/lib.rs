@@ -1,83 +1,92 @@
-#![cfg_attr(feature = "cargo-clippy", allow(clone_on_ref_ptr))]
-#![cfg_attr(feature = "cargo-clippy", allow(not_unsafe_ptr_arg_deref))]
-#![cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
+//! The implementation of librsvg.
+//!
+//! The implementation of librsvg is in the `rsvg_internals` crate.  It is not a public
+//! crate; instead, it exports the primitives necessary to implement librsvg's public APIs,
+//! both the C and Rust APIs.  It has the XML and CSS parsing code, the SVG element
+//! definitions and tree of elements, and all the drawing logic.
+//!
+//! # Common entry points for newcomers
+//!
+//! * Are you adding support for a CSS property?  Look in the [`property_defs`] module.
+//!
+//! # Some interesting parts of rsvg_internals
+//!
+//! * The [`Handle`] struct provides the primitives to implement the public APIs, such as
+//! loading an SVG file and rendering it.
+//!
+//! * The [`DrawingCtx`] struct is active while an SVG handle is being drawn or queried
+//! for its geometry.  It has all the mutable state related to the drawing process.
+//!
+//! * The [`Document`] struct represents a loaded SVG document.  It holds the tree of
+//! [`Node`] elements, and a mapping of `id` attributes to the corresponding element
+//! nodes.
+//!
+//! * The [`node`] module provides the [`Node`] struct and helper traits used to operate
+//! on nodes.
+//!
+//! * The [`element`] module provides the [`Element`] struct and the [`SetAttributes`] and
+//! [`Draw`] traits which are implemented by all SVG elements.
+//!
+//! * The [`xml`] module receives events from the XML parser, and builds a [`Document`] as
+//! a tree of [`Node`].
+//!
+//! * The [`properties`] module contains structs that represent collections of CSS
+//! properties.
+//!
+//! * The [`property_defs`] module contains one type for each of the CSS style properties
+//! that librsvg supports.
+//!
+//! * The [`css`] module contains the implementation of CSS parsing and matching.
+//!
+//! [`Document`]: document/struct.Document.html
+//! [`Node`]: node/type.Node.html
+//! [`Element`]: element/struct.Element.html
+//! [`Handle`]: handle/struct.Handle.html
+//! [`DrawingCtx`]: drawing_ctx/struct.DrawingCtx.html
+//! [`Document`]: document/struct.Document.html
+//! [`SetAttributes`]: element/trait.SetAttributes.html
+//! [`Draw`]: element/trait.Draw.html
+//! [`css`]: css/index.html
+//! [`element`]: element/index.html
+//! [`node`]: node/index.html
+//! [`properties`]: properties/index.html
+//! [`property_defs`]: property_defs/index.html
+//! [`xml`]: xml/index.html
 
-extern crate cairo;
-extern crate cairo_sys;
-extern crate cssparser;
-extern crate float_cmp;
-extern crate gdk_pixbuf;
-extern crate glib;
-extern crate glib_sys;
-extern crate itertools;
-extern crate language_tags;
-extern crate libc;
-extern crate locale_config;
-extern crate nalgebra;
-extern crate num_traits;
-extern crate owning_ref;
-extern crate pango;
-extern crate pango_cairo_sys;
-extern crate pango_sys;
-extern crate pangocairo;
-extern crate rayon;
-extern crate regex;
+#![allow(clippy::clone_on_ref_ptr)]
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::too_many_arguments)]
+#![warn(unused)]
+
+pub use crate::color::Color;
+
+pub use crate::dpi::Dpi;
+
+pub use crate::error::{DefsLookupErrorKind, HrefError, LoadingError, RenderingError};
+
+pub use crate::handle::{Handle, LoadOptions};
+
+pub use crate::length::{Length, LengthUnit, RsvgLength};
+
+pub use crate::parsers::Parse;
+
+pub use crate::rect::{IRect, Rect};
+
+pub use crate::structure::IntrinsicDimensions;
+
+pub use crate::surface_utils::{
+    iterators::Pixels,
+    shared_surface::{SharedImageSurface, SurfaceType},
+    CairoARGB, Pixel,
+};
+
+pub use crate::viewbox::ViewBox;
 
 #[macro_use]
-extern crate lazy_static;
-
-extern crate downcast_rs;
-
-pub use color::{rsvg_css_parse_color, ColorKind, ColorSpec};
-
-pub use css::{rsvg_css_parse_into_handle, rsvg_css_styles_free, rsvg_css_styles_new};
-
-pub use defs::{rsvg_defs_free, rsvg_defs_lookup, rsvg_defs_new};
-
-pub use drawing_ctx::{
-    rsvg_drawing_ctx_add_node_and_ancestors_to_stack,
-    rsvg_drawing_ctx_draw_node_from_stack,
-    rsvg_drawing_ctx_free,
-    rsvg_drawing_ctx_get_ink_rect,
-    rsvg_drawing_ctx_new,
-};
-
-pub use load::{rsvg_load_new_node, rsvg_load_set_node_atts, rsvg_load_set_svg_node_atts};
-
-pub use node::{
-    rsvg_node_add_child,
-    rsvg_node_children_iter_begin,
-    rsvg_node_children_iter_end,
-    rsvg_node_children_iter_next,
-    rsvg_node_find_last_chars_child,
-    rsvg_node_get_parent,
-    rsvg_node_ref,
-    rsvg_node_unref,
-};
-
-pub use tree::{
-    rsvg_tree_cascade,
-    rsvg_tree_free,
-    rsvg_tree_get_root,
-    rsvg_tree_is_root,
-    rsvg_tree_new,
-    rsvg_tree_root_is_svg,
-};
-
-pub use property_bag::{
-    rsvg_property_bag_free,
-    rsvg_property_bag_iter_begin,
-    rsvg_property_bag_iter_end,
-    rsvg_property_bag_iter_next,
-    rsvg_property_bag_new,
-};
-
-pub use structure::rsvg_node_svg_get_size;
-
-pub use text::{rsvg_node_chars_append, rsvg_node_chars_new};
+pub mod log;
 
 #[macro_use]
-mod log;
+mod parsers;
 
 #[macro_use]
 mod coord_units;
@@ -86,49 +95,55 @@ mod coord_units;
 mod float_eq_cairo;
 
 #[macro_use]
+mod node;
+
+#[macro_use]
 mod property_macros;
 
+mod allowed_url;
+mod angle;
 mod aspect_ratio;
 mod attributes;
 mod bbox;
-mod clip_path;
 mod color;
 mod cond;
-mod croco;
 mod css;
-mod defs;
+mod dasharray;
+mod document;
+mod dpi;
 mod drawing_ctx;
+mod element;
 mod error;
+mod filter;
 pub mod filters;
 mod font_props;
 mod gradient;
 mod handle;
+mod href;
 mod image;
+mod io;
 mod iri;
 mod length;
-mod link;
-mod load;
+mod limits;
 mod marker;
-mod mask;
-mod node;
+mod number_list;
 mod paint_server;
-mod parsers;
-mod path_builder;
-mod path_parser;
+pub mod path_builder; // pub for benchmarking
+pub mod path_parser; // pub for benchmarking
 mod pattern;
-mod property_bag;
-mod rect;
+mod properties;
+mod property_defs;
+pub mod rect;
 mod shapes;
 mod space;
-pub mod srgb;
-mod state;
-mod stop;
 mod structure;
+mod style;
 pub mod surface_utils;
 mod text;
 mod transform;
-mod tree;
-mod unitinterval;
+mod unit_interval;
 mod util;
 mod viewbox;
-mod viewport;
+mod xml;
+mod xml2;
+mod xml2_load;

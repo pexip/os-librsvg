@@ -1,6 +1,12 @@
-#![cfg(feature = "arbitrary")]
-use num::Zero;
 use na::{Point3, Vector3, Vector4};
+use num::Zero;
+
+#[test]
+fn point_clone() {
+    let p = Point3::new(1.0, 2.0, 3.0);
+    let p2 = p.clone();
+    assert_eq!(p, p2);
+}
 
 #[test]
 fn point_ops() {
@@ -8,20 +14,20 @@ fn point_ops() {
     let b = Point3::new(1.0, 2.0, 3.0);
     let c = Vector3::new(1.0, 2.0, 3.0);
 
-    assert_eq!( a -  b, Vector3::zero());
+    assert_eq!(a - b, Vector3::zero());
     assert_eq!(&a - &b, Vector3::zero());
-    assert_eq!( a - &b, Vector3::zero());
-    assert_eq!(&a -  b, Vector3::zero());
+    assert_eq!(a - &b, Vector3::zero());
+    assert_eq!(&a - b, Vector3::zero());
 
-    assert_eq!( b -  c, Point3::origin());
+    assert_eq!(b - c, Point3::origin());
     assert_eq!(&b - &c, Point3::origin());
-    assert_eq!( b - &c, Point3::origin());
-    assert_eq!(&b -  c, Point3::origin());
+    assert_eq!(b - &c, Point3::origin());
+    assert_eq!(&b - c, Point3::origin());
 
-    assert_eq!( b +  c, 2.0 * a);
+    assert_eq!(b + c, 2.0 * a);
     assert_eq!(&b + &c, 2.0 * a);
-    assert_eq!( b + &c, 2.0 * a);
-    assert_eq!(&b +  c, 2.0 * a);
+    assert_eq!(b + &c, 2.0 * a);
+    assert_eq!(&b + c, 2.0 * a);
 
     let mut a1 = a;
     let mut a2 = a;
@@ -58,20 +64,19 @@ fn point_coordinates() {
 
 #[test]
 fn point_scale() {
-    let pt       = Point3::new(1, 2, 3);
+    let pt = Point3::new(1, 2, 3);
     let expected = Point3::new(10, 20, 30);
 
     assert_eq!(pt * 10, expected);
     assert_eq!(&pt * 10, expected);
     assert_eq!(10 * pt, expected);
     assert_eq!(10 * &pt, expected);
-
 }
 
 #[test]
 fn point_vector_sum() {
-    let pt       = Point3::new(1, 2, 3);
-    let vec      = Vector3::new(10, 20, 30);
+    let pt = Point3::new(1, 2, 3);
+    let vec = Vector3::new(10, 20, 30);
     let expected = Point3::new(11, 22, 33);
 
     assert_eq!(&pt + &vec, expected);
@@ -82,12 +87,13 @@ fn point_vector_sum() {
 
 #[test]
 fn to_homogeneous() {
-    let a        = Point3::new(1.0, 2.0, 3.0);
+    let a = Point3::new(1.0, 2.0, 3.0);
     let expected = Vector4::new(1.0, 2.0, 3.0, 1.0);
 
     assert_eq!(a.to_homogeneous(), expected);
 }
 
+#[cfg(feature = "arbitrary")]
 quickcheck!(
     fn point_sub(pt1: Point3<f64>, pt2: Point3<f64>) -> bool {
         let dpt = &pt2 - &pt1;

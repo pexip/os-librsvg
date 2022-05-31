@@ -1,27 +1,41 @@
 set -ex
 
-if [ "$HTML_REPORTS" = "no" ]; then
-    BUILD_ARGS="--no-default-features"
-else
-    BUILD_ARGS=""
-fi
+export CARGO_INCREMENTAL=0
+
+FEATURES="async_smol async_tokio async_std async_futures"
 
 if [ "$CLIPPY" = "yes" ]; then
       cargo clippy --all -- -D warnings
 elif [ "$DOCS" = "yes" ]; then
     cargo clean
-    cargo doc --all --no-deps $BUILD_ARGS
+    cargo doc --features "$FEATURES" --all --no-deps
     cd book
     mdbook build
     cd ..
-    cp -r book/book/ target/doc/book/
+    cp -r book/book/html/ target/doc/book/
     travis-cargo doc-upload || true
-elif [ "$COVERAGE" = "yes" ]; then
-    cargo tarpaulin --all --no-count --ciserver travis-ci --coveralls $TRAVIS_JOB_ID
 elif [ "$RUSTFMT" = "yes" ]; then
-    cargo fmt -- --write-mode diff
+    cargo fmt --all -- --check
+elif [ "$MINIMAL_VERSIONS" = "yes" ]; then
+    rm Cargo.lock || true
+    cargo build -Z minimal-versions
 else
-    cargo build $BUILD_ARGS --release
-    cargo test $BUILD_ARGS --all --release
-    cargo bench $BUILD_ARGS --all -- --test
+    export RUSTFLAGS="-D warnings"
+
+    cargo build --features "$FEATURES" $BUILD_ARGS
+
+    cargo test --features "$FEATURES" --all
+    cargo test --features "$FEATURES" --benches
+    
+    cd bencher_compat
+    export CARGO_TARGET_DIR="../target"
+    cargo test --benches
+    cd ..
+
+    if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
+        cd macro
+        export CARGO_TARGET_DIR="../target"
+        cargo test --benches
+        cd ..
+    fi
 fi

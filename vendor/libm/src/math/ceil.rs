@@ -2,8 +2,19 @@ use core::f64;
 
 const TOINT: f64 = 1. / f64::EPSILON;
 
-#[inline]
+/// Ceil (f64)
+///
+/// Finds the nearest integer greater than or equal to `x`.
+#[cfg_attr(all(test, assert_no_panic), no_panic::no_panic)]
 pub fn ceil(x: f64) -> f64 {
+    // On wasm32 we know that LLVM's intrinsic will compile to an optimized
+    // `f64.ceil` native instruction, so we can leverage this for both code size
+    // and speed.
+    llvm_intrinsically_optimized! {
+        #[cfg(target_arch = "wasm32")] {
+            return unsafe { ::core::intrinsics::ceilf64(x) }
+        }
+    }
     let u: u64 = x.to_bits();
     let e: i64 = (u >> 52 & 0x7ff) as i64;
     let y: f64;
@@ -18,7 +29,7 @@ pub fn ceil(x: f64) -> f64 {
         x + TOINT - TOINT - x
     };
     // special case because of non-nearest rounding modes
-    if e <= 0x3ff - 1 {
+    if e < 0x3ff {
         force_eval!(y);
         return if (u >> 63) != 0 { -0. } else { 1. };
     }
@@ -31,9 +42,22 @@ pub fn ceil(x: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use core::f64::*;
+
     #[test]
     fn sanity_check() {
-        assert_eq!(super::ceil(1.1), 2.0);
-        assert_eq!(super::ceil(2.9), 3.0);
+        assert_eq!(ceil(1.1), 2.0);
+        assert_eq!(ceil(2.9), 3.0);
+    }
+
+    /// The spec: https://en.cppreference.com/w/cpp/numeric/math/ceil
+    #[test]
+    fn spec_tests() {
+        // Not Asserted: that the current rounding mode has no effect.
+        assert!(ceil(NAN).is_nan());
+        for f in [0.0, -0.0, INFINITY, NEG_INFINITY].iter().copied() {
+            assert_eq!(ceil(f), f);
+        }
     }
 }

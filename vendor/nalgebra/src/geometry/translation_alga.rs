@@ -1,22 +1,26 @@
-use alga::general::{AbstractGroup, AbstractLoop, AbstractMagma, AbstractMonoid,
-                    AbstractQuasigroup, AbstractSemigroup, Id, Identity, Inverse, Multiplicative,
-                    Real};
-use alga::linear::{AffineTransformation, DirectIsometry, Isometry, ProjectiveTransformation,
-                   Similarity, Transformation};
+use alga::general::{
+    AbstractGroup, AbstractLoop, AbstractMagma, AbstractMonoid, AbstractQuasigroup,
+    AbstractSemigroup, Id, Identity, Multiplicative, RealField, TwoSidedInverse,
+};
 use alga::linear::Translation as AlgaTranslation;
+use alga::linear::{
+    AffineTransformation, DirectIsometry, Isometry, ProjectiveTransformation, Similarity,
+    Transformation,
+};
 
-use base::{DefaultAllocator, VectorN};
-use base::dimension::DimName;
-use base::allocator::Allocator;
+use crate::base::allocator::Allocator;
+use crate::base::dimension::DimName;
+use crate::base::{DefaultAllocator, VectorN};
 
-use geometry::{Point, Translation};
+use crate::geometry::{Point, Translation};
 
 /*
  *
  * Algebraic structures.
  *
  */
-impl<N: Real, D: DimName> Identity<Multiplicative> for Translation<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> Identity<Multiplicative>
+    for Translation<N, D>
 where
     DefaultAllocator: Allocator<N, D>,
 {
@@ -26,22 +30,25 @@ where
     }
 }
 
-impl<N: Real, D: DimName> Inverse<Multiplicative> for Translation<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> TwoSidedInverse<Multiplicative>
+    for Translation<N, D>
 where
     DefaultAllocator: Allocator<N, D>,
 {
     #[inline]
-    fn inverse(&self) -> Self {
+    #[must_use = "Did you mean to use two_sided_inverse_mut()?"]
+    fn two_sided_inverse(&self) -> Self {
         self.inverse()
     }
 
     #[inline]
-    fn inverse_mut(&mut self) {
+    fn two_sided_inverse_mut(&mut self) {
         self.inverse_mut()
     }
 }
 
-impl<N: Real, D: DimName> AbstractMagma<Multiplicative> for Translation<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> AbstractMagma<Multiplicative>
+    for Translation<N, D>
 where
     DefaultAllocator: Allocator<N, D>,
 {
@@ -53,7 +60,7 @@ where
 
 macro_rules! impl_multiplicative_structures(
     ($($marker: ident<$operator: ident>),* $(,)*) => {$(
-        impl<N: Real, D: DimName> $marker<$operator> for Translation<N, D>
+        impl<N: RealField + simba::scalar::RealField, D: DimName> $marker<$operator> for Translation<N, D>
             where DefaultAllocator: Allocator<N, D> { }
     )*}
 );
@@ -71,13 +78,14 @@ impl_multiplicative_structures!(
  * Transformation groups.
  *
  */
-impl<N: Real, D: DimName> Transformation<Point<N, D>> for Translation<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> Transformation<Point<N, D>>
+    for Translation<N, D>
 where
     DefaultAllocator: Allocator<N, D>,
 {
     #[inline]
     fn transform_point(&self, pt: &Point<N, D>) -> Point<N, D> {
-        pt + &self.vector
+        self.transform_point(pt)
     }
 
     #[inline]
@@ -86,13 +94,14 @@ where
     }
 }
 
-impl<N: Real, D: DimName> ProjectiveTransformation<Point<N, D>> for Translation<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> ProjectiveTransformation<Point<N, D>>
+    for Translation<N, D>
 where
     DefaultAllocator: Allocator<N, D>,
 {
     #[inline]
     fn inverse_transform_point(&self, pt: &Point<N, D>) -> Point<N, D> {
-        pt - &self.vector
+        self.inverse_transform_point(pt)
     }
 
     #[inline]
@@ -101,7 +110,8 @@ where
     }
 }
 
-impl<N: Real, D: DimName> AffineTransformation<Point<N, D>> for Translation<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> AffineTransformation<Point<N, D>>
+    for Translation<N, D>
 where
     DefaultAllocator: Allocator<N, D>,
 {
@@ -145,7 +155,8 @@ where
     }
 }
 
-impl<N: Real, D: DimName> Similarity<Point<N, D>> for Translation<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> Similarity<Point<N, D>>
+    for Translation<N, D>
 where
     DefaultAllocator: Allocator<N, D>,
 {
@@ -169,7 +180,7 @@ where
 
 macro_rules! marker_impl(
     ($($Trait: ident),*) => {$(
-        impl<N: Real, D: DimName> $Trait<Point<N, D>> for Translation<N, D>
+        impl<N: RealField + simba::scalar::RealField, D: DimName> $Trait<Point<N, D>> for Translation<N, D>
             where DefaultAllocator: Allocator<N, D> { }
     )*}
 );
@@ -177,7 +188,8 @@ macro_rules! marker_impl(
 marker_impl!(Isometry, DirectIsometry);
 
 /// Subgroups of the n-dimensional translation group `T(n)`.
-impl<N: Real, D: DimName> AlgaTranslation<Point<N, D>> for Translation<N, D>
+impl<N: RealField + simba::scalar::RealField, D: DimName> AlgaTranslation<Point<N, D>>
+    for Translation<N, D>
 where
     DefaultAllocator: Allocator<N, D>,
 {
@@ -188,16 +200,16 @@ where
 
     #[inline]
     fn from_vector(v: VectorN<N, D>) -> Option<Self> {
-        Some(Self::from_vector(v))
+        Some(Self::from(v))
     }
 
     #[inline]
     fn powf(&self, n: N) -> Option<Self> {
-        Some(Self::from_vector(&self.vector * n))
+        Some(Self::from(&self.vector * n))
     }
 
     #[inline]
     fn translation_between(a: &Point<N, D>, b: &Point<N, D>) -> Option<Self> {
-        Some(Self::from_vector(b - a))
+        Some(Self::from(b - a))
     }
 }

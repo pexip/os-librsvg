@@ -1,21 +1,31 @@
-// Non-conventional componentwise operators.
+// Non-conventional component-wise operators.
 
 use num::{Signed, Zero};
 use std::ops::{Add, Mul};
 
-use alga::general::{ClosedDiv, ClosedMul};
+use simba::scalar::{ClosedDiv, ClosedMul};
+use simba::simd::SimdPartialOrd;
 
-use base::allocator::{Allocator, SameShapeAllocator};
-use base::constraint::{SameNumberOfColumns, SameNumberOfRows, ShapeConstraint};
-use base::dimension::Dim;
-use base::storage::{Storage, StorageMut};
-use base::{DefaultAllocator, Matrix, MatrixMN, MatrixSum, Scalar};
+use crate::base::allocator::{Allocator, SameShapeAllocator};
+use crate::base::constraint::{SameNumberOfColumns, SameNumberOfRows, ShapeConstraint};
+use crate::base::dimension::Dim;
+use crate::base::storage::{Storage, StorageMut};
+use crate::base::{DefaultAllocator, Matrix, MatrixMN, MatrixSum, Scalar};
 
-/// The type of the result of a matrix componentwise operation.
+/// The type of the result of a matrix component-wise operation.
 pub type MatrixComponentOp<N, R1, C1, R2, C2> = MatrixSum<N, R1, C1, R2, C2>;
 
 impl<N: Scalar, R: Dim, C: Dim, S: Storage<N, R, C>> Matrix<N, R, C, S> {
-    /// Computes the componentwise absolute value.
+    /// Computes the component-wise absolute value.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use nalgebra::Matrix2;
+    /// let a = Matrix2::new(0.0, 1.0,
+    ///                      -2.0, -3.0);
+    /// assert_eq!(a.abs(), Matrix2::new(0.0, 1.0, 2.0, 3.0))
+    /// ```
     #[inline]
     pub fn abs(&self) -> MatrixMN<N, R, C>
     where
@@ -52,7 +62,7 @@ macro_rules! component_binop_impl(
                 for j in 0 .. res.ncols() {
                     for i in 0 .. res.nrows() {
                         unsafe {
-                            res.get_unchecked_mut(i, j).$op_assign(*rhs.get_unchecked(i, j));
+                            res.get_unchecked_mut((i, j)).$op_assign(rhs.get_unchecked((i, j)).inlined_clone());
                         }
                     }
                 }
@@ -80,8 +90,8 @@ macro_rules! component_binop_impl(
                     for j in 0 .. self.ncols() {
                         for i in 0 .. self.nrows() {
                             unsafe {
-                                let res = alpha * a.get_unchecked(i, j).$op(*b.get_unchecked(i, j));
-                                *self.get_unchecked_mut(i, j) = res;
+                                let res = alpha.inlined_clone() * a.get_unchecked((i, j)).inlined_clone().$op(b.get_unchecked((i, j)).inlined_clone());
+                                *self.get_unchecked_mut((i, j)) = res;
                             }
                         }
                     }
@@ -90,8 +100,8 @@ macro_rules! component_binop_impl(
                     for j in 0 .. self.ncols() {
                         for i in 0 .. self.nrows() {
                             unsafe {
-                                let res = alpha * a.get_unchecked(i, j).$op(*b.get_unchecked(i, j));
-                                *self.get_unchecked_mut(i, j) = beta * *self.get_unchecked(i, j) + res;
+                                let res = alpha.inlined_clone() * a.get_unchecked((i, j)).inlined_clone().$op(b.get_unchecked((i, j)).inlined_clone());
+                                *self.get_unchecked_mut((i, j)) = beta.inlined_clone() * self.get_unchecked((i, j)).inlined_clone() + res;
                             }
                         }
                     }
@@ -112,7 +122,7 @@ macro_rules! component_binop_impl(
                 for j in 0 .. self.ncols() {
                     for i in 0 .. self.nrows() {
                         unsafe {
-                            self.get_unchecked_mut(i, j).$op_assign(*rhs.get_unchecked(i, j));
+                            self.get_unchecked_mut((i, j)).$op_assign(rhs.get_unchecked((i, j)).inlined_clone());
                         }
                     }
                 }
@@ -120,7 +130,7 @@ macro_rules! component_binop_impl(
 
             #[doc = $desc_mut]
             #[inline]
-            #[deprecated(note = "This is renamed using the `_assign` sufix instead of the `_mut` suffix.")]
+            #[deprecated(note = "This is renamed using the `_assign` suffix instead of the `_mut` suffix.")]
             pub fn $binop_mut<R2, C2, SB>(&mut self, rhs: &Matrix<N, R2, C2, SB>)
                 where N: $Trait,
                       R2: Dim,
@@ -135,12 +145,122 @@ macro_rules! component_binop_impl(
 
 component_binop_impl!(
     component_mul, component_mul_mut, component_mul_assign, cmpy, ClosedMul.mul.mul_assign,
-    "Componentwise matrix multiplication.",
-    "Computes componentwise `self[i] = alpha * a[i] * b[i] + beta * self[i]`.",
-    "Inplace componentwise matrix multiplication.";
+    r"
+    Componentwise matrix or vector multiplication.
+
+    # Example
+
+    ```
+    # use nalgebra::Matrix2;
+    let a = Matrix2::new(0.0, 1.0, 2.0, 3.0);
+    let b = Matrix2::new(4.0, 5.0, 6.0, 7.0);
+    let expected = Matrix2::new(0.0, 5.0, 12.0, 21.0);
+
+    assert_eq!(a.component_mul(&b), expected);
+    ```
+    ",
+    r"
+    Computes componentwise `self[i] = alpha * a[i] * b[i] + beta * self[i]`.
+
+    # Example
+    ```
+    # use nalgebra::Matrix2;
+    let mut m = Matrix2::new(0.0, 1.0, 2.0, 3.0);
+    let a = Matrix2::new(0.0, 1.0, 2.0, 3.0);
+    let b = Matrix2::new(4.0, 5.0, 6.0, 7.0);
+    let expected = (a.component_mul(&b) * 5.0) + m * 10.0;
+
+    m.cmpy(5.0, &a, &b, 10.0);
+    assert_eq!(m, expected);
+    ```
+    ",
+    r"
+    Inplace componentwise matrix or vector multiplication.
+
+    # Example
+    ```
+    # use nalgebra::Matrix2;
+    let mut a = Matrix2::new(0.0, 1.0, 2.0, 3.0);
+    let b = Matrix2::new(4.0, 5.0, 6.0, 7.0);
+    let expected = Matrix2::new(0.0, 5.0, 12.0, 21.0);
+
+    a.component_mul_assign(&b);
+
+    assert_eq!(a, expected);
+    ```
+    ";
     component_div, component_div_mut, component_div_assign, cdpy, ClosedDiv.div.div_assign,
-    "Componentwise matrix division.",
-    "Computes componentwise `self[i] = alpha * a[i] / b[i] + beta * self[i]`.",    
-    "Inplace componentwise matrix division.";
+    r"
+    Componentwise matrix or vector division.
+
+    # Example
+
+    ```
+    # use nalgebra::Matrix2;
+    let a = Matrix2::new(0.0, 1.0, 2.0, 3.0);
+    let b = Matrix2::new(4.0, 5.0, 6.0, 7.0);
+    let expected = Matrix2::new(0.0, 1.0 / 5.0, 2.0 / 6.0, 3.0 / 7.0);
+
+    assert_eq!(a.component_div(&b), expected);
+    ```
+    ",
+    r"
+    Computes componentwise `self[i] = alpha * a[i] / b[i] + beta * self[i]`.
+
+    # Example
+    ```
+    # use nalgebra::Matrix2;
+    let mut m = Matrix2::new(0.0, 1.0, 2.0, 3.0);
+    let a = Matrix2::new(4.0, 5.0, 6.0, 7.0);
+    let b = Matrix2::new(4.0, 5.0, 6.0, 7.0);
+    let expected = (a.component_div(&b) * 5.0) + m * 10.0;
+
+    m.cdpy(5.0, &a, &b, 10.0);
+    assert_eq!(m, expected);
+    ```
+    ",
+    r"
+    Inplace componentwise matrix or vector division.
+
+    # Example
+    ```
+    # use nalgebra::Matrix2;
+    let mut a = Matrix2::new(0.0, 1.0, 2.0, 3.0);
+    let b = Matrix2::new(4.0, 5.0, 6.0, 7.0);
+    let expected = Matrix2::new(0.0, 1.0 / 5.0, 2.0 / 6.0, 3.0 / 7.0);
+
+    a.component_div_assign(&b);
+
+    assert_eq!(a, expected);
+    ```
+    ";
     // FIXME: add other operators like bitshift, etc. ?
 );
+
+/*
+ * inf/sup
+ */
+impl<N, R: Dim, C: Dim, S: Storage<N, R, C>> Matrix<N, R, C, S>
+where
+    N: Scalar + SimdPartialOrd,
+    DefaultAllocator: Allocator<N, R, C>,
+{
+    /// Computes the infimum (aka. componentwise min) of two matrices/vectors.
+    #[inline]
+    pub fn inf(&self, other: &Self) -> MatrixMN<N, R, C> {
+        self.zip_map(other, |a, b| a.simd_min(b))
+    }
+
+    /// Computes the supremum (aka. componentwise max) of two matrices/vectors.
+    #[inline]
+    pub fn sup(&self, other: &Self) -> MatrixMN<N, R, C> {
+        self.zip_map(other, |a, b| a.simd_max(b))
+    }
+
+    /// Computes the (infimum, supremum) of two matrices/vectors.
+    #[inline]
+    pub fn inf_sup(&self, other: &Self) -> (MatrixMN<N, R, C>, MatrixMN<N, R, C>) {
+        // FIXME: can this be optimized?
+        (self.inf(other), self.sup(other))
+    }
+}

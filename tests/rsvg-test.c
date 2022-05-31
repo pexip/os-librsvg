@@ -42,107 +42,9 @@
 
 static char *_output_dir;
 
-typedef struct _buffer_diff_result {
-    unsigned int pixels_changed;
-    unsigned int max_diff;
-} buffer_diff_result_t;
-
-/* Compare two buffers, returning the number of pixels that are
- * different and the maximum difference of any single color channel in
- * result_ret.
- *
- * This function should be rewritten to compare all formats supported by
- * cairo_format_t instead of taking a mask as a parameter.
- */
-static void
-buffer_diff_core (unsigned char *_buf_a,
-		  unsigned char *_buf_b,
-		  unsigned char *_buf_diff,
-		  int		width,
-		  int		height,
-		  int		stride,
-		  guint32       mask,
-		  buffer_diff_result_t *result_ret)
-{
-    int x, y;
-    guint32 *row_a, *row_b, *row;
-    buffer_diff_result_t result = {0, 0};
-    guint32 *buf_a = (guint32 *) _buf_a;
-    guint32 *buf_b = (guint32 *) _buf_b;
-    guint32 *buf_diff = (guint32 *) _buf_diff;
-
-    stride /= sizeof(guint32);
-    for (y = 0; y < height; y++)
-    {
-	row_a = buf_a + y * stride;
-	row_b = buf_b + y * stride;
-	row = buf_diff + y * stride;
-	for (x = 0; x < width; x++)
-	{
-	    /* check if the pixels are the same */
-	    if ((row_a[x] & mask) != (row_b[x] & mask)) {
-		int channel;
-		guint32 diff_pixel = 0;
-
-		/* calculate a difference value for all 4 channels */
-		for (channel = 0; channel < 4; channel++) {
-		    int value_a = (row_a[x] >> (channel*8)) & 0xff;
-		    int value_b = (row_b[x] >> (channel*8)) & 0xff;
-		    unsigned int diff;
-		    diff = abs (value_a - value_b);
-		    if (diff > result.max_diff)
-			result.max_diff = diff;
-		    diff *= 4;  /* emphasize */
-		    if (diff)
-		        diff += 128; /* make sure it's visible */
-		    if (diff > 255)
-		        diff = 255;
-		    diff_pixel |= diff << (channel*8);
-		}
-
-		result.pixels_changed++;
-		if ((diff_pixel & 0x00ffffff) == 0) {
-		    /* alpha only difference, convert to luminance */
-		    guint8 alpha = diff_pixel >> 24;
-		    diff_pixel = alpha * 0x010101;
-		}
-		row[x] = diff_pixel;
-	    } else {
-		row[x] = 0;
-	    }
-	    row[x] |= 0xff000000; /* Set ALPHA to 100% (opaque) */
-	}
-    }
-
-    *result_ret = result;
-}
-
-static void
-compare_surfaces (cairo_surface_t	*surface_a,
-		  cairo_surface_t	*surface_b,
-		  cairo_surface_t	*surface_diff,
-		  buffer_diff_result_t	*result)
-{
-    /* Here, we run cairo's old buffer_diff algorithm which looks for
-     * pixel-perfect images.
-     */
-    buffer_diff_core (cairo_image_surface_get_data (surface_a),
-		      cairo_image_surface_get_data (surface_b),
-		      cairo_image_surface_get_data (surface_diff),
-		      cairo_image_surface_get_width (surface_a),
-		      cairo_image_surface_get_height (surface_a),
-		      cairo_image_surface_get_stride (surface_a),
-		      0xffffffff,
-		      result);
-    if (result->pixels_changed == 0)
-	return;
-
-    g_test_message ("%d pixels differ (with maximum difference of %d) from reference image\n",
-		    result->pixels_changed, result->max_diff);
-}
-
 static char *
-get_output_dir (void) {
+get_output_dir (void)
+{
     if (_output_dir == NULL) {
 	char *cwd = g_get_current_dir ();
         _output_dir = g_strconcat (cwd, G_DIR_SEPARATOR_S, "output", NULL);
@@ -156,18 +58,18 @@ static char *
 get_output_file (const char *test_file,
                  const char *extension)
 {
-  const char *output_dir = get_output_dir ();
-  char *result, *base;
+    const char *output_dir = get_output_dir ();
+    char *result, *base;
 
-  base = g_path_get_basename (test_file);
+    base = g_path_get_basename (test_file);
 
-  if (g_str_has_suffix (base, ".svg"))
-    base[strlen (base) - strlen (".svg")] = '\0';
+    if (g_str_has_suffix (base, ".svg"))
+	base[strlen (base) - strlen (".svg")] = '\0';
 
-  result = g_strconcat (output_dir, G_DIR_SEPARATOR_S, base, extension, NULL);
-  g_free (base);
+    result = g_strconcat (output_dir, G_DIR_SEPARATOR_S, base, extension, NULL);
+    g_free (base);
 
-  return result;
+    return result;
 }
 
 static void
@@ -175,12 +77,12 @@ save_image (cairo_surface_t *surface,
             const char      *test_name,
             const char      *extension)
 {
-  char *filename = get_output_file (test_name, extension);
+    char *filename = get_output_file (test_name, extension);
 
-  g_test_message ("Storing test result image at %s", filename);
-  g_assert (cairo_surface_write_to_png (surface, filename) == CAIRO_STATUS_SUCCESS);
+    g_test_message ("Storing test result image at %s", filename);
+    g_assert (cairo_surface_write_to_png (surface, filename) == CAIRO_STATUS_SUCCESS);
 
-  g_free (filename);
+    g_free (filename);
 }
 
 static gboolean
@@ -196,11 +98,11 @@ is_svg_or_subdir (GFile *file)
     ignore = g_str_has_prefix (basename, "ignore") || strcmp (basename, "resources") == 0;
 
     if (ignore)
-	goto out;
+       goto out;
 
     if (g_file_query_file_type (file, 0, NULL) == G_FILE_TYPE_DIRECTORY) {
-	result = TRUE;
-	goto out;
+       result = TRUE;
+       goto out;
     }
 
     result = g_str_has_suffix (basename, ".svg");
@@ -217,39 +119,39 @@ read_from_stream (void          *stream,
                   unsigned int   length)
 
 {
-  gssize result;
-  GError *error = NULL;
+    gssize result;
+    GError *error = NULL;
 
-  result = g_input_stream_read (stream, data, length, NULL, &error);
-  g_assert_no_error (error);
-  g_assert (result == length);
+    result = g_input_stream_read (stream, data, length, NULL, &error);
+    g_assert_no_error (error);
+    g_assert_cmpint (result, ==, length);
 
-  return CAIRO_STATUS_SUCCESS;
+    return CAIRO_STATUS_SUCCESS;
 }
 
 static cairo_surface_t *
 read_png (const char *test_name)
 {
-  char *reference_uri;
-  GFileInputStream *stream;
-  GFile *file;
-  GError *error = NULL;
-  cairo_surface_t *surface;
+    char *reference_uri = NULL;
+    GFileInputStream *stream;
+    GFile *file;
+    GError *error = NULL;
+    cairo_surface_t *surface;
 
-  reference_uri = g_strconcat (test_name, "-ref.png", NULL);
-  file = g_file_new_for_uri (reference_uri);
-  g_free (reference_uri);
+    reference_uri = g_strconcat (test_name, "-ref.png", NULL);
+    file = g_file_new_for_uri (reference_uri);
+    g_free (reference_uri);
 
-  stream = g_file_read (file, NULL, &error);
-  g_assert_no_error (error);
-  g_assert (stream);
+    stream = g_file_read (file, NULL, &error);
+    g_assert_no_error (error);
+    g_assert_nonnull (stream);
 
-  surface = cairo_image_surface_create_from_png_stream (read_from_stream, stream);
+    surface = cairo_image_surface_create_from_png_stream (read_from_stream, stream);
 
-  g_object_unref (stream);
-  g_object_unref (file);
+    g_object_unref (stream);
+    g_object_unref (file);
 
-  return surface;
+    return surface;
 }
 
 static cairo_surface_t *
@@ -310,6 +212,28 @@ test_tolerate (const gchar *message)
 // offset.
 #define FRAME_SIZE 47
 
+G_GNUC_CONST static unsigned int
+tolerable_difference (void)
+{
+    const gchar *env = g_getenv ("RSVG_TEST_TOLERANCE");
+    if (env)
+	return strtoul (env, NULL, 10);
+
+#ifdef __x86_64__
+    return 2;
+#else
+    /* https://gitlab.gnome.org/GNOME/librsvg/issues/178,
+     * https://gitlab.gnome.org/GNOME/librsvg/issues/366 */
+    return 20;
+#endif
+}
+
+G_GNUC_CONST static unsigned int
+allowed_difference (void)
+{
+    return 2;
+}
+
 static void
 rsvg_cairo_check (gconstpointer data)
 {
@@ -319,8 +243,8 @@ rsvg_cairo_check (gconstpointer data)
     cairo_t *cr;
     cairo_surface_t *render_surface;
     cairo_surface_t *surface_a, *surface_b, *surface_diff;
-    buffer_diff_result_t result;
-    char *test_file_base;
+    TestUtilsBufferDiffResult result;
+    char *test_file_base = NULL;
     unsigned int width_a, height_a, stride_a;
     unsigned int width_b, height_b, stride_b;
     GError *error = NULL;
@@ -331,7 +255,7 @@ rsvg_cairo_check (gconstpointer data)
 
     rsvg = rsvg_handle_new_from_gfile_sync (test_file, 0, NULL, &error);
     g_assert_no_error (error);
-    g_assert (rsvg != NULL);
+    g_assert_nonnull (rsvg);
 
     rsvg_handle_internal_set_testing (rsvg, TRUE);
 
@@ -340,8 +264,8 @@ rsvg_cairo_check (gconstpointer data)
     else
       rsvg_handle_set_dpi_x_y (rsvg, 72.0, 72.0);
     rsvg_handle_get_dimensions (rsvg, &dimensions);
-    g_assert (dimensions.width > 0);
-    g_assert (dimensions.height > 0);
+    g_assert_cmpint (dimensions.width, >, 0);
+    g_assert_cmpint (dimensions.height, >, 0);
 
     render_surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
 						 dimensions.width + 2 * FRAME_SIZE,
@@ -372,29 +296,20 @@ rsvg_cairo_check (gconstpointer data)
 	stride_a != stride_b) {
         g_test_fail ();
         g_test_message ("Image size mismatch (%dx%d != %dx%d)\n",
-                        width_a, height_a, width_b, height_b); 
+                        width_a, height_a, width_b, height_b);
     }
     else {
-#ifdef __x86_64__
-	const unsigned int MAX_DIFF = 2;
-#else
-        /* https://gitlab.gnome.org/GNOME/librsvg/issues/178,
-         * https://gitlab.gnome.org/GNOME/librsvg/issues/366 */
-	const unsigned int MAX_DIFF = 20;
-#endif
-	const unsigned int WARN_DIFF = 2;
-
 	surface_diff = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
 						   dimensions.width, dimensions.height);
 
-	compare_surfaces (surface_a, surface_b, surface_diff, &result);
+	test_utils_compare_surfaces (surface_a, surface_b, surface_diff, &result);
 
-	if (result.pixels_changed && result.max_diff > MAX_DIFF) {
+	if (result.pixels_changed && result.max_diff > tolerable_difference ()) {
             g_test_fail ();
             save_image (surface_diff, test_file_base, "-diff.png");
 	}
-        else if (result.pixels_changed && result.max_diff > WARN_DIFF) {
-            test_tolerate ("not the same as x86_64, but giving it the benefit of the doubt");
+        else if (result.pixels_changed && result.max_diff > allowed_difference ()) {
+            test_tolerate ("not perfect, but somewhat tolerable");
             save_image (surface_diff, test_file_base, "-diff.png");
 	}
 
@@ -414,10 +329,17 @@ main (int argc, char **argv)
 {
     int result;
 
-    /* For systemLanguage attribute tests */
-    g_setenv ("LC_ALL", "de:en_US:en", TRUE);
+    /* For systemLanguage attribute tests.
+     * The trailing ":" is intentional to test gitlab#425.
+     */
+    g_setenv ("LANGUAGE", "de:en_US:en:", TRUE);
+    g_setenv ("LC_ALL", "de:en_US:en:", TRUE);
 
     g_test_init (&argc, &argv, NULL);
+
+    test_utils_print_dependency_versions ();
+
+    test_utils_setup_font_map ();
 
     if (argc < 2) {
         GFile *base, *tests;
@@ -441,8 +363,5 @@ main (int argc, char **argv)
 
     result = g_test_run ();
 
-    rsvg_cleanup ();
-
     return result;
 }
-

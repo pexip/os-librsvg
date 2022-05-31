@@ -1,24 +1,21 @@
-// Copyright 2016 bluss
+// Copyright 2016 - 2018 Ulrik Sverdrup "bluss"
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-//! 
-//! General matrix multiplication for f32, f64 matrices.
-//! 
-//! Allows arbitrary row, column strided matrices.
-//! 
-//! Uses the same microkernel algorithm as [BLIS][bl], but in a much simpler
-//! and less featureful implementation.
-//! See their [multithreading][mt] page for a very good diagram over how
-//! the algorithm partitions the matrix (*Note:* this crate does not implement
-//! multithreading).
-//! 
+//!
+//! General matrix multiplication for f32, f64 matrices. Operates on matrices
+//! with general layout (they can use arbitrary row and column stride).
+//!
+//! This crate uses the same macro/microkernel approach to matrix multiplication as
+//! the [BLIS][bl] project.
+//!
+//! We presently provide a few good microkernels, portable and for x86-64, and
+//! only one operation: the general matrix-matrix multiplication (“gemm”).
+//!
 //! [bl]: https://github.com/flame/blis
-//! 
-//! [mt]: https://github.com/flame/blis/wiki/Multithreading
 //!
 //! ## Matrix Representation
 //!
@@ -45,21 +42,72 @@
 //! For example for a contiguous matrix, row major strides are *rsa=k,
 //! csa=1* and column major strides are *rsa=1, csa=m*.
 //!
-//! Stides can be negative or even zero, but for a mutable matrix elements
+//! Strides can be negative or even zero, but for a mutable matrix elements
 //! may not alias each other.
+//!
+//! ## Portability and Performance
+//!
+//! - The default kernels are written in portable Rust and available
+//!   on all targets. These may depend on autovectorization to perform well.
+//!
+//! - *x86* and *x86-64* features can be detected at runtime by default or
+//!   compile time (if enabled), and the crate following kernel variants are
+//!   implemented:
+//!
+//!   - `fma`
+//!   - `avx`
+//!   - `sse2`
+//!
+//! ## Features
+//!
+//! This crate can be used without the standard library (`#![no_std]`) by
+//! disabling the default `std` feature. To do so, use this in your
+//! `Cargo.toml`:
+//!
+//! ```toml
+//! matrixmultiply = { version = "0.2", default-features = false }
+//! ```
+//!
+//! Runtime CPU feature detection is available only when `std` is enabled.
+//! Without the `std` feature, the crate uses special CPU features only if they
+//! are enabled at compile time. (To enable CPU features at compile time, pass
+//! the relevant
+//! [`target-cpu`](https://doc.rust-lang.org/rustc/codegen-options/index.html#target-cpu)
+//! or
+//! [`target-feature`](https://doc.rust-lang.org/rustc/codegen-options/index.html#target-feature)
+//! option to `rustc`.)
+//!
+//! ## Other Notes
+//!
+//! The functions in this crate are thread safe, as long as the destination
+//! matrix is distinct.
 
-#![doc(html_root_url = "https://docs.rs/matrixmultiply/0.1/")]
+#![doc(html_root_url = "https://docs.rs/matrixmultiply/0.2/")]
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+#[cfg(feature = "std")]
+extern crate core;
 
 extern crate rawpointer;
 
-#[macro_use] mod debugmacros;
-#[macro_use] mod loopmacros;
+#[macro_use]
+mod debugmacros;
+#[macro_use]
+mod loopmacros;
 mod archparam;
-mod kernel;
 mod gemm;
-mod sgemm_kernel;
-mod dgemm_kernel;
+mod kernel;
+
+mod aligned_alloc;
 mod util;
 
-pub use gemm::sgemm;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[macro_use]
+mod x86;
+mod dgemm_kernel;
+mod sgemm_kernel;
+
 pub use gemm::dgemm;
+pub use gemm::sgemm;

@@ -7,50 +7,74 @@
 ///
 /// let collector = Collector::new();
 ///
-/// let handle = collector.handle();
+/// let handle = collector.register();
 /// drop(collector); // `handle` still works after dropping `collector`
 ///
 /// handle.pin().flush();
 /// ```
+use core::fmt;
 
-use alloc::arc::Arc;
-
-use internal::{Global, Local};
-use guard::Guard;
+use crate::alloc::sync::Arc;
+use crate::guard::Guard;
+use crate::internal::{Global, Local};
 
 /// An epoch-based garbage collector.
 pub struct Collector {
-    global: Arc<Global>,
+    pub(crate) global: Arc<Global>,
 }
 
 unsafe impl Send for Collector {}
 unsafe impl Sync for Collector {}
 
+impl Default for Collector {
+    fn default() -> Self {
+        Self {
+            global: Arc::new(Global::new()),
+        }
+    }
+}
+
 impl Collector {
     /// Creates a new collector.
     pub fn new() -> Self {
-        Collector { global: Arc::new(Global::new()) }
+        Self::default()
     }
 
-    /// Creates a new handle for the collector.
-    pub fn handle(&self) -> Handle {
-        Handle { local: Local::register(&self.global) }
+    /// Registers a new handle for the collector.
+    pub fn register(&self) -> LocalHandle {
+        Local::register(self)
     }
 }
 
 impl Clone for Collector {
     /// Creates another reference to the same garbage collector.
     fn clone(&self) -> Self {
-        Collector { global: self.global.clone() }
+        Collector {
+            global: self.global.clone(),
+        }
     }
 }
 
-/// A handle to a garbage collector.
-pub struct Handle {
-    local: *const Local,
+impl fmt::Debug for Collector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.pad("Collector { .. }")
+    }
 }
 
-impl Handle {
+impl PartialEq for Collector {
+    /// Checks if both handles point to the same collector.
+    fn eq(&self, rhs: &Collector) -> bool {
+        Arc::ptr_eq(&self.global, &rhs.global)
+    }
+}
+impl Eq for Collector {}
+
+/// A handle to a garbage collector.
+pub struct LocalHandle {
+    pub(crate) local: *const Local,
+}
+
+impl LocalHandle {
     /// Pins the handle.
     #[inline]
     pub fn pin(&self) -> Guard {
@@ -62,11 +86,15 @@ impl Handle {
     pub fn is_pinned(&self) -> bool {
         unsafe { (*self.local).is_pinned() }
     }
+
+    /// Returns the `Collector` associated with this handle.
+    #[inline]
+    pub fn collector(&self) -> &Collector {
+        unsafe { (*self.local).collector() }
+    }
 }
 
-unsafe impl Send for Handle {}
-
-impl Drop for Handle {
+impl Drop for LocalHandle {
     #[inline]
     fn drop(&mut self) {
         unsafe {
@@ -75,32 +103,27 @@ impl Drop for Handle {
     }
 }
 
-impl Clone for Handle {
-    #[inline]
-    fn clone(&self) -> Self {
-        unsafe {
-            Local::acquire_handle(&*self.local);
-        }
-        Handle { local: self.local }
+impl fmt::Debug for LocalHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.pad("LocalHandle { .. }")
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::mem;
-    use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT};
-    use std::sync::atomic::Ordering;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use crossbeam_utils::scoped;
+    use crossbeam_utils::thread;
 
-    use {Collector, Owned};
+    use crate::{Collector, Owned};
 
     const NUM_THREADS: usize = 8;
 
     #[test]
     fn pin_reentrant() {
         let collector = Collector::new();
-        let handle = collector.handle();
+        let handle = collector.register();
         drop(collector);
 
         assert!(!handle.is_pinned());
@@ -119,18 +142,18 @@ mod tests {
     #[test]
     fn flush_local_bag() {
         let collector = Collector::new();
-        let handle = collector.handle();
+        let handle = collector.register();
         drop(collector);
 
         for _ in 0..100 {
             let guard = &handle.pin();
             unsafe {
                 let a = Owned::new(7).into_shared(guard);
-                guard.defer(move || a.into_owned());
+                guard.defer_destroy(a);
 
-                assert!(!(*guard.get_local()).is_bag_empty());
+                assert!(!(*(*guard.local).bag.get()).is_empty());
 
-                while !(*guard.get_local()).is_bag_empty() {
+                while !(*(*guard.local).bag.get()).is_empty() {
                     guard.flush();
                 }
             }
@@ -140,16 +163,16 @@ mod tests {
     #[test]
     fn garbage_buffering() {
         let collector = Collector::new();
-        let handle = collector.handle();
+        let handle = collector.register();
         drop(collector);
 
         let guard = &handle.pin();
         unsafe {
             for _ in 0..10 {
                 let a = Owned::new(7).into_shared(guard);
-                guard.defer(move || a.into_owned());
+                guard.defer_destroy(a);
             }
-            assert!(!(*guard.get_local()).is_bag_empty());
+            assert!(!(*(*guard.local).bag.get()).is_empty());
         }
     }
 
@@ -157,44 +180,38 @@ mod tests {
     fn pin_holds_advance() {
         let collector = Collector::new();
 
-        let threads = (0..NUM_THREADS)
-            .map(|_| {
-                scoped::scope(|scope| {
-                    scope.spawn(|| {
-                        let handle = collector.handle();
-                        for _ in 0..500_000 {
-                            let guard = &handle.pin();
+        thread::scope(|scope| {
+            for _ in 0..NUM_THREADS {
+                scope.spawn(|_| {
+                    let handle = collector.register();
+                    for _ in 0..500_000 {
+                        let guard = &handle.pin();
 
-                            let before = collector.global.load_epoch(Ordering::Relaxed);
-                            collector.global.collect(guard);
-                            let after = collector.global.load_epoch(Ordering::Relaxed);
+                        let before = collector.global.epoch.load(Ordering::Relaxed);
+                        collector.global.collect(guard);
+                        let after = collector.global.epoch.load(Ordering::Relaxed);
 
-                            assert!(after.wrapping_sub(before) <= 2);
-                        }
-                    })
-                })
-            })
-            .collect::<Vec<_>>();
-        drop(collector);
-
-        for t in threads {
-            t.join();
-        }
+                        assert!(after.wrapping_sub(before) <= 2);
+                    }
+                });
+            }
+        })
+        .unwrap();
     }
 
     #[test]
     fn incremental() {
         const COUNT: usize = 100_000;
-        static DESTROYS: AtomicUsize = ATOMIC_USIZE_INIT;
+        static DESTROYS: AtomicUsize = AtomicUsize::new(0);
 
         let collector = Collector::new();
-        let handle = collector.handle();
+        let handle = collector.register();
 
         unsafe {
             let guard = &handle.pin();
             for _ in 0..COUNT {
                 let a = Owned::new(7i32).into_shared(guard);
-                guard.defer(move || {
+                guard.defer_unchecked(move || {
                     drop(a.into_owned());
                     DESTROYS.fetch_add(1, Ordering::Relaxed);
                 });
@@ -218,16 +235,16 @@ mod tests {
     #[test]
     fn buffering() {
         const COUNT: usize = 10;
-        static DESTROYS: AtomicUsize = ATOMIC_USIZE_INIT;
+        static DESTROYS: AtomicUsize = AtomicUsize::new(0);
 
         let collector = Collector::new();
-        let handle = collector.handle();
+        let handle = collector.register();
 
         unsafe {
             let guard = &handle.pin();
             for _ in 0..COUNT {
                 let a = Owned::new(7i32).into_shared(guard);
-                guard.defer(move || {
+                guard.defer_unchecked(move || {
                     drop(a.into_owned());
                     DESTROYS.fetch_add(1, Ordering::Relaxed);
                 });
@@ -251,7 +268,7 @@ mod tests {
     #[test]
     fn count_drops() {
         const COUNT: usize = 100_000;
-        static DROPS: AtomicUsize = ATOMIC_USIZE_INIT;
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
 
         struct Elem(i32);
 
@@ -262,14 +279,14 @@ mod tests {
         }
 
         let collector = Collector::new();
-        let handle = collector.handle();
+        let handle = collector.register();
 
         unsafe {
             let guard = &handle.pin();
 
             for _ in 0..COUNT {
                 let a = Owned::new(Elem(7i32)).into_shared(guard);
-                guard.defer(move || a.into_owned());
+                guard.defer_destroy(a);
             }
             guard.flush();
         }
@@ -284,17 +301,17 @@ mod tests {
     #[test]
     fn count_destroy() {
         const COUNT: usize = 100_000;
-        static DESTROYS: AtomicUsize = ATOMIC_USIZE_INIT;
+        static DESTROYS: AtomicUsize = AtomicUsize::new(0);
 
         let collector = Collector::new();
-        let handle = collector.handle();
+        let handle = collector.register();
 
         unsafe {
             let guard = &handle.pin();
 
             for _ in 0..COUNT {
                 let a = Owned::new(7i32).into_shared(guard);
-                guard.defer(move || {
+                guard.defer_unchecked(move || {
                     drop(a.into_owned());
                     DESTROYS.fetch_add(1, Ordering::Relaxed);
                 });
@@ -312,7 +329,7 @@ mod tests {
     #[test]
     fn drop_array() {
         const COUNT: usize = 700;
-        static DROPS: AtomicUsize = ATOMIC_USIZE_INIT;
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
 
         struct Elem(i32);
 
@@ -323,7 +340,7 @@ mod tests {
         }
 
         let collector = Collector::new();
-        let handle = collector.handle();
+        let handle = collector.register();
 
         let mut guard = handle.pin();
 
@@ -334,7 +351,9 @@ mod tests {
 
         {
             let a = Owned::new(v).into_shared(&guard);
-            unsafe { guard.defer(move || a.into_owned()); }
+            unsafe {
+                guard.defer_destroy(a);
+            }
             guard.flush();
         }
 
@@ -348,10 +367,10 @@ mod tests {
     #[test]
     fn destroy_array() {
         const COUNT: usize = 100_000;
-        static DESTROYS: AtomicUsize = ATOMIC_USIZE_INIT;
+        static DESTROYS: AtomicUsize = AtomicUsize::new(0);
 
         let collector = Collector::new();
-        let handle = collector.handle();
+        let handle = collector.register();
 
         unsafe {
             let guard = &handle.pin();
@@ -363,8 +382,8 @@ mod tests {
 
             let ptr = v.as_mut_ptr() as usize;
             let len = v.len();
-            guard.defer(move || {
-                drop(Vec::from_raw_parts(ptr as *const u8 as *mut u8, len, len));
+            guard.defer_unchecked(move || {
+                drop(Vec::from_raw_parts(ptr as *const i32 as *mut i32, len, len));
                 DESTROYS.fetch_add(len, Ordering::Relaxed);
             });
             guard.flush();
@@ -383,7 +402,7 @@ mod tests {
     fn stress() {
         const THREADS: usize = 8;
         const COUNT: usize = 100_000;
-        static DROPS: AtomicUsize = ATOMIC_USIZE_INIT;
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
 
         struct Elem(i32);
 
@@ -395,28 +414,23 @@ mod tests {
 
         let collector = Collector::new();
 
-        let threads = (0..THREADS)
-            .map(|_| {
-                scoped::scope(|scope| {
-                    scope.spawn(|| {
-                        let handle = collector.handle();
-                        for _ in 0..COUNT {
-                            let guard = &handle.pin();
-                            unsafe {
-                                let a = Owned::new(Elem(7i32)).into_shared(guard);
-                                guard.defer(move || a.into_owned());
-                            }
+        thread::scope(|scope| {
+            for _ in 0..THREADS {
+                scope.spawn(|_| {
+                    let handle = collector.register();
+                    for _ in 0..COUNT {
+                        let guard = &handle.pin();
+                        unsafe {
+                            let a = Owned::new(Elem(7i32)).into_shared(guard);
+                            guard.defer_destroy(a);
                         }
-                    })
-                })
-            })
-            .collect::<Vec<_>>();
+                    }
+                });
+            }
+        })
+        .unwrap();
 
-        for t in threads {
-            t.join();
-        }
-
-        let handle = collector.handle();
+        let handle = collector.register();
         while DROPS.load(Ordering::Relaxed) < COUNT * THREADS {
             let guard = &handle.pin();
             collector.global.collect(guard);

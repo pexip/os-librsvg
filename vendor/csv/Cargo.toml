@@ -3,7 +3,7 @@
 # When uploading crates to the registry Cargo will automatically
 # "normalize" Cargo.toml files for maximal compatibility
 # with all versions of Cargo and also rewrite `path` dependencies
-# to registry (e.g. crates.io) dependencies
+# to registry (e.g., crates.io) dependencies
 #
 # If you believe there's an error in this file please file an
 # issue against the rust-lang/cargo repository. If you're
@@ -11,8 +11,9 @@
 # will likely look very different (and much more reasonable)
 
 [package]
+edition = "2018"
 name = "csv"
-version = "1.0.2"
+version = "1.1.5"
 authors = ["Andrew Gallant <jamslam@gmail.com>"]
 exclude = ["/.travis.yml", "/appveyor.yml", "/ci/*", "/scripts/*"]
 description = "Fast CSV parsing with support for serde."
@@ -31,16 +32,24 @@ debug = true
 
 [lib]
 bench = false
+[dependencies.bstr]
+version = "0.2.1"
+features = ["serde1"]
+
 [dependencies.csv-core]
-version = "0.1.4"
+version = "0.1.6"
+
+[dependencies.itoa]
+version = "0.4.3"
+
+[dependencies.ryu]
+version = "1"
 
 [dependencies.serde]
 version = "1.0.55"
-[dev-dependencies.serde_bytes]
-version = "0.10.4"
-
-[dev-dependencies.serde_derive]
+[dev-dependencies.serde]
 version = "1.0.55"
+features = ["derive"]
 [badges.appveyor]
 repository = "BurntSushi/rust-csv"
 

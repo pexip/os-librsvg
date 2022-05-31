@@ -3,7 +3,7 @@
 # When uploading crates to the registry Cargo will automatically
 # "normalize" Cargo.toml files for maximal compatibility
 # with all versions of Cargo and also rewrite `path` dependencies
-# to registry (e.g. crates.io) dependencies
+# to registry (e.g., crates.io) dependencies
 #
 # If you believe there's an error in this file please file an
 # issue against the rust-lang/cargo repository. If you're
@@ -12,7 +12,7 @@
 
 [package]
 name = "glib"
-version = "0.5.0"
+version = "0.9.3"
 authors = ["The Gtk-rs Project Developers"]
 exclude = ["gir-files/*"]
 description = "Rust bindings for the GLib library"
@@ -22,34 +22,61 @@ readme = "README.md"
 keywords = ["glib", "gtk-rs", "gnome", "GUI"]
 license = "MIT"
 repository = "https://github.com/gtk-rs/glib"
+[package.metadata.docs.rs]
+features = ["dox"]
 
 [lib]
 name = "glib"
 [dependencies.bitflags]
 version = "1.0"
 
+[dependencies.futures-channel]
+version = "0.3"
+
+[dependencies.futures-core]
+version = "0.3"
+
+[dependencies.futures-executor]
+version = "0.3"
+
+[dependencies.futures-preview]
+version = "0.3.0-alpha"
+optional = true
+
+[dependencies.futures-task]
+version = "0.3"
+
+[dependencies.futures-util]
+version = "0.3"
+
 [dependencies.glib-sys]
-version = "0.6.0"
+version = "0.9.1"
 
 [dependencies.gobject-sys]
-version = "0.6.0"
+version = "0.9.1"
 
 [dependencies.lazy_static]
-version = "1.0"
+version = "1.2"
 
 [dependencies.libc]
 version = "0.2"
-[dev-dependencies.tempdir]
-version = "0.3"
+[dev-dependencies.tempfile]
+version = "3"
 
 [features]
 dox = ["glib-sys/dox", "gobject-sys/dox"]
-v2_34 = ["glib-sys/v2_34", "gobject-sys/v2_34"]
-v2_38 = ["v2_34", "glib-sys/v2_38", "gobject-sys/v2_38"]
-v2_40 = ["v2_38", "glib-sys/v2_40"]
-v2_44 = ["v2_40", "glib-sys/v2_44", "gobject-sys/v2_44"]
+v2_44 = ["glib-sys/v2_44", "gobject-sys/v2_44"]
 v2_46 = ["v2_44", "glib-sys/v2_46", "gobject-sys/v2_46"]
 v2_48 = ["v2_46", "glib-sys/v2_48"]
 v2_50 = ["v2_48", "glib-sys/v2_50"]
 v2_52 = ["v2_50", "glib-sys/v2_52"]
 v2_54 = ["v2_52", "glib-sys/v2_54", "gobject-sys/v2_54"]
+v2_56 = ["v2_54", "glib-sys/v2_56"]
+v2_58 = ["v2_56", "glib-sys/v2_58"]
+v2_60 = ["v2_58", "glib-sys/v2_60"]
+[badges.appveyor]
+repository = "GuillaumeGomez/glib"
+service = "github"
+
+[badges.travis-ci]
+repository = "gtk-rs/glib"

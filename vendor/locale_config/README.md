@@ -88,11 +88,27 @@ See full documentation on [![Docs.rs](https://docs.rs/locale_config/badge.svg)](
       etc.) are not detected (yet).
     - Not well tested.
 
+* **OS X:** Reads setting from `NSLocale`, can be overridden by setting the
+  Unix environment variables.
+
 * **CGI:** The `HTTP_ACCEPT_LANGUAGE` environment variable is used if
   detected. Hopefully it is specific enough to the CGI environment that it
   can be used whenever detected.
 
 ## Changelog
+
+### 0.3.0
+
+ * Support OS X `NSLocale`.
+   Thanks Sophie Tauchert (@999eagle).
+
+### 0.2.3
+
+* Try support getting locale in emscripten targets in browser. Unfortunately
+  the emscripten targets seem to have broken in cross meanwhile, so they are not
+  being tested.
+* Update to winapi 0.3.
+* Update ro regex 1.0.
 
 ### 0.2.2
 

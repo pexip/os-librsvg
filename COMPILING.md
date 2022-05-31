@@ -19,6 +19,7 @@ explains librsvg's peculiarities.
 * [Basic compilation instructions](#basic-compilation-instructions)
 * [Verbosity](#verbosity)
 * [Debug or release builds](#debug-or-release-builds)
+* [Selecting a Rust toolchain](#selecting-a-rust-toolchain)
 * [Cross-compilation](#cross-compilation)
 * [Building with no network access](#building-with-no-network-access)
 * [Running `make distcheck`](#running-make-distcheck)
@@ -31,23 +32,19 @@ minimum version is listed here; you may use a newer version instead.
 **Compilers:**
 
 * a C compiler and `make` tool; we recommend GNU `make`.
-* rust 1.27 or later
+* rust 1.40 or later
 * cargo
 
 **Mandatory dependencies:**
 
-* Cairo 1.15.12 with PNG support
+* Cairo 1.16.0 with PNG support
 * Freetype2 2.8.0
-* Libcroco 0.6.1
 * Gdk-pixbuf 2.20.0
 * GIO 2.24.0
 * GObject-Introspection 0.10.8
+* Gtk-doc 1.13
 * Libxml2 2.9.0
 * Pango 1.38.0
-
-**Optional dependencies:**
-
-* GTK+ 3.10.0 if you want the `rsvg-view-3` program
 
 The following sections describe how to install these dependencies on
 several systems.
@@ -63,8 +60,14 @@ As of 2018/Feb/22, librsvg cannot be built in `debian stable` and
 apt-get install -y gcc make rustc cargo \
 automake autoconf libtool gettext itstool \
 libgdk-pixbuf2.0-dev libgirepository1.0-dev \
-gtk-doc-tools git libgtk-3-dev \
-libxml2-dev libcroco3-dev libcairo2-dev libpango1.0-dev
+gtk-doc-tools git \
+libxml2-dev libcairo2-dev libpango1.0-dev
+```
+
+Additionally, as of September 2018 you need to add `gdk-pixbuf` utilities to your path, see #331 for more.
+
+```sh
+PATH="$PATH:/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0"
 ```
 
 ### Fedora based systems
@@ -73,8 +76,8 @@ libxml2-dev libcroco3-dev libcairo2-dev libpango1.0-dev
 dnf install -y gcc rust rust-std-static cargo make \
 automake autoconf libtool gettext itstool \
 gdk-pixbuf2-devel gobject-introspection-devel \
-gtk-doc git redhat-rpm-config gtk3-devel \
-libxml2-devel libcroco-devel cairo-devel pango-devel
+gtk-doc git redhat-rpm-config gettext-devel \
+libxml2-devel cairo-devel pango-devel
 ```
 
 ### openSUSE based systems
@@ -82,8 +85,8 @@ libxml2-devel libcroco-devel cairo-devel pango-devel
 ```sh
 zypper install -y gcc rust rust-std cargo make \
 automake autoconf libtool gettext itstool git \
-gtk-doc gobject-introspection-devel gtk3-devel \
-libxml2-devel libcroco-devel cairo-devel \
+gtk-doc gobject-introspection-devel \
+libxml2-devel cairo-devel \
 pango-devel gdk-pixbuf-devel
 ```
 
@@ -93,7 +96,7 @@ Dependencies may be installed using [Homebrew](https://brew.sh) or another
 package manager.
 
 ```sh
-brew install cairo gdk-pixbuf glib libcroco pango \
+brew install cairo gdk-pixbuf glib pango \
 gobject-introspection rust
 
 export PKG_CONFIG_PATH="`brew --prefix`/lib/pkgconfig:\
@@ -185,6 +188,24 @@ build the Rust sub-library in debug mode.
 In case both the environment variable and the command-line option are
 specified, the command-line option overrides the env var.
 
+# Selecting a Rust toolchain
+
+By default, the configure/make steps will use the `cargo` binary that
+is found in your `$PATH`.  If you have a system installation of Rust
+and one in your home directory, or for special build systems, you may
+need to override the locations of `cargo` and/or `rustc`.  In this
+case, you can set any of these environment variables before running
+`configure` or `autogen.sh`:
+
+* `RUSTC` - path to the `rustc` compiler
+* `CARGO` - path to `cargo`
+
+Note that `$RUSTC` only gets used in the `configure` script to ensure
+that there is a Rust compiler installed with an appropriate version.
+The actual compilation process just uses `$CARGO`, and assumes that
+that `cargo` binary will use the same Rust compiler as the other
+variable.
+
 # Cross-compilation
 
 If you need to cross-compile librsvg, specify the `--host=TRIPLE` to
@@ -230,6 +251,38 @@ cd /source/tree/for/librsvg
 ./configure --host=MYMACHINE-VENDOR-OS
 make RUST_TARGET_PATH=/my/target/definition
 ```
+
+## Cross-compiling for win32 target
+
+You can also cross-compile to win32 (Microsoft Windows) target by using
+[MinGW-w64][mingw-w64]. You need to specify the appropriate target in the same way
+as usual:
+
+* Set an appropriate target via the `--host` configure option:
+    * `i686-w64-mingw32` for 32-bit target
+    * `x86_64-w64-mingw32` for 64-bit target
+* Set an appropriate RUST_TARGET:
+    * `i686-pc-windows-gnu` for 32-bit target
+    * `x86_64-pc-windows-gnu` for 64-bit target
+
+In addition you may need to link with some win32 specific libraries like
+`LIBS="-lws2_32 -luserenv"`.
+
+Example:
+
+```sh
+./configure \
+  --host=x86_64-w64-mingw32 \
+  RUST_TARGET=x86_64-pc-windows-gnu \
+  LIBS="-lws2_32 -luserenv"
+make
+```
+
+The most painful aspect of this way of building is preparing a win32
+build for each of librsvg's dependencies. [MXE][mxe] may help you on
+this work.
+
+
 
 # Building with no network access
 
@@ -278,3 +331,5 @@ trying to modify your system locations.
 [cargo-source-replacement]: http://doc.crates.io/source-replacement.html
 [rust-cross]: https://github.com/japaric/rust-cross
 [target-json]: https://github.com/japaric/rust-cross#target-specification-files
+[mingw-w64]: https://mingw-w64.org/
+[mxe]: https://mxe.cc/

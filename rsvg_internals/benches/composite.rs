@@ -1,13 +1,9 @@
-#[macro_use]
-extern crate criterion;
-use criterion::{black_box, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-extern crate cairo;
-extern crate cairo_sys;
-extern crate rsvg_internals;
-
-use rsvg_internals::filters::{composite::composite_arithmetic, context::IRect};
-use rsvg_internals::surface_utils::shared_surface::{SharedImageSurface, SurfaceType};
+use rsvg_internals::rect::IRect;
+use rsvg_internals::surface_utils::shared_surface::{
+    composite_arithmetic, ExclusiveImageSurface, SharedImageSurface, SurfaceType,
+};
 
 const SURFACE_SIDE: i32 = 512;
 const BOUNDS: IRect = IRect {
@@ -20,14 +16,12 @@ const BOUNDS: IRect = IRect {
 fn bench_composite(c: &mut Criterion) {
     c.bench_function("composite arithmetic", |b| {
         let input_surface =
-            cairo::ImageSurface::create(cairo::Format::ARgb32, SURFACE_SIDE, SURFACE_SIDE).unwrap();
-        let input_surface = SharedImageSurface::new(input_surface, SurfaceType::SRgb).unwrap();
+            SharedImageSurface::empty(SURFACE_SIDE, SURFACE_SIDE, SurfaceType::SRgb).unwrap();
         let input_2_surface =
-            cairo::ImageSurface::create(cairo::Format::ARgb32, SURFACE_SIDE, SURFACE_SIDE).unwrap();
-        let input_2_surface = SharedImageSurface::new(input_2_surface, SurfaceType::SRgb).unwrap();
+            SharedImageSurface::empty(SURFACE_SIDE, SURFACE_SIDE, SurfaceType::SRgb).unwrap();
 
         let mut output_surface =
-            cairo::ImageSurface::create(cairo::Format::ARgb32, SURFACE_SIDE, SURFACE_SIDE).unwrap();
+            ExclusiveImageSurface::new(SURFACE_SIDE, SURFACE_SIDE, SurfaceType::SRgb).unwrap();
 
         let bounds = black_box(BOUNDS);
 

@@ -5,7 +5,9 @@ version = "1.0"
 target_path = "."
 work_mode = "normal"
 generate_safety_asserts = false
-min_cfg_version = "1.30"
+min_cfg_version = "1.36"
+single_version_file = true
+deprecate_by_min_version = true
 
 generate = [
     "PangoCairo.Font",
@@ -13,8 +15,8 @@ generate = [
 
 manual = [
     "cairo.Context",
-    "cairo.FontType",
     "cairo.FontOptions",
+    "cairo.FontType",
     "cairo.ScaledFont",
     "GLib.Error",
     "Pango.Context",
@@ -101,12 +103,17 @@ status = "generate"
 [[object]]
 name = "PangoCairo.FontMap"
 status = "generate"
+manual_traits = ["FontMapExtManual"]
     [[object.function]]
     name = "get_font_type"
     ignore = true
+    doc_trait_name = "FontMapExtManual"
     [[object.function]]
     name = "new_for_font_type"
     ignore = true
     [[object.function]]
     name = "new"
+    ignore = true
+    [[object.function]]
+    name = "set_default"
     ignore = true

@@ -8,8 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use super::sip::{SipHasher, SipHasher13, SipHasher24};
 use std::hash::{Hash, Hasher};
-use sip::{SipHasher, SipHasher13, SipHasher24};
 
 // Hash just the bytes of the slice, without length prefix
 struct Bytes<'a>(&'a [u8]);
@@ -23,25 +23,25 @@ impl<'a> Hash for Bytes<'a> {
 }
 
 macro_rules! u8to64_le {
-    ($buf:expr, $i:expr) =>
-    ($buf[0+$i] as u64 |
-     ($buf[1+$i] as u64) << 8 |
-     ($buf[2+$i] as u64) << 16 |
-     ($buf[3+$i] as u64) << 24 |
-     ($buf[4+$i] as u64) << 32 |
-     ($buf[5+$i] as u64) << 40 |
-     ($buf[6+$i] as u64) << 48 |
-     ($buf[7+$i] as u64) << 56);
-    ($buf:expr, $i:expr, $len:expr) =>
-    ({
+    ($buf:expr, $i:expr) => {
+        $buf[0 + $i] as u64
+            | ($buf[1 + $i] as u64) << 8
+            | ($buf[2 + $i] as u64) << 16
+            | ($buf[3 + $i] as u64) << 24
+            | ($buf[4 + $i] as u64) << 32
+            | ($buf[5 + $i] as u64) << 40
+            | ($buf[6 + $i] as u64) << 48
+            | ($buf[7 + $i] as u64) << 56
+    };
+    ($buf:expr, $i:expr, $len:expr) => {{
         let mut t = 0;
         let mut out = 0;
         while t < $len {
-            out |= ($buf[t+$i] as u64) << t*8;
+            out |= ($buf[t + $i] as u64) << t * 8;
             t += 1;
         }
         out
-    });
+    }};
 }
 
 fn hash_with<H: Hasher, T: Hash>(mut st: H, x: &T) -> u64 {
@@ -319,4 +319,13 @@ fn test_hash_no_concat_alias() {
 
     assert_ne!(v, w);
     assert_ne!(hash(&v), hash(&w));
+}
+
+#[test]
+fn test_hash_serde() {
+    let val64 = 0xdeadbeef_deadbeef_u64;
+    let hash = hash(&val64);
+    let serialized = serde_json::to_string(&hash).unwrap();
+    let deserialized: u64 = serde_json::from_str(&serialized).unwrap();
+    assert_eq!(hash, deserialized);
 }

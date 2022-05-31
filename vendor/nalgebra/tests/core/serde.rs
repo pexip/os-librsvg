@@ -1,20 +1,12 @@
 #![cfg(feature = "serde-serialize")]
 
-use serde_json;
-use rand;
 use na::{
-    DMatrix,
-    Matrix3x4,
-    Point3,
-    Translation3,
-    Rotation3,
-    Isometry3,
-    IsometryMatrix3,
-    Similarity3,
-    SimilarityMatrix3,
-    Quaternion,
-    Unit,
+    DMatrix, Isometry2, Isometry3, IsometryMatrix2, IsometryMatrix3, Matrix3x4, Point2, Point3,
+    Quaternion, Rotation2, Rotation3, Similarity2, Similarity3, SimilarityMatrix2,
+    SimilarityMatrix3, Translation2, Translation3, Unit,
 };
+use rand;
+use serde_json;
 
 macro_rules! test_serde(
     ($($test: ident, $ty: ident);* $(;)*) => {$(
@@ -22,7 +14,8 @@ macro_rules! test_serde(
         fn $test() {
             let v: $ty<f32> = rand::random();
             let serialized = serde_json::to_string(&v).unwrap();
-            assert_eq!(v, serde_json::from_str(&serialized).unwrap());
+            let deserialized: $ty<f32> = serde_json::from_str(&serialized).unwrap();
+            assert_eq!(v, deserialized);
         }
     )*}
 );
@@ -31,7 +24,8 @@ macro_rules! test_serde(
 fn serde_dmatrix() {
     let v: DMatrix<f32> = DMatrix::new_random(3, 4);
     let serialized = serde_json::to_string(&v).unwrap();
-    assert_eq!(v, serde_json::from_str(&serialized).unwrap());
+    let deserialized: DMatrix<f32> = serde_json::from_str(&serialized).unwrap();
+    assert_eq!(v, deserialized);
 }
 
 test_serde!(
@@ -44,6 +38,13 @@ test_serde!(
     serde_similarity3,        Similarity3;
     serde_similarity_matrix3, SimilarityMatrix3;
     serde_quaternion,         Quaternion;
+    serde_point2,             Point2;
+    serde_translation2,       Translation2;
+    serde_rotation2,          Rotation2;
+    serde_isometry2,          Isometry2;
+    serde_isometry_matrix2,   IsometryMatrix2;
+    serde_similarity2,        Similarity2;
+    serde_similarity_matrix2, SimilarityMatrix2;
 );
 
 #[test]

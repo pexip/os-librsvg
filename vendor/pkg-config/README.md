@@ -1,7 +1,7 @@
 # pkg-config-rs
 
-[![Build Status](https://travis-ci.org/alexcrichton/pkg-config-rs.svg?branch=master)](https://travis-ci.org/alexcrichton/pkg-config-rs)
-[![Rust](https://img.shields.io/badge/rust-1.13%2B-blue.svg?maxAge=3600)](https://github.com/alexcrichton/pkg-config-rs/)
+[![Build Status](https://travis-ci.com/rust-lang/pkg-config-rs.svg?branch=master)](https://travis-ci.com/rust-lang/pkg-config-rs)
+[![Rust](https://img.shields.io/badge/rust-1.30%2B-blue.svg?maxAge=3600)](https://github.com/rust-lang/pkg-config-rs/)
 
 [Documentation](https://docs.rs/pkg-config)
 
@@ -13,7 +13,7 @@ You can use this crate directly to probe for specific libraries, or use
 [metadeps](https://github.com/joshtriplett/metadeps) to declare all your
 `pkg-config` dependencies in `Cargo.toml`.
 
-This library requires Rust 1.13+.
+This library requires Rust 1.30+.
 
 # Example
 
@@ -40,7 +40,7 @@ fn main() {
 
 # External configuration via target-scoped environment variables
 
-In cross-compilation context, it is useful to manage separately PKG_CONFIG_PATH
+In cross-compilation context, it is useful to manage separately `PKG_CONFIG_PATH`
 and a few other variables for the `host` and the `target` platform.
 
 The supported variables are: `PKG_CONFIG_PATH`, `PKG_CONFIG_LIBDIR`, and
@@ -53,7 +53,13 @@ Each of these variables can also be supplied with certain prefixes and suffixes,
 3. `<build-kind>_<var>` - for example, `HOST_PKG_CONFIG_PATH` or `TARGET_PKG_CONFIG_PATH`
 4. `<var>` - a plain `PKG_CONFIG_PATH`
 
-Also note that `PKG_CONFIG_ALLOW_CROSS` must always be set in cross-compilation context.
+This crate will allow `pkg-config` to be used in cross-compilation
+if `PKG_CONFIG_SYSROOT_DIR` or `PKG_CONFIG` is set. You can set `PKG_CONFIG_ALLOW_CROSS=1`
+to bypass the compatibility check, but please note that enabling use of `pkg-config` in
+cross-compilation without appropriate sysroot and search paths set is likely to break builds.
+
+Some Rust sys crates support building vendored libraries from source, which may be a work
+around for lack of cross-compilation support in `pkg-config`.
 
 # License
 
@@ -69,5 +75,5 @@ at your option.
 ### Contribution
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in Serde by you, as defined in the Apache-2.0 license, shall be
+for inclusion in pkg-config-rs by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.

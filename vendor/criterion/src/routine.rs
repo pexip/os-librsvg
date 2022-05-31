@@ -1,35 +1,93 @@
-use benchmark::BenchmarkConfig;
-use std::time::{Duration, Instant};
-
-use program::Program;
-use report::{BenchmarkId, ReportContext};
+use crate::benchmark::BenchmarkConfig;
+use crate::connection::OutgoingMessage;
+use crate::measurement::Measurement;
+use crate::report::{BenchmarkId, Report, ReportContext};
+use crate::{ActualSamplingMode, Bencher, Criterion, DurationExt};
 use std::marker::PhantomData;
-use {Bencher, Criterion, DurationExt};
+use std::time::Duration;
 
 /// PRIVATE
-pub trait Routine<T> {
-    fn start(&mut self, parameter: &T) -> Option<Program>;
+pub(crate) trait Routine<M: Measurement, T: ?Sized> {
+    /// PRIVATE
+    fn bench(&mut self, m: &M, iters: &[u64], parameter: &T) -> Vec<f64>;
+    /// PRIVATE
+    fn warm_up(&mut self, m: &M, how_long: Duration, parameter: &T) -> (u64, u64);
 
     /// PRIVATE
-    fn bench(&mut self, m: &mut Option<Program>, iters: &[u64], parameter: &T) -> Vec<f64>;
-    /// PRIVATE
-    fn warm_up(&mut self, m: &mut Option<Program>, how_long: Duration, parameter: &T)
-        -> (u64, u64);
+    fn test(&mut self, m: &M, parameter: &T) {
+        self.bench(m, &[1u64], parameter);
+    }
 
-    /// PRIVATE
-    fn test(&mut self, parameter: &T) {
-        let mut m = self.start(parameter);
-        self.bench(&mut m, &[1u64], parameter);
+    /// Iterates the benchmarked function for a fixed length of time, but takes no measurements.
+    /// This keeps the overall benchmark suite runtime constant-ish even when running under a
+    /// profiler with an unknown amount of overhead. Since no measurements are taken, it also
+    /// reduces the amount of time the execution spends in Criterion.rs code, which should help
+    /// show the performance of the benchmarked code more clearly as well.
+    fn profile(
+        &mut self,
+        measurement: &M,
+        id: &BenchmarkId,
+        criterion: &Criterion<M>,
+        report_context: &ReportContext,
+        time: Duration,
+        parameter: &T,
+    ) {
+        criterion
+            .report
+            .profile(id, report_context, time.to_nanos() as f64);
+
+        let mut profile_path = report_context.output_directory.clone();
+        if (*crate::CARGO_CRITERION_CONNECTION).is_some() {
+            // If connected to cargo-criterion, generate a cargo-criterion-style path.
+            // This is kind of a hack.
+            profile_path.push("profile");
+            profile_path.push(id.as_directory_name());
+        } else {
+            profile_path.push(id.as_directory_name());
+            profile_path.push("profile");
+        }
+        criterion
+            .profiler
+            .borrow_mut()
+            .start_profiling(id.id(), &profile_path);
+
+        let time = time.to_nanos();
+
+        // TODO: Some profilers will show the two batches of iterations as
+        // being different code-paths even though they aren't really.
+
+        // Get the warmup time for one second
+        let (wu_elapsed, wu_iters) = self.warm_up(measurement, Duration::from_secs(1), parameter);
+        if wu_elapsed < time {
+            // Initial guess for the mean execution time
+            let met = wu_elapsed as f64 / wu_iters as f64;
+
+            // Guess how many iterations will be required for the remaining time
+            let remaining = (time - wu_elapsed) as f64;
+
+            let iters = remaining / met;
+            let iters = iters as u64;
+
+            self.bench(measurement, &[iters], parameter);
+        }
+
+        criterion
+            .profiler
+            .borrow_mut()
+            .stop_profiling(id.id(), &profile_path);
+
+        criterion.report.terminated(id, report_context);
     }
 
     fn sample(
         &mut self,
+        measurement: &M,
         id: &BenchmarkId,
         config: &BenchmarkConfig,
-        criterion: &Criterion,
+        criterion: &Criterion<M>,
         report_context: &ReportContext,
         parameter: &T,
-    ) -> (Box<[f64]>, Box<[f64]>) {
+    ) -> (ActualSamplingMode, Box<[f64]>, Box<[f64]>) {
         let wu = config.warm_up_time;
         let m_ns = config.measurement_time.to_nanos();
 
@@ -37,66 +95,111 @@ pub trait Routine<T> {
             .report
             .warmup(id, report_context, wu.to_nanos() as f64);
 
-        let mut m = self.start(parameter);
+        if let Some(conn) = &criterion.connection {
+            conn.send(&OutgoingMessage::Warmup {
+                id: id.into(),
+                nanos: wu.to_nanos() as f64,
+            })
+            .unwrap();
+        }
 
-        let (wu_elapsed, wu_iters) = self.warm_up(&mut m, wu, parameter);
+        let (wu_elapsed, wu_iters) = self.warm_up(measurement, wu, parameter);
+        if crate::debug_enabled() {
+            println!(
+                "\nCompleted {} iterations in {} nanoseconds, estimated execution time is {} ns",
+                wu_iters,
+                wu_elapsed,
+                wu_elapsed as f64 / wu_iters as f64
+            );
+        }
 
         // Initial guess for the mean execution time
         let met = wu_elapsed as f64 / wu_iters as f64;
 
         let n = config.sample_size as u64;
-        // Solve: [d + 2*d + 3*d + ... + n*d] * met = m_ns
-        let total_runs = n * (n + 1) / 2;
-        let d = (m_ns as f64 / met / total_runs as f64).ceil() as u64;
 
-        let m_iters = (1..(n + 1) as u64).map(|a| a * d).collect::<Vec<u64>>();
+        let actual_sampling_mode = config
+            .sampling_mode
+            .choose_sampling_mode(met, n, m_ns as f64);
 
-        let m_ns = total_runs as f64 * d as f64 * met;
+        let m_iters = actual_sampling_mode.iteration_counts(met, n, &config.measurement_time);
+
+        let expected_ns = m_iters
+            .iter()
+            .copied()
+            .map(|count| count as f64 * met)
+            .sum();
+
+        // Use saturating_add to handle overflow.
+        let mut total_iters = 0u64;
+        for count in m_iters.iter().copied() {
+            total_iters = total_iters.saturating_add(count);
+        }
+
         criterion
             .report
-            .measurement_start(id, report_context, n, m_ns, m_iters.iter().sum());
-        let m_elapsed = self.bench(&mut m, &m_iters, parameter);
+            .measurement_start(id, report_context, n, expected_ns, total_iters);
+
+        if let Some(conn) = &criterion.connection {
+            conn.send(&OutgoingMessage::MeasurementStart {
+                id: id.into(),
+                sample_count: n,
+                estimate_ns: expected_ns,
+                iter_count: total_iters,
+            })
+            .unwrap();
+        }
+
+        let m_elapsed = self.bench(measurement, &m_iters, parameter);
 
         let m_iters_f: Vec<f64> = m_iters.iter().map(|&x| x as f64).collect();
 
-        (m_iters_f.into_boxed_slice(), m_elapsed.into_boxed_slice())
+        (
+            actual_sampling_mode,
+            m_iters_f.into_boxed_slice(),
+            m_elapsed.into_boxed_slice(),
+        )
     }
 }
 
-pub struct Function<F, T>
+pub struct Function<M: Measurement, F, T>
 where
-    F: FnMut(&mut Bencher, &T),
+    F: FnMut(&mut Bencher<'_, M>, &T),
+    T: ?Sized,
 {
     f: F,
+    // TODO: Is there some way to remove these?
     _phantom: PhantomData<T>,
+    _phamtom2: PhantomData<M>,
 }
-impl<F, T> Function<F, T>
+impl<M: Measurement, F, T> Function<M, F, T>
 where
-    F: FnMut(&mut Bencher, &T),
+    F: FnMut(&mut Bencher<'_, M>, &T),
+    T: ?Sized,
 {
-    pub fn new(f: F) -> Function<F, T> {
+    pub fn new(f: F) -> Function<M, F, T> {
         Function {
             f,
             _phantom: PhantomData,
+            _phamtom2: PhantomData,
         }
     }
 }
 
-impl<F, T> Routine<T> for Function<F, T>
+impl<M: Measurement, F, T> Routine<M, T> for Function<M, F, T>
 where
-    F: FnMut(&mut Bencher, &T),
+    F: FnMut(&mut Bencher<'_, M>, &T),
+    T: ?Sized,
 {
-    fn start(&mut self, _: &T) -> Option<Program> {
-        None
-    }
-
-    fn bench(&mut self, _: &mut Option<Program>, iters: &[u64], parameter: &T) -> Vec<f64> {
+    fn bench(&mut self, m: &M, iters: &[u64], parameter: &T) -> Vec<f64> {
         let f = &mut self.f;
 
         let mut b = Bencher {
             iterated: false,
             iters: 0,
-            elapsed: Duration::from_secs(0),
+            value: m.zero(),
+            measurement: m,
+            elapsed_time: Duration::from_millis(0),
         };
 
         iters
@@ -105,38 +208,35 @@ where
                 b.iters = *iters;
                 (*f)(&mut b, parameter);
                 b.assert_iterated();
-                b.elapsed.to_nanos() as f64
+                m.to_f64(&b.value)
             })
             .collect()
     }
 
-    fn warm_up(
-        &mut self,
-        _: &mut Option<Program>,
-        how_long: Duration,
-        parameter: &T,
-    ) -> (u64, u64) {
+    fn warm_up(&mut self, m: &M, how_long: Duration, parameter: &T) -> (u64, u64) {
         let f = &mut self.f;
         let mut b = Bencher {
             iterated: false,
             iters: 1,
-            elapsed: Duration::from_secs(0),
+            value: m.zero(),
+            measurement: m,
+            elapsed_time: Duration::from_millis(0),
         };
 
         let mut total_iters = 0;
-        let start = Instant::now();
+        let mut elapsed_time = Duration::from_millis(0);
         loop {
             (*f)(&mut b, parameter);
 
             b.assert_iterated();
 
             total_iters += b.iters;
-            let elapsed = start.elapsed();
-            if elapsed > how_long {
-                return (elapsed.to_nanos(), total_iters);
+            elapsed_time += b.elapsed_time;
+            if elapsed_time > how_long {
+                return (elapsed_time.to_nanos(), total_iters);
             }
 
-            b.iters *= 2;
+            b.iters = b.iters.wrapping_mul(2);
         }
     }
 }

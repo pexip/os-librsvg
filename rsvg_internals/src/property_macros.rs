@@ -1,31 +1,106 @@
+//! Macros to define CSS properties.
+
+/// Trait which all CSS property types should implement.
+///
+/// This is generic on `T` for testing purposes; in the actual code `T` needs to
+/// be [`ComputedValues`].
+///
+/// [`ComputedValues`]: ../properties/struct.ComputedValues.html
 pub trait Property<T> {
+    /// Whether the property's computed value inherits from parent to child elements.
+    ///
+    /// For each property, the CSS or SVG specs say whether the property inherits
+    /// automatically.  When a property is not specified in an element, the return value
+    /// of this method determines whether the property's value is copied from the parent
+    /// element (`true`), or whether it resets to the initial/default value (`false`).
     fn inherits_automatically() -> bool;
-    fn compute(&self, &T) -> Self;
+
+    /// Derive the CSS computed value from the parent element's `ComputedValues` and the `self` value.
+    ///
+    /// The CSS or SVG specs say how to derive this for each property.
+    fn compute(&self, _: &T) -> Self;
 }
 
-/// Generates a property definition that simply parses strings to enum variants
-/// or to a tuple struct of the given type.
+/// Generates a type for a CSS property.
 ///
-/// For example, the SVG spec defines the `stroke-linejoin` property
-/// to have possible values `miter | round | bevel | inherit`, with a default
-/// of `miter`.  We can define the property like this:
+/// Writing a property by hand takes a bit of boilerplate:
+///
+/// * Define a type to represent the property's values.
+///
+/// * A [`Parse`] implementation to parse the property.
+///
+/// * A `Default` implementation to define the property's *initial* value.
+///
+/// * A [`Property`] implementation to define whether the property
+/// inherits from the parent element, and how the property derives
+/// its computed value.
+///
+/// When going from [`SpecifiedValues`] to [`ComputedValues`], properties
+/// which inherit automatically from the parent element will just have
+/// their values cloned.  Properties which do not inherit will be reset back
+/// to their initial value (i.e. their `Default`).
+///
+/// The default implementation of `Property::compute()` is to just
+/// clone the property's value.  Properties which need more
+/// sophisticated computation can override this.
+///
+/// This macro allows defining properties of different kinds; see the following
+/// sections for examples.
+///
+/// # Simple identifiers
+///
+/// Many properties are just sets of identifiers and can be represented
+/// by simple enums.  In this case, you can use the following:
 ///
 /// ```ignore
 /// make_property!(
-/// StrokeLinejoin,
-/// default: Miter,
+///   ComputedValues,
+///   StrokeLinejoin,
+///   default: Miter,
+///   inherits_automatically: true,
 ///
-/// "miter" => Miter,
-/// "round" => Round,
-/// "bevel" => Bevel,
+///   identifiers:
+///     "miter" => Miter,
+///     "round" => Round,
+///     "bevel" => Bevel,
 /// );
 /// ```
 ///
-/// The macro will generate a `StrokeLinejoin` enum with the provided
-/// variants.  It will generate an `impl Default for StrokeLinejoin`
-/// with the provided `default:` value.  Finally, it will generate an
-/// `impl Parse for StrokeLinejoin`, from `parsers::Parse`, where
-/// `type Data = ()` and `type Err = ValueErrorKind`.
+/// This generates a simple enum like the following, with implementations of [`Parse`],
+/// `Default`, and [`Property`].
+///
+/// ```ignore
+/// pub enum StrokeLinejoin { Miter, Round, Bevel }
+/// ```
+///
+/// # Properties from an existing, general-purpose type
+///
+/// For example, both the `lightingColor` and `floodColor` properties can be represented
+/// with a `cssparser::Color`, but their intial values are different.  In this case, the macro
+/// can generate a newtype around `cssparser::Color` for each case:
+///
+/// ```ignore
+/// make_property!(
+///     ComputedValues,
+///     FloodColor,
+///     default: cssparser::Color::RGBA(cssparser::RGBA::new(0, 0, 0, 0)),
+///     inherits_automatically: false,
+///     newtype_parse: cssparser::Color,
+/// );
+/// ```
+///
+/// # Properties from custom specific types
+///
+/// For example, font-related properties have custom, complex types that require an
+/// implentation of `Property::compute` that is more than a simple `clone`.  In this case,
+/// define the custom type separately, and use the macro to specify the default value and
+/// the `Property` implementation.
+///
+/// [`Parse`]: ../trait.Parse.html
+/// [`Property`]: ../property_macros/trait.Property.html
+/// [`ComputedValues`]: ../properties/struct.ComputedValues.html
+/// [`SpecifiedValues`]: ../properties/struct.SpecifiedValues.html
+///
 #[macro_export]
 macro_rules! make_property {
     ($computed_values_type: ty,
@@ -36,6 +111,7 @@ macro_rules! make_property {
      $($str_prop: expr => $variant: ident,)+
     ) => {
         #[derive(Debug, Copy, Clone, PartialEq)]
+        #[repr(C)]
         pub enum $name {
             $($variant),+
         }
@@ -43,30 +119,12 @@ macro_rules! make_property {
         impl_default!($name, $name::$default);
         impl_property!($computed_values_type, $name, $inherits_automatically);
 
-        impl ::parsers::Parse for $name {
-            type Data = ();
-            type Err = ::error::ValueErrorKind;
-
-            fn parse(parser: &mut ::cssparser::Parser<'_, '_>, _: Self::Data) -> Result<$name, ::error::ValueErrorKind> {
-                let loc = parser.current_source_location();
-
-                parser
-                    .expect_ident()
-                    .and_then(|cow| match cow.as_ref() {
-                        $($str_prop => Ok($name::$variant),)+
-
-                            _ => Err(
-                                loc.new_basic_unexpected_token_error(
-                                    ::cssparser::Token::Ident(::cssparser::CowRcStr::from(
-                                        cow.as_ref().to_string(),
-                                    ))),
-                            ),
-                    })
-                    .map_err(|_| {
-                        ::error::ValueErrorKind::Parse(::parsers::ParseError::new(
-                            "unexpected value",
-                        ))
-                    })
+        impl crate::parsers::Parse for $name {
+            fn parse<'i>(parser: &mut ::cssparser::Parser<'i, '_>) -> Result<$name, crate::error::ParseError<'i>> {
+                Ok(parse_identifiers!(
+                    parser,
+                    $($str_prop => $name::$variant,)+
+                )?)
             }
         }
     };
@@ -76,29 +134,16 @@ macro_rules! make_property {
      default: $default: expr,
      inherits_automatically: $inherits_automatically: expr,
      newtype_parse: $type: ty,
-     parse_data_type: $parse_data_type: ty
     ) => {
         #[derive(Debug, Clone, PartialEq)]
         pub struct $name(pub $type);
 
         impl_default!($name, $name($default));
+        impl_property!($computed_values_type, $name, $inherits_automatically);
 
-        impl ::property_macros::Property<$computed_values_type> for $name {
-            fn inherits_automatically() -> bool {
-                $inherits_automatically
-            }
-
-            fn compute(&self, _v: &$computed_values_type) -> Self {
-                self.clone()
-            }
-        }
-
-        impl ::parsers::Parse for $name {
-            type Data = $parse_data_type;
-            type Err = ::error::ValueErrorKind;
-
-            fn parse(parser: &mut ::cssparser::Parser<'_, '_>, d: Self::Data) -> Result<$name, ::error::ValueErrorKind> {
-                Ok($name(<$type as ::parsers::Parse>::parse(parser, d)?))
+        impl crate::parsers::Parse for $name {
+            fn parse<'i>(parser: &mut ::cssparser::Parser<'i, '_>) -> Result<$name, crate::error::ParseError<'i>> {
+                Ok($name(<$type as crate::parsers::Parse>::parse(parser)?))
             }
         }
     };
@@ -106,27 +151,35 @@ macro_rules! make_property {
     ($computed_values_type: ty,
      $name: ident,
      default: $default: expr,
-     newtype_parse: $type: ty,
-     parse_data_type: $parse_data_type: ty,
      property_impl: { $prop: item }
     ) => {
-        #[derive(Debug, Clone, PartialEq)]
-        pub struct $name(pub $type);
-
-        impl_default!($name, $name($default));
+        impl_default!($name, $default);
 
         $prop
-
-        impl ::parsers::Parse for $name {
-            type Data = $parse_data_type;
-            type Err = ::error::ValueErrorKind;
-
-            fn parse(parser: &mut ::cssparser::Parser<'_, '_>, d: Self::Data) -> Result<$name, ::error::ValueErrorKind> {
-                Ok($name(<$type as ::parsers::Parse>::parse(parser, d)?))
-            }
-        }
     };
 
+    ($computed_values_type: ty,
+     $name: ident,
+     default: $default: expr,
+     inherits_automatically: $inherits_automatically: expr,
+    ) => {
+        impl_default!($name, $default);
+        impl_property!($computed_values_type, $name, $inherits_automatically);
+    };
+
+    ($computed_values_type: ty,
+     $name: ident,
+     default: $default: expr,
+     inherits_automatically: $inherits_automatically: expr,
+     parse_impl: { $parse: item }
+    ) => {
+        impl_default!($name, $default);
+        impl_property!($computed_values_type, $name, $inherits_automatically);
+
+        $parse
+    };
+
+    // pending - only BaselineShift
     ($computed_values_type: ty,
      $name: ident,
      default: $default: expr,
@@ -144,13 +197,13 @@ macro_rules! make_property {
         $parse
     };
 
+    // pending - only XmlLang
     ($computed_values_type: ty,
      $name: ident,
      default: $default: expr,
      inherits_automatically: $inherits_automatically: expr,
      newtype: $type: ty,
      parse_impl: { $parse: item },
-     parse_data_type: $parse_data_type: ty
     ) => {
         #[derive(Debug, Clone, PartialEq)]
         pub struct $name(pub $type);
@@ -193,7 +246,7 @@ macro_rules! impl_default {
 
 macro_rules! impl_property {
     ($computed_values_type:ty, $name:ident, $inherits_automatically:expr) => {
-        impl ::property_macros::Property<$computed_values_type> for $name {
+        impl crate::property_macros::Property<$computed_values_type> for $name {
             fn inherits_automatically() -> bool {
                 $inherits_automatically
             }
@@ -209,11 +262,10 @@ macro_rules! impl_property {
 mod tests {
     use super::*;
 
-    use cssparser::RGBA;
-    use parsers::Parse;
+    use crate::parsers::Parse;
 
     #[test]
-    fn check_generated_property() {
+    fn check_identifiers_property() {
         make_property! {
             (),
             Foo,
@@ -228,40 +280,7 @@ mod tests {
 
         assert_eq!(<Foo as Default>::default(), Foo::Def);
         assert_eq!(<Foo as Property<()>>::inherits_automatically(), true);
-        assert!(<Foo as Parse>::parse_str("blargh", ()).is_err());
-        assert_eq!(<Foo as Parse>::parse_str("bar", ()), Ok(Foo::Bar));
-    }
-
-    #[test]
-    fn check_compute() {
-        make_property! {
-            RGBA,
-            AddColor,
-            default: RGBA::new(1, 1, 1, 1),
-            newtype_parse: RGBA,
-            parse_data_type: (),
-            property_impl: {
-                impl Property<RGBA> for AddColor {
-                    fn inherits_automatically() -> bool {
-                        true
-                    }
-
-                    fn compute(&self, v: &RGBA) -> Self {
-                        AddColor(RGBA::new(
-                            self.0.red + v.red,
-                            self.0.green + v.green,
-                            self.0.blue + v.blue,
-                            self.0.alpha + v.alpha
-                        ))
-                    }
-                }
-            }
-        }
-
-        let color = RGBA::new(1, 1, 1, 1);
-        let a = <AddColor as Parse>::parse_str("#02030405", ()).unwrap();
-        let b = a.compute(&color);
-
-        assert_eq!(b, AddColor(RGBA::new(3, 4, 5, 6)));
+        assert!(<Foo as Parse>::parse_str("blargh").is_err());
+        assert_eq!(<Foo as Parse>::parse_str("bar"), Ok(Foo::Bar));
     }
 }

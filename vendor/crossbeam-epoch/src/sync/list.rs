@@ -1,12 +1,12 @@
 //! Lock-free intrusive linked list.
 //!
 //! Ideas from Michael.  High Performance Dynamic Lock-Free Hash Tables and List-Based Sets.  SPAA
-//! 2002.  http://dl.acm.org/citation.cfm?id=564870.564881
+//! 2002.  <http://dl.acm.org/citation.cfm?id=564870.564881>
 
 use core::marker::PhantomData;
 use core::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
-use {Atomic, Shared, Guard, unprotected};
+use crate::{unprotected, Atomic, Guard, Shared};
 
 /// An entry in a linked list.
 ///
@@ -42,9 +42,8 @@ pub struct Entry {
 ///         &*elem_ptr
 ///     }
 ///
-///     unsafe fn finalize(entry: &Entry) {
-///         let elem = Self::element_of(entry);
-///         drop(Box::from_raw(elem as *const A as *mut A));
+///     unsafe fn finalize(entry: &Entry, guard: &Guard) {
+///         guard.defer_destroy(Shared::from(Self::element_of(entry) as *const _));
 ///     }
 /// }
 /// ```
@@ -67,7 +66,7 @@ pub struct Entry {
 ///
 pub trait IsElement<T> {
     /// Returns a reference to this element's `Entry`.
-    fn entry_of(&T) -> &Entry;
+    fn entry_of(_: &T) -> &Entry;
 
     /// Given a reference to an element's entry, returns that element.
     ///
@@ -78,17 +77,18 @@ pub trait IsElement<T> {
     /// ```
     ///
     /// # Safety
-    /// The caller has to guarantee that the `Entry` it
-    /// is called with was retrieved from an instance of the element type (`T`).
-    unsafe fn element_of(&Entry) -> &T;
+    ///
+    /// The caller has to guarantee that the `Entry` is called with was retrieved from an instance
+    /// of the element type (`T`).
+    unsafe fn element_of(_: &Entry) -> &T;
 
-    /// Deallocates the whole element given its `Entry`. This is called when the list
-    /// is ready to actually free the element.
+    /// The function that is called when an entry is unlinked from list.
     ///
     /// # Safety
-    /// The caller has to guarantee that the `Entry` it
-    /// is called with was retrieved from an instance of the element type (`T`).
-    unsafe fn finalize(&Entry);
+    ///
+    /// The caller has to guarantee that the `Entry` is called with was retrieved from an instance
+    /// of the element type (`T`).
+    unsafe fn finalize(_: &Entry, _: &Guard);
 }
 
 /// A lock-free, intrusive linked list of type `T`.
@@ -102,7 +102,7 @@ pub struct List<T, C: IsElement<T> = T> {
 }
 
 /// An iterator used for retrieving values from the list.
-pub struct Iter<'g, T: 'g, C: IsElement<T>> {
+pub struct Iter<'g, T, C: IsElement<T>> {
     /// The guard that protects the iteration.
     guard: &'g Guard,
 
@@ -130,8 +130,10 @@ pub enum IterError {
 
 impl Default for Entry {
     /// Returns the empty entry.
-    fn default() -> Entry {
-        Entry { next: Atomic::null() }
+    fn default() -> Self {
+        Self {
+            next: Atomic::null(),
+        }
     }
 }
 
@@ -150,8 +152,8 @@ impl Entry {
 
 impl<T, C: IsElement<T>> List<T, C> {
     /// Returns a new, empty linked list.
-    pub fn new() -> List<T, C> {
-        List {
+    pub fn new() -> Self {
+        Self {
             head: Atomic::null(),
             _marker: PhantomData,
         }
@@ -164,7 +166,7 @@ impl<T, C: IsElement<T>> List<T, C> {
     /// You should guarantee that:
     ///
     /// - `container` is not null
-    /// - `container` is immovable, e.g. inside a `Box`
+    /// - `container` is immovable, e.g. inside an `Owned`
     /// - the same `Entry` is not inserted more than once
     /// - the inserted object will be removed before the list is dropped
     pub unsafe fn insert<'g>(&'g self, container: Shared<'g, T>, guard: &'g Guard) {
@@ -204,7 +206,7 @@ impl<T, C: IsElement<T>> List<T, C> {
     ///    thread will continue to iterate over the same list.
     pub fn iter<'g>(&'g self, guard: &'g Guard) -> Iter<'g, T, C> {
         Iter {
-            guard: guard,
+            guard,
             pred: &self.head,
             curr: self.head.load(Acquire, guard),
             head: &self.head,
@@ -216,14 +218,14 @@ impl<T, C: IsElement<T>> List<T, C> {
 impl<T, C: IsElement<T>> Drop for List<T, C> {
     fn drop(&mut self) {
         unsafe {
-            let guard = &unprotected();
+            let guard = unprotected();
             let mut curr = self.head.load(Relaxed, guard);
             while let Some(c) = curr.as_ref() {
                 let succ = c.next.load(Relaxed, guard);
                 // Verify that all elements have been removed from the list.
                 assert_eq!(succ.tag(), 1);
 
-                C::finalize(curr.deref());
+                C::finalize(curr.deref(), guard);
                 curr = succ;
             }
         }
@@ -241,38 +243,44 @@ impl<'g, T: 'g, C: IsElement<T>> Iterator for Iter<'g, T, C> {
                 // This entry was removed. Try unlinking it from the list.
                 let succ = succ.with_tag(0);
 
-                // The tag should never be zero, because removing a node after a logically deleted
+                // The tag should always be zero, because removing a node after a logically deleted
                 // node leaves the list in an invalid state.
                 debug_assert!(self.curr.tag() == 0);
 
-                match self.pred.compare_and_set(
-                    self.curr,
-                    succ,
-                    Acquire,
-                    self.guard,
-                ) {
+                // Try to unlink `curr` from the list, and get the new value of `self.pred`.
+                let succ = match self
+                    .pred
+                    .compare_and_set(self.curr, succ, Acquire, self.guard)
+                {
                     Ok(_) => {
-                        // We succeeded in unlinking this element from the list, so we have to
-                        // schedule deallocation. Deferred drop is okay, because `list.delete()`
-                        // can only be called if `T: 'static`.
+                        // We succeeded in unlinking `curr`, so we have to schedule
+                        // deallocation. Deferred drop is okay, because `list.delete()` can only be
+                        // called if `T: 'static`.
                         unsafe {
-                            let p = self.curr;
-                            self.guard.defer(move || C::finalize(p.deref()));
+                            C::finalize(self.curr.deref(), self.guard);
                         }
 
-                        // Move over the removed by only advancing `curr`, not `pred`.
-                        self.curr = succ;
-                        continue;
+                        // `succ` is the new value of `self.pred`.
+                        succ
                     }
-                    Err(_) => {
-                        // A concurrent thread modified the predecessor node. Since it might've
-                        // been deleted, we need to restart from `head`.
-                        self.pred = self.head;
-                        self.curr = self.head.load(Acquire, self.guard);
+                    Err(e) => {
+                        // `e.current` is the current value of `self.pred`.
+                        e.current
+                    }
+                };
 
-                        return Some(Err(IterError::Stalled));
-                    }
+                // If the predecessor node is already marked as deleted, we need to restart from
+                // `head`.
+                if succ.tag() != 0 {
+                    self.pred = self.head;
+                    self.curr = self.head.load(Acquire, self.guard);
+
+                    return Some(Err(IterError::Stalled));
                 }
+
+                // Move over the removed by only advancing `curr`, not `pred`.
+                self.curr = succ;
+                continue;
             }
 
             // Move one step forward.
@@ -289,10 +297,10 @@ impl<'g, T: 'g, C: IsElement<T>> Iterator for Iter<'g, T, C> {
 
 #[cfg(test)]
 mod tests {
-    use {Collector, Owned, Guard};
-    use crossbeam_utils::scoped;
-    use std::sync::Barrier;
     use super::*;
+    use crate::{Collector, Owned};
+    use crossbeam_utils::thread;
+    use std::sync::Barrier;
 
     impl IsElement<Entry> for Entry {
         fn entry_of(entry: &Entry) -> &Entry {
@@ -303,8 +311,8 @@ mod tests {
             entry
         }
 
-        unsafe fn finalize(entry: &Entry) {
-            drop(Box::from_raw(entry as *const Entry as *mut Entry));
+        unsafe fn finalize(entry: &Entry, guard: &Guard) {
+            guard.defer_destroy(Shared::from(Self::element_of(entry) as *const _));
         }
     }
 
@@ -313,7 +321,7 @@ mod tests {
     #[test]
     fn insert() {
         let collector = Collector::new();
-        let handle = collector.handle();
+        let handle = collector.register();
         let guard = handle.pin();
 
         let l: List<Entry> = List::new();
@@ -352,7 +360,7 @@ mod tests {
     #[test]
     fn delete() {
         let collector = Collector::new();
-        let handle = collector.handle();
+        let handle = collector.register();
         let guard = handle.pin();
 
         let l: List<Entry> = List::new();
@@ -396,31 +404,34 @@ mod tests {
         let l: List<Entry> = List::new();
         let b = Barrier::new(THREADS);
 
-        scoped::scope(|s| for _ in 0..THREADS {
-            s.spawn(|| {
-                b.wait();
+        thread::scope(|s| {
+            for _ in 0..THREADS {
+                s.spawn(|_| {
+                    b.wait();
 
-                let handle = collector.handle();
-                let guard: Guard = handle.pin();
-                let mut v = Vec::with_capacity(ITERS);
+                    let handle = collector.register();
+                    let guard: Guard = handle.pin();
+                    let mut v = Vec::with_capacity(ITERS);
 
-                for _ in 0..ITERS {
-                    let e = Owned::new(Entry::default()).into_shared(&guard);
-                    v.push(e);
-                    unsafe {
-                        l.insert(e, &guard);
+                    for _ in 0..ITERS {
+                        let e = Owned::new(Entry::default()).into_shared(&guard);
+                        v.push(e);
+                        unsafe {
+                            l.insert(e, &guard);
+                        }
                     }
-                }
 
-                for e in v {
-                    unsafe {
-                        e.as_ref().unwrap().delete(&guard);
+                    for e in v {
+                        unsafe {
+                            e.as_ref().unwrap().delete(&guard);
+                        }
                     }
-                }
-            });
-        });
+                });
+            }
+        })
+        .unwrap();
 
-        let handle = collector.handle();
+        let handle = collector.register();
         let guard = handle.pin();
 
         let mut iter = l.iter(&guard);
@@ -435,36 +446,39 @@ mod tests {
         let l: List<Entry> = List::new();
         let b = Barrier::new(THREADS);
 
-        scoped::scope(|s| for _ in 0..THREADS {
-            s.spawn(|| {
-                b.wait();
+        thread::scope(|s| {
+            for _ in 0..THREADS {
+                s.spawn(|_| {
+                    b.wait();
 
-                let handle = collector.handle();
-                let guard: Guard = handle.pin();
-                let mut v = Vec::with_capacity(ITERS);
+                    let handle = collector.register();
+                    let guard: Guard = handle.pin();
+                    let mut v = Vec::with_capacity(ITERS);
 
-                for _ in 0..ITERS {
-                    let e = Owned::new(Entry::default()).into_shared(&guard);
-                    v.push(e);
-                    unsafe {
-                        l.insert(e, &guard);
+                    for _ in 0..ITERS {
+                        let e = Owned::new(Entry::default()).into_shared(&guard);
+                        v.push(e);
+                        unsafe {
+                            l.insert(e, &guard);
+                        }
                     }
-                }
 
-                let mut iter = l.iter(&guard);
-                for _ in 0..ITERS {
-                    assert!(iter.next().is_some());
-                }
-
-                for e in v {
-                    unsafe {
-                        e.as_ref().unwrap().delete(&guard);
+                    let mut iter = l.iter(&guard);
+                    for _ in 0..ITERS {
+                        assert!(iter.next().is_some());
                     }
-                }
-            });
-        });
 
-        let handle = collector.handle();
+                    for e in v {
+                        unsafe {
+                            e.as_ref().unwrap().delete(&guard);
+                        }
+                    }
+                });
+            }
+        })
+        .unwrap();
+
+        let handle = collector.register();
         let guard = handle.pin();
 
         let mut iter = l.iter(&guard);

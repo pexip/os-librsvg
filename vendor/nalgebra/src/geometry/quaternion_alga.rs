@@ -1,53 +1,57 @@
 use num::Zero;
 
-use alga::general::{AbstractGroup, AbstractGroupAbelian, AbstractLoop, AbstractMagma,
-                    AbstractModule, AbstractMonoid, AbstractQuasigroup, AbstractSemigroup,
-                    Additive, Id, Identity, Inverse, Module, Multiplicative, Real};
-use alga::linear::{AffineTransformation, DirectIsometry, FiniteDimVectorSpace, Isometry,
-                   NormedSpace, OrthogonalTransformation, ProjectiveTransformation, Rotation,
-                   Similarity, Transformation, VectorSpace};
+use alga::general::{
+    AbstractGroup, AbstractGroupAbelian, AbstractLoop, AbstractMagma, AbstractModule,
+    AbstractMonoid, AbstractQuasigroup, AbstractSemigroup, Additive, Id, Identity, Module,
+    Multiplicative, RealField, TwoSidedInverse,
+};
+use alga::linear::{
+    AffineTransformation, DirectIsometry, FiniteDimVectorSpace, Isometry, NormedSpace,
+    OrthogonalTransformation, ProjectiveTransformation, Rotation, Similarity, Transformation,
+    VectorSpace,
+};
 
-use base::{Vector3, Vector4};
-use geometry::{Point3, Quaternion, UnitQuaternion};
+use crate::base::{Vector3, Vector4};
+use crate::geometry::{Point3, Quaternion, UnitQuaternion};
 
-impl<N: Real> Identity<Multiplicative> for Quaternion<N> {
+impl<N: RealField + simba::scalar::RealField> Identity<Multiplicative> for Quaternion<N> {
     #[inline]
     fn identity() -> Self {
         Self::identity()
     }
 }
 
-impl<N: Real> Identity<Additive> for Quaternion<N> {
+impl<N: RealField + simba::scalar::RealField> Identity<Additive> for Quaternion<N> {
     #[inline]
     fn identity() -> Self {
         Self::zero()
     }
 }
 
-impl<N: Real> AbstractMagma<Multiplicative> for Quaternion<N> {
+impl<N: RealField + simba::scalar::RealField> AbstractMagma<Multiplicative> for Quaternion<N> {
     #[inline]
     fn operate(&self, rhs: &Self) -> Self {
         self * rhs
     }
 }
 
-impl<N: Real> AbstractMagma<Additive> for Quaternion<N> {
+impl<N: RealField + simba::scalar::RealField> AbstractMagma<Additive> for Quaternion<N> {
     #[inline]
     fn operate(&self, rhs: &Self) -> Self {
         self + rhs
     }
 }
 
-impl<N: Real> Inverse<Additive> for Quaternion<N> {
+impl<N: RealField + simba::scalar::RealField> TwoSidedInverse<Additive> for Quaternion<N> {
     #[inline]
-    fn inverse(&self) -> Self {
+    fn two_sided_inverse(&self) -> Self {
         -self
     }
 }
 
 macro_rules! impl_structures(
     ($Quaternion: ident; $($marker: ident<$operator: ident>),* $(,)*) => {$(
-        impl<N: Real> $marker<$operator> for $Quaternion<N> { }
+        impl<N: RealField + simba::scalar::RealField> $marker<$operator> for $Quaternion<N> { }
     )*}
 );
 
@@ -69,7 +73,7 @@ impl_structures!(
  * Vector space.
  *
  */
-impl<N: Real> AbstractModule for Quaternion<N> {
+impl<N: RealField + simba::scalar::RealField> AbstractModule for Quaternion<N> {
     type AbstractRing = N;
 
     #[inline]
@@ -78,15 +82,15 @@ impl<N: Real> AbstractModule for Quaternion<N> {
     }
 }
 
-impl<N: Real> Module for Quaternion<N> {
+impl<N: RealField + simba::scalar::RealField> Module for Quaternion<N> {
     type Ring = N;
 }
 
-impl<N: Real> VectorSpace for Quaternion<N> {
+impl<N: RealField + simba::scalar::RealField> VectorSpace for Quaternion<N> {
     type Field = N;
 }
 
-impl<N: Real> FiniteDimVectorSpace for Quaternion<N> {
+impl<N: RealField + simba::scalar::RealField> FiniteDimVectorSpace for Quaternion<N> {
     #[inline]
     fn dimension() -> usize {
         4
@@ -94,7 +98,7 @@ impl<N: Real> FiniteDimVectorSpace for Quaternion<N> {
 
     #[inline]
     fn canonical_basis_element(i: usize) -> Self {
-        Self::from_vector(Vector4::canonical_basis_element(i))
+        Self::from(Vector4::canonical_basis_element(i))
     }
 
     #[inline]
@@ -113,7 +117,10 @@ impl<N: Real> FiniteDimVectorSpace for Quaternion<N> {
     }
 }
 
-impl<N: Real> NormedSpace for Quaternion<N> {
+impl<N: RealField + simba::scalar::RealField> NormedSpace for Quaternion<N> {
+    type RealField = N;
+    type ComplexField = N;
+
     #[inline]
     fn norm_squared(&self) -> N {
         self.coords.norm_squared()
@@ -127,7 +134,7 @@ impl<N: Real> NormedSpace for Quaternion<N> {
     #[inline]
     fn normalize(&self) -> Self {
         let v = self.coords.normalize();
-        Self::from_vector(v)
+        Self::from(v)
     }
 
     #[inline]
@@ -138,7 +145,7 @@ impl<N: Real> NormedSpace for Quaternion<N> {
     #[inline]
     fn try_normalize(&self, min_norm: N) -> Option<Self> {
         if let Some(v) = self.coords.try_normalize(min_norm) {
-            Some(Self::from_vector(v))
+            Some(Self::from(v))
         } else {
             None
         }
@@ -155,28 +162,30 @@ impl<N: Real> NormedSpace for Quaternion<N> {
  * Implementations for UnitQuaternion.
  *
  */
-impl<N: Real> Identity<Multiplicative> for UnitQuaternion<N> {
+impl<N: RealField + simba::scalar::RealField> Identity<Multiplicative> for UnitQuaternion<N> {
     #[inline]
     fn identity() -> Self {
         Self::identity()
     }
 }
 
-impl<N: Real> AbstractMagma<Multiplicative> for UnitQuaternion<N> {
+impl<N: RealField + simba::scalar::RealField> AbstractMagma<Multiplicative> for UnitQuaternion<N> {
     #[inline]
     fn operate(&self, rhs: &Self) -> Self {
         self * rhs
     }
 }
 
-impl<N: Real> Inverse<Multiplicative> for UnitQuaternion<N> {
+impl<N: RealField + simba::scalar::RealField> TwoSidedInverse<Multiplicative>
+    for UnitQuaternion<N>
+{
     #[inline]
-    fn inverse(&self) -> Self {
+    fn two_sided_inverse(&self) -> Self {
         self.inverse()
     }
 
     #[inline]
-    fn inverse_mut(&mut self) {
+    fn two_sided_inverse_mut(&mut self) {
         self.inverse_mut()
     }
 }
@@ -190,33 +199,35 @@ impl_structures!(
     AbstractGroup<Multiplicative>
 );
 
-impl<N: Real> Transformation<Point3<N>> for UnitQuaternion<N> {
+impl<N: RealField + simba::scalar::RealField> Transformation<Point3<N>> for UnitQuaternion<N> {
     #[inline]
     fn transform_point(&self, pt: &Point3<N>) -> Point3<N> {
-        self * pt
+        self.transform_point(pt)
     }
 
     #[inline]
     fn transform_vector(&self, v: &Vector3<N>) -> Vector3<N> {
-        self * v
+        self.transform_vector(v)
     }
 }
 
-impl<N: Real> ProjectiveTransformation<Point3<N>> for UnitQuaternion<N> {
+impl<N: RealField + simba::scalar::RealField> ProjectiveTransformation<Point3<N>>
+    for UnitQuaternion<N>
+{
     #[inline]
     fn inverse_transform_point(&self, pt: &Point3<N>) -> Point3<N> {
-        // FIXME: would it be useful performancewise not to call inverse explicitly (i-e. implement
-        // the inverse transformation explicitly here) ?
-        self.inverse() * pt
+        self.inverse_transform_point(pt)
     }
 
     #[inline]
     fn inverse_transform_vector(&self, v: &Vector3<N>) -> Vector3<N> {
-        self.inverse() * v
+        self.inverse_transform_vector(v)
     }
 }
 
-impl<N: Real> AffineTransformation<Point3<N>> for UnitQuaternion<N> {
+impl<N: RealField + simba::scalar::RealField> AffineTransformation<Point3<N>>
+    for UnitQuaternion<N>
+{
     type Rotation = Self;
     type NonUniformScaling = Id;
     type Translation = Id;
@@ -257,7 +268,7 @@ impl<N: Real> AffineTransformation<Point3<N>> for UnitQuaternion<N> {
     }
 }
 
-impl<N: Real> Similarity<Point3<N>> for UnitQuaternion<N> {
+impl<N: RealField + simba::scalar::RealField> Similarity<Point3<N>> for UnitQuaternion<N> {
     type Scaling = Id;
 
     #[inline]
@@ -278,13 +289,13 @@ impl<N: Real> Similarity<Point3<N>> for UnitQuaternion<N> {
 
 macro_rules! marker_impl(
     ($($Trait: ident),*) => {$(
-        impl<N: Real> $Trait<Point3<N>> for UnitQuaternion<N> { }
+        impl<N: RealField + simba::scalar::RealField> $Trait<Point3<N>> for UnitQuaternion<N> { }
     )*}
 );
 
 marker_impl!(Isometry, DirectIsometry, OrthogonalTransformation);
 
-impl<N: Real> Rotation<Point3<N>> for UnitQuaternion<N> {
+impl<N: RealField + simba::scalar::RealField> Rotation<Point3<N>> for UnitQuaternion<N> {
     #[inline]
     fn powf(&self, n: N) -> Option<Self> {
         Some(self.powf(n))

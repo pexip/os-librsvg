@@ -1,26 +1,16 @@
-use std::cell::{Cell, RefCell};
+use cssparser::Parser;
+use markup5ever::{expanded_name, local_name, namespace_url, ns};
 
-use cairo::{self, ImageSurface};
-use cssparser::{CowRcStr, Parser, Token};
+use crate::attributes::Attributes;
+use crate::document::AcquiredNodes;
+use crate::drawing_ctx::DrawingCtx;
+use crate::element::{ElementResult, SetAttributes};
+use crate::error::*;
+use crate::node::Node;
+use crate::parsers::{Parse, ParseValue};
 
-use attributes::Attribute;
-use drawing_ctx::DrawingCtx;
-use error::{NodeError, ValueErrorKind};
-use handle::RsvgHandle;
-use node::{NodeResult, NodeTrait, RsvgNode};
-use parsers::{self, parse, Parse};
-use property_bag::PropertyBag;
-use surface_utils::{
-    iterators::Pixels,
-    shared_surface::SharedImageSurface,
-    ImageSurfaceDataExt,
-    Pixel,
-};
-use util::clamp;
-
-use super::context::{FilterContext, FilterOutput, FilterResult, IRect};
-use super::input::Input;
-use super::{Filter, FilterError, PrimitiveWithInput};
+use super::context::{FilterContext, FilterOutput, FilterResult};
+use super::{FilterEffect, FilterError, Input, PrimitiveWithInput};
 
 /// Enumeration of the possible compositing operations.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -34,59 +24,44 @@ enum Operator {
 }
 
 /// The `feComposite` filter primitive.
-pub struct Composite {
+pub struct FeComposite {
     base: PrimitiveWithInput,
-    in2: RefCell<Option<Input>>,
-    operator: Cell<Operator>,
-    k1: Cell<f64>,
-    k2: Cell<f64>,
-    k3: Cell<f64>,
-    k4: Cell<f64>,
+    in2: Option<Input>,
+    operator: Operator,
+    k1: f64,
+    k2: f64,
+    k3: f64,
+    k4: f64,
 }
 
-impl Composite {
+impl Default for FeComposite {
     /// Constructs a new `Composite` with empty properties.
     #[inline]
-    pub fn new() -> Composite {
-        Composite {
+    fn default() -> FeComposite {
+        FeComposite {
             base: PrimitiveWithInput::new::<Self>(),
-            in2: RefCell::new(None),
-            operator: Cell::new(Operator::Over),
-            k1: Cell::new(0f64),
-            k2: Cell::new(0f64),
-            k3: Cell::new(0f64),
-            k4: Cell::new(0f64),
+            in2: None,
+            operator: Operator::Over,
+            k1: 0.0,
+            k2: 0.0,
+            k3: 0.0,
+            k4: 0.0,
         }
     }
 }
 
-impl NodeTrait for Composite {
-    fn set_atts(
-        &self,
-        node: &RsvgNode,
-        handle: *const RsvgHandle,
-        pbag: &PropertyBag<'_>,
-    ) -> NodeResult {
-        self.base.set_atts(node, handle, pbag)?;
+impl SetAttributes for FeComposite {
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        self.base.set_attributes(attrs)?;
 
-        for (_key, attr, value) in pbag.iter() {
-            match attr {
-                Attribute::In2 => {
-                    self.in2.replace(Some(Input::parse(Attribute::In2, value)?));
-                }
-                Attribute::Operator => self.operator.set(parse("operator", value, ())?),
-                Attribute::K1 => self.k1.set(
-                    parsers::number(value).map_err(|err| NodeError::attribute_error(attr, err))?,
-                ),
-                Attribute::K2 => self.k2.set(
-                    parsers::number(value).map_err(|err| NodeError::attribute_error(attr, err))?,
-                ),
-                Attribute::K3 => self.k3.set(
-                    parsers::number(value).map_err(|err| NodeError::attribute_error(attr, err))?,
-                ),
-                Attribute::K4 => self.k4.set(
-                    parsers::number(value).map_err(|err| NodeError::attribute_error(attr, err))?,
-                ),
+        for (attr, value) in attrs.iter() {
+            match attr.expanded() {
+                expanded_name!("", "in2") => self.in2 = Some(attr.parse(value)?),
+                expanded_name!("", "operator") => self.operator = attr.parse(value)?,
+                expanded_name!("", "k1") => self.k1 = attr.parse(value)?,
+                expanded_name!("", "k2") => self.k2 = attr.parse(value)?,
+                expanded_name!("", "k3") => self.k3 = attr.parse(value)?,
+                expanded_name!("", "k4") => self.k4 = attr.parse(value)?,
                 _ => (),
             }
         }
@@ -95,137 +70,43 @@ impl NodeTrait for Composite {
     }
 }
 
-/// Performs the arithmetic composite operation. Public for benchmarking.
-#[inline]
-pub fn composite_arithmetic(
-    input_surface: &SharedImageSurface,
-    input_2_surface: &SharedImageSurface,
-    output_surface: &mut cairo::ImageSurface,
-    bounds: IRect,
-    k1: f64,
-    k2: f64,
-    k3: f64,
-    k4: f64,
-) {
-    let output_stride = output_surface.get_stride() as usize;
-    {
-        let mut output_data = output_surface.get_data().unwrap();
-
-        for (x, y, pixel, pixel_2) in Pixels::new(input_surface, bounds)
-            .map(|(x, y, p)| (x, y, p, input_2_surface.get_pixel(x, y)))
-        {
-            let i1a = f64::from(pixel.a) / 255f64;
-            let i2a = f64::from(pixel_2.a) / 255f64;
-            let oa = k1 * i1a * i2a + k2 * i1a + k3 * i2a + k4;
-            let oa = clamp(oa, 0f64, 1f64);
-
-            // Contents of image surfaces are transparent by default, so if the resulting pixel is
-            // transparent there's no need to do anything.
-            if oa > 0f64 {
-                let compute = |i1, i2| {
-                    let i1 = f64::from(i1) / 255f64;
-                    let i2 = f64::from(i2) / 255f64;
-
-                    let o = k1 * i1 * i2 + k2 * i1 + k3 * i2 + k4;
-                    let o = clamp(o, 0f64, oa);
-
-                    ((o * 255f64) + 0.5) as u8
-                };
-
-                let output_pixel = Pixel {
-                    r: compute(pixel.r, pixel_2.r),
-                    g: compute(pixel.g, pixel_2.g),
-                    b: compute(pixel.b, pixel_2.b),
-                    a: ((oa * 255f64) + 0.5) as u8,
-                };
-                output_data.set_pixel(output_stride, output_pixel, x, y);
-            }
-        }
-    }
-}
-
-impl Filter for Composite {
+impl FilterEffect for FeComposite {
     fn render(
         &self,
-        _node: &RsvgNode,
+        node: &Node,
         ctx: &FilterContext,
-        draw_ctx: &mut DrawingCtx<'_>,
+        acquired_nodes: &mut AcquiredNodes,
+        draw_ctx: &mut DrawingCtx,
     ) -> Result<FilterResult, FilterError> {
-        let input = self.base.get_input(ctx, draw_ctx)?;
-        let input_2 = ctx.get_input(draw_ctx, self.in2.borrow().as_ref())?;
+        let input = self.base.get_input(ctx, acquired_nodes, draw_ctx)?;
+        let input_2 = ctx.get_input(acquired_nodes, draw_ctx, self.in2.as_ref())?;
         let bounds = self
             .base
-            .get_bounds(ctx)
+            .get_bounds(ctx, node.parent().as_ref())?
             .add_input(&input)
             .add_input(&input_2)
             .into_irect(draw_ctx);
 
-        // If we're combining two alpha-only surfaces, the result is alpha-only. Otherwise the
-        // result is whatever the non-alpha-only type we're working on (which can be either sRGB or
-        // linear sRGB depending on color-interpolation-filters).
-        let surface_type = if input.surface().is_alpha_only() {
-            input_2.surface().surface_type()
-        } else {
-            if !input_2.surface().is_alpha_only() {
-                // All surface types should match (this is enforced by get_input()).
-                assert_eq!(
-                    input_2.surface().surface_type(),
-                    input.surface().surface_type()
-                );
-            }
-
-            input.surface().surface_type()
-        };
-
-        let output_surface = if self.operator.get() == Operator::Arithmetic {
-            let mut output_surface = ImageSurface::create(
-                cairo::Format::ARgb32,
-                input.surface().width(),
-                input.surface().height(),
-            )?;
-
-            let k1 = self.k1.get();
-            let k2 = self.k2.get();
-            let k3 = self.k3.get();
-            let k4 = self.k4.get();
-
-            composite_arithmetic(
-                input.surface(),
+        let surface = if self.operator == Operator::Arithmetic {
+            input.surface().compose_arithmetic(
                 input_2.surface(),
-                &mut output_surface,
                 bounds,
-                k1,
-                k2,
-                k3,
-                k4,
-            );
-
-            output_surface
+                self.k1,
+                self.k2,
+                self.k3,
+                self.k4,
+            )?
         } else {
-            let output_surface = input_2.surface().copy_surface(bounds)?;
-
-            let cr = cairo::Context::new(&output_surface);
-            cr.rectangle(
-                bounds.x0 as f64,
-                bounds.y0 as f64,
-                (bounds.x1 - bounds.x0) as f64,
-                (bounds.y1 - bounds.y0) as f64,
-            );
-            cr.clip();
-
-            input.surface().set_as_source_surface(&cr, 0f64, 0f64);
-            cr.set_operator(self.operator.get().into());
-            cr.paint();
-
-            output_surface
+            input.surface().compose(
+                input_2.surface(),
+                bounds,
+                cairo::Operator::from(self.operator),
+            )?
         };
 
         Ok(FilterResult {
-            name: self.base.result.borrow().clone(),
-            output: FilterOutput {
-                surface: SharedImageSurface::new(output_surface, surface_type)?,
-                bounds,
-            },
+            name: self.base.result.clone(),
+            output: FilterOutput { surface, bounds },
         })
     }
 
@@ -236,28 +117,16 @@ impl Filter for Composite {
 }
 
 impl Parse for Operator {
-    type Data = ();
-    type Err = ValueErrorKind;
-
-    fn parse(parser: &mut Parser<'_, '_>, _data: Self::Data) -> Result<Self, Self::Err> {
-        let loc = parser.current_source_location();
-
-        parser
-            .expect_ident()
-            .and_then(|cow| match cow.as_ref() {
-                "over" => Ok(Operator::Over),
-                "in" => Ok(Operator::In),
-                "out" => Ok(Operator::Out),
-                "atop" => Ok(Operator::Atop),
-                "xor" => Ok(Operator::Xor),
-                "arithmetic" => Ok(Operator::Arithmetic),
-                _ => Err(
-                    loc.new_basic_unexpected_token_error(Token::Ident(CowRcStr::from(
-                        cow.as_ref().to_string(),
-                    ))),
-                ),
-            })
-            .map_err(|_| ValueErrorKind::Value("invalid operator value".to_string()))
+    fn parse<'i>(parser: &mut Parser<'i, '_>) -> Result<Self, ParseError<'i>> {
+        Ok(parse_identifiers!(
+            parser,
+            "over" => Operator::Over,
+            "in" => Operator::In,
+            "out" => Operator::Out,
+            "atop" => Operator::Atop,
+            "xor" => Operator::Xor,
+            "arithmetic" => Operator::Arithmetic,
+        )?)
     }
 }
 

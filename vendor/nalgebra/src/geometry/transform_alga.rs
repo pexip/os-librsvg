@@ -1,19 +1,22 @@
-use alga::general::{AbstractGroup, AbstractLoop, AbstractMagma, AbstractMonoid,
-                    AbstractQuasigroup, AbstractSemigroup, Identity, Inverse, Multiplicative, Real};
+use alga::general::{
+    AbstractGroup, AbstractLoop, AbstractMagma, AbstractMonoid, AbstractQuasigroup,
+    AbstractSemigroup, Identity, Multiplicative, RealField, TwoSidedInverse,
+};
 use alga::linear::{ProjectiveTransformation, Transformation};
 
-use base::{DefaultAllocator, VectorN};
-use base::dimension::{DimNameAdd, DimNameSum, U1};
-use base::allocator::Allocator;
+use crate::base::allocator::Allocator;
+use crate::base::dimension::{DimNameAdd, DimNameSum, U1};
+use crate::base::{DefaultAllocator, VectorN};
 
-use geometry::{Point, SubTCategoryOf, TCategory, TProjective, Transform};
+use crate::geometry::{Point, SubTCategoryOf, TCategory, TProjective, Transform};
 
 /*
  *
  * Algebraic structures.
  *
  */
-impl<N: Real, D: DimNameAdd<U1>, C> Identity<Multiplicative> for Transform<N, D, C>
+impl<N: RealField + simba::scalar::RealField, D: DimNameAdd<U1>, C> Identity<Multiplicative>
+    for Transform<N, D, C>
 where
     C: TCategory,
     DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
@@ -24,23 +27,26 @@ where
     }
 }
 
-impl<N: Real, D: DimNameAdd<U1>, C> Inverse<Multiplicative> for Transform<N, D, C>
+impl<N: RealField + simba::scalar::RealField, D: DimNameAdd<U1>, C> TwoSidedInverse<Multiplicative>
+    for Transform<N, D, C>
 where
     C: SubTCategoryOf<TProjective>,
     DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
 {
     #[inline]
-    fn inverse(&self) -> Self {
+    #[must_use = "Did you mean to use two_sided_inverse_mut()?"]
+    fn two_sided_inverse(&self) -> Self {
         self.clone().inverse()
     }
 
     #[inline]
-    fn inverse_mut(&mut self) {
+    fn two_sided_inverse_mut(&mut self) {
         self.inverse_mut()
     }
 }
 
-impl<N: Real, D: DimNameAdd<U1>, C> AbstractMagma<Multiplicative> for Transform<N, D, C>
+impl<N: RealField + simba::scalar::RealField, D: DimNameAdd<U1>, C> AbstractMagma<Multiplicative>
+    for Transform<N, D, C>
 where
     C: TCategory,
     DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
@@ -53,7 +59,7 @@ where
 
 macro_rules! impl_multiplicative_structures(
     ($($marker: ident<$operator: ident>),* $(,)*) => {$(
-        impl<N: Real, D: DimNameAdd<U1>, C> $marker<$operator> for Transform<N, D, C>
+        impl<N: RealField + simba::scalar::RealField, D: DimNameAdd<U1>, C> $marker<$operator> for Transform<N, D, C>
             where C: TCategory,
                   DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>> { }
     )*}
@@ -61,7 +67,7 @@ macro_rules! impl_multiplicative_structures(
 
 macro_rules! impl_inversible_multiplicative_structures(
     ($($marker: ident<$operator: ident>),* $(,)*) => {$(
-        impl<N: Real, D: DimNameAdd<U1>, C> $marker<$operator> for Transform<N, D, C>
+        impl<N: RealField + simba::scalar::RealField, D: DimNameAdd<U1>, C> $marker<$operator> for Transform<N, D, C>
             where C: SubTCategoryOf<TProjective>,
                   DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>> { }
     )*}
@@ -85,7 +91,7 @@ impl_inversible_multiplicative_structures!(
  */
 impl<N, D: DimNameAdd<U1>, C> Transformation<Point<N, D>> for Transform<N, D, C>
 where
-    N: Real,
+    N: RealField + simba::scalar::RealField,
     C: TCategory,
     DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>
         + Allocator<N, DimNameSum<D, U1>>
@@ -94,18 +100,18 @@ where
 {
     #[inline]
     fn transform_point(&self, pt: &Point<N, D>) -> Point<N, D> {
-        self * pt
+        self.transform_point(pt)
     }
 
     #[inline]
     fn transform_vector(&self, v: &VectorN<N, D>) -> VectorN<N, D> {
-        self * v
+        self.transform_vector(v)
     }
 }
 
 impl<N, D: DimNameAdd<U1>, C> ProjectiveTransformation<Point<N, D>> for Transform<N, D, C>
 where
-    N: Real,
+    N: RealField + simba::scalar::RealField,
     C: SubTCategoryOf<TProjective>,
     DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>
         + Allocator<N, DimNameSum<D, U1>>
@@ -114,19 +120,19 @@ where
 {
     #[inline]
     fn inverse_transform_point(&self, pt: &Point<N, D>) -> Point<N, D> {
-        self.inverse() * pt
+        self.inverse_transform_point(pt)
     }
 
     #[inline]
     fn inverse_transform_vector(&self, v: &VectorN<N, D>) -> VectorN<N, D> {
-        self.inverse() * v
+        self.inverse_transform_vector(v)
     }
 }
 
 // FIXME: we need to implement an SVD for this.
 //
 // impl<N, D: DimNameAdd<U1>, C> AffineTransformation<Point<N, D>> for Transform<N, D, C>
-//     where N:  Real,
+//     where N:  RealField,
 //           C: SubTCategoryOf<TAffine>,
 //           DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>> +
 //                             Allocator<N, D, D> +

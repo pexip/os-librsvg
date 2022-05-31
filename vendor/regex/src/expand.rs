@@ -1,6 +1,6 @@
 use std::str;
 
-use memchr::memchr;
+use find_byte::find_byte;
 
 use re_bytes;
 use re_unicode;
@@ -11,7 +11,7 @@ pub fn expand_str(
     dst: &mut String,
 ) {
     while !replacement.is_empty() {
-        match memchr(b'$', replacement.as_bytes()) {
+        match find_byte(b'$', replacement.as_bytes()) {
             None => break,
             Some(i) => {
                 dst.push_str(&replacement[..i]);
@@ -24,7 +24,7 @@ pub fn expand_str(
             continue;
         }
         debug_assert!(!replacement.is_empty());
-        let cap_ref = match find_cap_ref(replacement) {
+        let cap_ref = match find_cap_ref(replacement.as_bytes()) {
             Some(cap_ref) => cap_ref,
             None => {
                 dst.push_str("$");
@@ -35,12 +35,12 @@ pub fn expand_str(
         replacement = &replacement[cap_ref.end..];
         match cap_ref.cap {
             Ref::Number(i) => {
-                dst.push_str(
-                    caps.get(i).map(|m| m.as_str()).unwrap_or(""));
+                dst.push_str(caps.get(i).map(|m| m.as_str()).unwrap_or(""));
             }
             Ref::Named(name) => {
                 dst.push_str(
-                    caps.name(name).map(|m| m.as_str()).unwrap_or(""));
+                    caps.name(name).map(|m| m.as_str()).unwrap_or(""),
+                );
             }
         }
     }
@@ -53,7 +53,7 @@ pub fn expand_bytes(
     dst: &mut Vec<u8>,
 ) {
     while !replacement.is_empty() {
-        match memchr(b'$', replacement) {
+        match find_byte(b'$', replacement) {
             None => break,
             Some(i) => {
                 dst.extend(&replacement[..i]);
@@ -77,12 +77,12 @@ pub fn expand_bytes(
         replacement = &replacement[cap_ref.end..];
         match cap_ref.cap {
             Ref::Number(i) => {
-                dst.extend(
-                    caps.get(i).map(|m| m.as_bytes()).unwrap_or(b""));
+                dst.extend(caps.get(i).map(|m| m.as_bytes()).unwrap_or(b""));
             }
             Ref::Named(name) => {
                 dst.extend(
-                    caps.name(name).map(|m| m.as_bytes()).unwrap_or(b""));
+                    caps.name(name).map(|m| m.as_bytes()).unwrap_or(b""),
+                );
             }
         }
     }
@@ -92,7 +92,7 @@ pub fn expand_bytes(
 /// `CaptureRef` represents a reference to a capture group inside some text.
 /// The reference is either a capture group name or a number.
 ///
-/// It is also tagged with the position in the text immediately proceding the
+/// It is also tagged with the position in the text following the
 /// capture reference.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct CaptureRef<'a> {
@@ -125,19 +125,15 @@ impl From<usize> for Ref<'static> {
 /// starting at the beginning of `replacement`.
 ///
 /// If no such valid reference could be found, None is returned.
-fn find_cap_ref<T: ?Sized + AsRef<[u8]>>(
-    replacement: &T,
-) -> Option<CaptureRef> {
+fn find_cap_ref(replacement: &[u8]) -> Option<CaptureRef> {
     let mut i = 0;
     let rep: &[u8] = replacement.as_ref();
     if rep.len() <= 1 || rep[0] != b'$' {
         return None;
     }
-    let mut brace = false;
     i += 1;
     if rep[i] == b'{' {
-        brace = true;
-        i += 1;
+        return find_cap_ref_braced(rep, i + 1);
     }
     let mut cap_end = i;
     while rep.get(cap_end).map_or(false, is_valid_cap_letter) {
@@ -149,14 +145,8 @@ fn find_cap_ref<T: ?Sized + AsRef<[u8]>>(
     // We just verified that the range 0..cap_end is valid ASCII, so it must
     // therefore be valid UTF-8. If we really cared, we could avoid this UTF-8
     // check with either unsafe or by parsing the number straight from &[u8].
-    let cap = str::from_utf8(&rep[i..cap_end])
-                  .expect("valid UTF-8 capture name");
-    if brace {
-        if !rep.get(cap_end).map_or(false, |&b| b == b'}') {
-            return None;
-        }
-        cap_end += 1;
-    }
+    let cap =
+        str::from_utf8(&rep[i..cap_end]).expect("valid UTF-8 capture name");
     Some(CaptureRef {
         cap: match cap.parse::<u32>() {
             Ok(i) => Ref::Number(i as usize),
@@ -166,29 +156,54 @@ fn find_cap_ref<T: ?Sized + AsRef<[u8]>>(
     })
 }
 
+fn find_cap_ref_braced(rep: &[u8], mut i: usize) -> Option<CaptureRef> {
+    let start = i;
+    while rep.get(i).map_or(false, |&b| b != b'}') {
+        i += 1;
+    }
+    if !rep.get(i).map_or(false, |&b| b == b'}') {
+        return None;
+    }
+    // When looking at braced names, we don't put any restrictions on the name,
+    // so it's possible it could be invalid UTF-8. But a capture group name
+    // can never be invalid UTF-8, so if we have invalid UTF-8, then we can
+    // safely return None.
+    let cap = match str::from_utf8(&rep[start..i]) {
+        Err(_) => return None,
+        Ok(cap) => cap,
+    };
+    Some(CaptureRef {
+        cap: match cap.parse::<u32>() {
+            Ok(i) => Ref::Number(i as usize),
+            Err(_) => Ref::Named(cap),
+        },
+        end: i + 1,
+    })
+}
+
 /// Returns true if and only if the given byte is allowed in a capture name.
 fn is_valid_cap_letter(b: &u8) -> bool {
     match *b {
-        b'0' ... b'9' | b'a' ... b'z' | b'A' ... b'Z' | b'_' => true,
+        b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' | b'_' => true,
         _ => false,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{CaptureRef, find_cap_ref};
+    use super::{find_cap_ref, CaptureRef};
 
     macro_rules! find {
         ($name:ident, $text:expr) => {
             #[test]
             fn $name() {
-                assert_eq!(None, find_cap_ref($text));
+                assert_eq!(None, find_cap_ref($text.as_bytes()));
             }
         };
         ($name:ident, $text:expr, $capref:expr) => {
             #[test]
             fn $name() {
-                assert_eq!(Some($capref), find_cap_ref($text));
+                assert_eq!(Some($capref), find_cap_ref($text.as_bytes()));
             }
         };
     }
@@ -204,6 +219,8 @@ mod tests {
     find!(find_cap_ref3, "$0", c!(0, 2));
     find!(find_cap_ref4, "$5", c!(5, 2));
     find!(find_cap_ref5, "$10", c!(10, 3));
+    // See https://github.com/rust-lang/regex/pull/585
+    // for more on characters following numbers
     find!(find_cap_ref6, "$42a", c!("42a", 4));
     find!(find_cap_ref7, "${42}a", c!(42, 5));
     find!(find_cap_ref8, "${42");
@@ -212,4 +229,10 @@ mod tests {
     find!(find_cap_ref11, "$");
     find!(find_cap_ref12, " ");
     find!(find_cap_ref13, "");
+    find!(find_cap_ref14, "$1-$2", c!(1, 2));
+    find!(find_cap_ref15, "$1_$2", c!("1_", 3));
+    find!(find_cap_ref16, "$x-$y", c!("x", 2));
+    find!(find_cap_ref17, "$x_$y", c!("x_", 3));
+    find!(find_cap_ref18, "${#}", c!("#", 4));
+    find!(find_cap_ref19, "${Z[}", c!("Z[", 5));
 }

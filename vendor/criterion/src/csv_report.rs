@@ -1,14 +1,20 @@
+use crate::error::Result;
+use crate::measurement::ValueFormatter;
+use crate::report::{BenchmarkId, MeasurementData, Report, ReportContext};
+use crate::Throughput;
 use csv::Writer;
-use error::Result;
-use report::{BenchmarkId, MeasurementData, Report, ReportContext};
 use std::io::Write;
+use std::path::Path;
 
 #[derive(Serialize)]
 struct CsvRow<'a> {
     group: &'a str,
     function: Option<&'a str>,
     value: Option<&'a str>,
-    sample_time_nanos: f64,
+    throughput_num: Option<&'a str>,
+    throughput_type: Option<&'a str>,
+    sample_measured_value: f64,
+    unit: &'static str,
     iteration_count: u64,
 }
 
@@ -16,17 +22,33 @@ struct CsvReportWriter<W: Write> {
     writer: Writer<W>,
 }
 impl<W: Write> CsvReportWriter<W> {
-    fn write_data(&mut self, id: &BenchmarkId, data: &MeasurementData) -> Result<()> {
-        for (count, time) in data.iter_counts
-            .as_slice()
-            .iter()
-            .zip(data.sample_times.as_slice())
-        {
+    fn write_data(
+        &mut self,
+        id: &BenchmarkId,
+        data: &MeasurementData<'_>,
+        formatter: &dyn ValueFormatter,
+    ) -> Result<()> {
+        let mut data_scaled: Vec<f64> = data.sample_times().as_ref().into();
+        let unit = formatter.scale_for_machines(&mut data_scaled);
+        let group = id.group_id.as_str();
+        let function = id.function_id.as_ref().map(String::as_str);
+        let value = id.value_str.as_ref().map(String::as_str);
+        let (throughput_num, throughput_type) = match id.throughput {
+            Some(Throughput::Bytes(bytes)) => (Some(format!("{}", bytes)), Some("bytes")),
+            Some(Throughput::Elements(elems)) => (Some(format!("{}", elems)), Some("elements")),
+            None => (None, None),
+        };
+        let throughput_num = throughput_num.as_ref().map(String::as_str);
+
+        for (count, measured_value) in data.iter_counts().iter().zip(data_scaled.into_iter()) {
             let row = CsvRow {
-                group: id.group_id.as_str(),
-                function: id.function_id.as_ref().map(String::as_str),
-                value: id.value_str.as_ref().map(String::as_str),
-                sample_time_nanos: *time,
+                group,
+                function,
+                value,
+                throughput_num,
+                throughput_type,
+                sample_measured_value: measured_value,
+                unit,
                 iteration_count: (*count) as u64,
             };
             self.writer.serialize(row)?;
@@ -39,13 +61,14 @@ pub struct FileCsvReport;
 impl FileCsvReport {
     fn write_file(
         &self,
-        path: String,
+        path: &Path,
         id: &BenchmarkId,
-        measurements: &MeasurementData,
+        measurements: &MeasurementData<'_>,
+        formatter: &dyn ValueFormatter,
     ) -> Result<()> {
         let writer = Writer::from_path(path)?;
         let mut writer = CsvReportWriter { writer };
-        writer.write_data(id, measurements)?;
+        writer.write_data(id, measurements, formatter)?;
         Ok(())
     }
 }
@@ -55,13 +78,13 @@ impl Report for FileCsvReport {
         &self,
         id: &BenchmarkId,
         context: &ReportContext,
-        measurements: &MeasurementData,
+        measurements: &MeasurementData<'_>,
+        formatter: &dyn ValueFormatter,
     ) {
-        let path = format!(
-            "{}/{}/new/raw.csv",
-            context.output_directory,
-            id.as_directory_name()
-        );
-        log_if_err!(self.write_file(path, id, measurements));
+        let mut path = context.output_directory.clone();
+        path.push(id.as_directory_name());
+        path.push("new");
+        path.push("raw.csv");
+        log_if_err!(self.write_file(&path, id, measurements, formatter));
     }
 }

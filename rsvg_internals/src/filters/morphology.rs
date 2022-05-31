@@ -1,75 +1,69 @@
-use std::cell::Cell;
 use std::cmp::{max, min};
 
-use cairo::{self, ImageSurface, MatrixTrait};
+use cssparser::Parser;
+use markup5ever::{expanded_name, local_name, namespace_url, ns};
 
-use attributes::Attribute;
-use drawing_ctx::DrawingCtx;
-use error::NodeError;
-use handle::RsvgHandle;
-use node::{NodeResult, NodeTrait, RsvgNode};
-use parsers::{self, ParseError};
-use property_bag::PropertyBag;
-use surface_utils::{
+use crate::attributes::Attributes;
+use crate::document::AcquiredNodes;
+use crate::drawing_ctx::DrawingCtx;
+use crate::element::{ElementResult, SetAttributes};
+use crate::error::*;
+use crate::node::Node;
+use crate::parsers::{NumberOptionalNumber, Parse, ParseValue};
+use crate::rect::IRect;
+use crate::surface_utils::{
     iterators::{PixelRectangle, Pixels},
-    shared_surface::SharedImageSurface,
-    EdgeMode,
-    ImageSurfaceDataExt,
-    Pixel,
+    shared_surface::ExclusiveImageSurface,
+    EdgeMode, ImageSurfaceDataExt, Pixel,
 };
 
-use super::context::{FilterContext, FilterOutput, FilterResult, IRect};
-use super::{Filter, FilterError, PrimitiveWithInput};
+use super::context::{FilterContext, FilterOutput, FilterResult};
+use super::{FilterEffect, FilterError, PrimitiveWithInput};
 
 /// Enumeration of the possible morphology operations.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 enum Operator {
     Erode,
     Dilate,
 }
 
 /// The `feMorphology` filter primitive.
-pub struct Morphology {
+pub struct FeMorphology {
     base: PrimitiveWithInput,
-    operator: Cell<Operator>,
-    radius: Cell<(f64, f64)>,
+    operator: Operator,
+    radius: (f64, f64),
 }
 
-impl Morphology {
+impl Default for FeMorphology {
     /// Constructs a new `Morphology` with empty properties.
     #[inline]
-    pub fn new() -> Morphology {
-        Morphology {
+    fn default() -> FeMorphology {
+        FeMorphology {
             base: PrimitiveWithInput::new::<Self>(),
-            operator: Cell::new(Operator::Erode),
-            radius: Cell::new((0.0, 0.0)),
+            operator: Operator::Erode,
+            radius: (0.0, 0.0),
         }
     }
 }
 
-impl NodeTrait for Morphology {
-    fn set_atts(
-        &self,
-        node: &RsvgNode,
-        handle: *const RsvgHandle,
-        pbag: &PropertyBag<'_>,
-    ) -> NodeResult {
-        self.base.set_atts(node, handle, pbag)?;
+impl SetAttributes for FeMorphology {
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        self.base.set_attributes(attrs)?;
 
-        for (_key, attr, value) in pbag.iter() {
-            match attr {
-                Attribute::Operator => self.operator.set(Operator::parse(attr, value)?),
-                Attribute::Radius => self.radius.set(
-                    parsers::number_optional_number(value)
-                        .map_err(|err| NodeError::attribute_error(attr, err))
-                        .and_then(|(x, y)| {
-                            if x >= 0.0 && y >= 0.0 {
-                                Ok((x, y))
+        for (attr, value) in attrs.iter() {
+            match attr.expanded() {
+                expanded_name!("", "operator") => self.operator = attr.parse(value)?,
+                expanded_name!("", "radius") => {
+                    let NumberOptionalNumber(x, y) =
+                        attr.parse_and_validate(value, |v: NumberOptionalNumber<f64>| {
+                            if v.0 >= 0.0 && v.1 >= 0.0 {
+                                Ok(v)
                             } else {
-                                Err(NodeError::value_error(attr, "radius cannot be negative"))
+                                Err(ValueErrorKind::value_error("radius cannot be negative"))
                             }
-                        })?,
-                ),
+                        })?;
+
+                    self.radius = (x, y);
+                }
                 _ => (),
             }
         }
@@ -78,46 +72,45 @@ impl NodeTrait for Morphology {
     }
 }
 
-impl Filter for Morphology {
+impl FilterEffect for FeMorphology {
     fn render(
         &self,
-        _node: &RsvgNode,
+        node: &Node,
         ctx: &FilterContext,
-        draw_ctx: &mut DrawingCtx<'_>,
+        acquired_nodes: &mut AcquiredNodes,
+        draw_ctx: &mut DrawingCtx,
     ) -> Result<FilterResult, FilterError> {
-        let input = self.base.get_input(ctx, draw_ctx)?;
+        let input = self.base.get_input(ctx, acquired_nodes, draw_ctx)?;
         let bounds = self
             .base
-            .get_bounds(ctx)
+            .get_bounds(ctx, node.parent().as_ref())?
             .add_input(&input)
             .into_irect(draw_ctx);
 
-        let (rx, ry) = self.radius.get();
+        let (rx, ry) = self.radius;
         let (rx, ry) = ctx.paffine().transform_distance(rx, ry);
 
-        let operator = self.operator.get();
+        // The radii can become negative here due to the transform.
+        let (rx, ry) = (rx.abs(), ry.abs());
 
-        let mut output_surface = ImageSurface::create(
-            cairo::Format::ARgb32,
+        let mut surface = ExclusiveImageSurface::new(
             ctx.source_graphic().width(),
             ctx.source_graphic().height(),
+            input.surface().surface_type(),
         )?;
 
-        let output_stride = output_surface.get_stride() as usize;
-        {
-            let mut output_data = output_surface.get_data().unwrap();
-
-            for (x, y, _pixel) in Pixels::new(input.surface(), bounds) {
+        surface.modify(&mut |data, stride| {
+            for (x, y, _pixel) in Pixels::within(input.surface(), bounds) {
                 // Compute the kernel rectangle bounds.
-                let kernel_bounds = IRect {
-                    x0: (f64::from(x) - rx).floor() as i32,
-                    y0: (f64::from(y) - ry).floor() as i32,
-                    x1: (f64::from(x) + rx).ceil() as i32 + 1,
-                    y1: (f64::from(y) + ry).ceil() as i32 + 1,
-                };
+                let kernel_bounds = IRect::new(
+                    (f64::from(x) - rx).floor() as i32,
+                    (f64::from(y) - ry).floor() as i32,
+                    (f64::from(x) + rx).ceil() as i32 + 1,
+                    (f64::from(y) + ry).ceil() as i32 + 1,
+                );
 
                 // Compute the new pixel values.
-                let initial = match operator {
+                let initial = match self.operator {
                     Operator::Erode => u8::max_value(),
                     Operator::Dilate => u8::min_value(),
                 };
@@ -130,9 +123,9 @@ impl Filter for Morphology {
                 };
 
                 for (_x, _y, pixel) in
-                    PixelRectangle::new(&input.surface(), bounds, kernel_bounds, EdgeMode::None)
+                    PixelRectangle::within(&input.surface(), bounds, kernel_bounds, EdgeMode::None)
                 {
-                    let op = match operator {
+                    let op = match self.operator {
                         Operator::Erode => min,
                         Operator::Dilate => max,
                     };
@@ -143,14 +136,14 @@ impl Filter for Morphology {
                     output_pixel.a = op(output_pixel.a, pixel.a);
                 }
 
-                output_data.set_pixel(output_stride, output_pixel, x, y);
+                data.set_pixel(stride, output_pixel, x, y);
             }
-        }
+        });
 
         Ok(FilterResult {
-            name: self.base.result.borrow().clone(),
+            name: self.base.result.clone(),
             output: FilterOutput {
-                surface: SharedImageSurface::new(output_surface, input.surface().surface_type())?,
+                surface: surface.share()?,
                 bounds,
             },
         })
@@ -162,15 +155,12 @@ impl Filter for Morphology {
     }
 }
 
-impl Operator {
-    fn parse(attr: Attribute, s: &str) -> Result<Self, NodeError> {
-        match s {
-            "erode" => Ok(Operator::Erode),
-            "dilate" => Ok(Operator::Dilate),
-            _ => Err(NodeError::parse_error(
-                attr,
-                ParseError::new("invalid value"),
-            )),
-        }
+impl Parse for Operator {
+    fn parse<'i>(parser: &mut Parser<'i, '_>) -> Result<Self, ParseError<'i>> {
+        Ok(parse_identifiers!(
+            parser,
+            "erode" => Operator::Erode,
+            "dilate" => Operator::Dilate,
+        )?)
     }
 }

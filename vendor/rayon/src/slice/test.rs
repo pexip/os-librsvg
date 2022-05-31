@@ -1,9 +1,10 @@
 #![cfg(test)]
 
-use rand::{thread_rng, Rng};
+use crate::prelude::*;
 use rand::distributions::Uniform;
+use rand::seq::SliceRandom;
+use rand::{thread_rng, Rng};
 use std::cmp::Ordering::{Equal, Greater, Less};
-use super::ParallelSliceMut;
 
 macro_rules! sort {
     ($f:ident, $name:ident) => {
@@ -15,9 +16,7 @@ macro_rules! sort {
                 for &modulus in &[5, 10, 100] {
                     let dist = Uniform::new(0, modulus);
                     for _ in 0..100 {
-                        let v: Vec<i32> = rng.sample_iter(&dist)
-                            .take(len)
-                            .collect();
+                        let v: Vec<i32> = rng.sample_iter(&dist).take(len).collect();
 
                         // Test sort using `<` operator.
                         let mut tmp = v.clone();
@@ -36,9 +35,7 @@ macro_rules! sort {
             for &len in &[1_000, 10_000, 100_000] {
                 for &modulus in &[5, 10, 100, 10_000] {
                     let dist = Uniform::new(0, modulus);
-                    let mut v: Vec<i32> = rng.sample_iter(&dist)
-                        .take(len)
-                        .collect();
+                    let mut v: Vec<i32> = rng.sample_iter(&dist).take(len).collect();
 
                     v.$f(|a, b| a.cmp(b));
                     assert!(v.windows(2).all(|w| w[0] <= w[1]));
@@ -50,9 +47,7 @@ macro_rules! sort {
                 let len_dist = Uniform::new(0, len);
                 for &modulus in &[5, 10, 1000, 50_000] {
                     let dist = Uniform::new(0, modulus);
-                    let mut v: Vec<i32> = rng.sample_iter(&dist)
-                        .take(len)
-                        .collect();
+                    let mut v: Vec<i32> = rng.sample_iter(&dist).take(len).collect();
 
                     v.sort();
                     v.reverse();
@@ -75,7 +70,7 @@ macro_rules! sort {
             // Sort using a completely random comparison function.
             // This will reorder the elements *somehow*, but won't panic.
             let mut v: Vec<_> = (0..100).collect();
-            v.$f(|_, _| *thread_rng().choose(&[Less, Equal, Greater]).unwrap());
+            v.$f(|_, _| *[Less, Equal, Greater].choose(&mut thread_rng()).unwrap());
             v.$f(|a, b| a.cmp(b));
             for i in 0..v.len() {
                 assert_eq!(v[i], i);
@@ -86,11 +81,11 @@ macro_rules! sort {
             [(); 10].$f(|a, b| a.cmp(b));
             [(); 100].$f(|a, b| a.cmp(b));
 
-            let mut v = [0xDEADBEEFu64];
+            let mut v = [0xDEAD_BEEFu64];
             v.$f(|a, b| a.cmp(b));
-            assert!(v == [0xDEADBEEF]);
+            assert!(v == [0xDEAD_BEEF]);
         }
-    }
+    };
 }
 
 sort!(par_sort_by, test_par_sort);
@@ -107,9 +102,10 @@ fn test_par_sort_stability() {
             // the second item represents which occurrence of that
             // number this element is, i.e. the second elements
             // will occur in sorted order.
+            let mut rng = thread_rng();
             let mut v: Vec<_> = (0..len)
                 .map(|_| {
-                    let n = thread_rng().gen_range::<usize>(0, 10);
+                    let n: usize = rng.gen_range(0, 10);
                     counts[n] += 1;
                     (n, counts[n])
                 })
@@ -127,4 +123,26 @@ fn test_par_sort_stability() {
             assert!(v.windows(2).all(|w| w[0] <= w[1]));
         }
     }
+}
+
+#[test]
+fn test_par_chunks_exact_remainder() {
+    let v: &[i32] = &[0, 1, 2, 3, 4];
+    let c = v.par_chunks_exact(2);
+    assert_eq!(c.remainder(), &[4]);
+    assert_eq!(c.len(), 2);
+}
+
+#[test]
+fn test_par_chunks_exact_mut_remainder() {
+    let v: &mut [i32] = &mut [0, 1, 2, 3, 4];
+    let mut c = v.par_chunks_exact_mut(2);
+    assert_eq!(c.remainder(), &[4]);
+    assert_eq!(c.len(), 2);
+    assert_eq!(c.into_remainder(), &[4]);
+
+    let mut c = v.par_chunks_exact_mut(2);
+    assert_eq!(c.take_remainder(), &[4]);
+    assert_eq!(c.take_remainder(), &[]);
+    assert_eq!(c.len(), 2);
 }

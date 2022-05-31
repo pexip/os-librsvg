@@ -10,7 +10,6 @@ struct Num {
     sign: i32,
 }
 
-#[inline]
 fn normalize(x: f64) -> Num {
     let x1p63: f64 = f64::from_bits(0x43e0000000000000); // 0x1p63 === 2 ^ 63
 
@@ -30,7 +29,6 @@ fn normalize(x: f64) -> Num {
     Num { m: ix, e, sign }
 }
 
-#[inline]
 fn mul(x: u64, y: u64) -> (u64, u64) {
     let t1: u64;
     let t2: u64;
@@ -43,12 +41,17 @@ fn mul(x: u64, y: u64) -> (u64, u64) {
     t1 = xlo * ylo;
     t2 = xlo * yhi + xhi * ylo;
     t3 = xhi * yhi;
-    let lo = t1 + (t2 << 32);
+    let lo = t1.wrapping_add(t2 << 32);
     let hi = t3 + (t2 >> 32) + (t1 > lo) as u64;
     (hi, lo)
 }
 
-#[inline]
+/// Floating multiply add (f64)
+///
+/// Computes `(x*y)+z`, rounded as one ternary operation:
+/// Computes the value (as if) to infinite precision and rounds once to the result format,
+/// according to the rounding mode characterized by the value of FLT_ROUNDS.
+#[cfg_attr(all(test, assert_no_panic), no_panic::no_panic)]
 pub fn fma(x: f64, y: f64, z: f64) -> f64 {
     let x1p63: f64 = f64::from_bits(0x43e0000000000000); // 0x1p63 === 2 ^ 63
     let x0_ffffff8p_63 = f64::from_bits(0x3bfffffff0000000); // 0x0.ffffff8p-63
@@ -82,7 +85,7 @@ pub fn fma(x: f64, y: f64, z: f64) -> f64 {
     if d > 0 {
         if d < 64 {
             zlo = nz.m << d;
-            zhi = nz.m >> 64 - d;
+            zhi = nz.m >> (64 - d);
         } else {
             zlo = 0;
             zhi = nz.m;
@@ -90,7 +93,7 @@ pub fn fma(x: f64, y: f64, z: f64) -> f64 {
             d -= 64;
             if d == 0 {
             } else if d < 64 {
-                rlo = rhi << 64 - d | rlo >> d | ((rlo << 64 - d) != 0) as u64;
+                rlo = rhi << (64 - d) | rlo >> d | ((rlo << (64 - d)) != 0) as u64;
                 rhi = rhi >> d;
             } else {
                 rlo = 1;
@@ -103,7 +106,7 @@ pub fn fma(x: f64, y: f64, z: f64) -> f64 {
         if d == 0 {
             zlo = nz.m;
         } else if d < 64 {
-            zlo = nz.m >> d | ((nz.m << 64 - d) != 0) as u64;
+            zlo = nz.m >> d | ((nz.m << (64 - d)) != 0) as u64;
         } else {
             zlo = 1;
         }
@@ -115,13 +118,13 @@ pub fn fma(x: f64, y: f64, z: f64) -> f64 {
     let mut nonzero: i32 = 1;
     if samesign {
         /* r += z */
-        rlo += zlo;
+        rlo = rlo.wrapping_add(zlo);
         rhi += zhi + (rlo < zlo) as u64;
     } else {
         /* r -= z */
         let t = rlo;
-        rlo -= zlo;
-        rhi = rhi - zhi - (t < rlo) as u64;
+        rlo = rlo.wrapping_sub(zlo);
+        rhi = rhi.wrapping_sub(zhi.wrapping_sub((t < rlo) as u64));
         if (rhi >> 63) != 0 {
             rlo = (-(rlo as i64)) as u64;
             rhi = (-(rhi as i64)) as u64 - (rlo != 0) as u64;
@@ -135,7 +138,7 @@ pub fn fma(x: f64, y: f64, z: f64) -> f64 {
         e += 64;
         d = rhi.leading_zeros() as i32 - 1;
         /* note: d > 0 */
-        rhi = rhi << d | rlo >> 64 - d | ((rlo << d) != 0) as u64;
+        rhi = rhi << d | rlo >> (64 - d) | ((rlo << d) != 0) as u64;
     } else if rlo != 0 {
         d = rlo.leading_zeros() as i32 - 1;
         if d < 0 {
@@ -165,13 +168,13 @@ pub fn fma(x: f64, y: f64, z: f64) -> f64 {
             }
             if r == c {
                 /* min normal after rounding, underflow depends
-                   on arch behaviour which can be imitated by
-                   a double to float conversion */
+                on arch behaviour which can be imitated by
+                a double to float conversion */
                 let fltmin: f32 = (x0_ffffff8p_63 * f32::MIN_POSITIVE as f64 * r) as f32;
                 return f64::MIN_POSITIVE / f32::MIN_POSITIVE as f64 * fltmin as f64;
             }
             /* one bit is lost when scaled, add another top bit to
-               only round once at conversion if it is inexact */
+            only round once at conversion if it is inexact */
             if (rhi << 53) != 0 {
                 i = (rhi >> 1 | (rhi & 1) | 1 << 62) as i64;
                 if sign != 0 {
@@ -181,7 +184,7 @@ pub fn fma(x: f64, y: f64, z: f64) -> f64 {
                 r = 2. * r - c; /* remove top bit */
 
                 /* raise underflow portably, such that it
-                   cannot be optimized away */
+                cannot be optimized away */
                 {
                     let tiny: f64 = f64::MIN_POSITIVE / f32::MIN_POSITIVE as f64 * r;
                     r += (tiny * tiny) * (r - r);
@@ -190,7 +193,7 @@ pub fn fma(x: f64, y: f64, z: f64) -> f64 {
         } else {
             /* only round once when scaled */
             d = 10;
-            i = ((rhi >> d | ((rhi << 64 - d) != 0) as u64) << d) as i64;
+            i = ((rhi >> d | ((rhi << (64 - d)) != 0) as u64) << d) as i64;
             if sign != 0 {
                 i = -i;
             }
@@ -198,4 +201,23 @@ pub fn fma(x: f64, y: f64, z: f64) -> f64 {
         }
     }
     scalbn(r, e)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn fma_segfault() {
+        // These two inputs cause fma to segfault on release due to overflow:
+        assert_eq!(
+            fma(
+                -0.0000000000000002220446049250313,
+                -0.0000000000000002220446049250313,
+                -0.0000000000000002220446049250313
+            ),
+            -0.00000000000000022204460492503126,
+        );
+
+        assert_eq!(fma(-0.992, -0.992, -0.992), -0.00793599999988632,);
+    }
 }

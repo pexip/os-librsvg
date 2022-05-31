@@ -1,13 +1,12 @@
 #![feature(test)]
 
-extern crate crossbeam_epoch as epoch;
-extern crate crossbeam_utils as utils;
 extern crate test;
 
 use std::sync::Barrier;
 
+use crossbeam_epoch as epoch;
+use crossbeam_utils::thread::scope;
 use test::Bencher;
-use utils::scoped::scope;
 
 #[bench]
 fn single_flush(b: &mut Bencher) {
@@ -18,7 +17,7 @@ fn single_flush(b: &mut Bencher) {
 
     scope(|s| {
         for _ in 0..THREADS {
-            s.spawn(|| {
+            s.spawn(|_| {
                 epoch::pin();
                 start.wait();
                 end.wait();
@@ -28,7 +27,8 @@ fn single_flush(b: &mut Bencher) {
         start.wait();
         b.iter(|| epoch::pin().flush());
         end.wait();
-    });
+    })
+    .unwrap();
 }
 
 #[bench]
@@ -39,13 +39,14 @@ fn multi_flush(b: &mut Bencher) {
     b.iter(|| {
         scope(|s| {
             for _ in 0..THREADS {
-                s.spawn(|| {
+                s.spawn(|_| {
                     for _ in 0..STEPS {
                         let guard = &epoch::pin();
                         guard.flush();
                     }
                 });
             }
-        });
+        })
+        .unwrap();
     });
 }

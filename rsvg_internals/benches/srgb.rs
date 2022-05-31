@@ -1,17 +1,10 @@
-#[macro_use]
-extern crate criterion;
-use criterion::{black_box, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-extern crate cairo;
-extern crate cairo_sys;
-extern crate rsvg_internals;
-
-use rsvg_internals::filters::context::IRect;
-use rsvg_internals::srgb::{linearize, map_unpremultiplied_components_loop};
+use rsvg_internals::rect::IRect;
 use rsvg_internals::surface_utils::{
-    shared_surface::{SharedImageSurface, SurfaceType},
-    ImageSurfaceDataExt,
-    Pixel,
+    shared_surface::{ExclusiveImageSurface, SurfaceType},
+    srgb::{linearize, map_unpremultiplied_components_loop},
+    ImageSurfaceDataExt, Pixel,
 };
 
 const SURFACE_SIDE: i32 = 512;
@@ -25,33 +18,27 @@ const BOUNDS: IRect = IRect {
 fn bench_srgb_linearization(c: &mut Criterion) {
     c.bench_function("srgb map_unpremultiplied_components", |b| {
         let mut surface =
-            cairo::ImageSurface::create(cairo::Format::ARgb32, SURFACE_SIDE, SURFACE_SIDE).unwrap();
-        let mut output_surface =
-            cairo::ImageSurface::create(cairo::Format::ARgb32, SURFACE_SIDE, SURFACE_SIDE).unwrap();
+            ExclusiveImageSurface::new(SURFACE_SIDE, SURFACE_SIDE, SurfaceType::LinearRgb).unwrap();
 
         // Fill the surface with non-zero alpha (otherwise linearization is a no-op).
-        let stride = surface.get_stride() as usize;
-        {
-            let mut data = surface.get_data().unwrap();
-            for y in BOUNDS.y0..BOUNDS.y1 {
-                for x in BOUNDS.x0..BOUNDS.x1 {
-                    data.set_pixel(
-                        stride,
-                        Pixel {
-                            r: 0,
-                            g: 0,
-                            b: 0,
-                            a: 127,
-                        },
-                        x as u32,
-                        y as u32,
-                    );
+        surface.modify(&mut |data, stride| {
+            for y in BOUNDS.y_range() {
+                for x in BOUNDS.x_range() {
+                    let pixel = Pixel {
+                        r: 0,
+                        g: 0,
+                        b: 0,
+                        a: 127,
+                    };
+
+                    data.set_pixel(stride, pixel, x as u32, y as u32);
                 }
             }
-        }
+        });
 
-        let surface = SharedImageSurface::new(surface, SurfaceType::LinearRgb).unwrap();
-
+        let surface = surface.share().unwrap();
+        let mut output_surface =
+            ExclusiveImageSurface::new(SURFACE_SIDE, SURFACE_SIDE, SurfaceType::SRgb).unwrap();
         let bounds = black_box(BOUNDS);
 
         b.iter(|| {

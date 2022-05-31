@@ -5,6 +5,8 @@
  * Author: Robert Staudinger <robsta@gnome.org>.
  */
 
+#define RSVG_DISABLE_DEPRECATION_WARNINGS
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <glib.h>
@@ -142,8 +144,6 @@ bail:
         g_option_context_free (context), context = NULL;
     if (error)
         g_error_free (error), error = NULL;
-
-    rsvg_cleanup ();
 
     return exit_code;
 }

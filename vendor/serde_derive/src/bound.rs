@@ -1,19 +1,10 @@
-// Copyright 2017 Serde Developers
-//
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
-// except according to those terms.
-
 use std::collections::HashSet;
 
 use syn;
 use syn::punctuated::{Pair, Punctuated};
-use syn::visit::{self, Visit};
 
 use internals::ast::{Container, Data};
-use internals::attr;
+use internals::{attr, ungroup};
 
 use proc_macro2::Span;
 
@@ -25,14 +16,15 @@ pub fn without_defaults(generics: &syn::Generics) -> syn::Generics {
         params: generics
             .params
             .iter()
-            .map(|param| match *param {
-                syn::GenericParam::Type(ref param) => syn::GenericParam::Type(syn::TypeParam {
+            .map(|param| match param {
+                syn::GenericParam::Type(param) => syn::GenericParam::Type(syn::TypeParam {
                     eq_token: None,
                     default: None,
                     ..param.clone()
                 }),
                 _ => param.clone(),
-            }).collect(),
+            })
+            .collect(),
         ..generics.clone()
     }
 }
@@ -45,7 +37,7 @@ pub fn with_where_predicates(
     generics
         .make_where_clause()
         .predicates
-        .extend(predicates.into_iter().cloned());
+        .extend(predicates.iter().cloned());
     generics
 }
 
@@ -70,8 +62,8 @@ pub fn with_where_predicates_from_variants(
     generics: &syn::Generics,
     from_variant: fn(&attr::Variant) -> Option<&[syn::WherePredicate]>,
 ) -> syn::Generics {
-    let variants = match cont.data {
-        Data::Enum(ref variants) => variants,
+    let variants = match &cont.data {
+        Data::Enum(variants) => variants,
         Data::Struct(_, _) => {
             return generics.clone();
         }
@@ -119,10 +111,11 @@ pub fn with_bound(
         // parameters.
         associated_type_usage: Vec<&'ast syn::TypePath>,
     }
-    impl<'ast> Visit<'ast> for FindTyParams<'ast> {
+
+    impl<'ast> FindTyParams<'ast> {
         fn visit_field(&mut self, field: &'ast syn::Field) {
-            if let syn::Type::Path(ref ty) = field.ty {
-                if let Some(Pair::Punctuated(ref t, _)) = ty.path.segments.first() {
+            if let syn::Type::Path(ty) = ungroup(&field.ty) {
+                if let Some(Pair::Punctuated(t, _)) = ty.path.segments.pairs().next() {
                     if self.all_type_params.contains(&t.ident) {
                         self.associated_type_usage.push(ty);
                     }
@@ -133,7 +126,7 @@ pub fn with_bound(
 
         fn visit_path(&mut self, path: &'ast syn::Path) {
             if let Some(seg) = path.segments.last() {
-                if seg.into_value().ident == "PhantomData" {
+                if seg.ident == "PhantomData" {
                     // Hardcoded exception, because PhantomData<T> implements
                     // Serialize and Deserialize whether or not T implements it.
                     return;
@@ -145,7 +138,98 @@ pub fn with_bound(
                     self.relevant_type_params.insert(id.clone());
                 }
             }
-            visit::visit_path(self, path);
+            for segment in &path.segments {
+                self.visit_path_segment(segment);
+            }
+        }
+
+        // Everything below is simply traversing the syntax tree.
+
+        fn visit_type(&mut self, ty: &'ast syn::Type) {
+            match ty {
+                syn::Type::Array(ty) => self.visit_type(&ty.elem),
+                syn::Type::BareFn(ty) => {
+                    for arg in &ty.inputs {
+                        self.visit_type(&arg.ty);
+                    }
+                    self.visit_return_type(&ty.output);
+                }
+                syn::Type::Group(ty) => self.visit_type(&ty.elem),
+                syn::Type::ImplTrait(ty) => {
+                    for bound in &ty.bounds {
+                        self.visit_type_param_bound(bound);
+                    }
+                }
+                syn::Type::Macro(ty) => self.visit_macro(&ty.mac),
+                syn::Type::Paren(ty) => self.visit_type(&ty.elem),
+                syn::Type::Path(ty) => {
+                    if let Some(qself) = &ty.qself {
+                        self.visit_type(&qself.ty);
+                    }
+                    self.visit_path(&ty.path);
+                }
+                syn::Type::Ptr(ty) => self.visit_type(&ty.elem),
+                syn::Type::Reference(ty) => self.visit_type(&ty.elem),
+                syn::Type::Slice(ty) => self.visit_type(&ty.elem),
+                syn::Type::TraitObject(ty) => {
+                    for bound in &ty.bounds {
+                        self.visit_type_param_bound(bound);
+                    }
+                }
+                syn::Type::Tuple(ty) => {
+                    for elem in &ty.elems {
+                        self.visit_type(elem);
+                    }
+                }
+
+                syn::Type::Infer(_) | syn::Type::Never(_) | syn::Type::Verbatim(_) => {}
+
+                #[cfg(test)]
+                syn::Type::__TestExhaustive(_) => unimplemented!(),
+                #[cfg(not(test))]
+                _ => {}
+            }
+        }
+
+        fn visit_path_segment(&mut self, segment: &'ast syn::PathSegment) {
+            self.visit_path_arguments(&segment.arguments);
+        }
+
+        fn visit_path_arguments(&mut self, arguments: &'ast syn::PathArguments) {
+            match arguments {
+                syn::PathArguments::None => {}
+                syn::PathArguments::AngleBracketed(arguments) => {
+                    for arg in &arguments.args {
+                        match arg {
+                            syn::GenericArgument::Type(arg) => self.visit_type(arg),
+                            syn::GenericArgument::Binding(arg) => self.visit_type(&arg.ty),
+                            syn::GenericArgument::Lifetime(_)
+                            | syn::GenericArgument::Constraint(_)
+                            | syn::GenericArgument::Const(_) => {}
+                        }
+                    }
+                }
+                syn::PathArguments::Parenthesized(arguments) => {
+                    for argument in &arguments.inputs {
+                        self.visit_type(argument);
+                    }
+                    self.visit_return_type(&arguments.output);
+                }
+            }
+        }
+
+        fn visit_return_type(&mut self, return_type: &'ast syn::ReturnType) {
+            match return_type {
+                syn::ReturnType::Default => {}
+                syn::ReturnType::Type(_, output) => self.visit_type(output),
+            }
+        }
+
+        fn visit_type_param_bound(&mut self, bound: &'ast syn::TypeParamBound) {
+            match bound {
+                syn::TypeParamBound::Trait(bound) => self.visit_path(&bound.path),
+                syn::TypeParamBound::Lifetime(_) => {}
+            }
         }
 
         // Type parameter should not be considered used by a macro path.
@@ -163,21 +247,23 @@ pub fn with_bound(
         .collect();
 
     let mut visitor = FindTyParams {
-        all_type_params: all_type_params,
+        all_type_params,
         relevant_type_params: HashSet::new(),
         associated_type_usage: Vec::new(),
     };
-    match cont.data {
-        Data::Enum(ref variants) => for variant in variants.iter() {
-            let relevant_fields = variant
-                .fields
-                .iter()
-                .filter(|field| filter(&field.attrs, Some(&variant.attrs)));
-            for field in relevant_fields {
-                visitor.visit_field(field.original);
+    match &cont.data {
+        Data::Enum(variants) => {
+            for variant in variants.iter() {
+                let relevant_fields = variant
+                    .fields
+                    .iter()
+                    .filter(|field| filter(&field.attrs, Some(&variant.attrs)));
+                for field in relevant_fields {
+                    visitor.visit_field(field.original);
+                }
             }
-        },
-        Data::Struct(_, ref fields) => {
+        }
+        Data::Struct(_, fields) => {
             for field in fields.iter().filter(|field| filter(&field.attrs, None)) {
                 visitor.visit_field(field.original);
             }
@@ -193,7 +279,8 @@ pub fn with_bound(
         .map(|id| syn::TypePath {
             qself: None,
             path: id.into(),
-        }).chain(associated_type_usage.into_iter().cloned())
+        })
+        .chain(associated_type_usage.into_iter().cloned())
         .map(|bounded_ty| {
             syn::WherePredicate::Type(syn::PredicateType {
                 lifetimes: None,
@@ -206,7 +293,8 @@ pub fn with_bound(
                     modifier: syn::TraitBoundModifier::None,
                     lifetimes: None,
                     path: bound.clone(),
-                })].into_iter()
+                })]
+                .into_iter()
                 .collect(),
             })
         });
@@ -239,7 +327,8 @@ pub fn with_self_bound(
                 modifier: syn::TraitBoundModifier::None,
                 lifetimes: None,
                 path: bound.clone(),
-            })].into_iter()
+            })]
+            .into_iter()
             .collect(),
         }));
     generics
@@ -257,11 +346,11 @@ pub fn with_lifetime_bound(generics: &syn::Generics, lifetime: &str) -> syn::Gen
     let params = Some(syn::GenericParam::Lifetime(def))
         .into_iter()
         .chain(generics.params.iter().cloned().map(|mut param| {
-            match param {
-                syn::GenericParam::Lifetime(ref mut param) => {
+            match &mut param {
+                syn::GenericParam::Lifetime(param) => {
                     param.bounds.push(bound.clone());
                 }
-                syn::GenericParam::Type(ref mut param) => {
+                syn::GenericParam::Type(param) => {
                     param
                         .bounds
                         .push(syn::TypeParamBound::Lifetime(bound.clone()));
@@ -269,10 +358,11 @@ pub fn with_lifetime_bound(generics: &syn::Generics, lifetime: &str) -> syn::Gen
                 syn::GenericParam::Const(_) => {}
             }
             param
-        })).collect();
+        }))
+        .collect();
 
     syn::Generics {
-        params: params,
+        params,
         ..generics.clone()
     }
 }
@@ -292,24 +382,26 @@ fn type_of_item(cont: &Container) -> syn::Type {
                             .generics
                             .params
                             .iter()
-                            .map(|param| match *param {
-                                syn::GenericParam::Type(ref param) => {
+                            .map(|param| match param {
+                                syn::GenericParam::Type(param) => {
                                     syn::GenericArgument::Type(syn::Type::Path(syn::TypePath {
                                         qself: None,
                                         path: param.ident.clone().into(),
                                     }))
                                 }
-                                syn::GenericParam::Lifetime(ref param) => {
+                                syn::GenericParam::Lifetime(param) => {
                                     syn::GenericArgument::Lifetime(param.lifetime.clone())
                                 }
                                 syn::GenericParam::Const(_) => {
                                     panic!("Serde does not support const generics yet");
                                 }
-                            }).collect(),
+                            })
+                            .collect(),
                         gt_token: <Token![>]>::default(),
                     },
                 ),
-            }].into_iter()
+            }]
+            .into_iter()
             .collect(),
         },
     })

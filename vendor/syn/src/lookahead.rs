@@ -1,11 +1,10 @@
-use std::cell::RefCell;
-
+use crate::buffer::Cursor;
+use crate::error::{self, Error};
+use crate::sealed::lookahead::Sealed;
+use crate::span::IntoSpans;
+use crate::token::Token;
 use proc_macro2::{Delimiter, Span};
-
-use buffer::Cursor;
-use error::{self, Error};
-use span::IntoSpans;
-use token::Token;
+use std::cell::RefCell;
 
 /// Support for checking the next token in a stream to decide how to parse.
 ///
@@ -16,17 +15,14 @@ use token::Token;
 ///
 /// Use [`ParseStream::lookahead1`] to construct this object.
 ///
-/// [`ParseStream::peek`]: struct.ParseBuffer.html#method.peek
-/// [`ParseStream::lookahead1`]: struct.ParseBuffer.html#method.lookahead1
+/// [`ParseStream::peek`]: crate::parse::ParseBuffer::peek
+/// [`ParseStream::lookahead1`]: crate::parse::ParseBuffer::lookahead1
 ///
 /// # Example
 ///
 /// ```
-/// #[macro_use]
-/// extern crate syn;
-///
-/// use syn::{ConstParam, Ident, Lifetime, LifetimeDef, TypeParam};
-/// use syn::parse::{Parse, ParseStream, Result};
+/// use syn::{ConstParam, Ident, Lifetime, LifetimeDef, Result, Token, TypeParam};
+/// use syn::parse::{Parse, ParseStream};
 ///
 /// // A generic parameter, a single one of the comma-separated elements inside
 /// // angle brackets in:
@@ -59,8 +55,6 @@ use token::Token;
 ///         }
 ///     }
 /// }
-/// #
-/// # fn main() {}
 /// ```
 pub struct Lookahead1<'a> {
     scope: Span,
@@ -70,8 +64,8 @@ pub struct Lookahead1<'a> {
 
 pub fn new(scope: Span, cursor: Cursor) -> Lookahead1 {
     Lookahead1 {
-        scope: scope,
-        cursor: cursor,
+        scope,
+        cursor,
         comparisons: RefCell::new(Vec::new()),
     }
 }
@@ -99,7 +93,8 @@ impl<'a> Lookahead1<'a> {
     ///
     /// - `input.peek(Token![struct])`
     /// - `input.peek(Token![==])`
-    /// - `input.peek(Ident)`
+    /// - `input.peek(Ident)`&emsp;*(does not accept keywords)*
+    /// - `input.peek(Ident::peek_any)`
     /// - `input.peek(Lifetime)`
     /// - `input.peek(token::Brace)`
     pub fn peek<T: Peek>(&self, token: T) -> bool {
@@ -114,11 +109,13 @@ impl<'a> Lookahead1<'a> {
     pub fn error(self) -> Error {
         let comparisons = self.comparisons.borrow();
         match comparisons.len() {
-            0 => if self.cursor.eof() {
-                Error::new(self.scope, "unexpected end of input")
-            } else {
-                Error::new(self.cursor.span(), "unexpected token")
-            },
+            0 => {
+                if self.cursor.eof() {
+                    Error::new(self.scope, "unexpected end of input")
+                } else {
+                    Error::new(self.cursor.span(), "unexpected token")
+                }
+            }
             1 => {
                 let message = format!("expected {}", comparisons[0]);
                 error::new_at(self.scope, self.cursor, message)
@@ -143,14 +140,14 @@ impl<'a> Lookahead1<'a> {
 ///
 /// This trait is sealed and cannot be implemented for types outside of Syn.
 ///
-/// [`ParseStream::peek`]: struct.ParseBuffer.html#method.peek
-pub trait Peek: private::Sealed {
+/// [`ParseStream::peek`]: crate::parse::ParseBuffer::peek
+pub trait Peek: Sealed {
     // Not public API.
     #[doc(hidden)]
     type Token: Token;
 }
 
-impl<F: FnOnce(TokenMarker) -> T, T: Token> Peek for F {
+impl<F: Copy + FnOnce(TokenMarker) -> T, T: Token> Peek for F {
     type Token = T;
 }
 
@@ -166,8 +163,4 @@ pub fn is_delimiter(cursor: Cursor, delimiter: Delimiter) -> bool {
     cursor.group(delimiter).is_some()
 }
 
-mod private {
-    use super::{Token, TokenMarker};
-    pub trait Sealed {}
-    impl<F: FnOnce(TokenMarker) -> T, T: Token> Sealed for F {}
-}
+impl<F: Copy + FnOnce(TokenMarker) -> T, T: Token> Sealed for F {}

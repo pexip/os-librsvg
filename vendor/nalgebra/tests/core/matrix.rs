@@ -1,10 +1,11 @@
 use num::{One, Zero};
+use std::cmp::Ordering;
 
-use na::dimension::{U15, U8};
+use na::dimension::{U15, U2, U4, U8};
 use na::{
     self, DMatrix, DVector, Matrix2, Matrix2x3, Matrix2x4, Matrix3, Matrix3x2, Matrix3x4, Matrix4,
-    Matrix4x3, Matrix4x5, Matrix5, Matrix6, MatrixMN, Real, RowVector3, RowVector4, RowVector5,
-    Vector1, Vector2, Vector3, Vector4, Vector5, Vector6,
+    Matrix4x3, Matrix4x5, Matrix5, Matrix6, MatrixMN, RowVector3, RowVector4, RowVector5, Vector1,
+    Vector2, Vector3, Vector4, Vector5, Vector6,
 };
 
 #[test]
@@ -194,10 +195,10 @@ fn from_columns() {
 #[test]
 fn from_columns_dynamic() {
     let columns = &[
-        DVector::from_row_slice(3, &[11, 21, 31]),
-        DVector::from_row_slice(3, &[12, 22, 32]),
-        DVector::from_row_slice(3, &[13, 23, 33]),
-        DVector::from_row_slice(3, &[14, 24, 34]),
+        DVector::from_row_slice(&[11, 21, 31]),
+        DVector::from_row_slice(&[12, 22, 32]),
+        DVector::from_row_slice(&[13, 23, 33]),
+        DVector::from_row_slice(&[14, 24, 34]),
     ];
 
     let expected = DMatrix::from_row_slice(3, 4, &[11, 12, 13, 14, 21, 22, 23, 24, 31, 32, 33, 34]);
@@ -232,8 +233,8 @@ fn from_not_enough_columns() {
 #[should_panic]
 fn from_rows_with_different_dimensions() {
     let columns = &[
-        DVector::from_row_slice(3, &[11, 21, 31]),
-        DVector::from_row_slice(3, &[12, 22, 32, 33]),
+        DVector::from_row_slice(&[11, 21, 31]),
+        DVector::from_row_slice(&[12, 22, 32, 33]),
     ];
 
     let _ = DMatrix::from_columns(columns);
@@ -242,12 +243,8 @@ fn from_rows_with_different_dimensions() {
 #[test]
 fn copy_from_slice() {
     let mut a = Matrix3::zeros();
-    let data = [ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0 ];
-    let expected_a = Matrix3::new(
-        1.0, 4.0, 7.0,
-        2.0, 5.0, 8.0,
-        3.0, 6.0, 9.0
-    );
+    let data = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
+    let expected_a = Matrix3::new(1.0, 4.0, 7.0, 2.0, 5.0, 8.0, 3.0, 6.0, 9.0);
 
     a.copy_from_slice(&data);
 
@@ -258,7 +255,7 @@ fn copy_from_slice() {
 #[test]
 fn copy_from_slice_too_small() {
     let mut a = Matrix3::zeros();
-    let data = [ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0 ];
+    let data = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
     a.copy_from_slice(&data);
 }
 
@@ -266,7 +263,7 @@ fn copy_from_slice_too_small() {
 #[test]
 fn copy_from_slice_too_large() {
     let mut a = Matrix3::zeros();
-    let data = [ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0 ];
+    let data = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0];
     a.copy_from_slice(&data);
 }
 
@@ -275,11 +272,31 @@ fn to_homogeneous() {
     let a = Vector3::new(1.0, 2.0, 3.0);
     let expected_a = Vector4::new(1.0, 2.0, 3.0, 0.0);
 
-    let b = DVector::from_row_slice(3, &[1.0, 2.0, 3.0]);
-    let expected_b = DVector::from_row_slice(4, &[1.0, 2.0, 3.0, 0.0]);
+    let b = DVector::from_row_slice(&[1.0, 2.0, 3.0]);
+    let expected_b = DVector::from_row_slice(&[1.0, 2.0, 3.0, 0.0]);
+
+    let c = Matrix2::new(1.0, 2.0, 3.0, 4.0);
+    let expected_c = Matrix3::new(1.0, 2.0, 0.0, 3.0, 4.0, 0.0, 0.0, 0.0, 1.0);
+
+    let d = DMatrix::from_row_slice(2, 2, &[1.0, 2.0, 3.0, 4.0]);
+    let expected_d = DMatrix::from_row_slice(3, 3, &[1.0, 2.0, 0.0, 3.0, 4.0, 0.0, 0.0, 0.0, 1.0]);
 
     assert_eq!(a.to_homogeneous(), expected_a);
     assert_eq!(b.to_homogeneous(), expected_b);
+    assert_eq!(c.to_homogeneous(), expected_c);
+    assert_eq!(d.to_homogeneous(), expected_d);
+}
+
+#[test]
+fn push() {
+    let a = Vector3::new(1.0, 2.0, 3.0);
+    let expected_a = Vector4::new(1.0, 2.0, 3.0, 4.0);
+
+    let b = DVector::from_row_slice(&[1.0, 2.0, 3.0]);
+    let expected_b = DVector::from_row_slice(&[1.0, 2.0, 3.0, 4.0]);
+
+    assert_eq!(a.push(4.0), expected_a);
+    assert_eq!(b.push(4.0), expected_b);
 }
 
 #[test]
@@ -400,7 +417,7 @@ fn simple_scalar_conversion() {
 #[test]
 fn apply() {
     let mut a = Matrix4::new(
-        1.1, 2.2, 3.3, 4.4, 5.5, 6.6, 7.7, 8.8, 9.9, 8.8, 7.7, 6.6, 5.5, 4.4, 3.3, 2.2,
+        1.1f32, 2.2, 3.3, 4.4, 5.5, 6.6, 7.7, 8.8, 9.9, 8.8, 7.7, 6.6, 5.5, 4.4, 3.3, 2.2,
     );
 
     let expected = Matrix4::new(
@@ -421,6 +438,17 @@ fn map() {
     let expected = Matrix4::new(1, 2, 3, 4, 6, 7, 8, 9, 10, 9, 8, 7, 6, 4, 3, 2);
 
     let computed = a.map(|e| e.round() as i64);
+
+    assert_eq!(computed, expected);
+}
+
+#[test]
+fn map_with_location() {
+    let a = Matrix4::new(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4);
+
+    let expected = Matrix4::new(1, 2, 3, 4, 3, 4, 5, 6, 5, 6, 7, 8, 7, 8, 9, 10);
+
+    let computed = a.map_with_location(|i, j, e| e + i + j);
 
     assert_eq!(computed, expected);
 }
@@ -716,6 +744,19 @@ fn partial_clamp() {
     assert_eq!(*inter.unwrap(), n);
 }
 
+#[test]
+fn partial_cmp() {
+    let a = Vector2::new(1.0, 6.0);
+    let b = Vector2::new(1.0, 3.0);
+    let c = Vector2::new(2.0, 7.0);
+    let d = Vector2::new(0.0, 7.0);
+    assert_eq!(a.partial_cmp(&a), Some(Ordering::Equal));
+    assert_eq!(a.partial_cmp(&b), Some(Ordering::Greater));
+    assert_eq!(a.partial_cmp(&c), Some(Ordering::Less));
+    assert_eq!(a.partial_cmp(&d), None);
+}
+
+#[test]
 fn swizzle() {
     let a = Vector2::new(1.0f32, 2.0);
     let b = Vector3::new(1.0f32, 2.0, 3.0);
@@ -749,7 +790,6 @@ fn swizzle() {
     assert_eq!(b.zxy(), Vector3::new(3.0, 1.0, 2.0));
     assert_eq!(b.zxz(), Vector3::new(3.0, 1.0, 3.0));
     assert_eq!(b.zyz(), Vector3::new(3.0, 2.0, 3.0));
-
 
     assert_eq!(c.xy(), Vector2::new(1.0, 2.0));
     assert_eq!(c.yx(), Vector2::new(2.0, 1.0));
@@ -905,7 +945,7 @@ mod normalization_tests {
     }
 }
 
-#[cfg(feature = "arbitrary")]
+#[cfg(all(feature = "arbitrary", feature = "alga"))]
 // FIXME: move this to alga ?
 mod finite_dim_inner_space_tests {
     use super::*;
@@ -982,7 +1022,9 @@ mod finite_dim_inner_space_tests {
      *
      */
     #[cfg(feature = "arbitrary")]
-    fn is_subspace_basis<T: FiniteDimInnerSpace<Real = f64> + Display>(vs: &[T]) -> bool {
+    fn is_subspace_basis<T: FiniteDimInnerSpace<RealField = f64, ComplexField = f64> + Display>(
+        vs: &[T],
+    ) -> bool {
         for i in 0..vs.len() {
             // Basis elements must be normalized.
             if !relative_eq!(vs[i].norm(), 1.0, epsilon = 1.0e-7) {
@@ -1006,4 +1048,62 @@ mod finite_dim_inner_space_tests {
 
         true
     }
+}
+
+#[test]
+fn partial_eq_shape_mismatch() {
+    let a = Matrix2::new(1, 2, 3, 4);
+    let b = Matrix2x3::new(1, 2, 3, 4, 5, 6);
+    assert_ne!(a, b);
+    assert_ne!(b, a);
+}
+
+#[test]
+fn partial_eq_different_types() {
+    // Ensure comparability of several types of Matrices
+    let dynamic_mat = DMatrix::from_row_slice(2, 4, &[1, 2, 3, 4, 5, 6, 7, 8]);
+    let static_mat = Matrix2x4::new(1, 2, 3, 4, 5, 6, 7, 8);
+
+    let mut typenum_static_mat = MatrixMN::<u8, typenum::U1024, U4>::zeros();
+    let mut slice = typenum_static_mat.slice_mut((0, 0), (2, 4));
+    slice += static_mat;
+
+    let fslice_of_dmat = dynamic_mat.fixed_slice::<U2, U2>(0, 0);
+    let dslice_of_dmat = dynamic_mat.slice((0, 0), (2, 2));
+    let fslice_of_smat = static_mat.fixed_slice::<U2, U2>(0, 0);
+    let dslice_of_smat = static_mat.slice((0, 0), (2, 2));
+
+    assert_eq!(dynamic_mat, static_mat);
+    assert_eq!(static_mat, dynamic_mat);
+
+    assert_eq!(dynamic_mat, slice);
+    assert_eq!(slice, dynamic_mat);
+
+    assert_eq!(static_mat, slice);
+    assert_eq!(slice, static_mat);
+
+    assert_eq!(fslice_of_dmat, dslice_of_dmat);
+    assert_eq!(dslice_of_dmat, fslice_of_dmat);
+
+    assert_eq!(fslice_of_dmat, fslice_of_smat);
+    assert_eq!(fslice_of_smat, fslice_of_dmat);
+
+    assert_eq!(fslice_of_dmat, dslice_of_smat);
+    assert_eq!(dslice_of_smat, fslice_of_dmat);
+
+    assert_eq!(dslice_of_dmat, fslice_of_smat);
+    assert_eq!(fslice_of_smat, dslice_of_dmat);
+
+    assert_eq!(dslice_of_dmat, dslice_of_smat);
+    assert_eq!(dslice_of_smat, dslice_of_dmat);
+
+    assert_eq!(fslice_of_smat, dslice_of_smat);
+    assert_eq!(dslice_of_smat, fslice_of_smat);
+
+    assert_ne!(dynamic_mat, dslice_of_smat);
+    assert_ne!(dslice_of_smat, dynamic_mat);
+
+    // TODO - implement those comparisons
+    // assert_ne!(static_mat, typenum_static_mat);
+    //assert_ne!(typenum_static_mat, static_mat);
 }

@@ -7,36 +7,28 @@ A port of [MUSL]'s libm to Rust.
 ## Goals
 
 The short term goal of this library is to [enable math support (e.g. `sin`, `atan2`) for the
-`wasm32-unknown-unknown` target][wasm] (cf. [rust-lang-nursery/compiler-builtins][pr]). The longer
+`wasm32-unknown-unknown` target][wasm] (cf. [rust-lang/compiler-builtins][pr]). The longer
 term goal is to enable [math support in the `core` crate][core].
 
-[wasm]: https://github.com/japaric/libm/milestone/1
-[pr]: https://github.com/rust-lang-nursery/compiler-builtins/pull/248
-[core]: https://github.com/japaric/libm/milestone/2
+[wasm]: https://github.com/rust-lang/libm/milestone/1
+[pr]: https://github.com/rust-lang/compiler-builtins/pull/248
+[core]: https://github.com/rust-lang/libm/milestone/2
 
 ## Already usable
 
-This crate is [on crates.io] and can be used today in stable `#![no_std]` programs like this:
+This crate is [on crates.io] and can be used today in stable `#![no_std]` programs.
+
+The API documentation can be found [here](https://docs.rs/libm).
 
 [on crates.io]: https://crates.io/crates/libm
 
-``` rust
-#![no_std]
+## Benchmark
+[benchmark]: #benchmark
 
-extern crate libm;
+The benchmarks are located in `crates/libm-bench` and require a nightly Rust toolchain.
+To run all benchmarks:
 
-use libm::F32Ext; // adds methods to `f32`
-
-fn foo(x: f32) {
-    let y = x.sqrt();
-    let z = libm::truncf(x);
-}
-```
-
-Not all the math functions are available at the moment. Check the [API docs] to learn what's
-currently supported.
-
-[API docs]: https://docs.rs/libm
+> cargo +nightly bench --all
 
 ## Contributing
 

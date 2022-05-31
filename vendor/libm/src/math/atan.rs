@@ -60,7 +60,11 @@ const AT: [f64; 11] = [
     1.62858201153657823623e-02,  /* 0x3F90AD3A, 0xE322DA11 */
 ];
 
-#[inline]
+/// Arctangent (f64)
+///
+/// Computes the inverse tangent (arc tangent) of the input value.
+/// Returns a value in radians, in the range of -pi/2 to pi/2.
+#[cfg_attr(all(test, assert_no_panic), no_panic::no_panic)]
 pub fn atan(x: f64) -> f64 {
     let mut x = x;
     let mut ix = (x.to_bits() >> 32) as u32;
@@ -101,16 +105,14 @@ pub fn atan(x: f64) -> f64 {
                 x = (x - 1.) / (x + 1.);
                 1
             }
+        } else if ix < 0x40038000 {
+            /* |x| < 2.4375 */
+            x = (x - 1.5) / (1. + 1.5 * x);
+            2
         } else {
-            if ix < 0x40038000 {
-                /* |x| < 2.4375 */
-                x = (x - 1.5) / (1. + 1.5 * x);
-                2
-            } else {
-                /* 2.4375 <= |x| < 2^66 */
-                x = -1. / x;
-                3
-            }
+            /* 2.4375 <= |x| < 2^66 */
+            x = -1. / x;
+            3
         }
     };
 
@@ -124,7 +126,7 @@ pub fn atan(x: f64) -> f64 {
         return x - x * (s1 + s2);
     }
 
-    let z = ATANHI[id as usize] - (x * (s1 + s2) - ATANLO[id as usize] - x);
+    let z = i!(ATANHI, id as usize) - (x * (s1 + s2) - i!(ATANLO, id as usize) - x);
 
     if sign != 0 {
         -z
@@ -147,7 +149,8 @@ mod tests {
             (-3.0_f64.sqrt() / 3.0, -f64::consts::FRAC_PI_6),
             (-1.0, -f64::consts::FRAC_PI_4),
             (-3.0_f64.sqrt(), -f64::consts::FRAC_PI_3),
-        ].iter()
+        ]
+        .iter()
         {
             assert!(
                 (atan(*input) - answer) / answer < 1e-5,

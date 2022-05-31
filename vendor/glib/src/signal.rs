@@ -4,12 +4,11 @@
 
 //! `IMPL` Low level signal support.
 
-use libc::{c_void, c_uint, c_ulong};
-
-use gobject_ffi::{self, GCallback};
-use ffi::{gboolean, GQuark};
-use object::{IsA, Object};
-use source::CallbackGuard;
+use glib_sys::{gboolean, gpointer};
+use gobject_sys::{self, GCallback};
+use libc::{c_char, c_ulong, c_void};
+use object::ObjectType;
+use std::mem;
 use translate::{from_glib, FromGlib, ToGlib, ToGlibPtr};
 
 /// The id of a signal that is returned by `connect`.
@@ -49,47 +48,64 @@ impl ToGlib for Inhibit {
     }
 }
 
-pub unsafe fn connect(receiver: *mut gobject_ffi::GObject, signal_name: &str, trampoline: GCallback,
-                      closure: *mut Box<Fn() + 'static>) -> SignalHandlerId {
-    let handle = gobject_ffi::g_signal_connect_data(receiver, signal_name.to_glib_none().0,
-        trampoline, closure as *mut _, Some(destroy_closure),
-        gobject_ffi::GConnectFlags::empty());
+#[allow(clippy::missing_safety_doc)]
+pub unsafe fn connect_raw<F>(
+    receiver: *mut gobject_sys::GObject,
+    signal_name: *const c_char,
+    trampoline: GCallback,
+    closure: *mut F,
+) -> SignalHandlerId {
+    unsafe extern "C" fn destroy_closure<F>(ptr: *mut c_void, _: *mut gobject_sys::GClosure) {
+        // destroy
+        Box::<F>::from_raw(ptr as *mut _);
+    }
+    assert_eq!(mem::size_of::<*mut F>(), mem::size_of::<gpointer>());
+    assert!(trampoline.is_some());
+    let handle = gobject_sys::g_signal_connect_data(
+        receiver,
+        signal_name,
+        trampoline,
+        closure as *mut _,
+        Some(destroy_closure::<F>),
+        0,
+    );
     assert!(handle > 0);
     from_glib(handle)
 }
 
-pub fn signal_handler_block<T: IsA<Object>>(instance: &T, handler_id: &SignalHandlerId) {
+pub fn signal_handler_block<T: ObjectType>(instance: &T, handler_id: &SignalHandlerId) {
     unsafe {
-        gobject_ffi::g_signal_handler_block(instance.to_glib_none().0, handler_id.to_glib());
+        gobject_sys::g_signal_handler_block(
+            instance.as_object_ref().to_glib_none().0,
+            handler_id.to_glib(),
+        );
     }
 }
 
-pub fn signal_handler_unblock<T: IsA<Object>>(instance: &T, handler_id: &SignalHandlerId) {
+pub fn signal_handler_unblock<T: ObjectType>(instance: &T, handler_id: &SignalHandlerId) {
     unsafe {
-        gobject_ffi::g_signal_handler_unblock(instance.to_glib_none().0, handler_id.to_glib());
+        gobject_sys::g_signal_handler_unblock(
+            instance.as_object_ref().to_glib_none().0,
+            handler_id.to_glib(),
+        );
     }
 }
 
-pub fn signal_handler_disconnect<T: IsA<Object>>(instance: &T, handler_id: SignalHandlerId) {
+#[allow(clippy::needless_pass_by_value)]
+pub fn signal_handler_disconnect<T: ObjectType>(instance: &T, handler_id: SignalHandlerId) {
     unsafe {
-        gobject_ffi::g_signal_handler_disconnect(instance.to_glib_none().0, handler_id.to_glib());
+        gobject_sys::g_signal_handler_disconnect(
+            instance.as_object_ref().to_glib_none().0,
+            handler_id.to_glib(),
+        );
     }
 }
 
-pub fn signal_stop_emission<T: IsA<Object>>(instance: &T, signal_id: u32, detail: GQuark) {
+pub fn signal_stop_emission_by_name<T: ObjectType>(instance: &T, signal_name: &str) {
     unsafe {
-        gobject_ffi::g_signal_stop_emission(instance.to_glib_none().0, signal_id as c_uint, detail);
+        gobject_sys::g_signal_stop_emission_by_name(
+            instance.as_object_ref().to_glib_none().0,
+            signal_name.to_glib_none().0,
+        );
     }
-}
-
-pub fn signal_stop_emission_by_name<T: IsA<Object>>(instance: &T, signal_name: &str) {
-    unsafe {
-        gobject_ffi::g_signal_stop_emission_by_name(instance.to_glib_none().0, signal_name.to_glib_none().0);
-    }
-}
-
-unsafe extern "C" fn destroy_closure(ptr: *mut c_void, _: *mut gobject_ffi::GClosure) {
-    let _guard = CallbackGuard::new();
-    // destroy
-    Box::<Box<Fn()>>::from_raw(ptr as *mut _);
 }
