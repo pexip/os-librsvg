@@ -1,14 +1,8 @@
-extern crate docopt;
-extern crate rayon;
-#[macro_use]
-extern crate serde_derive;
-extern crate serde;
-
 use docopt::Docopt;
 use std::io;
 use std::process;
 
-const USAGE: &'static str = "
+const USAGE: &str = "
 Usage: cpu_monitor [options] <scenario>
        cpu_monitor --help
 
@@ -28,15 +22,16 @@ Options:
     -d N, --depth N              Control how hard the dummy task works [default: 27]
 ";
 
-#[derive(Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Args {
     arg_scenario: String,
     flag_depth: usize,
 }
 
 fn main() {
-    let args: &Args =
-        &Docopt::new(USAGE).and_then(|d| d.deserialize()).unwrap_or_else(|e| e.exit());
+    let args: &Args = &Docopt::new(USAGE)
+        .and_then(|d| d.deserialize())
+        .unwrap_or_else(|e| e.exit());
 
     match &args.arg_scenario[..] {
         "tasks_ended" => tasks_ended(args),
@@ -75,12 +70,12 @@ fn tasks_ended(args: &Args) {
 }
 
 fn task_stall_root(args: &Args) {
-    rayon::join(|| task(args), || wait_for_user());
+    rayon::join(|| task(args), wait_for_user);
 }
 
 fn task_stall_scope(args: &Args) {
     rayon::scope(|scope| {
-                     scope.spawn(move |_| task(args));
-                     scope.spawn(move |_| wait_for_user());
-                 });
+        scope.spawn(move |_| task(args));
+        scope.spawn(move |_| wait_for_user());
+    });
 }

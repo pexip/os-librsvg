@@ -3,10 +3,10 @@
 use std::fmt::Debug;
 use std::mem;
 
-use base::Scalar;
-use base::default_allocator::DefaultAllocator;
-use base::dimension::{Dim, U1};
-use base::allocator::{Allocator, SameShapeC, SameShapeR};
+use crate::base::allocator::{Allocator, SameShapeC, SameShapeR};
+use crate::base::default_allocator::DefaultAllocator;
+use crate::base::dimension::{Dim, U1};
+use crate::base::Scalar;
 
 /*
  * Aliases for allocation results.
@@ -34,7 +34,7 @@ pub type CStride<N, R, C = U1> =
 /// Note that `Self` must always have a number of elements compatible with the matrix length (given
 /// by `R` and `C` if they are known at compile-time). For example, implementors of this trait
 /// should **not** allow the user to modify the size of the underlying buffer with safe methods
-/// (for example the `MatrixVec::data_mut` method is unsafe because the user could change the
+/// (for example the `VecStorage::data_mut` method is unsafe because the user could change the
 /// vector's size so that it no longer contains enough elements: this will lead to UB.
 pub unsafe trait Storage<N: Scalar, R: Dim, C: Dim = U1>: Debug + Sized {
     /// The static stride of this storage's rows.
@@ -72,7 +72,7 @@ pub unsafe trait Storage<N: Scalar, R: Dim, C: Dim = U1>: Debug + Sized {
     /// Gets the address of the i-th matrix component without performing bound-checking.
     #[inline]
     unsafe fn get_address_unchecked_linear(&self, i: usize) -> *const N {
-        self.ptr().offset(i as isize)
+        self.ptr().wrapping_offset(i as isize)
     }
 
     /// Gets the address of the i-th matrix component without performing bound-checking.
@@ -94,13 +94,11 @@ pub unsafe trait Storage<N: Scalar, R: Dim, C: Dim = U1>: Debug + Sized {
     }
 
     /// Indicates whether this data buffer stores its elements contiguously.
-    #[inline]
     fn is_contiguous(&self) -> bool;
 
     /// Retrieves the data buffer as a contiguous slice.
     ///
     /// The matrix components may not be stored in a contiguous way, depending on the strides.
-    #[inline]
     fn as_slice(&self) -> &[N];
 
     /// Builds a matrix data storage that does not contain any reference.
@@ -126,7 +124,7 @@ pub unsafe trait StorageMut<N: Scalar, R: Dim, C: Dim = U1>: Storage<N, R, C> {
     /// Gets the mutable address of the i-th matrix component without performing bound-checking.
     #[inline]
     unsafe fn get_address_unchecked_linear_mut(&mut self, i: usize) -> *mut N {
-        self.ptr_mut().offset(i as isize)
+        self.ptr_mut().wrapping_offset(i as isize)
     }
 
     /// Gets the mutable address of the i-th matrix component without performing bound-checking.
@@ -168,7 +166,6 @@ pub unsafe trait StorageMut<N: Scalar, R: Dim, C: Dim = U1>: Storage<N, R, C> {
     /// Retrieves the mutable data buffer as a contiguous slice.
     ///
     /// Matrix components may not be contiguous, depending on its strides.
-    #[inline]
     fn as_mut_slice(&mut self) -> &mut [N];
 }
 
@@ -177,8 +174,9 @@ pub unsafe trait StorageMut<N: Scalar, R: Dim, C: Dim = U1>: Storage<N, R, C> {
 /// The storage requirement means that for any value of `i` in `[0, nrows * ncols[`, the value
 /// `.get_unchecked_linear` returns one of the matrix component. This trait is unsafe because
 /// failing to comply to this may cause Undefined Behaviors.
-pub unsafe trait ContiguousStorage<N: Scalar, R: Dim, C: Dim = U1>
-    : Storage<N, R, C> {
+pub unsafe trait ContiguousStorage<N: Scalar, R: Dim, C: Dim = U1>:
+    Storage<N, R, C>
+{
 }
 
 /// A mutable matrix storage that is stored contiguously in memory.
@@ -186,6 +184,7 @@ pub unsafe trait ContiguousStorage<N: Scalar, R: Dim, C: Dim = U1>
 /// The storage requirement means that for any value of `i` in `[0, nrows * ncols[`, the value
 /// `.get_unchecked_linear` returns one of the matrix component. This trait is unsafe because
 /// failing to comply to this may cause Undefined Behaviors.
-pub unsafe trait ContiguousStorageMut<N: Scalar, R: Dim, C: Dim = U1>
-    : ContiguousStorage<N, R, C> + StorageMut<N, R, C> {
+pub unsafe trait ContiguousStorageMut<N: Scalar, R: Dim, C: Dim = U1>:
+    ContiguousStorage<N, R, C> + StorageMut<N, R, C>
+{
 }

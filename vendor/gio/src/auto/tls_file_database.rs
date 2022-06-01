@@ -2,78 +2,108 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use Error;
-use TlsDatabase;
-use ffi;
+use gio_sys;
 use glib;
+use glib::object::Cast;
+use glib::object::IsA;
+use glib::signal::connect_raw;
+use glib::signal::SignalHandlerId;
+use glib::translate::*;
+use glib::GString;
 use glib::StaticType;
 use glib::Value;
-use glib::object::Downcast;
-use glib::object::IsA;
-use glib::signal::SignalHandlerId;
-use glib::signal::connect;
-use glib::translate::*;
-use glib_ffi;
-use gobject_ffi;
+use glib_sys;
+use gobject_sys;
 use std;
 use std::boxed::Box as Box_;
-use std::mem;
+use std::fmt;
 use std::mem::transmute;
 use std::ptr;
+use TlsDatabase;
 
 glib_wrapper! {
-    pub struct TlsFileDatabase(Object<ffi::GTlsFileDatabase, ffi::GTlsFileDatabaseInterface>): TlsDatabase;
+    pub struct TlsFileDatabase(Interface<gio_sys::GTlsFileDatabase>) @requires TlsDatabase;
 
     match fn {
-        get_type => || ffi::g_tls_file_database_get_type(),
+        get_type => || gio_sys::g_tls_file_database_get_type(),
     }
 }
 
 impl TlsFileDatabase {
-    pub fn new<P: AsRef<std::path::Path>>(anchors: P) -> Result<TlsFileDatabase, Error> {
+    pub fn new<P: AsRef<std::path::Path>>(anchors: P) -> Result<TlsFileDatabase, glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let ret = ffi::g_tls_file_database_new(anchors.as_ref().to_glib_none().0, &mut error);
-            if error.is_null() { Ok(from_glib_full(ret)) } else { Err(from_glib_full(error)) }
+            let ret =
+                gio_sys::g_tls_file_database_new(anchors.as_ref().to_glib_none().0, &mut error);
+            if error.is_null() {
+                Ok(from_glib_full(ret))
+            } else {
+                Err(from_glib_full(error))
+            }
         }
     }
 }
 
-pub trait TlsFileDatabaseExt {
-    fn get_property_anchors(&self) -> Option<String>;
+pub const NONE_TLS_FILE_DATABASE: Option<&TlsFileDatabase> = None;
+
+pub trait TlsFileDatabaseExt: 'static {
+    fn get_property_anchors(&self) -> Option<GString>;
 
     fn set_property_anchors(&self, anchors: Option<&str>);
 
     fn connect_property_anchors_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
 }
 
-impl<O: IsA<TlsFileDatabase> + IsA<glib::object::Object>> TlsFileDatabaseExt for O {
-    fn get_property_anchors(&self) -> Option<String> {
+impl<O: IsA<TlsFileDatabase>> TlsFileDatabaseExt for O {
+    fn get_property_anchors(&self) -> Option<GString> {
         unsafe {
-            let mut value = Value::from_type(<String as StaticType>::static_type());
-            gobject_ffi::g_object_get_property(self.to_glib_none().0, "anchors".to_glib_none().0, value.to_glib_none_mut().0);
-            value.get()
+            let mut value = Value::from_type(<GString as StaticType>::static_type());
+            gobject_sys::g_object_get_property(
+                self.to_glib_none().0 as *mut gobject_sys::GObject,
+                b"anchors\0".as_ptr() as *const _,
+                value.to_glib_none_mut().0,
+            );
+            value
+                .get()
+                .expect("Return Value for property `anchors` getter")
         }
     }
 
     fn set_property_anchors(&self, anchors: Option<&str>) {
         unsafe {
-            gobject_ffi::g_object_set_property(self.to_glib_none().0, "anchors".to_glib_none().0, Value::from(anchors).to_glib_none().0);
+            gobject_sys::g_object_set_property(
+                self.to_glib_none().0 as *mut gobject_sys::GObject,
+                b"anchors\0".as_ptr() as *const _,
+                Value::from(anchors).to_glib_none().0,
+            );
         }
     }
 
     fn connect_property_anchors_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
+        unsafe extern "C" fn notify_anchors_trampoline<P, F: Fn(&P) + 'static>(
+            this: *mut gio_sys::GTlsFileDatabase,
+            _param_spec: glib_sys::gpointer,
+            f: glib_sys::gpointer,
+        ) where
+            P: IsA<TlsFileDatabase>,
+        {
+            let f: &F = &*(f as *const F);
+            f(&TlsFileDatabase::from_glib_borrow(this).unsafe_cast())
+        }
         unsafe {
-            let f: Box_<Box_<Fn(&Self) + 'static>> = Box_::new(Box_::new(f));
-            connect(self.to_glib_none().0, "notify::anchors",
-                transmute(notify_anchors_trampoline::<Self> as usize), Box_::into_raw(f) as *mut _)
+            let f: Box_<F> = Box_::new(f);
+            connect_raw(
+                self.as_ptr() as *mut _,
+                b"notify::anchors\0".as_ptr() as *const _,
+                Some(transmute(notify_anchors_trampoline::<Self, F> as usize)),
+                Box_::into_raw(f),
+            )
         }
     }
 }
 
-unsafe extern "C" fn notify_anchors_trampoline<P>(this: *mut ffi::GTlsFileDatabase, _param_spec: glib_ffi::gpointer, f: glib_ffi::gpointer)
-where P: IsA<TlsFileDatabase> {
-    callback_guard!();
-    let f: &&(Fn(&P) + 'static) = transmute(f);
-    f(&TlsFileDatabase::from_glib_borrow(this).downcast_unchecked())
+impl fmt::Display for TlsFileDatabase {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "TlsFileDatabase")
+    }
 }

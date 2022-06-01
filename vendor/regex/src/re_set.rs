@@ -1,13 +1,3 @@
-// Copyright 2014-2015 The Rust Project Developers. See the COPYRIGHT
-// file at the top-level directory of this distribution and at
-// http://rust-lang.org/COPYRIGHT.
-//
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
-// except according to those terms.
-
 macro_rules! define_set {
     ($name:ident, $builder_mod:ident, $text_ty:ty, $as_bytes:expr,
      $(#[$doc_regexset_example:meta])* ) => {
@@ -104,6 +94,19 @@ impl RegexSet {
     pub fn new<I, S>(exprs: I) -> Result<RegexSet, Error>
             where S: AsRef<str>, I: IntoIterator<Item=S> {
         RegexSetBuilder::new(exprs).build()
+    }
+
+    /// Create a new empty regex set.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use regex::RegexSet;
+    /// let set = RegexSet::empty();
+    /// assert!(set.is_empty());
+    /// ```
+    pub fn empty() -> RegexSet {
+        RegexSetBuilder::new(&[""; 0]).build().unwrap()
     }
 
     /// Returns true if and only if one of the regexes in this set matches
@@ -216,6 +219,42 @@ impl RegexSet {
     pub fn len(&self) -> usize {
         self.0.regex_strings().len()
     }
+
+    /// Returns `true` if this set contains no regular expressions.
+    pub fn is_empty(&self) -> bool {
+        self.0.regex_strings().is_empty()
+    }
+
+    /// Returns the patterns that this set will match on.
+    ///
+    /// This function can be used to determine the pattern for a match. The
+    /// slice returned has exactly as many patterns givens to this regex set,
+    /// and the order of the slice is the same as the order of the patterns
+    /// provided to the set.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use regex::RegexSet;
+    /// let set = RegexSet::new(&[
+    ///     r"\w+",
+    ///     r"\d+",
+    ///     r"\pL+",
+    ///     r"foo",
+    ///     r"bar",
+    ///     r"barfoo",
+    ///     r"foobar",
+    /// ]).unwrap();
+    /// let matches: Vec<_> = set
+    ///     .matches("foobar")
+    ///     .into_iter()
+    ///     .map(|match_idx| &set.patterns()[match_idx])
+    ///     .collect();
+    /// assert_eq!(matches, vec![r"\w+", r"\pL+", r"foo", r"bar", r"foobar"]);
+    /// ```
+    pub fn patterns(&self) -> &[String] {
+        self.0.regex_strings()
+    }
 }
 
 /// A set of matches returned by a regex set.
@@ -281,6 +320,7 @@ impl<'a> IntoIterator for &'a SetMatches {
 /// This will always produces matches in ascending order of index, where the
 /// index corresponds to the index of the regex that matched with respect to
 /// its position when initially building the set.
+#[derive(Debug)]
 pub struct SetMatchesIntoIter(iter::Enumerate<vec::IntoIter<bool>>);
 
 impl Iterator for SetMatchesIntoIter {
@@ -297,7 +337,7 @@ impl Iterator for SetMatchesIntoIter {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint() 
+        self.0.size_hint()
     }
 }
 
@@ -313,6 +353,8 @@ impl DoubleEndedIterator for SetMatchesIntoIter {
     }
 }
 
+impl iter::FusedIterator for SetMatchesIntoIter {}
+
 /// A borrowed iterator over the set of matches from a regex set.
 ///
 /// The lifetime `'a` refers to the lifetime of a `SetMatches` value.
@@ -320,7 +362,7 @@ impl DoubleEndedIterator for SetMatchesIntoIter {
 /// This will always produces matches in ascending order of index, where the
 /// index corresponds to the index of the regex that matched with respect to
 /// its position when initially building the set.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SetMatchesIter<'a>(iter::Enumerate<slice::Iter<'a, bool>>);
 
 impl<'a> Iterator for SetMatchesIter<'a> {
@@ -337,7 +379,7 @@ impl<'a> Iterator for SetMatchesIter<'a> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint() 
+        self.0.size_hint()
     }
 }
 
@@ -352,6 +394,8 @@ impl<'a> DoubleEndedIterator for SetMatchesIter<'a> {
         }
     }
 }
+
+impl<'a> iter::FusedIterator for SetMatchesIter<'a> {}
 
 #[doc(hidden)]
 impl From<Exec> for RegexSet {

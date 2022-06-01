@@ -1,19 +1,16 @@
-use std::cell::{Cell, RefCell};
+use cssparser::Parser;
+use markup5ever::{expanded_name, local_name, namespace_url, ns};
 
-use cairo;
-
-use attributes::Attribute;
-use drawing_ctx::DrawingCtx;
-use error::NodeError;
-use handle::RsvgHandle;
-use node::{NodeResult, NodeTrait, RsvgNode};
-use parsers::ParseError;
-use property_bag::PropertyBag;
-use surface_utils::shared_surface::SharedImageSurface;
+use crate::attributes::Attributes;
+use crate::document::AcquiredNodes;
+use crate::drawing_ctx::DrawingCtx;
+use crate::element::{ElementResult, SetAttributes};
+use crate::error::*;
+use crate::node::Node;
+use crate::parsers::{Parse, ParseValue};
 
 use super::context::{FilterContext, FilterOutput, FilterResult};
-use super::input::Input;
-use super::{Filter, FilterError, PrimitiveWithInput};
+use super::{FilterEffect, FilterError, Input, PrimitiveWithInput};
 
 /// Enumeration of the possible blending modes.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -23,42 +20,48 @@ enum Mode {
     Screen,
     Darken,
     Lighten,
+    Overlay,
+    ColorDodge,
+    ColorBurn,
+    HardLight,
+    SoftLight,
+    Difference,
+    Exclusion,
+    HslHue,
+    HslSaturation,
+    HslColor,
+    HslLuminosity,
 }
 
 /// The `feBlend` filter primitive.
-pub struct Blend {
+pub struct FeBlend {
     base: PrimitiveWithInput,
-    in2: RefCell<Option<Input>>,
-    mode: Cell<Mode>,
+    in2: Option<Input>,
+    mode: Mode,
 }
 
-impl Blend {
+impl Default for FeBlend {
     /// Constructs a new `Blend` with empty properties.
     #[inline]
-    pub fn new() -> Blend {
-        Blend {
+    fn default() -> FeBlend {
+        FeBlend {
             base: PrimitiveWithInput::new::<Self>(),
-            in2: RefCell::new(None),
-            mode: Cell::new(Mode::Normal),
+            in2: None,
+            mode: Mode::Normal,
         }
     }
 }
 
-impl NodeTrait for Blend {
-    fn set_atts(
-        &self,
-        node: &RsvgNode,
-        handle: *const RsvgHandle,
-        pbag: &PropertyBag<'_>,
-    ) -> NodeResult {
-        self.base.set_atts(node, handle, pbag)?;
+impl SetAttributes for FeBlend {
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        self.base.set_attributes(attrs)?;
 
-        for (_key, attr, value) in pbag.iter() {
-            match attr {
-                Attribute::In2 => {
-                    self.in2.replace(Some(Input::parse(attr, value)?));
+        for (attr, value) in attrs.iter() {
+            match attr.expanded() {
+                expanded_name!("", "in2") => {
+                    self.in2 = Some(attr.parse(value)?);
                 }
-                Attribute::Mode => self.mode.set(Mode::parse(attr, value)?),
+                expanded_name!("", "mode") => self.mode = attr.parse(value)?,
                 _ => (),
             }
         }
@@ -67,61 +70,31 @@ impl NodeTrait for Blend {
     }
 }
 
-impl Filter for Blend {
+impl FilterEffect for FeBlend {
     fn render(
         &self,
-        _node: &RsvgNode,
+        node: &Node,
         ctx: &FilterContext,
-        draw_ctx: &mut DrawingCtx<'_>,
+        acquired_nodes: &mut AcquiredNodes,
+        draw_ctx: &mut DrawingCtx,
     ) -> Result<FilterResult, FilterError> {
-        let input = self.base.get_input(ctx, draw_ctx)?;
-        let input_2 = ctx.get_input(draw_ctx, self.in2.borrow().as_ref())?;
+        let input = self.base.get_input(ctx, acquired_nodes, draw_ctx)?;
+        let input_2 = ctx.get_input(acquired_nodes, draw_ctx, self.in2.as_ref())?;
         let bounds = self
             .base
-            .get_bounds(ctx)
+            .get_bounds(ctx, node.parent().as_ref())?
             .add_input(&input)
             .add_input(&input_2)
             .into_irect(draw_ctx);
 
-        // If we're combining two alpha-only surfaces, the result is alpha-only. Otherwise the
-        // result is whatever the non-alpha-only type we're working on (which can be either sRGB or
-        // linear sRGB depending on color-interpolation-filters).
-        let surface_type = if input.surface().is_alpha_only() {
-            input_2.surface().surface_type()
-        } else {
-            if !input_2.surface().is_alpha_only() {
-                // All surface types should match (this is enforced by get_input()).
-                assert_eq!(
-                    input_2.surface().surface_type(),
-                    input.surface().surface_type()
-                );
-            }
-
-            input.surface().surface_type()
-        };
-
-        let output_surface = input_2.surface().copy_surface(bounds)?;
-        {
-            let cr = cairo::Context::new(&output_surface);
-            cr.rectangle(
-                bounds.x0 as f64,
-                bounds.y0 as f64,
-                (bounds.x1 - bounds.x0) as f64,
-                (bounds.y1 - bounds.y0) as f64,
-            );
-            cr.clip();
-
-            input.surface().set_as_source_surface(&cr, 0f64, 0f64);
-            cr.set_operator(self.mode.get().into());
-            cr.paint();
-        }
+        let surface =
+            input
+                .surface()
+                .compose(input_2.surface(), bounds, cairo::Operator::from(self.mode))?;
 
         Ok(FilterResult {
-            name: self.base.result.borrow().clone(),
-            output: FilterOutput {
-                surface: SharedImageSurface::new(output_surface, surface_type)?,
-                bounds,
-            },
+            name: self.base.result.clone(),
+            output: FilterOutput { surface, bounds },
         })
     }
 
@@ -131,19 +104,27 @@ impl Filter for Blend {
     }
 }
 
-impl Mode {
-    fn parse(attr: Attribute, s: &str) -> Result<Self, NodeError> {
-        match s {
-            "normal" => Ok(Mode::Normal),
-            "multiply" => Ok(Mode::Multiply),
-            "screen" => Ok(Mode::Screen),
-            "darken" => Ok(Mode::Darken),
-            "lighten" => Ok(Mode::Lighten),
-            _ => Err(NodeError::parse_error(
-                attr,
-                ParseError::new("invalid value"),
-            )),
-        }
+impl Parse for Mode {
+    fn parse<'i>(parser: &mut Parser<'i, '_>) -> Result<Self, ParseError<'i>> {
+        Ok(parse_identifiers!(
+            parser,
+            "normal" => Mode::Normal,
+            "multiply" => Mode::Multiply,
+            "screen" => Mode::Screen,
+            "darken" => Mode::Darken,
+            "lighten" => Mode::Lighten,
+            "overlay" => Mode::Overlay,
+            "color-dodge" => Mode::ColorDodge,
+            "color-burn" => Mode::ColorBurn,
+            "hard-light" => Mode::HardLight,
+            "soft-light" => Mode::SoftLight,
+            "difference" => Mode::Difference,
+            "exclusion" => Mode::Exclusion,
+            "hue" => Mode::HslHue,
+            "saturation" => Mode::HslSaturation,
+            "color" => Mode::HslColor,
+            "luminosity" => Mode::HslLuminosity,
+        )?)
     }
 }
 
@@ -156,6 +137,17 @@ impl From<Mode> for cairo::Operator {
             Mode::Screen => cairo::Operator::Screen,
             Mode::Darken => cairo::Operator::Darken,
             Mode::Lighten => cairo::Operator::Lighten,
+            Mode::Overlay => cairo::Operator::Overlay,
+            Mode::ColorDodge => cairo::Operator::ColorDodge,
+            Mode::ColorBurn => cairo::Operator::ColorBurn,
+            Mode::HardLight => cairo::Operator::HardLight,
+            Mode::SoftLight => cairo::Operator::SoftLight,
+            Mode::Difference => cairo::Operator::Difference,
+            Mode::Exclusion => cairo::Operator::Exclusion,
+            Mode::HslHue => cairo::Operator::HslHue,
+            Mode::HslSaturation => cairo::Operator::HslSaturation,
+            Mode::HslColor => cairo::Operator::HslColor,
+            Mode::HslLuminosity => cairo::Operator::HslLuminosity,
         }
     }
 }

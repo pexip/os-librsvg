@@ -7,29 +7,33 @@
    Copyright (C) 2005 Red Hat, Inc.
    Copyright (C) 2005 Dom Lachowicz <cinamod@hotmail.com>
    Copyright (C) 2005 Caleb Moore <c.moore@student.unsw.edu.au>
+   Copyright (C) 2019 Federico Mena Quintero <federico@gnome.org>
   
-   This program is free software; you can redistribute it and/or
-   modify it under the terms of the GNU Library General Public License as
-   published by the Free Software Foundation; either version 2 of the
-   License, or (at your option) any later version.
-  
-   This program is distributed in the hope that it will be useful,
+   This library is free software; you can redistribute it and/or
+   modify it under the terms of the GNU Lesser General Public
+   License as published by the Free Software Foundation; either
+   version 2.1 of the License, or (at your option) any later version.
+
+   This library is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-   Library General Public License for more details.
-  
-   You should have received a copy of the GNU Library General Public
-   License along with this program; if not, write to the
-   Free Software Foundation, Inc., 59 Temple Place - Suite 330,
-   Boston, MA 02111-1307, USA.
+   Lesser General Public License for more details.
+
+   You should have received a copy of the GNU Lesser General Public
+   License along with this library; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
   
    Authors: Carl Worth <cworth@cworth.org>, 
             Caleb Moore <c.moore@student.unsw.edu.au>,
-            Dom Lachowicz <cinamod@hotmail.com>
+            Dom Lachowicz <cinamod@hotmail.com>,
+            Federico Mena Quintero <federico@gnome.org>
 */
+
+#define RSVG_DISABLE_DEPRECATION_WARNINGS
 
 #include "config.h"
 
+#include <math.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -54,7 +58,6 @@
 
 #include "librsvg/rsvg-css.h"
 #include "librsvg/rsvg.h"
-#include "librsvg/rsvg-size-callback.h"
 
 #ifdef CAIRO_HAS_PS_SURFACE
 #include <cairo-ps.h>
@@ -71,6 +74,98 @@
 #ifdef CAIRO_HAS_XML_SURFACE
 #include <cairo-xml.h>
 #endif
+
+typedef enum {
+    SIZE_KIND_ZOOM,
+    SIZE_KIND_WH,
+    SIZE_KIND_WH_MAX,
+    SIZE_KIND_ZOOM_MAX
+} SizeKind;
+
+typedef struct {
+    SizeKind kind;
+    double x_zoom;
+    double y_zoom;
+    gint width;
+    gint height;
+
+    gboolean keep_aspect_ratio;
+} SizeMode;
+
+static void
+get_final_size (int *width, int *height, SizeMode *real_data)
+{
+    double zoomx, zoomy, zoom;
+
+    int in_width, in_height;
+
+    in_width = *width;
+    in_height = *height;
+
+    switch (real_data->kind) {
+    case SIZE_KIND_ZOOM:
+        if (*width < 0 || *height < 0)
+            return;
+
+        *width = floor (real_data->x_zoom * *width + 0.5);
+        *height = floor (real_data->y_zoom * *height + 0.5);
+        break;
+
+    case SIZE_KIND_ZOOM_MAX:
+        if (*width < 0 || *height < 0)
+            return;
+
+        *width = floor (real_data->x_zoom * *width + 0.5);
+        *height = floor (real_data->y_zoom * *height + 0.5);
+
+        if (*width > real_data->width || *height > real_data->height) {
+            zoomx = (double) real_data->width / *width;
+            zoomy = (double) real_data->height / *height;
+            zoom = MIN (zoomx, zoomy);
+
+            *width = floor (zoom * *width + 0.5);
+            *height = floor (zoom * *height + 0.5);
+        }
+        break;
+
+    case SIZE_KIND_WH_MAX:
+        if (*width < 0 || *height < 0)
+            return;
+
+        zoomx = (double) real_data->width / *width;
+        zoomy = (double) real_data->height / *height;
+        if (zoomx < 0)
+            zoom = zoomy;
+        else if (zoomy < 0)
+            zoom = zoomx;
+        else
+            zoom = MIN (zoomx, zoomy);
+
+        *width = floor (zoom * *width + 0.5);
+        *height = floor (zoom * *height + 0.5);
+        break;
+
+    case SIZE_KIND_WH:
+        if (real_data->width != -1)
+            *width = real_data->width;
+        if (real_data->height != -1)
+            *height = real_data->height;
+        break;
+
+    default:
+        g_assert_not_reached ();
+    }
+
+    if (real_data->keep_aspect_ratio) {
+        int out_min = MIN (*width, *height);
+
+        if (out_min == *width) {
+            *height = in_height * ((double) *width / (double) in_width);
+        } else {
+            *width = in_width * ((double) *height / (double) in_height);
+        }
+    }
+}
 
 static void
 display_error (GError * err)
@@ -97,11 +192,11 @@ get_lookup_id_from_command_line (const char *lookup_id)
     if (lookup_id == NULL)
         export_lookup_id = NULL;
     else {
-        /* rsvg_handle_has_sub() and rsvg_defs_lookup() expect ids to have a
-         * '#' prepended to them, so they can lookup ids in externs like
-         * "subfile.svg#subid".  For the user's convenience, we include this
-         * '#' automatically; we only support specifying ids from the
-         * toplevel, and don't expect users to lookup things in externs.
+        /* rsvg_handle_has_sub() expects ids to have a '#' prepended to them, so
+         * it can lookup ids in externs like "subfile.svg#subid".  For the
+         * user's convenience, we include this '#' automatically; we only
+         * support specifying ids from the toplevel, and don't expect users to
+         * lookup things in externs.
          */
         export_lookup_id = g_strdup_printf ("#%s", lookup_id);
     }
@@ -123,6 +218,7 @@ main (int argc, char **argv)
     int bVersion = 0;
     char *format = NULL;
     char *output = NULL;
+    char *stylesheet = NULL;
     char *export_id = NULL;
     int keep_aspect_ratio = FALSE;
     guint32 background_color = 0;
@@ -147,6 +243,9 @@ main (int argc, char **argv)
     char *export_lookup_id;
     double unscaled_width, unscaled_height;
     int scaled_width, scaled_height;
+
+    char *stylesheet_data = NULL;
+    gsize stylesheet_data_len = 0;
 
     char buffer[25];
     char *endptr;
@@ -184,6 +283,7 @@ main (int argc, char **argv)
          N_("whether to preserve the aspect ratio [optional; defaults to FALSE]"), NULL},
         {"background-color", 'b', 0, G_OPTION_ARG_STRING, &background_color_str,
          N_("set the background color [optional; defaults to None]"), N_("[black, white, #abccee, #aaa...]")},
+        {"stylesheet", 's', 0, G_OPTION_ARG_FILENAME, &stylesheet, N_("Filename of CSS stylesheet"), NULL},
         {"unlimited", 'u', 0, G_OPTION_ARG_NONE, &unlimited, N_("Allow huge SVG files"), NULL},
         {"keep-image-data", 0, 0, G_OPTION_ARG_NONE, &keep_image_data, N_("Keep image data"), NULL},
         {"no-keep-image-data", 0, 0, G_OPTION_ARG_NONE, &no_keep_image_data, N_("Don't keep image data"), NULL},
@@ -209,6 +309,14 @@ main (int argc, char **argv)
     if (bVersion != 0) {
         printf (_("rsvg-convert version %s\n"), VERSION);
         return 0;
+    }
+
+    if (stylesheet != NULL) {
+        error = NULL;
+        if (!g_file_get_contents (stylesheet, &stylesheet_data, &stylesheet_data_len, &error)) {
+            g_printerr (_("Error reading stylesheet: %s\n"), error->message);
+            exit (1);
+        }
     }
 
     if (output != NULL) {
@@ -306,6 +414,13 @@ main (int argc, char **argv)
 
         g_assert (rsvg != NULL);
 
+        if (stylesheet_data != NULL) {
+            if (!rsvg_handle_set_stylesheet (rsvg, stylesheet_data, stylesheet_data_len, &error)) {
+                g_printerr (_("Error in stylesheet: %s\n"), error->message);
+                exit (1);
+            }
+        }
+
         rsvg_handle_set_dpi_x_y (rsvg, dpi_x, dpi_y);
 
         export_lookup_id = get_lookup_id_from_command_line (export_id);
@@ -316,10 +431,15 @@ main (int argc, char **argv)
         }
 
         if (i == 0) {
-            struct RsvgSizeCallbackData size_data;
+            SizeMode size_data;
 
             if (!rsvg_handle_get_dimensions_sub (rsvg, &dimensions, export_lookup_id)) {
                 g_printerr ("Could not get dimensions for file %s\n", args[i]);
+                exit (1);
+            }
+
+            if (dimensions.width == 0 || dimensions.height == 0) {
+                g_printerr ("The SVG %s has no dimensions\n", args[i]);
                 exit (1);
             }
 
@@ -328,26 +448,26 @@ main (int argc, char **argv)
 
             /* if both are unspecified, assume user wants to zoom the image in at least 1 dimension */
             if (width == -1 && height == -1) {
-                size_data.type = RSVG_SIZE_ZOOM;
+                size_data.kind = SIZE_KIND_ZOOM;
                 size_data.x_zoom = x_zoom;
                 size_data.y_zoom = y_zoom;
                 size_data.keep_aspect_ratio = keep_aspect_ratio;
             } else if (x_zoom == 1.0 && y_zoom == 1.0) {
                 /* if one parameter is unspecified, assume user wants to keep the aspect ratio */
                 if (width == -1 || height == -1) {
-                    size_data.type = RSVG_SIZE_WH_MAX;
+                    size_data.kind = SIZE_KIND_WH_MAX;
                     size_data.width = width;
                     size_data.height = height;
                     size_data.keep_aspect_ratio = keep_aspect_ratio;
                 } else {
-                    size_data.type = RSVG_SIZE_WH;
+                    size_data.kind = SIZE_KIND_WH;
                     size_data.width = width;
                     size_data.height = height;
                     size_data.keep_aspect_ratio = keep_aspect_ratio;
                 }
             } else {
                 /* assume the user wants to zoom the image, but cap the maximum size */
-                size_data.type = RSVG_SIZE_ZOOM_MAX;
+                size_data.kind = SIZE_KIND_ZOOM_MAX;
                 size_data.x_zoom = x_zoom;
                 size_data.y_zoom = y_zoom;
                 size_data.width = width;
@@ -357,7 +477,14 @@ main (int argc, char **argv)
 
             scaled_width = dimensions.width;
             scaled_height = dimensions.height;
-            _rsvg_size_callback (&scaled_width, &scaled_height, &size_data);
+            get_final_size (&scaled_width, &scaled_height, &size_data);
+
+            if (scaled_width > 32767 || scaled_height > 32767) {
+                g_printerr (_("The resulting image would be larger than 32767 pixels on either dimension.\n"
+                              "Librsvg currently cannot render to images bigger than that.\n"
+                              "Please specify a smaller size.\n"));
+                exit (1);
+            }
 
             if (!format || !strcmp (format, "png"))
                 surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
@@ -428,11 +555,14 @@ main (int argc, char **argv)
 #endif
 #endif
             else {
-                g_printerr (_("Unknown output format."));
+                g_printerr (_("Unknown output format.\n"));
                 exit (1);
             }
 
             cr = cairo_create (surface);
+            cairo_scale (cr,
+                         scaled_width / unscaled_width,
+                         scaled_height / unscaled_height);
         }
 
         // Set background color
@@ -443,22 +573,19 @@ main (int argc, char **argv)
             if (spec.kind == RSVG_CSS_COLOR_SPEC_ARGB) {
                 background_color = spec.argb;
             } else {
-                g_printerr (_("Invalid color specification."));
+                g_printerr (_("Invalid color specification.\n"));
                 exit (1);
             }
 
-            cairo_set_source_rgb (
+            cairo_set_source_rgba (
                 cr, 
                 ((background_color >> 16) & 0xff) / 255.0, 
                 ((background_color >> 8) & 0xff) / 255.0, 
-                ((background_color >> 0) & 0xff) / 255.0);
-            cairo_rectangle (cr, 0, 0, scaled_width, scaled_height);
+                ((background_color >> 0) & 0xff) / 255.0,
+                ((background_color >> 24) & 0xff) / 255.0);
+            cairo_rectangle (cr, 0, 0, unscaled_width, unscaled_height);
             cairo_fill (cr);
         }
-
-        cairo_scale (cr,
-                     scaled_width / unscaled_width,
-                     scaled_height / unscaled_height);
 
         if (export_lookup_id) {
             RsvgPositionData pos;
@@ -505,8 +632,6 @@ main (int argc, char **argv)
     fclose (output_file);
 
     g_strfreev (args);
-
-    rsvg_cleanup ();
 
     return 0;
 }

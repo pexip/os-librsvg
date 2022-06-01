@@ -7,7 +7,7 @@ use std::cmp;
 use std::fmt::Debug;
 use std::ops::{Add, Div, Mul, Sub};
 use typenum::{
-    self, B1, Bit, Diff, Max, Maximum, Min, Minimum, Prod, Quot, Sum, UInt, UTerm, Unsigned,
+    self, Bit, Diff, Max, Maximum, Min, Minimum, Prod, Quot, Sum, UInt, UTerm, Unsigned, B1,
 };
 
 #[cfg(feature = "serde-serialize")]
@@ -22,8 +22,8 @@ pub struct Dynamic {
 impl Dynamic {
     /// A dynamic size equal to `value`.
     #[inline]
-    pub fn new(value: usize) -> Dynamic {
-        Dynamic { value: value }
+    pub fn new(value: usize) -> Self {
+        Self { value: value }
     }
 }
 
@@ -84,7 +84,7 @@ impl Dim for Dynamic {
 
     #[inline]
     fn from_usize(dim: usize) -> Self {
-        Dynamic::new(dim)
+        Self::new(dim)
     }
 
     #[inline]
@@ -97,8 +97,8 @@ impl Add<usize> for Dynamic {
     type Output = Dynamic;
 
     #[inline]
-    fn add(self, rhs: usize) -> Dynamic {
-        Dynamic::new(self.value + rhs)
+    fn add(self, rhs: usize) -> Self {
+        Self::new(self.value + rhs)
     }
 }
 
@@ -106,8 +106,8 @@ impl Sub<usize> for Dynamic {
     type Output = Dynamic;
 
     #[inline]
-    fn sub(self, rhs: usize) -> Dynamic {
-        Dynamic::new(self.value - rhs)
+    fn sub(self, rhs: usize) -> Self {
+        Self::new(self.value - rhs)
     }
 }
 
@@ -185,7 +185,7 @@ dim_ops!(
     DimMul, DimNameMul, Mul, mul, Mul::mul, DimProd,    DimNameProd,    Prod;
     DimSub, DimNameSub, Sub, sub, Sub::sub, DimDiff,    DimNameDiff,    Diff;
     DimDiv, DimNameDiv, Div, div, Div::div, DimQuot,    DimNameQuot,    Quot;
-    DimMin, DimNameMin, Min, min, cmp::min, DimMinimum, DimNameNimimum, Minimum;
+    DimMin, DimNameMin, Min, min, cmp::min, DimMinimum, DimNameMinimum, Minimum;
     DimMax, DimNameMax, Max, max, cmp::max, DimMaximum, DimNameMaximum, Maximum;
 );
 
@@ -194,7 +194,6 @@ pub trait DimName: Dim {
     type Value: NamedDim<Name = Self>;
 
     /// The name of this dimension, i.e., the singleton `Self`.
-    #[inline]
     fn name() -> Self;
 
     // FIXME: this is not a very idiomatic name.
@@ -209,6 +208,7 @@ pub trait NamedDim: Sized + Any + Unsigned {
     type Name: DimName<Value = Self>;
 }
 
+/// A type level dimension with a value of `1`.
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde-serialize", derive(Serialize, Deserialize))]
 pub struct U1;
@@ -244,8 +244,9 @@ impl NamedDim for typenum::U1 {
     type Name = U1;
 }
 
-macro_rules! named_dimension(
+macro_rules! named_dimension (
     ($($D: ident),* $(,)*) => {$(
+        /// A type level dimension.
         #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
         #[cfg_attr(feature = "serde-serialize", derive(Serialize, Deserialize))]
         pub struct $D;
@@ -366,7 +367,8 @@ impl<
         G: Bit + Any + Debug + Copy + PartialEq + Send + Sync,
     > IsNotStaticOne
     for UInt<UInt<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, A>, B>, C>, D>, E>, F>, G>
-{}
+{
+}
 
 impl<U: Unsigned + DimName, B: Bit + Any + Debug + Copy + PartialEq + Send + Sync> NamedDim
     for UInt<U, B>
@@ -407,4 +409,5 @@ impl<U: Unsigned + DimName, B: Bit + Any + Debug + Copy + PartialEq + Send + Syn
 
 impl<U: Unsigned + DimName, B: Bit + Any + Debug + Copy + PartialEq + Send + Sync> IsNotStaticOne
     for UInt<U, B>
-{}
+{
+}

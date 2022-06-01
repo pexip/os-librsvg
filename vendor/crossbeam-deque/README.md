@@ -1,9 +1,19 @@
-# Concurrent work-stealing deque
+# Crossbeam Deque
 
-[![Build Status](https://travis-ci.org/crossbeam-rs/crossbeam-deque.svg?branch=master)](https://travis-ci.org/crossbeam-rs/crossbeam-deque)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](https://github.com/crossbeam-rs/crossbeam-deque)
-[![Cargo](https://img.shields.io/crates/v/crossbeam-deque.svg)](https://crates.io/crates/crossbeam-deque)
-[![Documentation](https://docs.rs/crossbeam-deque/badge.svg)](https://docs.rs/crossbeam-deque)
+[![Build Status](https://github.com/crossbeam-rs/crossbeam/workflows/CI/badge.svg)](
+https://github.com/crossbeam-rs/crossbeam/actions)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](
+https://github.com/crossbeam-rs/crossbeam/tree/master/crossbeam-deque#license)
+[![Cargo](https://img.shields.io/crates/v/crossbeam-deque.svg)](
+https://crates.io/crates/crossbeam-deque)
+[![Documentation](https://docs.rs/crossbeam-deque/badge.svg)](
+https://docs.rs/crossbeam-deque)
+[![Rust 1.36+](https://img.shields.io/badge/rust-1.36+-lightgray.svg)](
+https://www.rust-lang.org)
+[![chat](https://img.shields.io/discord/569610676205781012.svg?logo=discord)](https://discord.gg/BBYwKq)
+
+This crate provides work-stealing deques, which are primarily intended for
+building task schedulers.
 
 ## Usage
 
@@ -11,17 +21,26 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-crossbeam-deque = "0.1"
+crossbeam-deque = "0.7"
 ```
 
-Next, add this to your crate:
+## Compatibility
 
-```rust
-extern crate crossbeam_deque;
-```
+Crossbeam Deque supports stable Rust releases going back at least six months,
+and every time the minimum supported Rust version is increased, a new minor
+version is released. Currently, the minimum supported Rust version is 1.36.
 
 ## License
 
-Licensed under the terms of MIT license and the Apache License (Version 2.0).
+Licensed under either of
 
-See [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE) for details.
+ * Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+ * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+at your option.
+
+#### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.

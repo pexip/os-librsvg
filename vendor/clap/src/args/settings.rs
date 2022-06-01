@@ -33,9 +33,11 @@ bitflags! {
 pub struct ArgFlags(Flags);
 
 impl ArgFlags {
-    pub fn new() -> Self { ArgFlags::default() }
+    pub fn new() -> Self {
+        ArgFlags::default()
+    }
 
-    impl_settings!{ArgSettings,
+    impl_settings! {ArgSettings,
         Required => Flags::REQUIRED,
         Multiple => Flags::MULTIPLE,
         EmptyValues => Flags::EMPTY_VALS,
@@ -60,7 +62,9 @@ impl ArgFlags {
 }
 
 impl Default for ArgFlags {
-    fn default() -> Self { ArgFlags(Flags::EMPTY_VALS | Flags::DELIM_NOT_SET) }
+    fn default() -> Self {
+        ArgFlags(Flags::EMPTY_VALS | Flags::DELIM_NOT_SET)
+    }
 }
 
 /// Various settings that apply to arguments and may be set, unset, and checked via getter/setter
@@ -77,7 +81,8 @@ pub enum ArgSettings {
     Multiple,
     /// The argument allows empty values such as `--option ""`
     EmptyValues,
-    /// The argument should be propagated down through all child [`SubCommands`]
+    /// The argument should be propagated down through all child [`SubCommand`]s
+    ///
     /// [`SubCommand`]: ./struct.SubCommand.html
     Global,
     /// The argument should **not** be shown in help text
@@ -109,8 +114,10 @@ pub enum ArgSettings {
     HiddenShortHelp,
     /// The argument should **not** be shown in long help text
     HiddenLongHelp,
-    #[doc(hidden)] RequiredUnlessAll,
-    #[doc(hidden)] ValueDelimiterNotSet,
+    #[doc(hidden)]
+    RequiredUnlessAll,
+    #[doc(hidden)]
+    ValueDelimiterNotSet,
 }
 
 impl FromStr for ArgSettings {

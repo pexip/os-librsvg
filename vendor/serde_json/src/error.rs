@@ -1,20 +1,9 @@
-// Copyright 2017 Serde Developers
-//
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
-// except according to those terms.
-
 //! When serializing or deserializing JSON goes wrong.
 
-use std::error;
-use std::fmt::{self, Debug, Display};
-use std::io;
-use std::result;
-
-use serde::de;
-use serde::ser;
+use crate::io;
+use crate::lib::str::FromStr;
+use crate::lib::*;
+use serde::{de, ser};
 
 /// This type represents all possible errors that can occur when serializing or
 /// deserializing JSON data.
@@ -65,10 +54,8 @@ impl Error {
             ErrorCode::ExpectedColon
             | ErrorCode::ExpectedListCommaOrEnd
             | ErrorCode::ExpectedObjectCommaOrEnd
-            | ErrorCode::ExpectedObjectOrArray
             | ErrorCode::ExpectedSomeIdent
             | ErrorCode::ExpectedSomeValue
-            | ErrorCode::ExpectedSomeString
             | ErrorCode::InvalidEscape
             | ErrorCode::InvalidNumber
             | ErrorCode::NumberOutOfRange
@@ -137,14 +124,15 @@ pub enum Category {
     Eof,
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(fallible_impl_from))]
+#[cfg(feature = "std")]
+#[allow(clippy::fallible_impl_from)]
 impl From<Error> for io::Error {
     /// Convert a `serde_json::Error` into an `io::Error`.
     ///
     /// JSON syntax and data errors are turned into `InvalidData` IO errors.
     /// EOF errors are turned into `UnexpectedEof` IO errors.
     ///
-    /// ```rust
+    /// ```
     /// use std::io;
     ///
     /// enum MyError {
@@ -185,9 +173,7 @@ struct ErrorImpl {
     column: usize,
 }
 
-// Not public API. Should be pub(crate).
-#[doc(hidden)]
-pub enum ErrorCode {
+pub(crate) enum ErrorCode {
     /// Catchall for syntax error messages
     Message(Box<str>),
 
@@ -215,17 +201,11 @@ pub enum ErrorCode {
     /// Expected this character to be either a `','` or a `'}'`.
     ExpectedObjectCommaOrEnd,
 
-    /// Expected this character to be either a `'{'` or a `'['`.
-    ExpectedObjectOrArray,
-
     /// Expected to parse either a `true`, `false`, or a `null`.
     ExpectedSomeIdent,
 
     /// Expected this character to start a JSON value.
     ExpectedSomeValue,
-
-    /// Expected this character to start a JSON string.
-    ExpectedSomeString,
 
     /// Invalid hex escape code.
     InvalidEscape,
@@ -262,16 +242,10 @@ pub enum ErrorCode {
 }
 
 impl Error {
-    // Not public API. Should be pub(crate).
-    #[doc(hidden)]
     #[cold]
-    pub fn syntax(code: ErrorCode, line: usize, column: usize) -> Self {
+    pub(crate) fn syntax(code: ErrorCode, line: usize, column: usize) -> Self {
         Error {
-            err: Box::new(ErrorImpl {
-                code: code,
-                line: line,
-                column: column,
-            }),
+            err: Box::new(ErrorImpl { code, line, column }),
         }
     }
 
@@ -290,10 +264,8 @@ impl Error {
         }
     }
 
-    // Not public API. Should be pub(crate).
-    #[doc(hidden)]
     #[cold]
-    pub fn fix_position<F>(self, f: F) -> Self
+    pub(crate) fn fix_position<F>(self, f: F) -> Self
     where
         F: FnOnce(ErrorCode) -> Error,
     {
@@ -317,10 +289,8 @@ impl Display for ErrorCode {
             ErrorCode::ExpectedColon => f.write_str("expected `:`"),
             ErrorCode::ExpectedListCommaOrEnd => f.write_str("expected `,` or `]`"),
             ErrorCode::ExpectedObjectCommaOrEnd => f.write_str("expected `,` or `}`"),
-            ErrorCode::ExpectedObjectOrArray => f.write_str("expected `{` or `[`"),
             ErrorCode::ExpectedSomeIdent => f.write_str("expected ident"),
             ErrorCode::ExpectedSomeValue => f.write_str("expected value"),
-            ErrorCode::ExpectedSomeString => f.write_str("expected string"),
             ErrorCode::InvalidEscape => f.write_str("invalid escape"),
             ErrorCode::InvalidNumber => f.write_str("invalid number"),
             ErrorCode::NumberOutOfRange => f.write_str("number out of range"),
@@ -340,18 +310,9 @@ impl Display for ErrorCode {
     }
 }
 
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        match self.err.code {
-            ErrorCode::Io(ref err) => error::Error::description(err),
-            _ => {
-                // If you want a better message, use Display::fmt or to_string().
-                "JSON error"
-            }
-        }
-    }
-
-    fn cause(&self) -> Option<&error::Error> {
+impl serde::de::StdError for Error {
+    #[cfg(feature = "std")]
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self.err.code {
             ErrorCode::Io(ref err) => Some(err),
             _ => None,
@@ -396,17 +357,11 @@ impl Debug for Error {
 impl de::Error for Error {
     #[cold]
     fn custom<T: Display>(msg: T) -> Error {
-        Error {
-            err: Box::new(ErrorImpl {
-                code: ErrorCode::Message(msg.to_string().into_boxed_str()),
-                line: 0,
-                column: 0,
-            }),
-        }
+        make_error(msg.to_string())
     }
 
     #[cold]
-    fn invalid_type(unexp: de::Unexpected, exp: &de::Expected) -> Self {
+    fn invalid_type(unexp: de::Unexpected, exp: &dyn de::Expected) -> Self {
         if let de::Unexpected::Unit = unexp {
             Error::custom(format_args!("invalid type: null, expected {}", exp))
         } else {
@@ -418,12 +373,68 @@ impl de::Error for Error {
 impl ser::Error for Error {
     #[cold]
     fn custom<T: Display>(msg: T) -> Error {
-        Error {
-            err: Box::new(ErrorImpl {
-                code: ErrorCode::Message(msg.to_string().into_boxed_str()),
-                line: 0,
-                column: 0,
-            }),
-        }
+        make_error(msg.to_string())
+    }
+}
+
+// Parse our own error message that looks like "{} at line {} column {}" to work
+// around erased-serde round-tripping the error through de::Error::custom.
+fn make_error(mut msg: String) -> Error {
+    let (line, column) = parse_line_col(&mut msg).unwrap_or((0, 0));
+    Error {
+        err: Box::new(ErrorImpl {
+            code: ErrorCode::Message(msg.into_boxed_str()),
+            line,
+            column,
+        }),
+    }
+}
+
+fn parse_line_col(msg: &mut String) -> Option<(usize, usize)> {
+    let start_of_suffix = match msg.rfind(" at line ") {
+        Some(index) => index,
+        None => return None,
+    };
+
+    // Find start and end of line number.
+    let start_of_line = start_of_suffix + " at line ".len();
+    let mut end_of_line = start_of_line;
+    while starts_with_digit(&msg[end_of_line..]) {
+        end_of_line += 1;
+    }
+
+    if !msg[end_of_line..].starts_with(" column ") {
+        return None;
+    }
+
+    // Find start and end of column number.
+    let start_of_column = end_of_line + " column ".len();
+    let mut end_of_column = start_of_column;
+    while starts_with_digit(&msg[end_of_column..]) {
+        end_of_column += 1;
+    }
+
+    if end_of_column < msg.len() {
+        return None;
+    }
+
+    // Parse numbers.
+    let line = match usize::from_str(&msg[start_of_line..end_of_line]) {
+        Ok(line) => line,
+        Err(_) => return None,
+    };
+    let column = match usize::from_str(&msg[start_of_column..end_of_column]) {
+        Ok(column) => column,
+        Err(_) => return None,
+    };
+
+    msg.truncate(start_of_suffix);
+    Some((line, column))
+}
+
+fn starts_with_digit(slice: &str) -> bool {
+    match slice.as_bytes().get(0) {
+        None => false,
+        Some(&byte) => byte >= b'0' && byte <= b'9',
     }
 }

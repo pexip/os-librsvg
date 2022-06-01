@@ -5,12 +5,12 @@ use num::{Bounded, One, Zero};
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
 
-use alga::general::ClosedDiv;
-use base::allocator::Allocator;
-use base::dimension::{DimName, DimNameAdd, DimNameSum, U1, U2, U3, U4, U5, U6};
-use base::{DefaultAllocator, Scalar, VectorN};
+use crate::base::allocator::Allocator;
+use crate::base::dimension::{DimName, DimNameAdd, DimNameSum, U1, U2, U3, U4, U5, U6};
+use crate::base::{DefaultAllocator, Scalar, VectorN};
+use simba::scalar::ClosedDiv;
 
-use geometry::Point;
+use crate::geometry::Point;
 
 impl<N: Scalar, D: DimName> Point<N, D>
 where
@@ -19,22 +19,81 @@ where
     /// Creates a new point with uninitialized coordinates.
     #[inline]
     pub unsafe fn new_uninitialized() -> Self {
-        Self::from_coordinates(VectorN::new_uninitialized())
+        Self::from(VectorN::new_uninitialized())
     }
 
     /// Creates a new point with all coordinates equal to zero.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use nalgebra::{Point2, Point3};
+    /// // This works in any dimension.
+    /// // The explicit crate::<f32> type annotation may not always be needed,
+    /// // depending on the context of type inference.
+    /// let pt = Point2::<f32>::origin();
+    /// assert!(pt.x == 0.0 && pt.y == 0.0);
+    ///
+    /// let pt = Point3::<f32>::origin();
+    /// assert!(pt.x == 0.0 && pt.y == 0.0 && pt.z == 0.0);
+    /// ```
     #[inline]
     pub fn origin() -> Self
     where
         N: Zero,
     {
-        Self::from_coordinates(VectorN::from_element(N::zero()))
+        Self::from(VectorN::from_element(N::zero()))
+    }
+
+    /// Creates a new point from a slice.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use nalgebra::{Point2, Point3};
+    /// let data = [ 1.0, 2.0, 3.0 ];
+    ///
+    /// let pt = Point2::from_slice(&data[..2]);
+    /// assert_eq!(pt, Point2::new(1.0, 2.0));
+    ///
+    /// let pt = Point3::from_slice(&data);
+    /// assert_eq!(pt, Point3::new(1.0, 2.0, 3.0));
+    /// ```
+    #[inline]
+    pub fn from_slice(components: &[N]) -> Self {
+        Self::from(VectorN::from_row_slice(components))
     }
 
     /// Creates a new point from its homogeneous vector representation.
     ///
     /// In practice, this builds a D-dimensional points with the same first D component as `v`
     /// divided by the last component of `v`. Returns `None` if this divisor is zero.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use nalgebra::{Point2, Point3, Vector3, Vector4};
+    ///
+    /// let coords = Vector4::new(1.0, 2.0, 3.0, 1.0);
+    /// let pt = Point3::from_homogeneous(coords);
+    /// assert_eq!(pt, Some(Point3::new(1.0, 2.0, 3.0)));
+    ///
+    /// // All component of the result will be divided by the
+    /// // last component of the vector, here 2.0.
+    /// let coords = Vector4::new(1.0, 2.0, 3.0, 2.0);
+    /// let pt = Point3::from_homogeneous(coords);
+    /// assert_eq!(pt, Some(Point3::new(0.5, 1.0, 1.5)));
+    ///
+    /// // Fails because the last component is zero.
+    /// let coords = Vector4::new(1.0, 2.0, 3.0, 0.0);
+    /// let pt = Point3::from_homogeneous(coords);
+    /// assert!(pt.is_none());
+    ///
+    /// // Works also in other dimensions.
+    /// let coords = Vector3::new(1.0, 2.0, 1.0);
+    /// let pt = Point2::from_homogeneous(coords);
+    /// assert_eq!(pt, Some(Point2::new(1.0, 2.0)));
+    /// ```
     #[inline]
     pub fn from_homogeneous(v: VectorN<N, DimNameSum<D, U1>>) -> Option<Self>
     where
@@ -43,8 +102,8 @@ where
         DefaultAllocator: Allocator<N, DimNameSum<D, U1>>,
     {
         if !v[D::dim()].is_zero() {
-            let coords = v.fixed_slice::<D, U1>(0, 0) / v[D::dim()];
-            Some(Self::from_coordinates(coords))
+            let coords = v.fixed_slice::<D, U1>(0, 0) / v[D::dim()].inlined_clone();
+            Some(Self::from(coords))
         } else {
             None
         }
@@ -62,12 +121,12 @@ where
 {
     #[inline]
     fn max_value() -> Self {
-        Self::from_coordinates(VectorN::max_value())
+        Self::from(VectorN::max_value())
     }
 
     #[inline]
     fn min_value() -> Self {
-        Self::from_coordinates(VectorN::min_value())
+        Self::from(VectorN::min_value())
     }
 }
 
@@ -78,7 +137,7 @@ where
 {
     #[inline]
     fn sample<'a, G: Rng + ?Sized>(&self, rng: &mut G) -> Point<N, D> {
-        Point::from_coordinates(rng.gen::<VectorN<N, D>>())
+        Point::from(rng.gen::<VectorN<N, D>>())
     }
 }
 
@@ -90,7 +149,7 @@ where
 {
     #[inline]
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
-        Point::from_coordinates(VectorN::arbitrary(g))
+        Self::from(VectorN::arbitrary(g))
     }
 }
 
@@ -100,12 +159,15 @@ where
  *
  */
 macro_rules! componentwise_constructors_impl(
-    ($($D: ty, $($args: ident:$irow: expr),*);* $(;)*) => {$(
+    ($($doc: expr; $D: ty, $($args: ident:$irow: expr),*);* $(;)*) => {$(
         impl<N: Scalar> Point<N, $D>
             where DefaultAllocator: Allocator<N, $D> {
-            /// Initializes this matrix from its components.
+            #[doc = "Initializes this point from its components."]
+            #[doc = "# Example\n```"]
+            #[doc = $doc]
+            #[doc = "```"]
             #[inline]
-            pub fn new($($args: N),*) -> Point<N, $D> {
+            pub fn new($($args: N),*) -> Self {
                 unsafe {
                     let mut res = Self::new_uninitialized();
                     $( *res.get_unchecked_mut($irow) = $args; )*
@@ -118,11 +180,17 @@ macro_rules! componentwise_constructors_impl(
 );
 
 componentwise_constructors_impl!(
+    "# use nalgebra::Point1;\nlet p = Point1::new(1.0);\nassert!(p.x == 1.0);";
     U1, x:0;
+    "# use nalgebra::Point2;\nlet p = Point2::new(1.0, 2.0);\nassert!(p.x == 1.0 && p.y == 2.0);";
     U2, x:0, y:1;
+    "# use nalgebra::Point3;\nlet p = Point3::new(1.0, 2.0, 3.0);\nassert!(p.x == 1.0 && p.y == 2.0 && p.z == 3.0);";
     U3, x:0, y:1, z:2;
+    "# use nalgebra::Point4;\nlet p = Point4::new(1.0, 2.0, 3.0, 4.0);\nassert!(p.x == 1.0 && p.y == 2.0 && p.z == 3.0 && p.w == 4.0);";
     U4, x:0, y:1, z:2, w:3;
+    "# use nalgebra::Point5;\nlet p = Point5::new(1.0, 2.0, 3.0, 4.0, 5.0);\nassert!(p.x == 1.0 && p.y == 2.0 && p.z == 3.0 && p.w == 4.0 && p.a == 5.0);";
     U5, x:0, y:1, z:2, w:3, a:4;
+    "# use nalgebra::Point6;\nlet p = Point6::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);\nassert!(p.x == 1.0 && p.y == 2.0 && p.z == 3.0 && p.w == 4.0 && p.a == 5.0 && p.b == 6.0);";
     U6, x:0, y:1, z:2, w:3, a:4, b:5;
 );
 
@@ -130,7 +198,9 @@ macro_rules! from_array_impl(
     ($($D: ty, $len: expr);*) => {$(
       impl <N: Scalar> From<[N; $len]> for Point<N, $D> {
           fn from (coords: [N; $len]) -> Self {
-              Point::from_coordinates(coords.into())
+              Self {
+                coords: coords.into()
+              }
           }
       }
     )*}

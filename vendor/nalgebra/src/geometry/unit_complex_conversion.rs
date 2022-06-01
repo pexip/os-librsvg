@@ -1,14 +1,14 @@
 use num::Zero;
 use num_complex::Complex;
 
-use alga::general::{Real, SubsetOf, SupersetOf};
-use alga::linear::Rotation as AlgaRotation;
+use simba::scalar::{RealField, SubsetOf, SupersetOf};
+use simba::simd::{PrimitiveSimdValue, SimdRealField};
 
-use base::dimension::U2;
-use base::Matrix3;
-use geometry::{
-    Isometry, Point2, Rotation2, Similarity, SuperTCategoryOf, TAffine, Transform, Translation,
-    UnitComplex,
+use crate::base::dimension::U2;
+use crate::base::{Matrix2, Matrix3, Scalar};
+use crate::geometry::{
+    AbstractRotation, Isometry, Rotation2, Similarity, SuperTCategoryOf, TAffine, Transform,
+    Translation, UnitComplex,
 };
 
 /*
@@ -28,8 +28,8 @@ use geometry::{
 
 impl<N1, N2> SubsetOf<UnitComplex<N2>> for UnitComplex<N1>
 where
-    N1: Real,
-    N2: Real + SupersetOf<N1>,
+    N1: RealField,
+    N2: RealField + SupersetOf<N1>,
 {
     #[inline]
     fn to_superset(&self) -> UnitComplex<N2> {
@@ -38,19 +38,19 @@ where
 
     #[inline]
     fn is_in_subset(uq: &UnitComplex<N2>) -> bool {
-        ::is_convertible::<_, Complex<N1>>(uq.as_ref())
+        crate::is_convertible::<_, Complex<N1>>(uq.as_ref())
     }
 
     #[inline]
-    unsafe fn from_superset_unchecked(uq: &UnitComplex<N2>) -> Self {
-        Self::new_unchecked(::convert_ref_unchecked(uq.as_ref()))
+    fn from_superset_unchecked(uq: &UnitComplex<N2>) -> Self {
+        Self::new_unchecked(crate::convert_ref_unchecked(uq.as_ref()))
     }
 }
 
 impl<N1, N2> SubsetOf<Rotation2<N2>> for UnitComplex<N1>
 where
-    N1: Real,
-    N2: Real + SupersetOf<N1>,
+    N1: RealField,
+    N2: RealField + SupersetOf<N1>,
 {
     #[inline]
     fn to_superset(&self) -> Rotation2<N2> {
@@ -60,25 +60,25 @@ where
 
     #[inline]
     fn is_in_subset(rot: &Rotation2<N2>) -> bool {
-        ::is_convertible::<_, Rotation2<N1>>(rot)
+        crate::is_convertible::<_, Rotation2<N1>>(rot)
     }
 
     #[inline]
-    unsafe fn from_superset_unchecked(rot: &Rotation2<N2>) -> Self {
+    fn from_superset_unchecked(rot: &Rotation2<N2>) -> Self {
         let q = UnitComplex::<N2>::from_rotation_matrix(rot);
-        ::convert_unchecked(q)
+        crate::convert_unchecked(q)
     }
 }
 
 impl<N1, N2, R> SubsetOf<Isometry<N2, U2, R>> for UnitComplex<N1>
 where
-    N1: Real,
-    N2: Real + SupersetOf<N1>,
-    R: AlgaRotation<Point2<N2>> + SupersetOf<UnitComplex<N1>>,
+    N1: RealField,
+    N2: RealField + SupersetOf<N1>,
+    R: AbstractRotation<N2, U2> + SupersetOf<Self>,
 {
     #[inline]
     fn to_superset(&self) -> Isometry<N2, U2, R> {
-        Isometry::from_parts(Translation::identity(), ::convert_ref(self))
+        Isometry::from_parts(Translation::identity(), crate::convert_ref(self))
     }
 
     #[inline]
@@ -87,20 +87,20 @@ where
     }
 
     #[inline]
-    unsafe fn from_superset_unchecked(iso: &Isometry<N2, U2, R>) -> Self {
-        ::convert_ref_unchecked(&iso.rotation)
+    fn from_superset_unchecked(iso: &Isometry<N2, U2, R>) -> Self {
+        crate::convert_ref_unchecked(&iso.rotation)
     }
 }
 
 impl<N1, N2, R> SubsetOf<Similarity<N2, U2, R>> for UnitComplex<N1>
 where
-    N1: Real,
-    N2: Real + SupersetOf<N1>,
-    R: AlgaRotation<Point2<N2>> + SupersetOf<UnitComplex<N1>>,
+    N1: RealField,
+    N2: RealField + SupersetOf<N1>,
+    R: AbstractRotation<N2, U2> + SupersetOf<Self>,
 {
     #[inline]
     fn to_superset(&self) -> Similarity<N2, U2, R> {
-        Similarity::from_isometry(::convert_ref(self), N2::one())
+        Similarity::from_isometry(crate::convert_ref(self), N2::one())
     }
 
     #[inline]
@@ -109,15 +109,15 @@ where
     }
 
     #[inline]
-    unsafe fn from_superset_unchecked(sim: &Similarity<N2, U2, R>) -> Self {
-        ::convert_ref_unchecked(&sim.isometry)
+    fn from_superset_unchecked(sim: &Similarity<N2, U2, R>) -> Self {
+        crate::convert_ref_unchecked(&sim.isometry)
     }
 }
 
 impl<N1, N2, C> SubsetOf<Transform<N2, U2, C>> for UnitComplex<N1>
 where
-    N1: Real,
-    N2: Real + SupersetOf<N1>,
+    N1: RealField,
+    N2: RealField + SupersetOf<N1>,
     C: SuperTCategoryOf<TAffine>,
 {
     #[inline]
@@ -131,12 +131,12 @@ where
     }
 
     #[inline]
-    unsafe fn from_superset_unchecked(t: &Transform<N2, U2, C>) -> Self {
+    fn from_superset_unchecked(t: &Transform<N2, U2, C>) -> Self {
         Self::from_superset_unchecked(t.matrix())
     }
 }
 
-impl<N1: Real, N2: Real + SupersetOf<N1>> SubsetOf<Matrix3<N2>> for UnitComplex<N1> {
+impl<N1: RealField, N2: RealField + SupersetOf<N1>> SubsetOf<Matrix3<N2>> for UnitComplex<N1> {
     #[inline]
     fn to_superset(&self) -> Matrix3<N2> {
         self.to_homogeneous().to_superset()
@@ -144,12 +144,122 @@ impl<N1: Real, N2: Real + SupersetOf<N1>> SubsetOf<Matrix3<N2>> for UnitComplex<
 
     #[inline]
     fn is_in_subset(m: &Matrix3<N2>) -> bool {
-        ::is_convertible::<_, Rotation2<N1>>(m)
+        crate::is_convertible::<_, Rotation2<N1>>(m)
     }
 
     #[inline]
-    unsafe fn from_superset_unchecked(m: &Matrix3<N2>) -> Self {
-        let rot: Rotation2<N1> = ::convert_ref_unchecked(m);
+    fn from_superset_unchecked(m: &Matrix3<N2>) -> Self {
+        let rot: Rotation2<N1> = crate::convert_ref_unchecked(m);
         Self::from_rotation_matrix(&rot)
+    }
+}
+
+impl<N: SimdRealField> From<UnitComplex<N>> for Rotation2<N>
+where
+    N::Element: SimdRealField,
+{
+    #[inline]
+    fn from(q: UnitComplex<N>) -> Self {
+        q.to_rotation_matrix()
+    }
+}
+
+impl<N: SimdRealField> From<Rotation2<N>> for UnitComplex<N>
+where
+    N::Element: SimdRealField,
+{
+    #[inline]
+    fn from(q: Rotation2<N>) -> Self {
+        Self::from_rotation_matrix(&q)
+    }
+}
+
+impl<N: SimdRealField> From<UnitComplex<N>> for Matrix3<N>
+where
+    N::Element: SimdRealField,
+{
+    #[inline]
+    fn from(q: UnitComplex<N>) -> Matrix3<N> {
+        q.to_homogeneous()
+    }
+}
+
+impl<N: SimdRealField> From<UnitComplex<N>> for Matrix2<N>
+where
+    N::Element: SimdRealField,
+{
+    #[inline]
+    fn from(q: UnitComplex<N>) -> Self {
+        q.to_rotation_matrix().into_inner()
+    }
+}
+
+impl<N: Scalar + Copy + PrimitiveSimdValue> From<[UnitComplex<N::Element>; 2]> for UnitComplex<N>
+where
+    N: From<[<N as simba::simd::SimdValue>::Element; 2]>,
+    N::Element: Scalar + Copy,
+{
+    #[inline]
+    fn from(arr: [UnitComplex<N::Element>; 2]) -> Self {
+        Self::new_unchecked(Complex {
+            re: N::from([arr[0].re, arr[1].re]),
+            im: N::from([arr[0].im, arr[1].im]),
+        })
+    }
+}
+
+impl<N: Scalar + Copy + PrimitiveSimdValue> From<[UnitComplex<N::Element>; 4]> for UnitComplex<N>
+where
+    N: From<[<N as simba::simd::SimdValue>::Element; 4]>,
+    N::Element: Scalar + Copy,
+{
+    #[inline]
+    fn from(arr: [UnitComplex<N::Element>; 4]) -> Self {
+        Self::new_unchecked(Complex {
+            re: N::from([arr[0].re, arr[1].re, arr[2].re, arr[3].re]),
+            im: N::from([arr[0].im, arr[1].im, arr[2].im, arr[3].im]),
+        })
+    }
+}
+
+impl<N: Scalar + Copy + PrimitiveSimdValue> From<[UnitComplex<N::Element>; 8]> for UnitComplex<N>
+where
+    N: From<[<N as simba::simd::SimdValue>::Element; 8]>,
+    N::Element: Scalar + Copy,
+{
+    #[inline]
+    fn from(arr: [UnitComplex<N::Element>; 8]) -> Self {
+        Self::new_unchecked(Complex {
+            re: N::from([
+                arr[0].re, arr[1].re, arr[2].re, arr[3].re, arr[4].re, arr[5].re, arr[6].re,
+                arr[7].re,
+            ]),
+            im: N::from([
+                arr[0].im, arr[1].im, arr[2].im, arr[3].im, arr[4].im, arr[5].im, arr[6].im,
+                arr[7].im,
+            ]),
+        })
+    }
+}
+
+impl<N: Scalar + Copy + PrimitiveSimdValue> From<[UnitComplex<N::Element>; 16]> for UnitComplex<N>
+where
+    N: From<[<N as simba::simd::SimdValue>::Element; 16]>,
+    N::Element: Scalar + Copy,
+{
+    #[inline]
+    fn from(arr: [UnitComplex<N::Element>; 16]) -> Self {
+        Self::new_unchecked(Complex {
+            re: N::from([
+                arr[0].re, arr[1].re, arr[2].re, arr[3].re, arr[4].re, arr[5].re, arr[6].re,
+                arr[7].re, arr[8].re, arr[9].re, arr[10].re, arr[11].re, arr[12].re, arr[13].re,
+                arr[14].re, arr[15].re,
+            ]),
+            im: N::from([
+                arr[0].im, arr[1].im, arr[2].im, arr[3].im, arr[4].im, arr[5].im, arr[6].im,
+                arr[7].im, arr[8].im, arr[9].im, arr[10].im, arr[11].im, arr[12].im, arr[13].im,
+                arr[14].im, arr[15].im,
+            ]),
+        })
     }
 }

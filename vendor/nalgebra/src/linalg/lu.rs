@@ -1,42 +1,34 @@
 #[cfg(feature = "serde-serialize")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use alga::general::{Field, Real};
-use allocator::{Allocator, Reallocator};
-use base::{DefaultAllocator, Matrix, MatrixMN, MatrixN, Scalar};
-use constraint::{SameNumberOfRows, ShapeConstraint};
-use dimension::{Dim, DimMin, DimMinimum};
+use crate::allocator::{Allocator, Reallocator};
+use crate::base::{DefaultAllocator, Matrix, MatrixMN, MatrixN, Scalar};
+use crate::constraint::{SameNumberOfRows, ShapeConstraint};
+use crate::dimension::{Dim, DimMin, DimMinimum};
+use crate::storage::{Storage, StorageMut};
+use simba::scalar::{ComplexField, Field};
 use std::mem;
-use storage::{Storage, StorageMut};
 
-use linalg::PermutationSequence;
+use crate::linalg::PermutationSequence;
 
 /// LU decomposition with partial (row) pivoting.
 #[cfg_attr(feature = "serde-serialize", derive(Serialize, Deserialize))]
 #[cfg_attr(
     feature = "serde-serialize",
-    serde(
-        bound(
-            serialize = "DefaultAllocator: Allocator<N, R, C> +
+    serde(bound(serialize = "DefaultAllocator: Allocator<N, R, C> +
                            Allocator<(usize, usize), DimMinimum<R, C>>,
          MatrixMN<N, R, C>: Serialize,
-         PermutationSequence<DimMinimum<R, C>>: Serialize"
-        )
-    )
+         PermutationSequence<DimMinimum<R, C>>: Serialize"))
 )]
 #[cfg_attr(
     feature = "serde-serialize",
-    serde(
-        bound(
-            deserialize = "DefaultAllocator: Allocator<N, R, C> +
+    serde(bound(deserialize = "DefaultAllocator: Allocator<N, R, C> +
                            Allocator<(usize, usize), DimMinimum<R, C>>,
          MatrixMN<N, R, C>: Deserialize<'de>,
-         PermutationSequence<DimMinimum<R, C>>: Deserialize<'de>"
-        )
-    )
+         PermutationSequence<DimMinimum<R, C>>: Deserialize<'de>"))
 )]
 #[derive(Clone, Debug)]
-pub struct LU<N: Real, R: DimMin<C>, C: Dim>
+pub struct LU<N: ComplexField, R: DimMin<C>, C: Dim>
 where
     DefaultAllocator: Allocator<N, R, C> + Allocator<(usize, usize), DimMinimum<R, C>>,
 {
@@ -44,7 +36,7 @@ where
     p: PermutationSequence<DimMinimum<R, C>>,
 }
 
-impl<N: Real, R: DimMin<C>, C: Dim> Copy for LU<N, R, C>
+impl<N: ComplexField, R: DimMin<C>, C: Dim> Copy for LU<N, R, C>
 where
     DefaultAllocator: Allocator<N, R, C> + Allocator<(usize, usize), DimMinimum<R, C>>,
     MatrixMN<N, R, C>: Copy,
@@ -55,7 +47,7 @@ where
 /// Performs a LU decomposition to overwrite `out` with the inverse of `matrix`.
 ///
 /// If `matrix` is not invertible, `false` is returned and `out` may contain invalid data.
-pub fn try_invert_to<N: Real, D: Dim, S>(
+pub fn try_invert_to<N: ComplexField, D: Dim, S>(
     mut matrix: MatrixN<N, D>,
     out: &mut Matrix<N, D, D, S>,
 ) -> bool
@@ -72,7 +64,7 @@ where
     out.fill_with_identity();
 
     for i in 0..dim {
-        let piv = matrix.slice_range(i.., i).iamax() + i;
+        let piv = matrix.slice_range(i.., i).icamax() + i;
         let diag = matrix[(piv, i)];
 
         if diag.is_zero() {
@@ -92,7 +84,7 @@ where
     matrix.solve_upper_triangular_mut(out)
 }
 
-impl<N: Real, R: DimMin<C>, C: Dim> LU<N, R, C>
+impl<N: ComplexField, R: DimMin<C>, C: Dim> LU<N, R, C>
 where
     DefaultAllocator: Allocator<N, R, C> + Allocator<(usize, usize), DimMinimum<R, C>>,
 {
@@ -108,7 +100,7 @@ where
         }
 
         for i in 0..min_nrows_ncols.value() {
-            let piv = matrix.slice_range(i.., i).iamax() + i;
+            let piv = matrix.slice_range(i.., i).icamax() + i;
             let diag = matrix[(piv, i)];
 
             if diag.is_zero() {
@@ -214,7 +206,7 @@ where
     }
 }
 
-impl<N: Real, D: DimMin<D, Output = D>> LU<N, D, D>
+impl<N: ComplexField, D: DimMin<D, Output = D>> LU<N, D, D>
 where
     DefaultAllocator: Allocator<N, D, D> + Allocator<(usize, usize), D>,
 {
@@ -308,7 +300,7 @@ where
 
         let mut res = N::one();
         for i in 0..dim {
-            res *= unsafe { *self.lu.get_unchecked(i, i) };
+            res *= unsafe { *self.lu.get_unchecked((i, i)) };
         }
 
         res * self.p.determinant()
@@ -351,7 +343,8 @@ where
     let (pivot_row, mut down) = submat.rows_range_pair_mut(0, 1..);
 
     for k in 0..pivot_row.ncols() {
-        down.column_mut(k).axpy(-pivot_row[k], &coeffs, N::one());
+        down.column_mut(k)
+            .axpy(-pivot_row[k].inlined_clone(), &coeffs, N::one());
     }
 }
 
@@ -382,11 +375,12 @@ pub fn gauss_step_swap<N, R: Dim, C: Dim, S>(
 
     for k in 0..pivot_row.ncols() {
         mem::swap(&mut pivot_row[k], &mut down[(piv - 1, k)]);
-        down.column_mut(k).axpy(-pivot_row[k], &coeffs, N::one());
+        down.column_mut(k)
+            .axpy(-pivot_row[k].inlined_clone(), &coeffs, N::one());
     }
 }
 
-impl<N: Real, R: DimMin<C>, C: Dim, S: Storage<N, R, C>> Matrix<N, R, C, S>
+impl<N: ComplexField, R: DimMin<C>, C: Dim, S: Storage<N, R, C>> Matrix<N, R, C, S>
 where
     DefaultAllocator: Allocator<N, R, C> + Allocator<(usize, usize), DimMinimum<R, C>>,
 {

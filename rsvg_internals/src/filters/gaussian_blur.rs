@@ -1,24 +1,24 @@
-use std::cell::Cell;
 use std::cmp::min;
 use std::f64;
 
-use cairo::MatrixTrait;
-use nalgebra::{DMatrix, Dynamic, MatrixVec};
+use markup5ever::{expanded_name, local_name, namespace_url, ns};
+use nalgebra::{DMatrix, Dynamic, VecStorage};
 
-use attributes::Attribute;
-use drawing_ctx::DrawingCtx;
-use error::NodeError;
-use handle::RsvgHandle;
-use node::{NodeResult, NodeTrait, RsvgNode};
-use parsers;
-use property_bag::PropertyBag;
-use surface_utils::{
+use crate::attributes::Attributes;
+use crate::document::AcquiredNodes;
+use crate::drawing_ctx::DrawingCtx;
+use crate::element::{ElementResult, SetAttributes};
+use crate::error::*;
+use crate::node::Node;
+use crate::parsers::{NumberOptionalNumber, ParseValue};
+use crate::rect::IRect;
+use crate::surface_utils::{
     shared_surface::{BlurDirection, Horizontal, SharedImageSurface, Vertical},
     EdgeMode,
 };
 
-use super::context::{FilterContext, FilterOutput, FilterResult, IRect};
-use super::{Filter, FilterError, PrimitiveWithInput};
+use super::context::{FilterContext, FilterOutput, FilterResult};
+use super::{FilterEffect, FilterError, PrimitiveWithInput};
 
 /// The maximum gaussian blur kernel size.
 ///
@@ -26,46 +26,40 @@ use super::{Filter, FilterError, PrimitiveWithInput};
 const MAXIMUM_KERNEL_SIZE: usize = 500;
 
 /// The `feGaussianBlur` filter primitive.
-pub struct GaussianBlur {
+pub struct FeGaussianBlur {
     base: PrimitiveWithInput,
-    std_deviation: Cell<(f64, f64)>,
+    std_deviation: (f64, f64),
 }
 
-impl GaussianBlur {
+impl Default for FeGaussianBlur {
     /// Constructs a new `GaussianBlur` with empty properties.
     #[inline]
-    pub fn new() -> GaussianBlur {
-        GaussianBlur {
+    fn default() -> FeGaussianBlur {
+        FeGaussianBlur {
             base: PrimitiveWithInput::new::<Self>(),
-            std_deviation: Cell::new((0.0, 0.0)),
+            std_deviation: (0.0, 0.0),
         }
     }
 }
 
-impl NodeTrait for GaussianBlur {
-    fn set_atts(
-        &self,
-        node: &RsvgNode,
-        handle: *const RsvgHandle,
-        pbag: &PropertyBag<'_>,
-    ) -> NodeResult {
-        self.base.set_atts(node, handle, pbag)?;
-
-        for (_key, attr, value) in pbag.iter() {
-            match attr {
-                Attribute::StdDeviation => self.std_deviation.set(
-                    parsers::number_optional_number(value)
-                        .map_err(|err| NodeError::attribute_error(attr, err))
-                        .and_then(|(x, y)| {
-                            if x >= 0.0 && y >= 0.0 {
-                                Ok((x, y))
-                            } else {
-                                Err(NodeError::value_error(attr, "values can't be negative"))
-                            }
-                        })?,
-                ),
-                _ => (),
-            }
+impl SetAttributes for FeGaussianBlur {
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        self.base.set_attributes(attrs)?;
+        let result = attrs
+            .iter()
+            .find(|(attr, _)| attr.expanded() == expanded_name!("", "stdDeviation"))
+            .and_then(|(attr, value)| {
+                attr.parse_and_validate(value, |v: NumberOptionalNumber<f64>| {
+                    if v.0 >= 0.0 && v.1 >= 0.0 {
+                        Ok(v)
+                    } else {
+                        Err(ValueErrorKind::value_error("values can't be negative"))
+                    }
+                })
+                .ok()
+            });
+        if let Some(tuple) = result {
+            self.std_deviation = (tuple.0, tuple.1);
         }
 
         Ok(())
@@ -187,7 +181,7 @@ fn gaussian_blur(
     } else {
         (1, kernel.len())
     };
-    let kernel = DMatrix::from_data(MatrixVec::new(
+    let kernel = DMatrix::from_data(VecStorage::new(
         Dynamic::new(rows),
         Dynamic::new(cols),
         kernel,
@@ -201,21 +195,22 @@ fn gaussian_blur(
     )?)
 }
 
-impl Filter for GaussianBlur {
+impl FilterEffect for FeGaussianBlur {
     fn render(
         &self,
-        _node: &RsvgNode,
+        node: &Node,
         ctx: &FilterContext,
-        draw_ctx: &mut DrawingCtx<'_>,
+        acquired_nodes: &mut AcquiredNodes,
+        draw_ctx: &mut DrawingCtx,
     ) -> Result<FilterResult, FilterError> {
-        let input = self.base.get_input(ctx, draw_ctx)?;
+        let input = self.base.get_input(ctx, acquired_nodes, draw_ctx)?;
         let bounds = self
             .base
-            .get_bounds(ctx)
+            .get_bounds(ctx, node.parent().as_ref())?
             .add_input(&input)
             .into_irect(draw_ctx);
 
-        let (std_x, std_y) = self.std_deviation.get();
+        let (std_x, std_y) = self.std_deviation;
         let (std_x, std_y) = ctx.paffine().transform_distance(std_x, std_y);
 
         // The deviation can become negative here due to the transform.
@@ -227,31 +222,27 @@ impl Filter for GaussianBlur {
         // channels.
 
         // Horizontal convolution.
-        let horiz_result_surface = if std_x != 0.0 {
+        let horiz_result_surface = if std_x >= 2.0 {
             // The spec says for deviation >= 2.0 three box blurs can be used as an optimization.
-            if std_x >= 2.0 {
-                three_box_blurs::<Horizontal>(input.surface(), bounds, std_x)?
-            } else {
-                gaussian_blur(input.surface(), bounds, std_x, false)?
-            }
+            three_box_blurs::<Horizontal>(input.surface(), bounds, std_x)?
+        } else if std_x != 0.0 {
+            gaussian_blur(input.surface(), bounds, std_x, false)?
         } else {
             input.surface().clone()
         };
 
         // Vertical convolution.
-        let output_surface = if std_y != 0.0 {
+        let output_surface = if std_y >= 2.0 {
             // The spec says for deviation >= 2.0 three box blurs can be used as an optimization.
-            if std_y >= 2.0 {
-                three_box_blurs::<Vertical>(&horiz_result_surface, bounds, std_y)?
-            } else {
-                gaussian_blur(&horiz_result_surface, bounds, std_y, true)?
-            }
+            three_box_blurs::<Vertical>(&horiz_result_surface, bounds, std_y)?
+        } else if std_y != 0.0 {
+            gaussian_blur(&horiz_result_surface, bounds, std_y, true)?
         } else {
             horiz_result_surface
         };
 
         Ok(FilterResult {
-            name: self.base.result.borrow().clone(),
+            name: self.base.result.clone(),
             output: FilterOutput {
                 surface: output_surface,
                 bounds,

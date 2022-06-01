@@ -1,6 +1,6 @@
 //! Pixel iterators for `SharedImageSurface`.
-use filters::context::IRect;
-use util::clamp;
+use crate::rect::IRect;
+use crate::util::clamp;
 
 use super::shared_surface::SharedImageSurface;
 use super::{EdgeMode, Pixel};
@@ -27,9 +27,17 @@ pub struct PixelRectangle<'a> {
 }
 
 impl<'a> Pixels<'a> {
+    /// Creates an iterator over the image surface pixels
+    #[inline]
+    pub fn new(surface: &'a SharedImageSurface) -> Self {
+        let bounds = IRect::from_size(surface.width(), surface.height());
+
+        Self::within(surface, bounds)
+    }
+
     /// Creates an iterator over the image surface pixels, constrained within the given bounds.
     #[inline]
-    pub fn new(surface: &'a SharedImageSurface, bounds: IRect) -> Self {
+    pub fn within(surface: &'a SharedImageSurface, bounds: IRect) -> Self {
         // Sanity checks.
         assert!(bounds.x0 >= 0);
         assert!(bounds.x0 <= surface.width());
@@ -51,9 +59,17 @@ impl<'a> Pixels<'a> {
 }
 
 impl<'a> PixelRectangle<'a> {
+    /// Creates an iterator over the image surface pixels
+    #[inline]
+    pub fn new(surface: &'a SharedImageSurface, rectangle: IRect, edge_mode: EdgeMode) -> Self {
+        let bounds = IRect::from_size(surface.width(), surface.height());
+
+        Self::within(surface, bounds, rectangle, edge_mode)
+    }
+
     /// Creates an iterator over the image surface pixels, constrained within the given bounds.
     #[inline]
-    pub fn new(
+    pub fn within(
         surface: &'a SharedImageSurface,
         bounds: IRect,
         rectangle: IRect,
@@ -108,8 +124,7 @@ impl<'a> Iterator for Pixels<'a> {
         if self.x + 1 == self.bounds.x1 as u32 {
             self.x = self.bounds.x0 as u32;
             self.y += 1;
-            self.offset +=
-                self.surface.stride() - (self.bounds.x1 - self.bounds.x0 - 1) as isize * 4;
+            self.offset += self.surface.stride() - (self.bounds.width() - 1) as isize * 4;
         } else {
             self.x += 1;
             self.offset += 4;
@@ -131,11 +146,7 @@ impl<'a> Iterator for PixelRectangle<'a> {
 
         let rv = {
             let get_pixel = |x, y| {
-                if x < self.bounds.x0
-                    || y < self.bounds.y0
-                    || x >= self.bounds.x1
-                    || y >= self.bounds.y1
-                {
+                if !self.bounds.contains(x, y) {
                     match self.edge_mode {
                         EdgeMode::None => Pixel {
                             r: 0,
@@ -156,10 +167,8 @@ impl<'a> Iterator for PixelRectangle<'a> {
                                 x % v
                             };
 
-                            let x = self.bounds.x0
-                                + wrap(x - self.bounds.x0, self.bounds.x1 - self.bounds.x0);
-                            let y = self.bounds.y0
-                                + wrap(y - self.bounds.y0, self.bounds.y1 - self.bounds.y0);
+                            let x = self.bounds.x0 + wrap(x - self.bounds.x0, self.bounds.width());
+                            let y = self.bounds.y0 + wrap(y - self.bounds.y0, self.bounds.height());
                             self.surface.get_pixel(x as u32, y as u32)
                         }
                     }
@@ -185,85 +194,41 @@ impl<'a> Iterator for PixelRectangle<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cairo::{self, ImageSurface};
-    use surface_utils::shared_surface::SurfaceType;
+    use crate::surface_utils::shared_surface::SurfaceType;
 
     #[test]
     fn pixels_count() {
         const WIDTH: i32 = 32;
         const HEIGHT: i32 = 64;
 
-        let surface = SharedImageSurface::new(
-            ImageSurface::create(cairo::Format::ARgb32, WIDTH, HEIGHT).unwrap(),
-            SurfaceType::SRgb,
-        )
-        .unwrap();
+        let surface = SharedImageSurface::empty(WIDTH, HEIGHT, SurfaceType::SRgb).unwrap();
 
         // Full image.
-        let bounds = IRect {
-            x0: 0,
-            y0: 0,
-            x1: WIDTH,
-            y1: HEIGHT,
-        };
-        assert_eq!(
-            Pixels::new(&surface, bounds).count(),
-            (WIDTH * HEIGHT) as usize
-        );
+        assert_eq!(Pixels::new(&surface).count(), (WIDTH * HEIGHT) as usize);
 
         // 1-wide column.
-        let bounds = IRect {
-            x0: 0,
-            y0: 0,
-            x1: 1,
-            y1: HEIGHT,
-        };
-        assert_eq!(Pixels::new(&surface, bounds).count(), HEIGHT as usize);
+        let bounds = IRect::from_size(1, HEIGHT);
+        assert_eq!(Pixels::within(&surface, bounds).count(), HEIGHT as usize);
 
         // 1-tall row.
-        let bounds = IRect {
-            x0: 0,
-            y0: 0,
-            x1: WIDTH,
-            y1: 1,
-        };
-        assert_eq!(Pixels::new(&surface, bounds).count(), WIDTH as usize);
+        let bounds = IRect::from_size(WIDTH, 1);
+        assert_eq!(Pixels::within(&surface, bounds).count(), WIDTH as usize);
 
         // 1×1.
-        let bounds = IRect {
-            x0: 0,
-            y0: 0,
-            x1: 1,
-            y1: 1,
-        };
-        assert_eq!(Pixels::new(&surface, bounds).count(), 1);
+        let bounds = IRect::from_size(1, 1);
+        assert_eq!(Pixels::within(&surface, bounds).count(), 1);
 
         // Nothing (x0 == x1).
-        let bounds = IRect {
-            x0: 0,
-            y0: 0,
-            x1: 0,
-            y1: HEIGHT,
-        };
-        assert_eq!(Pixels::new(&surface, bounds).count(), 0);
+        let bounds = IRect::from_size(0, HEIGHT);
+        assert_eq!(Pixels::within(&surface, bounds).count(), 0);
 
         // Nothing (y0 == y1).
-        let bounds = IRect {
-            x0: 0,
-            y0: 0,
-            x1: WIDTH,
-            y1: 0,
-        };
-        assert_eq!(Pixels::new(&surface, bounds).count(), 0);
+        let bounds = IRect::from_size(WIDTH, 0);
+        assert_eq!(Pixels::within(&surface, bounds).count(), 0);
 
         // Nothing (x0 == x1, y0 == y1).
-        let bounds = IRect {
-            x0: 0,
-            y0: 0,
-            x1: 0,
-            y1: 0,
-        };
-        assert_eq!(Pixels::new(&surface, bounds).count(), 0);
+        let bounds = IRect::new(0, 0, 0, 0);
+        assert_eq!(Pixels::within(&surface, bounds).count(), 0);
     }
 
     #[test]
@@ -271,27 +236,11 @@ mod tests {
         const WIDTH: i32 = 32;
         const HEIGHT: i32 = 64;
 
-        let surface = SharedImageSurface::new(
-            ImageSurface::create(cairo::Format::ARgb32, WIDTH, HEIGHT).unwrap(),
-            SurfaceType::SRgb,
-        )
-        .unwrap();
+        let surface = SharedImageSurface::empty(WIDTH, HEIGHT, SurfaceType::SRgb).unwrap();
 
-        let bounds = IRect {
-            x0: 0,
-            y0: 0,
-            x1: WIDTH,
-            y1: HEIGHT,
-        };
-
-        let rect_bounds = IRect {
-            x0: -8,
-            y0: -8,
-            x1: 8,
-            y1: 8,
-        };
+        let rect_bounds = IRect::new(-8, -8, 8, 8);
         assert_eq!(
-            PixelRectangle::new(&surface, bounds, rect_bounds, EdgeMode::None).count(),
+            PixelRectangle::new(&surface, rect_bounds, EdgeMode::None).count(),
             (16 * 16) as usize
         );
     }

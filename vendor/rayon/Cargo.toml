@@ -3,7 +3,7 @@
 # When uploading crates to the registry Cargo will automatically
 # "normalize" Cargo.toml files for maximal compatibility
 # with all versions of Cargo and also rewrite `path` dependencies
-# to registry (e.g. crates.io) dependencies
+# to registry (e.g., crates.io) dependencies
 #
 # If you believe there's an error in this file please file an
 # issue against the rust-lang/cargo repository. If you're
@@ -11,10 +11,11 @@
 # will likely look very different (and much more reasonable)
 
 [package]
+edition = "2018"
 name = "rayon"
-version = "1.0.2"
+version = "1.5.0"
 authors = ["Niko Matsakis <niko@alum.mit.edu>", "Josh Stone <cuviper@gmail.com>"]
-build = "build.rs"
+exclude = ["/ci/*", "/scripts/*", "/.github/*", "/bors.toml"]
 description = "Simple work-stealing parallelism for Rust"
 documentation = "https://docs.rs/rayon/"
 readme = "README.md"
@@ -23,14 +24,14 @@ categories = ["concurrency"]
 license = "Apache-2.0/MIT"
 repository = "https://github.com/rayon-rs/rayon"
 [dependencies.crossbeam-deque]
-version = "0.2.0"
+version = "0.8.0"
 
 [dependencies.either]
 version = "1.0"
 default-features = false
 
 [dependencies.rayon-core]
-version = "1.4"
+version = "1.9.0"
 [dev-dependencies.docopt]
 version = "1"
 
@@ -38,10 +39,13 @@ version = "1"
 version = "1"
 
 [dev-dependencies.rand]
-version = "0.5"
+version = "0.7"
+
+[dev-dependencies.rand_xorshift]
+version = "0.2"
 
 [dev-dependencies.serde]
-version = "1"
-
-[dev-dependencies.serde_derive]
+version = "1.0.85"
+features = ["derive"]
+[build-dependencies.autocfg]
 version = "1"

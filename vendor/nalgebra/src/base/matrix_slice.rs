@@ -2,12 +2,12 @@ use std::marker::PhantomData;
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 use std::slice;
 
-use base::allocator::Allocator;
-use base::default_allocator::DefaultAllocator;
-use base::dimension::{Dim, DimName, Dynamic, U1};
-use base::iter::MatrixIter;
-use base::storage::{Owned, Storage, StorageMut};
-use base::{Matrix, Scalar};
+use crate::base::allocator::Allocator;
+use crate::base::default_allocator::DefaultAllocator;
+use crate::base::dimension::{Dim, DimName, Dynamic, IsNotStaticOne, U1};
+use crate::base::iter::MatrixIter;
+use crate::base::storage::{ContiguousStorage, ContiguousStorageMut, Owned, Storage, StorageMut};
+use crate::base::{Matrix, Scalar};
 
 macro_rules! slice_storage_impl(
     ($doc: expr; $Storage: ident as $SRef: ty; $T: ident.$get_addr: ident ($Ptr: ty as $Ref: ty)) => {
@@ -91,14 +91,15 @@ slice_storage_impl!("A mutable matrix data storage for mutable matrix slice. Onl
 
 impl<'a, N: Scalar, R: Dim, C: Dim, RStride: Dim, CStride: Dim> Copy
     for SliceStorage<'a, N, R, C, RStride, CStride>
-{}
+{
+}
 
 impl<'a, N: Scalar, R: Dim, C: Dim, RStride: Dim, CStride: Dim> Clone
     for SliceStorage<'a, N, R, C, RStride, CStride>
 {
     #[inline]
     fn clone(&self) -> Self {
-        SliceStorage {
+        Self {
             ptr: self.ptr,
             shape: self.shape,
             strides: self.strides,
@@ -145,8 +146,6 @@ macro_rules! storage_impl(
                     srows.value() == 1 && scols.value() == nrows.value()
                 }
             }
-
-
 
             #[inline]
             fn into_owned(self) -> Owned<N, R, C>
@@ -197,6 +196,32 @@ unsafe impl<'a, N: Scalar, R: Dim, C: Dim, RStride: Dim, CStride: Dim> StorageMu
             unsafe { slice::from_raw_parts_mut(self.ptr, 0) }
         }
     }
+}
+
+unsafe impl<'a, N: Scalar, R: Dim, CStride: Dim> ContiguousStorage<N, R, U1>
+    for SliceStorage<'a, N, R, U1, U1, CStride>
+{
+}
+unsafe impl<'a, N: Scalar, R: Dim, CStride: Dim> ContiguousStorage<N, R, U1>
+    for SliceStorageMut<'a, N, R, U1, U1, CStride>
+{
+}
+unsafe impl<'a, N: Scalar, R: Dim, CStride: Dim> ContiguousStorageMut<N, R, U1>
+    for SliceStorageMut<'a, N, R, U1, U1, CStride>
+{
+}
+
+unsafe impl<'a, N: Scalar, R: DimName, C: Dim + IsNotStaticOne> ContiguousStorage<N, R, C>
+    for SliceStorage<'a, N, R, C, U1, R>
+{
+}
+unsafe impl<'a, N: Scalar, R: DimName, C: Dim + IsNotStaticOne> ContiguousStorage<N, R, C>
+    for SliceStorageMut<'a, N, R, C, U1, R>
+{
+}
+unsafe impl<'a, N: Scalar, R: DimName, C: Dim + IsNotStaticOne> ContiguousStorageMut<N, R, C>
+    for SliceStorageMut<'a, N, R, C, U1, R>
+{
 }
 
 impl<N: Scalar, R: Dim, C: Dim, S: Storage<N, R, C>> Matrix<N, R, C, S> {
@@ -852,5 +877,26 @@ impl<N: Scalar, R: Dim, C: Dim, S: StorageMut<N, R, C>> Matrix<N, R, C, S> {
         cols: ColRange,
     ) -> MatrixSliceMut<N, R, ColRange::Size, S::RStride, S::CStride> {
         self.slice_range_mut(.., cols)
+    }
+}
+
+impl<'a, N, R, C, RStride, CStride> From<MatrixSliceMut<'a, N, R, C, RStride, CStride>>
+    for MatrixSlice<'a, N, R, C, RStride, CStride>
+where
+    N: Scalar,
+    R: Dim,
+    C: Dim,
+    RStride: Dim,
+    CStride: Dim,
+{
+    fn from(slice_mut: MatrixSliceMut<'a, N, R, C, RStride, CStride>) -> Self {
+        let data = SliceStorage {
+            ptr: slice_mut.data.ptr,
+            shape: slice_mut.data.shape,
+            strides: slice_mut.data.strides,
+            _phantoms: PhantomData,
+        };
+
+        unsafe { Matrix::from_data_statically_unchecked(data) }
     }
 }

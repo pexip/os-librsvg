@@ -6,17 +6,19 @@ use std::hash;
 use std::io::{Result as IOResult, Write};
 
 #[cfg(feature = "serde-serialize")]
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[cfg(feature = "abomonation-serialize")]
 use abomonation::Abomonation;
 
-use alga::general::{ClosedNeg, Real};
+use simba::scalar::{ClosedAdd, ClosedNeg, ClosedSub};
 
-use base::allocator::Allocator;
-use base::dimension::{DimName, DimNameAdd, DimNameSum, U1};
-use base::storage::Owned;
-use base::{DefaultAllocator, MatrixN, Scalar, VectorN};
+use crate::base::allocator::Allocator;
+use crate::base::dimension::{DimName, DimNameAdd, DimNameSum, U1};
+use crate::base::storage::Owned;
+use crate::base::{DefaultAllocator, MatrixN, Scalar, VectorN};
+
+use crate::geometry::Point;
 
 /// A translation.
 #[repr(C)]
@@ -40,7 +42,7 @@ where
     }
 }
 
-impl<N: Scalar, D: DimName> Copy for Translation<N, D>
+impl<N: Scalar + Copy, D: DimName> Copy for Translation<N, D>
 where
     DefaultAllocator: Allocator<N, D>,
     Owned<N, D>: Copy,
@@ -54,7 +56,7 @@ where
 {
     #[inline]
     fn clone(&self) -> Self {
-        Translation::from_vector(self.vector.clone())
+        Translation::from(self.vector.clone())
     }
 }
 
@@ -105,7 +107,7 @@ where
     {
         let matrix = VectorN::<N, D>::deserialize(deserializer)?;
 
-        Ok(Translation::from_vector(matrix))
+        Ok(Translation::from(matrix))
     }
 }
 
@@ -115,20 +117,52 @@ where
 {
     /// Creates a new translation from the given vector.
     #[inline]
+    #[deprecated(note = "Use `::from` instead.")]
     pub fn from_vector(vector: VectorN<N, D>) -> Translation<N, D> {
         Translation { vector: vector }
     }
 
     /// Inverts `self`.
+    ///
+    /// # Example
+    /// ```
+    /// # use nalgebra::{Translation2, Translation3};
+    /// let t = Translation3::new(1.0, 2.0, 3.0);
+    /// assert_eq!(t * t.inverse(), Translation3::identity());
+    /// assert_eq!(t.inverse() * t, Translation3::identity());
+    ///
+    /// // Work in all dimensions.
+    /// let t = Translation2::new(1.0, 2.0);
+    /// assert_eq!(t * t.inverse(), Translation2::identity());
+    /// assert_eq!(t.inverse() * t, Translation2::identity());
+    /// ```
     #[inline]
+    #[must_use = "Did you mean to use inverse_mut()?"]
     pub fn inverse(&self) -> Translation<N, D>
     where
         N: ClosedNeg,
     {
-        Translation::from_vector(-&self.vector)
+        Translation::from(-&self.vector)
     }
 
     /// Converts this translation into its equivalent homogeneous transformation matrix.
+    ///
+    /// # Example
+    /// ```
+    /// # use nalgebra::{Translation2, Translation3, Matrix3, Matrix4};
+    /// let t = Translation3::new(10.0, 20.0, 30.0);
+    /// let expected = Matrix4::new(1.0, 0.0, 0.0, 10.0,
+    ///                             0.0, 1.0, 0.0, 20.0,
+    ///                             0.0, 0.0, 1.0, 30.0,
+    ///                             0.0, 0.0, 0.0, 1.0);
+    /// assert_eq!(t.to_homogeneous(), expected);
+    ///
+    /// let t = Translation2::new(10.0, 20.0);
+    /// let expected = Matrix3::new(1.0, 0.0, 10.0,
+    ///                             0.0, 1.0, 20.0,
+    ///                             0.0, 0.0, 1.0);
+    /// assert_eq!(t.to_homogeneous(), expected);
+    /// ```
     #[inline]
     pub fn to_homogeneous(&self) -> MatrixN<N, DimNameSum<D, U1>>
     where
@@ -144,6 +178,23 @@ where
     }
 
     /// Inverts `self` in-place.
+    ///
+    /// # Example
+    /// ```
+    /// # use nalgebra::{Translation2, Translation3};
+    /// let t = Translation3::new(1.0, 2.0, 3.0);
+    /// let mut inv_t = Translation3::new(1.0, 2.0, 3.0);
+    /// inv_t.inverse_mut();
+    /// assert_eq!(t * inv_t, Translation3::identity());
+    /// assert_eq!(inv_t * t, Translation3::identity());
+    ///
+    /// // Work in all dimensions.
+    /// let t = Translation2::new(1.0, 2.0);
+    /// let mut inv_t = Translation2::new(1.0, 2.0);
+    /// inv_t.inverse_mut();
+    /// assert_eq!(t * inv_t, Translation2::identity());
+    /// assert_eq!(inv_t * t, Translation2::identity());
+    /// ```
     #[inline]
     pub fn inverse_mut(&mut self)
     where
@@ -153,11 +204,45 @@ where
     }
 }
 
-impl<N: Scalar + Eq, D: DimName> Eq for Translation<N, D>
+impl<N: Scalar + ClosedAdd, D: DimName> Translation<N, D>
 where
     DefaultAllocator: Allocator<N, D>,
 {
+    /// Translate the given point.
+    ///
+    /// This is the same as the multiplication `self * pt`.
+    ///
+    /// # Example
+    /// ```
+    /// # use nalgebra::{Translation3, Point3};
+    /// let t = Translation3::new(1.0, 2.0, 3.0);
+    /// let transformed_point = t.transform_point(&Point3::new(4.0, 5.0, 6.0));
+    /// assert_eq!(transformed_point, Point3::new(5.0, 7.0, 9.0));
+    #[inline]
+    pub fn transform_point(&self, pt: &Point<N, D>) -> Point<N, D> {
+        pt + &self.vector
+    }
 }
+
+impl<N: Scalar + ClosedSub, D: DimName> Translation<N, D>
+where
+    DefaultAllocator: Allocator<N, D>,
+{
+    /// Translate the given point by the inverse of this translation.
+    ///
+    /// # Example
+    /// ```
+    /// # use nalgebra::{Translation3, Point3};
+    /// let t = Translation3::new(1.0, 2.0, 3.0);
+    /// let transformed_point = t.inverse_transform_point(&Point3::new(4.0, 5.0, 6.0));
+    /// assert_eq!(transformed_point, Point3::new(3.0, 3.0, 3.0));
+    #[inline]
+    pub fn inverse_transform_point(&self, pt: &Point<N, D>) -> Point<N, D> {
+        pt - &self.vector
+    }
+}
+
+impl<N: Scalar + Eq, D: DimName> Eq for Translation<N, D> where DefaultAllocator: Allocator<N, D> {}
 
 impl<N: Scalar + PartialEq, D: DimName> PartialEq for Translation<N, D>
 where
@@ -230,15 +315,15 @@ where
  * Display
  *
  */
-impl<N: Real + fmt::Display, D: DimName> fmt::Display for Translation<N, D>
+impl<N: Scalar + fmt::Display, D: DimName> fmt::Display for Translation<N, D>
 where
     DefaultAllocator: Allocator<N, D> + Allocator<usize, D>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let precision = f.precision().unwrap_or(3);
 
-        try!(writeln!(f, "Translation {{"));
-        try!(write!(f, "{:.*}", precision, self.vector));
+        writeln!(f, "Translation {{")?;
+        write!(f, "{:.*}", precision, self.vector)?;
         writeln!(f, "}}")
     }
 }

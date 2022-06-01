@@ -1,15 +1,26 @@
-# Epoch-based garbage collection
+# Crossbeam Epoch
 
-[![Build Status](https://travis-ci.org/crossbeam-rs/crossbeam-epoch.svg?branch=master)](https://travis-ci.org/crossbeam-rs/crossbeam-epoch)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](https://github.com/crossbeam-rs/crossbeam-epoch)
-[![Cargo](https://img.shields.io/crates/v/crossbeam-epoch.svg)](https://crates.io/crates/crossbeam-epoch)
-[![Documentation](https://docs.rs/crossbeam-epoch/badge.svg)](https://docs.rs/crossbeam-epoch)
+[![Build Status](https://github.com/crossbeam-rs/crossbeam/workflows/CI/badge.svg)](
+https://github.com/crossbeam-rs/crossbeam/actions)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](
+https://github.com/crossbeam-rs/crossbeam/tree/master/crossbeam-epoch#license)
+[![Cargo](https://img.shields.io/crates/v/crossbeam-epoch.svg)](
+https://crates.io/crates/crossbeam-epoch)
+[![Documentation](https://docs.rs/crossbeam-epoch/badge.svg)](
+https://docs.rs/crossbeam-epoch)
+[![Rust 1.36+](https://img.shields.io/badge/rust-1.36+-lightgray.svg)](
+https://www.rust-lang.org)
+[![chat](https://img.shields.io/discord/569610676205781012.svg?logo=discord)](https://discord.gg/BBYwKq)
 
-This crate provides epoch-based garbage collection for use in concurrent data structures.
+This crate provides epoch-based garbage collection for building concurrent data structures.
 
-If a thread removes a node from a concurrent data structure, other threads
-may still have pointers to that node, so it cannot be immediately destructed.
-Epoch GC allows deferring destruction until it becomes safe to do so.
+When a thread removes an object from a concurrent data structure, other threads
+may be still using pointers to it at the same time, so it cannot be destroyed
+immediately. Epoch-based GC is an efficient mechanism for deferring destruction of
+shared objects until no pointers to them can exist.
+
+Everything in this crate except the global GC can be used in `no_std` environments, provided that
+features `alloc` and `nightly` are enabled.
 
 ## Usage
 
@@ -17,17 +28,26 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-crossbeam-epoch = "0.2"
+crossbeam-epoch = "0.9"
 ```
 
-Next, add this to your crate:
+## Compatibility
 
-```rust
-extern crate crossbeam_epoch as epoch;
-```
+Crossbeam Epoch supports stable Rust releases going back at least six months,
+and every time the minimum supported Rust version is increased, a new minor
+version is released. Currently, the minimum supported Rust version is 1.36.
 
 ## License
 
-Licensed under the terms of MIT license and the Apache License (Version 2.0).
+Licensed under either of
 
-See [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE) for details.
+ * Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+ * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+at your option.
+
+#### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.

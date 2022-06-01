@@ -1,15 +1,14 @@
+//! Conditional processing attributes: `requiredExtensions`, `requiredFeatures`, `systemLanguage`.
+
 #[allow(unused_imports, deprecated)]
 use std::ascii::AsciiExt;
 
 use std::str::FromStr;
 
-use glib;
-use itertools::{FoldWhile, Itertools};
 use language_tags::LanguageTag;
 use locale_config::{LanguageRange, Locale};
 
-use error::*;
-use parsers::ParseError;
+use crate::error::*;
 
 // No extensions at the moment.
 static IMPLEMENTED_EXTENSIONS: &[&str] = &[];
@@ -87,51 +86,27 @@ impl SystemLanguage {
     /// [`systemLanguage`]: https://www.w3.org/TR/SVG/struct.html#ConditionalProcessingSystemLanguageAttribute
     /// [BCP47]: http://www.ietf.org/rfc/bcp/bcp47.txt
     pub fn from_attribute(s: &str, locale: &Locale) -> Result<SystemLanguage, ValueErrorKind> {
-        s.split(',')
-            .map(LanguageTag::from_str)
-            .fold_while(
-                // start with no match
-                Ok(SystemLanguage(false)),
-                // The accumulator is Result<SystemLanguage, ValueErrorKind>
-                |acc, tag_result| match tag_result {
-                    Ok(language_tag) => {
-                        let have_match = acc.unwrap().0;
-                        if have_match {
-                            FoldWhile::Continue(Ok(SystemLanguage(have_match)))
-                        } else {
-                            locale_accepts_language_tag(locale, &language_tag)
-                                .map(|matches| FoldWhile::Continue(Ok(SystemLanguage(matches))))
-                                .unwrap_or_else(|e| FoldWhile::Done(Err(e)))
-                        }
+        s.split(',').map(LanguageTag::from_str).try_fold(
+            // start with no match
+            SystemLanguage(false),
+            // The accumulator is Result<SystemLanguage, ValueErrorKind>
+            |acc, tag_result| match tag_result {
+                Ok(language_tag) => {
+                    let have_match = acc.0;
+                    if have_match {
+                        Ok(SystemLanguage(have_match))
+                    } else {
+                        locale_accepts_language_tag(locale, &language_tag).map(SystemLanguage)
                     }
+                }
 
-                    Err(e) => FoldWhile::Done(Err(ValueErrorKind::Parse(ParseError::new(
-                        &format!("invalid language tag: \"{}\"", e),
-                    )))),
-                },
-            )
-            .into_inner()
+                Err(e) => Err(ValueErrorKind::parse_error(&format!(
+                    "invalid language tag: \"{}\"",
+                    e
+                ))),
+            },
+        )
     }
-}
-
-/// Gets the user's preferred locale from the environment and
-/// translates it to a `Locale` with `LanguageRange` fallbacks.
-///
-/// The `Locale::current()` call only contemplates a single language,
-/// but glib is smarter, and `g_get_langauge_names()` can provide
-/// fallbacks, for example, when LC_MESSAGES="en_US.UTF-8:de" (USA
-/// English and German).  This function converts the output of
-/// `g_get_language_names()` into a `Locale` with appropriate
-/// fallbacks.
-pub fn locale_from_environment() -> Result<Locale, String> {
-    let mut locale = Locale::invariant();
-
-    for name in glib::get_language_names() {
-        let range = LanguageRange::from_unix(&name).map_err(|e| format!("{}", e))?;
-        locale.add(&range);
-    }
-
-    Ok(locale)
 }
 
 fn locale_accepts_language_tag(
@@ -146,14 +121,14 @@ fn locale_accepts_language_tag(
         let str_locale_range = locale_range.as_ref();
 
         let locale_tag = LanguageTag::from_str(str_locale_range).map_err(|e| {
-            ValueErrorKind::Parse(ParseError::new(&format!(
+            ValueErrorKind::parse_error(&format!(
                 "invalid language tag \"{}\" in locale: {}",
                 str_locale_range, e
-            )))
+            ))
         })?;
 
         if !locale_tag.is_language_range() {
-            return Err(ValueErrorKind::Value(format!(
+            return Err(ValueErrorKind::value_error(&format!(
                 "language tag \"{}\" is not a language range",
                 locale_tag
             )));

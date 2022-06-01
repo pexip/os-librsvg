@@ -196,7 +196,7 @@ pub enum ErrorKind {
     /// assert!(result.is_err());
     /// assert_eq!(result.unwrap_err().kind, ErrorKind::WrongNumberOfValues);
     /// ```
-    /// [`Arg::number_of_values`]
+    ///
     /// [`Arg::number_of_values`]: ./struct.Arg.html#method.number_of_values
     /// [`Arg::value_names`]: ./struct.Arg.html#method.value_names
     WrongNumberOfValues,
@@ -365,6 +365,7 @@ pub enum ErrorKind {
 
     /// Represents a [Format error] (which is a part of [`Display`]).
     /// Typically caused by writing to `stderr` or `stdout`.
+    ///
     /// [`Display`]: https://doc.rust-lang.org/std/fmt/trait.Display.html
     /// [Format error]: https://doc.rust-lang.org/std/fmt/struct.Error.html
     Format,
@@ -402,7 +403,9 @@ impl Error {
     }
 
     #[doc(hidden)]
-    pub fn write_to<W: Write>(&self, w: &mut W) -> io::Result<()> { write!(w, "{}", self.message) }
+    pub fn write_to<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        write!(w, "{}", self.message)
+    }
 
     #[doc(hidden)]
     pub fn argument_conflict<O, U>(
@@ -633,7 +636,6 @@ impl Error {
         }
     }
 
-
     #[doc(hidden)]
     pub fn invalid_utf8<U>(usage: U, color: ColorWhen) -> Self
     where
@@ -720,8 +722,7 @@ impl Error {
     }
 
     #[doc(hidden)]
-    pub fn value_validation(arg: Option<&AnyArg>, err: String, color: ColorWhen) -> Self
-    {
+    pub fn value_validation(arg: Option<&AnyArg>, err: String, color: ColorWhen) -> Self {
         let c = Colorizer::new(ColorizerOption {
             use_stderr: true,
             when: color,
@@ -893,15 +894,21 @@ impl Error {
 }
 
 impl StdError for Error {
-    fn description(&self) -> &str { &*self.message }
+    fn description(&self) -> &str {
+        &*self.message
+    }
 }
 
 impl Display for Error {
-    fn fmt(&self, f: &mut std_fmt::Formatter) -> std_fmt::Result { writeln!(f, "{}", self.message) }
+    fn fmt(&self, f: &mut std_fmt::Formatter) -> std_fmt::Result {
+        writeln!(f, "{}", self.message)
+    }
 }
 
 impl From<io::Error> for Error {
-    fn from(e: io::Error) -> Self { Error::with_description(e.description(), ErrorKind::Io) }
+    fn from(e: io::Error) -> Self {
+        Error::with_description(e.description(), ErrorKind::Io)
+    }
 }
 
 impl From<std_fmt::Error> for Error {

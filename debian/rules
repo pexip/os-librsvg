@@ -13,13 +13,8 @@ override_dh_autoreconf:
 	dh_autoreconf --as-needed
 
 override_dh_auto_configure:
-	if ! test -e vendor/backtrace-sys/.cargo-checksum.json.dist; then \
-		cp vendor/backtrace-sys/.cargo-checksum.json vendor/backtrace-sys/.cargo-checksum.json.dist; \
-	fi
-	jq '.files = {}' < vendor/backtrace-sys/.cargo-checksum.json.dist > vendor/backtrace-sys/.cargo-checksum.json
 	mkdir -p $(CARGO_HOME)
 	dh_auto_configure -- \
-		--libexecdir='$${exec_prefix}/libexec' \
 		--enable-pixbuf-loader \
 		--enable-installed-tests \
 		--enable-introspection \
@@ -34,6 +29,7 @@ override_dh_makeshlibs:
 override_dh_install:
 	find debian/tmp -name '*.a' -print -delete
 	find debian/tmp -name '*.la' -print -delete
+	rm -f debian/tmp/usr/bin/rsvg-view-3
 	dh_install
 	sed -e "s/#MULTIARCH#/$(DEB_HOST_MULTIARCH)/g" debian/librsvg2-common.postinst.in > \
 		debian/librsvg2-common.postinst
@@ -47,19 +43,22 @@ override_dh_missing:
 override_dh_clean:
 	dh_clean
 	rm -fr $(CARGO_HOME)
-	if test -e vendor/backtrace-sys/.cargo-checksum.json.dist; then \
-		mv vendor/backtrace-sys/.cargo-checksum.json.dist vendor/backtrace-sys/.cargo-checksum.json; \
-	fi
 
-# https://bugs.debian.org/895723
-ifneq (,$(filter $(DEB_HOST_ARCH), ppc64el ppc64 powerpc))
-override_dh_auto_test:
-	CARGO_INCREMENTAL=1 dh_auto_test
-endif
+# Skip rsvg-tests which contain the reftests; they are tightly coupled to
+# specific versions of pixman, cairo, pango, and freetype. This list of
+# tests comes from the test_programs variable in tests/Makefile.am.
+# See also https://gitlab.gnome.org/GNOME/librsvg/issues/511 and
+# https://gitlab.gnome.org/GNOME/librsvg/issues/512 for an attempt to
+# mitigate this problem upstream.
+export TESTS = "api loading crash render-crash dimensions errors infinite-loop"
 
 override_dh_auto_test-arch:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
-	dh_auto_test
+	mkdir -p $(CURDIR)/debian/locales
+	localedef -i en_US -f UTF-8 $(CURDIR)/debian/locales/en
+	localedef -i en_US -f UTF-8 $(CURDIR)/debian/locales/en_US
+	localedef -i de_DE -f UTF-8 $(CURDIR)/debian/locales/de
+	LOCPATH=$(CURDIR)/debian/locales dh_auto_test -- TESTS=$(TESTS)
 	find debian -name '*.log' \
 		-not -name config.log \
 		-not -name test-suite.log \

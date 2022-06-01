@@ -1,20 +1,23 @@
+use approx::{AbsDiffEq, RelativeEq, UlpsEq};
 use std::any::Any;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
 #[cfg(feature = "serde-serialize")]
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use alga::general::Real;
+use simba::scalar::RealField;
 
-use base::{DefaultAllocator, MatrixN};
-use base::dimension::{DimName, DimNameAdd, DimNameSum, U1};
-use base::storage::Owned;
-use base::allocator::Allocator;
+use crate::base::allocator::Allocator;
+use crate::base::dimension::{DimName, DimNameAdd, DimNameSum, U1};
+use crate::base::storage::Owned;
+use crate::base::{DefaultAllocator, MatrixN, VectorN};
+
+use crate::geometry::Point;
 
 /// Trait implemented by phantom types identifying the projective transformation type.
 ///
-/// NOTE: this trait is not intended to be implementable outside of the `nalgebra` crate.
+/// NOTE: this trait is not intended to be implemented outside of the `nalgebra` crate.
 pub trait TCategory: Any + Debug + Copy + PartialEq + Send {
     /// Indicates whether a `Transform` with the category `Self` has a bottom-row different from
     /// `0 0 .. 1`.
@@ -25,7 +28,7 @@ pub trait TCategory: Any + Debug + Copy + PartialEq + Send {
 
     /// Checks that the given matrix is a valid homogeneous representation of an element of the
     /// category `Self`.
-    fn check_homogeneous_invariants<N: Real, D: DimName>(mat: &MatrixN<N, D>) -> bool
+    fn check_homogeneous_invariants<N: RealField, D: DimName>(mat: &MatrixN<N, D>) -> bool
     where
         N::Epsilon: Copy,
         DefaultAllocator: Allocator<N, D, D>;
@@ -56,22 +59,19 @@ where
 
 /// Tag representing the most general (not necessarily inversible) `Transform` type.
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum TGeneral {
-}
+pub enum TGeneral {}
 
 /// Tag representing the most general inversible `Transform` type.
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum TProjective {
-}
+pub enum TProjective {}
 
 /// Tag representing an affine `Transform`. Its bottom-row is equal to `(0, 0 ... 0, 1)`.
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum TAffine {
-}
+pub enum TAffine {}
 
 impl TCategory for TGeneral {
     #[inline]
-    fn check_homogeneous_invariants<N: Real, D: DimName>(_: &MatrixN<N, D>) -> bool
+    fn check_homogeneous_invariants<N: RealField, D: DimName>(_: &MatrixN<N, D>) -> bool
     where
         N::Epsilon: Copy,
         DefaultAllocator: Allocator<N, D, D>,
@@ -82,7 +82,7 @@ impl TCategory for TGeneral {
 
 impl TCategory for TProjective {
     #[inline]
-    fn check_homogeneous_invariants<N: Real, D: DimName>(mat: &MatrixN<N, D>) -> bool
+    fn check_homogeneous_invariants<N: RealField, D: DimName>(mat: &MatrixN<N, D>) -> bool
     where
         N::Epsilon: Copy,
         DefaultAllocator: Allocator<N, D, D>,
@@ -98,13 +98,14 @@ impl TCategory for TAffine {
     }
 
     #[inline]
-    fn check_homogeneous_invariants<N: Real, D: DimName>(mat: &MatrixN<N, D>) -> bool
+    fn check_homogeneous_invariants<N: RealField, D: DimName>(mat: &MatrixN<N, D>) -> bool
     where
         N::Epsilon: Copy,
         DefaultAllocator: Allocator<N, D, D>,
     {
         let last = D::dim() - 1;
-        mat.is_invertible() && mat[(last, last)] == N::one()
+        mat.is_invertible()
+            && mat[(last, last)] == N::one()
             && (0..last).all(|i| mat[(last, i)].is_zero())
     }
 }
@@ -156,7 +157,7 @@ super_tcategory_impl!(
 /// 3D transformation.
 #[repr(C)]
 #[derive(Debug)]
-pub struct Transform<N: Real, D: DimNameAdd<U1>, C: TCategory>
+pub struct Transform<N: RealField, D: DimNameAdd<U1>, C: TCategory>
 where
     DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
 {
@@ -165,7 +166,7 @@ where
 }
 
 // FIXME
-// impl<N: Real + hash::Hash, D: DimNameAdd<U1> + hash::Hash, C: TCategory> hash::Hash for Transform<N, D, C>
+// impl<N: RealField + hash::Hash, D: DimNameAdd<U1> + hash::Hash, C: TCategory> hash::Hash for Transform<N, D, C>
 //     where DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
 //           Owned<N, DimNameSum<D, U1>, DimNameSum<D, U1>>: hash::Hash {
 //     fn hash<H: hash::Hasher>(&self, state: &mut H) {
@@ -173,14 +174,14 @@ where
 //     }
 // }
 
-impl<N: Real, D: DimNameAdd<U1> + Copy, C: TCategory> Copy for Transform<N, D, C>
+impl<N: RealField, D: DimNameAdd<U1> + Copy, C: TCategory> Copy for Transform<N, D, C>
 where
     DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
     Owned<N, DimNameSum<D, U1>, DimNameSum<D, U1>>: Copy,
 {
 }
 
-impl<N: Real, D: DimNameAdd<U1>, C: TCategory> Clone for Transform<N, D, C>
+impl<N: RealField, D: DimNameAdd<U1>, C: TCategory> Clone for Transform<N, D, C>
 where
     DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
 {
@@ -191,7 +192,7 @@ where
 }
 
 #[cfg(feature = "serde-serialize")]
-impl<N: Real, D: DimNameAdd<U1>, C: TCategory> Serialize for Transform<N, D, C>
+impl<N: RealField, D: DimNameAdd<U1>, C: TCategory> Serialize for Transform<N, D, C>
 where
     DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
     Owned<N, DimNameSum<D, U1>, DimNameSum<D, U1>>: Serialize,
@@ -205,7 +206,7 @@ where
 }
 
 #[cfg(feature = "serde-serialize")]
-impl<'a, N: Real, D: DimNameAdd<U1>, C: TCategory> Deserialize<'a> for Transform<N, D, C>
+impl<'a, N: RealField, D: DimNameAdd<U1>, C: TCategory> Deserialize<'a> for Transform<N, D, C>
 where
     DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
     Owned<N, DimNameSum<D, U1>, DimNameSum<D, U1>>: Deserialize<'a>,
@@ -220,13 +221,12 @@ where
     }
 }
 
-impl<N: Real + Eq, D: DimNameAdd<U1>, C: TCategory> Eq for Transform<N, D, C>
-where
-    DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
+impl<N: RealField + Eq, D: DimNameAdd<U1>, C: TCategory> Eq for Transform<N, D, C> where
+    DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>
 {
 }
 
-impl<N: Real, D: DimNameAdd<U1>, C: TCategory> PartialEq for Transform<N, D, C>
+impl<N: RealField, D: DimNameAdd<U1>, C: TCategory> PartialEq for Transform<N, D, C>
 where
     DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
 {
@@ -236,7 +236,7 @@ where
     }
 }
 
-impl<N: Real, D: DimNameAdd<U1>, C: TCategory> Transform<N, D, C>
+impl<N: RealField, D: DimNameAdd<U1>, C: TCategory> Transform<N, D, C>
 where
     DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
 {
@@ -250,13 +250,43 @@ where
         }
     }
 
-    /// The underlying matrix.
+    /// Retrieves the underlying matrix.
+    ///
+    /// # Examples
+    /// ```
+    /// # use nalgebra::{Matrix3, Transform2};
+    ///
+    /// let m = Matrix3::new(1.0, 2.0, 0.0,
+    ///                      3.0, 4.0, 0.0,
+    ///                      0.0, 0.0, 1.0);
+    /// let t = Transform2::from_matrix_unchecked(m);
+    /// assert_eq!(t.into_inner(), m);
+    /// ```
+    #[inline]
+    pub fn into_inner(self) -> MatrixN<N, DimNameSum<D, U1>> {
+        self.matrix
+    }
+
+    /// Retrieves the underlying matrix.
+    /// Deprecated: Use [Transform::into_inner] instead.
+    #[deprecated(note = "use `.into_inner()` instead")]
     #[inline]
     pub fn unwrap(self) -> MatrixN<N, DimNameSum<D, U1>> {
         self.matrix
     }
 
     /// A reference to the underlying matrix.
+    ///
+    /// # Examples
+    /// ```
+    /// # use nalgebra::{Matrix3, Transform2};
+    ///
+    /// let m = Matrix3::new(1.0, 2.0, 0.0,
+    ///                      3.0, 4.0, 0.0,
+    ///                      0.0, 0.0, 1.0);
+    /// let t = Transform2::from_matrix_unchecked(m);
+    /// assert_eq!(*t.matrix(), m);
+    /// ```
     #[inline]
     pub fn matrix(&self) -> &MatrixN<N, DimNameSum<D, U1>> {
         &self.matrix
@@ -266,6 +296,24 @@ where
     ///
     /// It is `_unchecked` because direct modifications of this matrix may break invariants
     /// identified by this transformation category.
+    ///
+    /// # Examples
+    /// ```
+    /// # use nalgebra::{Matrix3, Transform2};
+    ///
+    /// let m = Matrix3::new(1.0, 2.0, 0.0,
+    ///                      3.0, 4.0, 0.0,
+    ///                      0.0, 0.0, 1.0);
+    /// let mut t = Transform2::from_matrix_unchecked(m);
+    /// t.matrix_mut_unchecked().m12 = 42.0;
+    /// t.matrix_mut_unchecked().m23 = 90.0;
+    ///
+    ///
+    /// let expected = Matrix3::new(1.0, 42.0, 0.0,
+    ///                             3.0, 4.0,  90.0,
+    ///                             0.0, 0.0,  1.0);
+    /// assert_eq!(*t.matrix(), expected);
+    /// ```
     #[inline]
     pub fn matrix_mut_unchecked(&mut self) -> &mut MatrixN<N, DimNameSum<D, U1>> {
         &mut self.matrix
@@ -284,20 +332,55 @@ where
 
     /// Clones this transform into one that owns its data.
     #[inline]
-    #[deprecated(note = "This method is a no-op and will be removed in a future release.")]
+    #[deprecated(
+        note = "This method is redundant with automatic `Copy` and the `.clone()` method and will be removed in a future release."
+    )]
     pub fn clone_owned(&self) -> Transform<N, D, C> {
         Transform::from_matrix_unchecked(self.matrix.clone_owned())
     }
 
     /// Converts this transform into its equivalent homogeneous transformation matrix.
+    ///
+    /// # Examples
+    /// ```
+    /// # use nalgebra::{Matrix3, Transform2};
+    ///
+    /// let m = Matrix3::new(1.0, 2.0, 0.0,
+    ///                      3.0, 4.0, 0.0,
+    ///                      0.0, 0.0, 1.0);
+    /// let t = Transform2::from_matrix_unchecked(m);
+    /// assert_eq!(t.into_inner(), m);
+    /// ```
     #[inline]
     pub fn to_homogeneous(&self) -> MatrixN<N, DimNameSum<D, U1>> {
         self.matrix().clone_owned()
     }
 
     /// Attempts to invert this transformation. You may use `.inverse` instead of this
-    /// transformation has a subcategory of `TProjective`.
+    /// transformation has a subcategory of `TProjective` (i.e. if it is a `Projective{2,3}` or `Affine{2,3}`).
+    ///
+    /// # Examples
+    /// ```
+    /// # #[macro_use] extern crate approx;
+    /// # use nalgebra::{Matrix3, Transform2};
+    ///
+    /// let m = Matrix3::new(2.0, 2.0, -0.3,
+    ///                      3.0, 4.0, 0.1,
+    ///                      0.0, 0.0, 1.0);
+    /// let t = Transform2::from_matrix_unchecked(m);
+    /// let inv_t = t.try_inverse().unwrap();
+    /// assert_relative_eq!(t * inv_t, Transform2::identity());
+    /// assert_relative_eq!(inv_t * t, Transform2::identity());
+    ///
+    /// // Non-invertible case.
+    /// let m = Matrix3::new(0.0, 2.0, 1.0,
+    ///                      3.0, 0.0, 5.0,
+    ///                      0.0, 0.0, 0.0);
+    /// let t = Transform2::from_matrix_unchecked(m);
+    /// assert!(t.try_inverse().is_none());
+    /// ```
     #[inline]
+    #[must_use = "Did you mean to use try_inverse_mut()?"]
     pub fn try_inverse(self) -> Option<Transform<N, D, C>> {
         if let Some(m) = self.matrix.try_inverse() {
             Some(Transform::from_matrix_unchecked(m))
@@ -307,8 +390,23 @@ where
     }
 
     /// Inverts this transformation. Use `.try_inverse` if this transform has the `TGeneral`
-    /// category (it may not be invertible).
+    /// category (i.e., a `Transform{2,3}` may not be invertible).
+    ///
+    /// # Examples
+    /// ```
+    /// # #[macro_use] extern crate approx;
+    /// # use nalgebra::{Matrix3, Projective2};
+    ///
+    /// let m = Matrix3::new(2.0, 2.0, -0.3,
+    ///                      3.0, 4.0, 0.1,
+    ///                      0.0, 0.0, 1.0);
+    /// let proj = Projective2::from_matrix_unchecked(m);
+    /// let inv_t = proj.inverse();
+    /// assert_relative_eq!(proj * inv_t, Projective2::identity());
+    /// assert_relative_eq!(inv_t * proj, Projective2::identity());
+    /// ```
     #[inline]
+    #[must_use = "Did you mean to use inverse_mut()?"]
     pub fn inverse(self) -> Transform<N, D, C>
     where
         C: SubTCategoryOf<TProjective>,
@@ -319,6 +417,28 @@ where
 
     /// Attempts to invert this transformation in-place. You may use `.inverse_mut` instead of this
     /// transformation has a subcategory of `TProjective`.
+    ///
+    /// # Examples
+    /// ```
+    /// # #[macro_use] extern crate approx;
+    /// # use nalgebra::{Matrix3, Transform2};
+    ///
+    /// let m = Matrix3::new(2.0, 2.0, -0.3,
+    ///                      3.0, 4.0, 0.1,
+    ///                      0.0, 0.0, 1.0);
+    /// let t = Transform2::from_matrix_unchecked(m);
+    /// let mut inv_t = t;
+    /// assert!(inv_t.try_inverse_mut());
+    /// assert_relative_eq!(t * inv_t, Transform2::identity());
+    /// assert_relative_eq!(inv_t * t, Transform2::identity());
+    ///
+    /// // Non-invertible case.
+    /// let m = Matrix3::new(0.0, 2.0, 1.0,
+    ///                      3.0, 0.0, 5.0,
+    ///                      0.0, 0.0, 0.0);
+    /// let mut t = Transform2::from_matrix_unchecked(m);
+    /// assert!(!t.try_inverse_mut());
+    /// ```
     #[inline]
     pub fn try_inverse_mut(&mut self) -> bool {
         self.matrix.try_inverse_mut()
@@ -326,6 +446,21 @@ where
 
     /// Inverts this transformation in-place. Use `.try_inverse_mut` if this transform has the
     /// `TGeneral` category (it may not be invertible).
+    ///
+    /// # Examples
+    /// ```
+    /// # #[macro_use] extern crate approx;
+    /// # use nalgebra::{Matrix3, Projective2};
+    ///
+    /// let m = Matrix3::new(2.0, 2.0, -0.3,
+    ///                      3.0, 4.0, 0.1,
+    ///                      0.0, 0.0, 1.0);
+    /// let proj = Projective2::from_matrix_unchecked(m);
+    /// let mut inv_t = proj;
+    /// inv_t.inverse_mut();
+    /// assert_relative_eq!(proj * inv_t, Projective2::identity());
+    /// assert_relative_eq!(inv_t * proj, Projective2::identity());
+    /// ```
     #[inline]
     pub fn inverse_mut(&mut self)
     where
@@ -335,7 +470,59 @@ where
     }
 }
 
-impl<N: Real, D: DimNameAdd<U1>> Transform<N, D, TGeneral>
+impl<N, D: DimNameAdd<U1>, C> Transform<N, D, C>
+where
+    N: RealField,
+    C: TCategory,
+    DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>
+        + Allocator<N, DimNameSum<D, U1>>
+        + Allocator<N, D, D>
+        + Allocator<N, D>,
+{
+    /// Transform the given point by this transformation.
+    ///
+    /// This is the same as the multiplication `self * pt`.
+    #[inline]
+    pub fn transform_point(&self, pt: &Point<N, D>) -> Point<N, D> {
+        self * pt
+    }
+
+    /// Transform the given vector by this transformation, ignoring the
+    /// translational component of the transformation.
+    ///
+    /// This is the same as the multiplication `self * v`.
+    #[inline]
+    pub fn transform_vector(&self, v: &VectorN<N, D>) -> VectorN<N, D> {
+        self * v
+    }
+}
+
+impl<N: RealField, D: DimNameAdd<U1>, C: TCategory> Transform<N, D, C>
+where
+    C: SubTCategoryOf<TProjective>,
+    DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>
+        + Allocator<N, DimNameSum<D, U1>>
+        + Allocator<N, D, D>
+        + Allocator<N, D>,
+{
+    /// Transform the given point by the inverse of this transformation.
+    /// This may be cheaper than inverting the transformation and transforming
+    /// the point.
+    #[inline]
+    pub fn inverse_transform_point(&self, pt: &Point<N, D>) -> Point<N, D> {
+        self.clone().inverse() * pt
+    }
+
+    /// Transform the given vector by the inverse of this transformation.
+    /// This may be cheaper than inverting the transformation and transforming
+    /// the vector.
+    #[inline]
+    pub fn inverse_transform_vector(&self, v: &VectorN<N, D>) -> VectorN<N, D> {
+        self.clone().inverse() * v
+    }
+}
+
+impl<N: RealField, D: DimNameAdd<U1>> Transform<N, D, TGeneral>
 where
     DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
 {
@@ -347,10 +534,66 @@ where
     }
 }
 
+impl<N: RealField, D: DimNameAdd<U1>, C: TCategory> AbsDiffEq for Transform<N, D, C>
+where
+    N::Epsilon: Copy,
+    DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
+{
+    type Epsilon = N::Epsilon;
+
+    #[inline]
+    fn default_epsilon() -> Self::Epsilon {
+        N::default_epsilon()
+    }
+
+    #[inline]
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        self.matrix.abs_diff_eq(&other.matrix, epsilon)
+    }
+}
+
+impl<N: RealField, D: DimNameAdd<U1>, C: TCategory> RelativeEq for Transform<N, D, C>
+where
+    N::Epsilon: Copy,
+    DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
+{
+    #[inline]
+    fn default_max_relative() -> Self::Epsilon {
+        N::default_max_relative()
+    }
+
+    #[inline]
+    fn relative_eq(
+        &self,
+        other: &Self,
+        epsilon: Self::Epsilon,
+        max_relative: Self::Epsilon,
+    ) -> bool {
+        self.matrix
+            .relative_eq(&other.matrix, epsilon, max_relative)
+    }
+}
+
+impl<N: RealField, D: DimNameAdd<U1>, C: TCategory> UlpsEq for Transform<N, D, C>
+where
+    N::Epsilon: Copy,
+    DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
+{
+    #[inline]
+    fn default_max_ulps() -> u32 {
+        N::default_max_ulps()
+    }
+
+    #[inline]
+    fn ulps_eq(&self, other: &Self, epsilon: Self::Epsilon, max_ulps: u32) -> bool {
+        self.matrix.ulps_eq(&other.matrix, epsilon, max_ulps)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base::Matrix4;
+    use crate::base::Matrix4;
 
     #[test]
     fn checks_homogeneous_invariants_of_square_identity_matrix() {

@@ -46,13 +46,17 @@ impl Epoch {
     /// Returns the same epoch, but marked as pinned.
     #[inline]
     pub fn pinned(self) -> Epoch {
-        Epoch { data: self.data | 1 }
+        Epoch {
+            data: self.data | 1,
+        }
     }
 
     /// Returns the same epoch, but marked as unpinned.
     #[inline]
     pub fn unpinned(self) -> Epoch {
-        Epoch { data: self.data & !1 }
+        Epoch {
+            data: self.data & !1,
+        }
     }
 
     /// Returns the successor epoch.
@@ -60,7 +64,9 @@ impl Epoch {
     /// The returned epoch will be marked as pinned only if the previous one was as well.
     #[inline]
     pub fn successor(self) -> Epoch {
-        Epoch { data: self.data.wrapping_add(2) }
+        Epoch {
+            data: self.data.wrapping_add(2),
+        }
     }
 }
 
@@ -77,13 +83,15 @@ impl AtomicEpoch {
     #[inline]
     pub fn new(epoch: Epoch) -> Self {
         let data = AtomicUsize::new(epoch.data);
-        AtomicEpoch { data: data }
+        AtomicEpoch { data }
     }
 
     /// Loads a value from the atomic epoch.
     #[inline]
     pub fn load(&self, ord: Ordering) -> Epoch {
-        Epoch { data: self.data.load(ord) }
+        Epoch {
+            data: self.data.load(ord),
+        }
     }
 
     /// Stores a value into the atomic epoch.
@@ -101,6 +109,6 @@ impl AtomicEpoch {
     #[inline]
     pub fn compare_and_swap(&self, current: Epoch, new: Epoch, ord: Ordering) -> Epoch {
         let data = self.data.compare_and_swap(current.data, new.data, ord);
-        Epoch { data: data }
+        Epoch { data }
     }
 }

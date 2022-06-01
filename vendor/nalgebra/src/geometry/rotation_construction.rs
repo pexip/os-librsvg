@@ -1,12 +1,12 @@
 use num::{One, Zero};
 
-use alga::general::{ClosedAdd, ClosedMul};
+use simba::scalar::{ClosedAdd, ClosedMul};
 
-use base::{DefaultAllocator, MatrixN, Scalar};
-use base::dimension::DimName;
-use base::allocator::Allocator;
+use crate::base::allocator::Allocator;
+use crate::base::dimension::DimName;
+use crate::base::{DefaultAllocator, MatrixN, Scalar};
 
-use geometry::Rotation;
+use crate::geometry::Rotation;
 
 impl<N, D: DimName> Rotation<N, D>
 where
@@ -14,6 +14,16 @@ where
     DefaultAllocator: Allocator<N, D, D>,
 {
     /// Creates a new square identity rotation of the given `dimension`.
+    ///
+    /// # Example
+    /// ```
+    /// # use nalgebra::Quaternion;
+    /// let rot1 = Quaternion::identity();
+    /// let rot2 = Quaternion::new(1.0, 2.0, 3.0, 4.0);
+    ///
+    /// assert_eq!(rot1 * rot2, rot2);
+    /// assert_eq!(rot2 * rot1, rot2);
+    /// ```
     #[inline]
     pub fn identity() -> Rotation<N, D> {
         Self::from_matrix_unchecked(MatrixN::<N, D>::identity())

@@ -1,17 +1,20 @@
+use num::{One, Zero};
 use std::iter;
-use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub,
-               SubAssign};
-use std::cmp::PartialOrd;
-use num::{One, Signed, Zero};
+use std::ops::{
+    Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign,
+};
 
-use alga::general::{ClosedAdd, ClosedDiv, ClosedMul, ClosedNeg, ClosedSub};
+use simba::scalar::{ClosedAdd, ClosedDiv, ClosedMul, ClosedNeg, ClosedSub};
+use simba::simd::{SimdPartialOrd, SimdSigned};
 
-use base::{DefaultAllocator, Matrix, MatrixMN, MatrixN, MatrixSum, Scalar};
-use base::dimension::{Dim, DimMul, DimName, DimProd};
-use base::constraint::{AreMultipliable, DimEq, SameNumberOfColumns, SameNumberOfRows,
-                       ShapeConstraint};
-use base::storage::{ContiguousStorageMut, Storage, StorageMut};
-use base::allocator::{Allocator, SameShapeAllocator, SameShapeC, SameShapeR};
+use crate::base::allocator::{Allocator, SameShapeAllocator, SameShapeC, SameShapeR};
+use crate::base::constraint::{
+    AreMultipliable, DimEq, SameNumberOfColumns, SameNumberOfRows, ShapeConstraint,
+};
+use crate::base::dimension::{Dim, DimMul, DimName, DimProd, Dynamic};
+use crate::base::storage::{ContiguousStorageMut, Storage, StorageMut};
+use crate::base::{DefaultAllocator, Matrix, MatrixMN, MatrixN, MatrixSum, Scalar, VectorSliceN};
+use crate::SimdComplexField;
 
 /*
  *
@@ -22,7 +25,7 @@ impl<N: Scalar, R: Dim, C: Dim, S: Storage<N, R, C>> Index<usize> for Matrix<N, 
     type Output = N;
 
     #[inline]
-    fn index(&self, i: usize) -> &N {
+    fn index(&self, i: usize) -> &Self::Output {
         let ij = self.vector_to_matrix_index(i);
         &self[ij]
     }
@@ -36,14 +39,14 @@ where
     type Output = N;
 
     #[inline]
-    fn index(&self, ij: (usize, usize)) -> &N {
+    fn index(&self, ij: (usize, usize)) -> &Self::Output {
         let shape = self.shape();
         assert!(
             ij.0 < shape.0 && ij.1 < shape.1,
             "Matrix index out of bounds."
         );
 
-        unsafe { self.get_unchecked(ij.0, ij.1) }
+        unsafe { self.get_unchecked((ij.0, ij.1)) }
     }
 }
 
@@ -69,7 +72,7 @@ where
             "Matrix index out of bounds."
         );
 
-        unsafe { self.get_unchecked_mut(ij.0, ij.1) }
+        unsafe { self.get_unchecked_mut((ij.0, ij.1)) }
     }
 }
 
@@ -117,7 +120,7 @@ where
     #[inline]
     pub fn neg_mut(&mut self) {
         for e in self.iter_mut() {
-            *e = -*e
+            *e = -e.inlined_clone()
         }
     }
 }
@@ -162,7 +165,7 @@ macro_rules! componentwise_binop_impl(
                     let out  = out.data.as_mut_slice();
                     for i in 0 .. arr1.len() {
                         unsafe {
-                            *out.get_unchecked_mut(i) = arr1.get_unchecked(i).$method(*arr2.get_unchecked(i));
+                            *out.get_unchecked_mut(i) = arr1.get_unchecked(i).inlined_clone().$method(arr2.get_unchecked(i).inlined_clone());
                         }
                     }
                 }
@@ -170,8 +173,8 @@ macro_rules! componentwise_binop_impl(
                     for j in 0 .. self.ncols() {
                         for i in 0 .. self.nrows() {
                             unsafe {
-                                let val = self.get_unchecked(i, j).$method(*rhs.get_unchecked(i, j));
-                                *out.get_unchecked_mut(i, j) = val;
+                                let val = self.get_unchecked((i, j)).inlined_clone().$method(rhs.get_unchecked((i, j)).inlined_clone());
+                                *out.get_unchecked_mut((i, j)) = val;
                             }
                         }
                     }
@@ -194,7 +197,7 @@ macro_rules! componentwise_binop_impl(
                     let arr2 = rhs.data.as_slice();
                     for i in 0 .. arr2.len() {
                         unsafe {
-                            arr1.get_unchecked_mut(i).$method_assign(*arr2.get_unchecked(i));
+                            arr1.get_unchecked_mut(i).$method_assign(arr2.get_unchecked(i).inlined_clone());
                         }
                     }
                 }
@@ -202,7 +205,7 @@ macro_rules! componentwise_binop_impl(
                     for j in 0 .. rhs.ncols() {
                         for i in 0 .. rhs.nrows() {
                             unsafe {
-                                self.get_unchecked_mut(i, j).$method_assign(*rhs.get_unchecked(i, j))
+                                self.get_unchecked_mut((i, j)).$method_assign(rhs.get_unchecked((i, j)).inlined_clone())
                             }
                         }
                     }
@@ -224,7 +227,7 @@ macro_rules! componentwise_binop_impl(
                     let arr2 = rhs.data.as_mut_slice();
                     for i in 0 .. arr1.len() {
                         unsafe {
-                            let res = arr1.get_unchecked(i).$method(*arr2.get_unchecked(i));
+                            let res = arr1.get_unchecked(i).inlined_clone().$method(arr2.get_unchecked(i).inlined_clone());
                             *arr2.get_unchecked_mut(i) = res;
                         }
                     }
@@ -233,8 +236,8 @@ macro_rules! componentwise_binop_impl(
                     for j in 0 .. self.ncols() {
                         for i in 0 .. self.nrows() {
                             unsafe {
-                                let r = rhs.get_unchecked_mut(i, j);
-                                *r = self.get_unchecked(i, j).$method(*r)
+                                let r = rhs.get_unchecked_mut((i, j));
+                                *r = self.get_unchecked((i, j)).inlined_clone().$method(r.inlined_clone())
                             }
                         }
                     }
@@ -382,6 +385,36 @@ where
     }
 }
 
+impl<N, C: Dim> iter::Sum for MatrixMN<N, Dynamic, C>
+where
+    N: Scalar + ClosedAdd + Zero,
+    DefaultAllocator: Allocator<N, Dynamic, C>,
+{
+    /// # Example
+    /// ```
+    /// # use nalgebra::DVector;
+    /// assert_eq!(vec![DVector::repeat(3, 1.0f64),
+    ///                 DVector::repeat(3, 1.0f64),
+    ///                 DVector::repeat(3, 1.0f64)].into_iter().sum::<DVector<f64>>(),
+    ///            DVector::repeat(3, 1.0f64) + DVector::repeat(3, 1.0f64) + DVector::repeat(3, 1.0f64));
+    /// ```
+    ///
+    /// # Panics
+    /// Panics if the iterator is empty:
+    /// ```should_panic
+    /// # use std::iter;
+    /// # use nalgebra::DMatrix;
+    /// iter::empty::<DMatrix<f64>>().sum::<DMatrix<f64>>(); // panics!
+    /// ```
+    fn sum<I: Iterator<Item = MatrixMN<N, Dynamic, C>>>(mut iter: I) -> MatrixMN<N, Dynamic, C> {
+        if let Some(first) = iter.next() {
+            iter.fold(first, |acc, x| acc + x)
+        } else {
+            panic!("Cannot compute `sum` of empty iterator.")
+        }
+    }
+}
+
 impl<'a, N, R: DimName, C: DimName> iter::Sum<&'a MatrixMN<N, R, C>> for MatrixMN<N, R, C>
 where
     N: Scalar + ClosedAdd + Zero,
@@ -389,6 +422,38 @@ where
 {
     fn sum<I: Iterator<Item = &'a MatrixMN<N, R, C>>>(iter: I) -> MatrixMN<N, R, C> {
         iter.fold(Matrix::zero(), |acc, x| acc + x)
+    }
+}
+
+impl<'a, N, C: Dim> iter::Sum<&'a MatrixMN<N, Dynamic, C>> for MatrixMN<N, Dynamic, C>
+where
+    N: Scalar + ClosedAdd + Zero,
+    DefaultAllocator: Allocator<N, Dynamic, C>,
+{
+    /// # Example
+    /// ```
+    /// # use nalgebra::DVector;
+    /// let v = &DVector::repeat(3, 1.0f64);
+    ///
+    /// assert_eq!(vec![v, v, v].into_iter().sum::<DVector<f64>>(),
+    ///            v + v + v);
+    /// ```
+    ///
+    /// # Panics
+    /// Panics if the iterator is empty:
+    /// ```should_panic
+    /// # use std::iter;
+    /// # use nalgebra::DMatrix;
+    /// iter::empty::<&DMatrix<f64>>().sum::<DMatrix<f64>>(); // panics!
+    /// ```
+    fn sum<I: Iterator<Item = &'a MatrixMN<N, Dynamic, C>>>(
+        mut iter: I,
+    ) -> MatrixMN<N, Dynamic, C> {
+        if let Some(first) = iter.next() {
+            iter.fold(first.clone(), |acc, x| acc + x)
+        } else {
+            panic!("Cannot compute `sum` of empty iterator.")
+        }
     }
 }
 
@@ -420,7 +485,7 @@ macro_rules! componentwise_scalarop_impl(
 
                 // for left in res.iter_mut() {
                 for left in res.as_mut_slice().iter_mut() {
-                    *left = left.$method(rhs)
+                    *left = left.inlined_clone().$method(rhs.inlined_clone())
                 }
 
                 res
@@ -446,7 +511,7 @@ macro_rules! componentwise_scalarop_impl(
             fn $method_assign(&mut self, rhs: N) {
                 for j in 0 .. self.ncols() {
                     for i in 0 .. self.nrows() {
-                        unsafe { self.get_unchecked_mut(i, j).$method_assign(rhs) };
+                        unsafe { self.get_unchecked_mut((i, j)).$method_assign(rhs.inlined_clone()) };
                     }
                 }
             }
@@ -627,13 +692,31 @@ where
         res
     }
 
-    /// Equivalent to `self.transpose() * rhs` but stores the result into `out` to avoid
-    /// allocations.
+    /// Equivalent to `self.adjoint() * rhs`.
     #[inline]
-    pub fn tr_mul_to<R2: Dim, C2: Dim, SB, R3: Dim, C3: Dim, SC>(
+    pub fn ad_mul<R2: Dim, C2: Dim, SB>(&self, rhs: &Matrix<N, R2, C2, SB>) -> MatrixMN<N, C1, C2>
+    where
+        N: SimdComplexField,
+        SB: Storage<N, R2, C2>,
+        DefaultAllocator: Allocator<N, C1, C2>,
+        ShapeConstraint: SameNumberOfRows<R1, R2>,
+    {
+        let mut res =
+            unsafe { Matrix::new_uninitialized_generic(self.data.shape().1, rhs.data.shape().1) };
+
+        self.ad_mul_to(rhs, &mut res);
+        res
+    }
+
+    #[inline(always)]
+    fn xx_mul_to<R2: Dim, C2: Dim, SB, R3: Dim, C3: Dim, SC>(
         &self,
         rhs: &Matrix<N, R2, C2, SB>,
         out: &mut Matrix<N, R3, C3, SC>,
+        dot: impl Fn(
+            &VectorSliceN<N, R1, SA::RStride, SA::CStride>,
+            &VectorSliceN<N, R2, SB::RStride, SB::CStride>,
+        ) -> N,
     ) where
         SB: Storage<N, R2, C2>,
         SC: StorageMut<N, R3, C3>,
@@ -654,10 +737,41 @@ where
 
         for i in 0..ncols1 {
             for j in 0..ncols2 {
-                let dot = self.column(i).dot(&rhs.column(j));
-                unsafe { *out.get_unchecked_mut(i, j) = dot };
+                let dot = dot(&self.column(i), &rhs.column(j));
+                unsafe { *out.get_unchecked_mut((i, j)) = dot };
             }
         }
+    }
+
+    /// Equivalent to `self.transpose() * rhs` but stores the result into `out` to avoid
+    /// allocations.
+    #[inline]
+    pub fn tr_mul_to<R2: Dim, C2: Dim, SB, R3: Dim, C3: Dim, SC>(
+        &self,
+        rhs: &Matrix<N, R2, C2, SB>,
+        out: &mut Matrix<N, R3, C3, SC>,
+    ) where
+        SB: Storage<N, R2, C2>,
+        SC: StorageMut<N, R3, C3>,
+        ShapeConstraint: SameNumberOfRows<R1, R2> + DimEq<C1, R3> + DimEq<C2, C3>,
+    {
+        self.xx_mul_to(rhs, out, |a, b| a.dot(b))
+    }
+
+    /// Equivalent to `self.adjoint() * rhs` but stores the result into `out` to avoid
+    /// allocations.
+    #[inline]
+    pub fn ad_mul_to<R2: Dim, C2: Dim, SB, R3: Dim, C3: Dim, SC>(
+        &self,
+        rhs: &Matrix<N, R2, C2, SB>,
+        out: &mut Matrix<N, R3, C3, SC>,
+    ) where
+        N: SimdComplexField,
+        SB: Storage<N, R2, C2>,
+        SC: StorageMut<N, R3, C3>,
+        ShapeConstraint: SameNumberOfRows<R1, R2> + DimEq<C1, R3> + DimEq<C2, C3>,
+    {
+        self.xx_mul_to(rhs, out, |a, b| a.dotc(b))
     }
 
     /// Equivalent to `self * rhs` but stores the result into `out` to avoid allocations.
@@ -702,10 +816,11 @@ where
                 for j2 in 0..ncols2.value() {
                     for i1 in 0..nrows1.value() {
                         unsafe {
-                            let coeff = *self.get_unchecked(i1, j1);
+                            let coeff = self.get_unchecked((i1, j1)).inlined_clone();
 
                             for i2 in 0..nrows2.value() {
-                                *data_res = coeff * *rhs.get_unchecked(i2, j2);
+                                *data_res = coeff.inlined_clone()
+                                    * rhs.get_unchecked((i2, j2)).inlined_clone();
                                 data_res = data_res.offset(1);
                             }
                         }
@@ -721,6 +836,7 @@ where
 impl<N: Scalar + ClosedAdd, R: Dim, C: Dim, S: Storage<N, R, C>> Matrix<N, R, C, S> {
     /// Adds a scalar to `self`.
     #[inline]
+    #[must_use = "Did you mean to use add_scalar_mut()?"]
     pub fn add_scalar(&self, rhs: N) -> MatrixMN<N, R, C>
     where
         DefaultAllocator: Allocator<N, R, C>,
@@ -737,7 +853,7 @@ impl<N: Scalar + ClosedAdd, R: Dim, C: Dim, S: Storage<N, R, C>> Matrix<N, R, C,
         S: StorageMut<N, R, C>,
     {
         for e in self.iter_mut() {
-            *e += rhs
+            *e += rhs.inlined_clone()
         }
     }
 }
@@ -762,39 +878,121 @@ where
     }
 }
 
-impl<N: Scalar + PartialOrd + Signed, R: Dim, C: Dim, S: Storage<N, R, C>> Matrix<N, R, C, S> {
-    /// Returns the absolute value of the coefficient with the largest absolute value.
+impl<N: Scalar, R: Dim, C: Dim, S: Storage<N, R, C>> Matrix<N, R, C, S> {
+    /// Returns the absolute value of the component with the largest absolute value.
+    /// # Example
+    /// ```
+    /// # use nalgebra::Vector3;
+    /// assert_eq!(Vector3::new(-1.0, 2.0, 3.0).amax(), 3.0);
+    /// assert_eq!(Vector3::new(-1.0, -2.0, -3.0).amax(), 3.0);
+    /// ```
     #[inline]
-    pub fn amax(&self) -> N {
-        let mut max = N::zero();
-
-        for e in self.iter() {
-            let ae = e.abs();
-
-            if ae > max {
-                max = ae;
-            }
-        }
-
-        max
+    pub fn amax(&self) -> N
+    where
+        N: Zero + SimdSigned + SimdPartialOrd,
+    {
+        self.fold_with(
+            |e| e.unwrap_or(&N::zero()).simd_abs(),
+            |a, b| a.simd_max(b.simd_abs()),
+        )
     }
 
-    /// Returns the absolute value of the coefficient with the smallest absolute value.
+    /// Returns the the 1-norm of the complex component with the largest 1-norm.
+    /// # Example
+    /// ```
+    /// # use nalgebra::{Vector3, Complex};
+    /// assert_eq!(Vector3::new(
+    ///     Complex::new(-3.0, -2.0),
+    ///     Complex::new(1.0, 2.0),
+    ///     Complex::new(1.0, 3.0)).camax(), 5.0);
+    /// ```
     #[inline]
-    pub fn amin(&self) -> N {
-        let mut it = self.iter();
-        let mut min = it.next()
-            .expect("amin: empty matrices not supported.")
-            .abs();
+    pub fn camax(&self) -> N::SimdRealField
+    where
+        N: SimdComplexField,
+    {
+        self.fold_with(
+            |e| e.unwrap_or(&N::zero()).simd_norm1(),
+            |a, b| a.simd_max(b.simd_norm1()),
+        )
+    }
 
-        for e in it {
-            let ae = e.abs();
+    /// Returns the component with the largest value.
+    /// # Example
+    /// ```
+    /// # use nalgebra::Vector3;
+    /// assert_eq!(Vector3::new(-1.0, 2.0, 3.0).max(), 3.0);
+    /// assert_eq!(Vector3::new(-1.0, -2.0, -3.0).max(), -1.0);
+    /// assert_eq!(Vector3::new(5u32, 2, 3).max(), 5);
+    /// ```
+    #[inline]
+    pub fn max(&self) -> N
+    where
+        N: SimdPartialOrd + Zero,
+    {
+        self.fold_with(
+            |e| e.map(|e| e.inlined_clone()).unwrap_or(N::zero()),
+            |a, b| a.simd_max(b.inlined_clone()),
+        )
+    }
 
-            if ae < min {
-                min = ae;
-            }
-        }
+    /// Returns the absolute value of the component with the smallest absolute value.
+    /// # Example
+    /// ```
+    /// # use nalgebra::Vector3;
+    /// assert_eq!(Vector3::new(-1.0, 2.0, -3.0).amin(), 1.0);
+    /// assert_eq!(Vector3::new(10.0, 2.0, 30.0).amin(), 2.0);
+    /// ```
+    #[inline]
+    pub fn amin(&self) -> N
+    where
+        N: Zero + SimdPartialOrd + SimdSigned,
+    {
+        self.fold_with(
+            |e| e.map(|e| e.simd_abs()).unwrap_or(N::zero()),
+            |a, b| a.simd_min(b.simd_abs()),
+        )
+    }
 
-        min
+    /// Returns the the 1-norm of the complex component with the smallest 1-norm.
+    /// # Example
+    /// ```
+    /// # use nalgebra::{Vector3, Complex};
+    /// assert_eq!(Vector3::new(
+    ///     Complex::new(-3.0, -2.0),
+    ///     Complex::new(1.0, 2.0),
+    ///     Complex::new(1.0, 3.0)).camin(), 3.0);
+    /// ```
+    #[inline]
+    pub fn camin(&self) -> N::SimdRealField
+    where
+        N: SimdComplexField,
+    {
+        self.fold_with(
+            |e| {
+                e.map(|e| e.simd_norm1())
+                    .unwrap_or(N::SimdRealField::zero())
+            },
+            |a, b| a.simd_min(b.simd_norm1()),
+        )
+    }
+
+    /// Returns the component with the smallest value.
+    /// # Example
+    /// ```
+    /// # use nalgebra::Vector3;
+    /// assert_eq!(Vector3::new(-1.0, 2.0, 3.0).min(), -1.0);
+    /// assert_eq!(Vector3::new(1.0, 2.0, 3.0).min(), 1.0);
+    /// assert_eq!(Vector3::new(5u32, 2, 3).min(), 2);
+    /// ```
+    #[inline]
+    pub fn min(&self) -> N
+    where
+        N: SimdPartialOrd + Zero,
+    {
+        self.fold_with(
+            |e| e.map(|e| e.inlined_clone()).unwrap_or(N::zero()),
+            |a, b| a.simd_min(b.inlined_clone()),
+        )
     }
 }

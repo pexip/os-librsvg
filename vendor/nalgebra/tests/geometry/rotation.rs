@@ -1,4 +1,4 @@
-use na::{Vector2, Vector3};
+use na::{Quaternion, RealField, UnitQuaternion, Vector2, Vector3};
 
 #[test]
 fn angle_2() {
@@ -16,11 +16,25 @@ fn angle_3() {
     assert_eq!(a.angle(&b), 0.0);
 }
 
+#[test]
+fn quaternion_euler_angles_issue_494() {
+    let quat = UnitQuaternion::from_quaternion(Quaternion::new(
+        -0.10405792,
+        -0.6993922f32,
+        -0.10406871,
+        0.69942284,
+    ));
+    let angs = quat.euler_angles();
+    assert_eq!(angs.0, 2.8461843);
+    assert_eq!(angs.1, f32::frac_pi_2());
+    assert_eq!(angs.2, 0.0);
+}
+
 #[cfg(feature = "arbitrary")]
 mod quickcheck_tests {
+    use na::{self, Rotation2, Rotation3, Unit, Vector2, Vector3};
+    use simba::scalar::RealField;
     use std::f64;
-    use alga::general::Real;
-    use na::{self, Vector2, Vector3, Rotation2, Rotation3, Unit};
 
     quickcheck! {
         /*
@@ -41,17 +55,17 @@ mod quickcheck_tests {
             yaw * pitch * roll == rpy
         }
 
-        fn to_euler_angles(r: f64, p: f64, y: f64) -> bool {
+        fn euler_angles(r: f64, p: f64, y: f64) -> bool {
             let rpy = Rotation3::from_euler_angles(r, p, y);
-            let (roll, pitch, yaw) = rpy.to_euler_angles();
+            let (roll, pitch, yaw) = rpy.euler_angles();
             relative_eq!(Rotation3::from_euler_angles(roll, pitch, yaw), rpy, epsilon = 1.0e-7)
         }
 
-        fn to_euler_angles_gimble_lock(r: f64, y: f64) -> bool {
+        fn euler_angles_gimble_lock(r: f64, y: f64) -> bool {
             let pos = Rotation3::from_euler_angles(r,  f64::frac_pi_2(), y);
             let neg = Rotation3::from_euler_angles(r, -f64::frac_pi_2(), y);
-            let (pos_r, pos_p, pos_y) = pos.to_euler_angles();
-            let (neg_r, neg_p, neg_y) = neg.to_euler_angles();
+            let (pos_r, pos_p, pos_y) = pos.euler_angles();
+            let (neg_r, neg_p, neg_y) = neg.euler_angles();
             relative_eq!(Rotation3::from_euler_angles(pos_r, pos_p, pos_y), pos, epsilon = 1.0e-7) &&
             relative_eq!(Rotation3::from_euler_angles(neg_r, neg_p, neg_y), neg, epsilon = 1.0e-7)
         }

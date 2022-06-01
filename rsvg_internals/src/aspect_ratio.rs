@@ -1,4 +1,4 @@
-//! Handling of `preserveAspectRatio` values
+//! Handling of `preserveAspectRatio` values.
 //!
 //! This module handles `preserveAspectRatio` values [per the SVG specification][spec].
 //! We have an [`AspectRatio`] struct which encapsulates such a value.
@@ -20,11 +20,14 @@
 //! [`AspectRatio`]: struct.AspectRatio.html
 //! [spec]: https://www.w3.org/TR/SVG/coords.html#PreserveAspectRatioAttribute
 
-use cssparser::{CowRcStr, Parser};
-use error::ValueErrorKind;
-use parsers::Parse;
-use parsers::ParseError;
 use std::ops::Deref;
+
+use crate::error::*;
+use crate::parsers::Parse;
+use crate::rect::Rect;
+use crate::transform::Transform;
+use crate::viewbox::ViewBox;
+use cssparser::{BasicParseError, Parser};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct AspectRatio {
@@ -120,92 +123,124 @@ impl AspectRatio {
         }
     }
 
-    pub fn compute(
-        &self,
-        object_width: f64,
-        object_height: f64,
-        dest_x: f64,
-        dest_y: f64,
-        dest_width: f64,
-        dest_height: f64,
-    ) -> (f64, f64, f64, f64) {
+    pub fn compute(&self, vbox: &ViewBox, viewport: &Rect) -> Rect {
         match self.align {
-            None => (dest_x, dest_y, dest_width, dest_height),
+            None => *viewport,
 
             Some(Align { x, y, fit }) => {
-                let w_factor = dest_width / object_width;
-                let h_factor = dest_height / object_height;
+                let (vb_width, vb_height) = vbox.size();
+                let (vp_width, vp_height) = viewport.size();
+
+                let w_factor = vp_width / vb_width;
+                let h_factor = vp_height / vb_height;
+
                 let factor = match fit {
                     FitMode::Meet => w_factor.min(h_factor),
                     FitMode::Slice => w_factor.max(h_factor),
                 };
 
-                let w = object_width * factor;
-                let h = object_height * factor;
+                let w = vb_width * factor;
+                let h = vb_height * factor;
 
-                let xpos = x.compute(dest_x, dest_width, w);
-                let ypos = y.compute(dest_y, dest_height, h);
+                let xpos = x.compute(viewport.x0, vp_width, w);
+                let ypos = y.compute(viewport.y0, vp_height, h);
 
-                (xpos, ypos, w, h)
+                Rect::new(xpos, ypos, xpos + w, ypos + h)
             }
+        }
+    }
+
+    /// Computes the viewport to viewbox transformation.
+    ///
+    /// Given a viewport, returns a transformation that will create a coordinate
+    /// space inside it.  The `(vbox.x0, vbox.y0)` will be mapped to the viewport's
+    /// upper-left corner, and the `(vbox.x1, vbox.y1)` will be mapped to the viewport's
+    /// lower-right corner.
+    ///
+    /// If the vbox or viewport are empty, returns `Ok(None)`.  Per the SVG spec, either
+    /// of those mean that the corresponding element should not be rendered.
+    ///
+    /// If the vbox would create an invalid transform (say, a vbox with huge numbers that
+    /// leads to a near-zero scaling transform), returns an `Err(())`.
+    pub fn viewport_to_viewbox_transform(
+        &self,
+        vbox: Option<ViewBox>,
+        viewport: &Rect,
+    ) -> Result<Option<Transform>, ()> {
+        // width or height set to 0 disables rendering of the element
+        // https://www.w3.org/TR/SVG/struct.html#SVGElementWidthAttribute
+        // https://www.w3.org/TR/SVG/struct.html#UseElementWidthAttribute
+        // https://www.w3.org/TR/SVG/struct.html#ImageElementWidthAttribute
+        // https://www.w3.org/TR/SVG/painting.html#MarkerWidthAttribute
+
+        if viewport.is_empty() {
+            return Ok(None);
+        }
+
+        // the preserveAspectRatio attribute is only used if viewBox is specified
+        // https://www.w3.org/TR/SVG/coords.html#PreserveAspectRatioAttribute
+        let transform = if let Some(vbox) = vbox {
+            if vbox.is_empty() {
+                // Width or height of 0 for the viewBox disables rendering of the element
+                // https://www.w3.org/TR/SVG/coords.html#ViewBoxAttribute
+                return Ok(None);
+            } else {
+                let r = self.compute(&vbox, viewport);
+                Transform::new_translate(r.x0, r.y0)
+                    .pre_scale(r.width() / vbox.width(), r.height() / vbox.height())
+                    .pre_translate(-vbox.x0, -vbox.y0)
+            }
+        } else {
+            Transform::new_translate(viewport.x0, viewport.y0)
+        };
+
+        if transform.is_invertible() {
+            Ok(Some(transform))
+        } else {
+            Err(())
         }
     }
 }
 
-fn parse_align_xy(ident: &CowRcStr) -> Result<Option<(X, Y)>, ValueErrorKind> {
+fn parse_align_xy<'i>(parser: &mut Parser<'i, '_>) -> Result<Option<(X, Y)>, BasicParseError<'i>> {
     use self::Align1D::*;
 
-    match ident.as_ref() {
-        "none" => Ok(None),
+    parse_identifiers!(
+        parser,
 
-        "xMinYMin" => Ok(Some((X(Min), Y(Min)))),
-        "xMidYMin" => Ok(Some((X(Mid), Y(Min)))),
-        "xMaxYMin" => Ok(Some((X(Max), Y(Min)))),
+        "none" => None,
 
-        "xMinYMid" => Ok(Some((X(Min), Y(Mid)))),
-        "xMidYMid" => Ok(Some((X(Mid), Y(Mid)))),
-        "xMaxYMid" => Ok(Some((X(Max), Y(Mid)))),
+        "xMinYMin" => Some((X(Min), Y(Min))),
+        "xMidYMin" => Some((X(Mid), Y(Min))),
+        "xMaxYMin" => Some((X(Max), Y(Min))),
 
-        "xMinYMax" => Ok(Some((X(Min), Y(Max)))),
-        "xMidYMax" => Ok(Some((X(Mid), Y(Max)))),
-        "xMaxYMax" => Ok(Some((X(Max), Y(Max)))),
+        "xMinYMid" => Some((X(Min), Y(Mid))),
+        "xMidYMid" => Some((X(Mid), Y(Mid))),
+        "xMaxYMid" => Some((X(Max), Y(Mid))),
 
-        _ => Err(ValueErrorKind::Parse(ParseError::new("invalid alignment"))),
-    }
+        "xMinYMax" => Some((X(Min), Y(Max))),
+        "xMidYMax" => Some((X(Mid), Y(Max))),
+        "xMaxYMax" => Some((X(Max), Y(Max))),
+    )
 }
 
-fn parse_fit_mode(s: &str) -> Result<FitMode, ValueErrorKind> {
-    match s {
-        "meet" => Ok(FitMode::Meet),
-        "slice" => Ok(FitMode::Slice),
-        _ => Err(ValueErrorKind::Parse(ParseError::new("invalid fit mode"))),
-    }
+fn parse_fit_mode<'i>(parser: &mut Parser<'i, '_>) -> Result<FitMode, BasicParseError<'i>> {
+    parse_identifiers!(
+        parser,
+        "meet" => FitMode::Meet,
+        "slice" => FitMode::Slice,
+    )
 }
 
 impl Parse for AspectRatio {
-    type Data = ();
-    type Err = ValueErrorKind;
+    fn parse<'i>(parser: &mut Parser<'i, '_>) -> Result<AspectRatio, ParseError<'i>> {
+        let defer = parser
+            .try_parse(|p| p.expect_ident_matching("defer"))
+            .is_ok();
 
-    fn parse(parser: &mut Parser<'_, '_>, _: ()) -> Result<AspectRatio, ValueErrorKind> {
-        let defer = parser.try(|p| p.expect_ident_matching("defer")).is_ok();
+        let align_xy = parser.try_parse(|p| parse_align_xy(p))?;
 
-        let align_xy = parser.try(|p| {
-            p.expect_ident()
-                .map_err(|_| ValueErrorKind::Parse(ParseError::new("expected identifier")))
-                .and_then(|ident| parse_align_xy(ident))
-        })?;
-
-        let fit = parser
-            .try(|p| {
-                p.expect_ident()
-                    .map_err(|_| ValueErrorKind::Parse(ParseError::new("expected identifier")))
-                    .and_then(|ident| parse_fit_mode(ident))
-            })
-            .unwrap_or(FitMode::default());
-
-        parser
-            .expect_exhausted()
-            .map_err(|_| ValueErrorKind::Parse(ParseError::new("extra data in AspectRatio")))?;
+        let fit = parser.try_parse(|p| parse_fit_mode(p)).unwrap_or_default();
 
         let align = align_xy.map(|(x, y)| Align { x, y, fit });
 
@@ -216,24 +251,22 @@ impl Parse for AspectRatio {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use float_eq_cairo::ApproxEqCairo;
+    use crate::float_eq_cairo::ApproxEqCairo;
 
     #[test]
     fn parsing_invalid_strings_yields_error() {
-        assert!(AspectRatio::parse_str("", ()).is_err());
-        assert!(AspectRatio::parse_str("defer", ()).is_err());
-        assert!(AspectRatio::parse_str("defer foo", ()).is_err());
-        assert!(AspectRatio::parse_str("defer xmidymid", ()).is_err());
-        assert!(AspectRatio::parse_str("defer xMidYMid foo", ()).is_err());
-        assert!(AspectRatio::parse_str("xmidymid", ()).is_err());
-        assert!(AspectRatio::parse_str("xMidYMid foo", ()).is_err());
-        assert!(AspectRatio::parse_str("defer xMidYMid meet foo", ()).is_err());
+        assert!(AspectRatio::parse_str("").is_err());
+        assert!(AspectRatio::parse_str("defer").is_err());
+        assert!(AspectRatio::parse_str("defer foo").is_err());
+        assert!(AspectRatio::parse_str("defer xMidYMid foo").is_err());
+        assert!(AspectRatio::parse_str("xMidYMid foo").is_err());
+        assert!(AspectRatio::parse_str("defer xMidYMid meet foo").is_err());
     }
 
     #[test]
     fn parses_valid_strings() {
         assert_eq!(
-            AspectRatio::parse_str("defer none", ()),
+            AspectRatio::parse_str("defer none"),
             Ok(AspectRatio {
                 defer: true,
                 align: None,
@@ -241,7 +274,7 @@ mod tests {
         );
 
         assert_eq!(
-            AspectRatio::parse_str("xMidYMid", ()),
+            AspectRatio::parse_str("xMidYMid"),
             Ok(AspectRatio {
                 defer: false,
                 align: Some(Align {
@@ -253,7 +286,7 @@ mod tests {
         );
 
         assert_eq!(
-            AspectRatio::parse_str("defer xMidYMid", ()),
+            AspectRatio::parse_str("defer xMidYMid"),
             Ok(AspectRatio {
                 defer: true,
                 align: Some(Align {
@@ -265,7 +298,7 @@ mod tests {
         );
 
         assert_eq!(
-            AspectRatio::parse_str("defer xMinYMax", ()),
+            AspectRatio::parse_str("defer xMinYMax"),
             Ok(AspectRatio {
                 defer: true,
                 align: Some(Align {
@@ -277,7 +310,7 @@ mod tests {
         );
 
         assert_eq!(
-            AspectRatio::parse_str("defer xMaxYMid meet", ()),
+            AspectRatio::parse_str("defer xMaxYMid meet"),
             Ok(AspectRatio {
                 defer: true,
                 align: Some(Align {
@@ -289,7 +322,7 @@ mod tests {
         );
 
         assert_eq!(
-            AspectRatio::parse_str("defer xMinYMax slice", ()),
+            AspectRatio::parse_str("defer xMinYMax slice"),
             Ok(AspectRatio {
                 defer: true,
                 align: Some(Align {
@@ -301,85 +334,139 @@ mod tests {
         );
     }
 
-    fn assert_quadruples_equal(a: &(f64, f64, f64, f64), b: &(f64, f64, f64, f64)) {
-        assert_approx_eq_cairo!(a.0, b.0);
-        assert_approx_eq_cairo!(a.1, b.1);
-        assert_approx_eq_cairo!(a.2, b.2);
-        assert_approx_eq_cairo!(a.3, b.3);
+    fn assert_rect_equal(r1: &Rect, r2: &Rect) {
+        assert_approx_eq_cairo!(r1.x0, r2.x0);
+        assert_approx_eq_cairo!(r1.y0, r2.y0);
+        assert_approx_eq_cairo!(r1.x1, r2.x1);
+        assert_approx_eq_cairo!(r1.y1, r2.y1);
     }
 
     #[test]
     fn aligns() {
-        let foo = AspectRatio::parse_str("xMinYMin meet", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(0.0, 0.0, 0.1, 1.0));
+        let viewbox = ViewBox::from(Rect::from_size(1.0, 10.0));
 
-        let foo = AspectRatio::parse_str("xMinYMin slice", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(0.0, 0.0, 10.0, 100.0));
+        let foo = AspectRatio::parse_str("xMinYMin meet").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::from_size(0.1, 1.0));
 
-        let foo = AspectRatio::parse_str("xMinYMid meet", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(0.0, 0.0, 0.1, 1.0));
+        let foo = AspectRatio::parse_str("xMinYMin slice").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::from_size(10.0, 100.0));
 
-        let foo = AspectRatio::parse_str("xMinYMid slice", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(0.0, -49.5, 10.0, 100.0));
+        let foo = AspectRatio::parse_str("xMinYMid meet").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::from_size(0.1, 1.0));
 
-        let foo = AspectRatio::parse_str("xMinYMax meet", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(0.0, 0.0, 0.1, 1.0));
+        let foo = AspectRatio::parse_str("xMinYMid slice").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::new(0.0, -49.5, 10.0, 100.0 - 49.5));
 
-        let foo = AspectRatio::parse_str("xMinYMax slice", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(0.0, -99.0, 10.0, 100.0));
+        let foo = AspectRatio::parse_str("xMinYMax meet").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::from_size(0.1, 1.0));
 
-        let foo = AspectRatio::parse_str("xMidYMin meet", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(4.95, 0.0, 0.1, 1.0));
+        let foo = AspectRatio::parse_str("xMinYMax slice").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::new(0.0, -99.0, 10.0, 1.0));
 
-        let foo = AspectRatio::parse_str("xMidYMin slice", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(0.0, 0.0, 10.0, 100.0));
+        let foo = AspectRatio::parse_str("xMidYMin meet").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::new(4.95, 0.0, 4.95 + 0.1, 1.0));
 
-        let foo = AspectRatio::parse_str("xMidYMid meet", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(4.95, 0.0, 0.1, 1.0));
+        let foo = AspectRatio::parse_str("xMidYMin slice").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::from_size(10.0, 100.0));
 
-        let foo = AspectRatio::parse_str("xMidYMid slice", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(0.0, -49.5, 10.0, 100.0));
+        let foo = AspectRatio::parse_str("xMidYMid meet").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::new(4.95, 0.0, 4.95 + 0.1, 1.0));
 
-        let foo = AspectRatio::parse_str("xMidYMax meet", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(4.95, 0.0, 0.1, 1.0));
+        let foo = AspectRatio::parse_str("xMidYMid slice").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::new(0.0, -49.5, 10.0, 100.0 - 49.5));
 
-        let foo = AspectRatio::parse_str("xMidYMax slice", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(0.0, -99.0, 10.0, 100.0));
+        let foo = AspectRatio::parse_str("xMidYMax meet").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::new(4.95, 0.0, 4.95 + 0.1, 1.0));
 
-        let foo = AspectRatio::parse_str("xMaxYMin meet", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(9.9, 0.0, 0.1, 1.0));
+        let foo = AspectRatio::parse_str("xMidYMax slice").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::new(0.0, -99.0, 10.0, 1.0));
 
-        let foo = AspectRatio::parse_str("xMaxYMin slice", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(0.0, 0.0, 10.0, 100.0));
+        let foo = AspectRatio::parse_str("xMaxYMin meet").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::new(9.9, 0.0, 10.0, 1.0));
 
-        let foo = AspectRatio::parse_str("xMaxYMid meet", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(9.9, 0.0, 0.1, 1.0));
+        let foo = AspectRatio::parse_str("xMaxYMin slice").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::from_size(10.0, 100.0));
 
-        let foo = AspectRatio::parse_str("xMaxYMid slice", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(0.0, -49.5, 10.0, 100.0));
+        let foo = AspectRatio::parse_str("xMaxYMid meet").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::new(9.9, 0.0, 10.0, 1.0));
 
-        let foo = AspectRatio::parse_str("xMaxYMax meet", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(9.9, 0.0, 0.1, 1.0));
+        let foo = AspectRatio::parse_str("xMaxYMid slice").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::new(0.0, -49.5, 10.0, 100.0 - 49.5));
 
-        let foo = AspectRatio::parse_str("xMaxYMax slice", ()).unwrap();
-        let foo = foo.compute(1.0, 10.0, 0.0, 0.0, 10.0, 1.0);
-        assert_quadruples_equal(&foo, &(0.0, -99.0, 10.0, 100.0));
+        let foo = AspectRatio::parse_str("xMaxYMax meet").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::new(9.9, 0.0, 10.0, 1.0));
+
+        let foo = AspectRatio::parse_str("xMaxYMax slice").unwrap();
+        let foo = foo.compute(&viewbox, &Rect::from_size(10.0, 1.0));
+        assert_rect_equal(&foo, &Rect::new(0.0, -99.0, 10.0, 1.0));
+    }
+
+    #[test]
+    fn empty_viewport() {
+        let a = AspectRatio::default();
+        let t = a.viewport_to_viewbox_transform(
+            Some(ViewBox::parse_str("10 10 40 40").unwrap()),
+            &Rect::from_size(0.0, 0.0),
+        );
+
+        assert_eq!(t, Ok(None));
+    }
+
+    #[test]
+    fn empty_viewbox() {
+        let a = AspectRatio::default();
+        let t = a.viewport_to_viewbox_transform(
+            Some(ViewBox::parse_str("10 10 0 0").unwrap()),
+            &Rect::from_size(10.0, 10.0),
+        );
+
+        assert_eq!(t, Ok(None));
+    }
+
+    #[test]
+    fn valid_viewport_and_viewbox() {
+        let a = AspectRatio::default();
+        let t = a.viewport_to_viewbox_transform(
+            Some(ViewBox::parse_str("10 10 40 40").unwrap()),
+            &Rect::new(1.0, 1.0, 2.0, 2.0),
+        );
+
+        assert_eq!(
+            t,
+            Ok(Some(
+                Transform::identity()
+                    .pre_translate(1.0, 1.0)
+                    .pre_scale(0.025, 0.025)
+                    .pre_translate(-10.0, -10.0)
+            ))
+        );
+    }
+
+    #[test]
+    fn invalid_viewbox() {
+        let a = AspectRatio::default();
+        let t = a.viewport_to_viewbox_transform(
+            Some(ViewBox::parse_str("0 0 6E20 540").unwrap()),
+            &Rect::new(1.0, 1.0, 2.0, 2.0),
+        );
+
+        assert_eq!(t, Err(()));
     }
 }

@@ -17,18 +17,18 @@
  * Matrix   ×= Rotation
  */
 
-use std::ops::{Div, DivAssign, Index, Mul, MulAssign};
 use num::{One, Zero};
+use std::ops::{Div, DivAssign, Index, Mul, MulAssign};
 
-use alga::general::{ClosedAdd, ClosedMul};
+use simba::scalar::{ClosedAdd, ClosedMul};
 
-use base::{DefaultAllocator, Matrix, MatrixMN, Scalar, Unit, Vector, VectorN};
-use base::dimension::{Dim, DimName, U1};
-use base::constraint::{AreMultipliable, ShapeConstraint};
-use base::storage::Storage;
-use base::allocator::Allocator;
+use crate::base::allocator::Allocator;
+use crate::base::constraint::{AreMultipliable, ShapeConstraint};
+use crate::base::dimension::{Dim, DimName, U1};
+use crate::base::storage::Storage;
+use crate::base::{DefaultAllocator, Matrix, MatrixMN, Scalar, Unit, Vector, VectorN};
 
-use geometry::{Point, Rotation};
+use crate::geometry::{Point, Rotation};
 
 impl<N: Scalar, D: DimName> Index<(usize, usize)> for Rotation<N, D>
 where
@@ -47,9 +47,9 @@ md_impl_all!(
     Mul, mul;
     (D, D), (D, D) for D: DimName;
     self: Rotation<N, D>, right: Rotation<N, D>, Output = Rotation<N, D>;
-    [val val] => Rotation::from_matrix_unchecked(self.unwrap() * right.unwrap());
-    [ref val] => Rotation::from_matrix_unchecked(self.matrix() * right.unwrap());
-    [val ref] => Rotation::from_matrix_unchecked(self.unwrap() * right.matrix());
+    [val val] => Rotation::from_matrix_unchecked(self.into_inner() * right.into_inner());
+    [ref val] => Rotation::from_matrix_unchecked(self.matrix() * right.into_inner());
+    [val ref] => Rotation::from_matrix_unchecked(self.into_inner() * right.matrix());
     [ref ref] => Rotation::from_matrix_unchecked(self.matrix() * right.matrix());
 );
 
@@ -72,9 +72,9 @@ md_impl_all!(
     where DefaultAllocator: Allocator<N, D1, C2>
     where ShapeConstraint: AreMultipliable<D1, D1, R2, C2>;
     self: Rotation<N, D1>, right: Matrix<N, R2, C2, SB>, Output = MatrixMN<N, D1, C2>;
-    [val val] => self.unwrap() * right;
+    [val val] => self.into_inner() * right;
     [ref val] => self.matrix() * right;
-    [val ref] => self.unwrap() * right;
+    [val ref] => self.into_inner() * right;
     [ref ref] => self.matrix() * right;
 );
 
@@ -85,8 +85,8 @@ md_impl_all!(
     where DefaultAllocator: Allocator<N, R1, D2>
     where ShapeConstraint:  AreMultipliable<R1, C1, D2, D2>;
     self: Matrix<N, R1, C1, SA>, right: Rotation<N, D2>, Output = MatrixMN<N, R1, D2>;
-    [val val] => self * right.unwrap();
-    [ref val] => self * right.unwrap();
+    [val val] => self * right.into_inner();
+    [ref val] => self * right.into_inner();
     [val ref] => self * right.matrix();
     [ref ref] => self * right.matrix();
 );
@@ -113,9 +113,9 @@ md_impl_all!(
     where DefaultAllocator: Allocator<N, D>
     where ShapeConstraint:  AreMultipliable<D, D, D, U1>;
     self: Rotation<N, D>, right: Point<N, D>, Output = Point<N, D>;
-    [val val] => self.unwrap() * right;
+    [val val] => self.into_inner() * right;
     [ref val] => self.matrix() * right;
-    [val ref] => self.unwrap() * right;
+    [val ref] => self.into_inner() * right;
     [ref ref] => self.matrix() * right;
 );
 
@@ -126,9 +126,9 @@ md_impl_all!(
     where DefaultAllocator: Allocator<N, D>
     where ShapeConstraint:  AreMultipliable<D, D, D, U1>;
     self: Rotation<N, D>, right: Unit<Vector<N, D, S>>, Output = Unit<VectorN<N, D>>;
-    [val val] => Unit::new_unchecked(self.unwrap() * right.unwrap());
-    [ref val] => Unit::new_unchecked(self.matrix() * right.unwrap());
-    [val ref] => Unit::new_unchecked(self.unwrap() * right.as_ref());
+    [val val] => Unit::new_unchecked(self.into_inner() * right.into_inner());
+    [ref val] => Unit::new_unchecked(self.matrix() * right.into_inner());
+    [val ref] => Unit::new_unchecked(self.into_inner() * right.as_ref());
     [ref ref] => Unit::new_unchecked(self.matrix() * right.as_ref());
 );
 
@@ -139,16 +139,16 @@ md_assign_impl_all!(
     MulAssign, mul_assign;
     (D, D), (D, D) for D: DimName;
     self: Rotation<N, D>, right: Rotation<N, D>;
-    [val] => unsafe { self.matrix_mut().mul_assign(right.unwrap()) };
-    [ref] => unsafe { self.matrix_mut().mul_assign(right.matrix()) };
+    [val] => self.matrix_mut_unchecked().mul_assign(right.into_inner());
+    [ref] => self.matrix_mut_unchecked().mul_assign(right.matrix());
 );
 
 md_assign_impl_all!(
     DivAssign, div_assign;
     (D, D), (D, D) for D: DimName;
     self: Rotation<N, D>, right: Rotation<N, D>;
-    [val] => unsafe { self.matrix_mut().mul_assign(right.inverse().unwrap()) };
-    [ref] => unsafe { self.matrix_mut().mul_assign(right.inverse().matrix()) };
+    [val] => self.matrix_mut_unchecked().mul_assign(right.inverse().into_inner());
+    [ref] => self.matrix_mut_unchecked().mul_assign(right.inverse().matrix());
 );
 
 // Matrix *= Rotation
@@ -161,7 +161,7 @@ md_assign_impl_all!(
     MulAssign, mul_assign;
     (R1, C1), (C1, C1) for R1: DimName, C1: DimName;
     self: MatrixMN<N, R1, C1>, right: Rotation<N, C1>;
-    [val] => self.mul_assign(right.unwrap());
+    [val] => self.mul_assign(right.into_inner());
     [ref] => self.mul_assign(right.matrix());
 );
 
@@ -169,6 +169,6 @@ md_assign_impl_all!(
     DivAssign, div_assign;
     (R1, C1), (C1, C1) for R1: DimName, C1: DimName;
     self: MatrixMN<N, R1, C1>, right: Rotation<N, C1>;
-    [val] => self.mul_assign(right.inverse().unwrap());
+    [val] => self.mul_assign(right.inverse().into_inner());
     [ref] => self.mul_assign(right.inverse().matrix());
 );

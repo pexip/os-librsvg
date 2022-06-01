@@ -1,29 +1,43 @@
-use std::cell::{Cell, Ref, RefCell};
 use std::cmp::min;
 
-use cairo::{self, ImageSurface};
+use cssparser::Parser;
+use markup5ever::{expanded_name, local_name, namespace_url, ns};
 
-use attributes::Attribute;
-use drawing_ctx::DrawingCtx;
-use error::NodeError;
-use handle::RsvgHandle;
-use node::{NodeResult, NodeTrait, NodeType, RsvgNode};
-use parsers::{self, ListLength, NumberListError, ParseError};
-use property_bag::PropertyBag;
-use surface_utils::{
-    iterators::Pixels,
-    shared_surface::SharedImageSurface,
-    ImageSurfaceDataExt,
-    Pixel,
+use crate::attributes::Attributes;
+use crate::document::AcquiredNodes;
+use crate::drawing_ctx::DrawingCtx;
+use crate::element::{Draw, Element, ElementResult, SetAttributes};
+use crate::error::*;
+use crate::node::{Node, NodeBorrow};
+use crate::number_list::{NumberList, NumberListLength};
+use crate::parsers::{Parse, ParseValue};
+use crate::surface_utils::{
+    iterators::Pixels, shared_surface::ExclusiveImageSurface, ImageSurfaceDataExt, Pixel,
 };
-use util::clamp;
+use crate::util::clamp;
 
 use super::context::{FilterContext, FilterOutput, FilterResult};
-use super::{Filter, FilterError, PrimitiveWithInput};
+use super::{FilterEffect, FilterError, PrimitiveWithInput};
 
 /// The `feComponentTransfer` filter primitive.
-pub struct ComponentTransfer {
+pub struct FeComponentTransfer {
     base: PrimitiveWithInput,
+}
+
+impl Default for FeComponentTransfer {
+    /// Constructs a new `ComponentTransfer` with empty properties.
+    #[inline]
+    fn default() -> FeComponentTransfer {
+        FeComponentTransfer {
+            base: PrimitiveWithInput::new::<Self>(),
+        }
+    }
+}
+
+impl SetAttributes for FeComponentTransfer {
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        self.base.set_attributes(attrs)
+    }
 }
 
 /// Pixel components that can be influenced by `feComponentTransfer`.
@@ -36,7 +50,6 @@ enum Channel {
 }
 
 /// Component transfer function types.
-#[derive(Debug, Clone, Copy)]
 enum FunctionType {
     Identity,
     Table,
@@ -45,21 +58,22 @@ enum FunctionType {
     Gamma,
 }
 
-/// The `<feFuncX>` element (X is R, G, B or A).
-pub struct FuncX {
-    channel: Channel,
-    function_type: Cell<FunctionType>,
-    table_values: RefCell<Vec<f64>>,
-    slope: Cell<f64>,
-    intercept: Cell<f64>,
-    amplitude: Cell<f64>,
-    exponent: Cell<f64>,
-    offset: Cell<f64>,
+impl Parse for FunctionType {
+    fn parse<'i>(parser: &mut Parser<'i, '_>) -> Result<Self, ParseError<'i>> {
+        Ok(parse_identifiers!(
+            parser,
+            "identity" => FunctionType::Identity,
+            "table" => FunctionType::Table,
+            "discrete" => FunctionType::Discrete,
+            "linear" => FunctionType::Linear,
+            "gamma" => FunctionType::Gamma,
+        )?)
+    }
 }
 
 /// The compute function parameters.
 struct FunctionParameters<'a> {
-    table_values: Ref<'a, Vec<f64>>,
+    table_values: &'a Vec<f64>,
     slope: f64,
     intercept: f64,
     amplitude: f64,
@@ -112,227 +126,215 @@ fn gamma(params: &FunctionParameters<'_>, value: f64) -> f64 {
     params.amplitude * value.powf(params.exponent) + params.offset
 }
 
-impl ComponentTransfer {
-    /// Constructs a new `ComponentTransfer` with empty properties.
-    #[inline]
-    pub fn new() -> ComponentTransfer {
-        ComponentTransfer {
-            base: PrimitiveWithInput::new::<Self>(),
-        }
-    }
-}
-
-impl Default for FuncX {
-    #[inline]
-    fn default() -> Self {
-        Self {
-            channel: Channel::R,
-            function_type: Cell::new(FunctionType::Identity),
-            table_values: RefCell::new(Vec::new()),
-            slope: Cell::new(1f64),
-            intercept: Cell::new(0f64),
-            amplitude: Cell::new(1f64),
-            exponent: Cell::new(1f64),
-            offset: Cell::new(0f64),
-        }
-    }
-}
-
-impl FuncX {
-    /// Constructs a new `FuncR` with empty properties.
-    #[inline]
-    pub fn new_r() -> Self {
-        Self {
-            channel: Channel::R,
-            ..Default::default()
-        }
-    }
-
-    /// Constructs a new `FuncG` with empty properties.
-    #[inline]
-    pub fn new_g() -> Self {
-        Self {
-            channel: Channel::G,
-            ..Default::default()
-        }
-    }
-
-    /// Constructs a new `FuncB` with empty properties.
-    #[inline]
-    pub fn new_b() -> Self {
-        Self {
-            channel: Channel::B,
-            ..Default::default()
-        }
-    }
-
-    /// Constructs a new `FuncA` with empty properties.
-    #[inline]
-    pub fn new_a() -> Self {
-        Self {
-            channel: Channel::A,
-            ..Default::default()
-        }
-    }
+trait FeComponentTransferFunc {
+    /// Returns the component transfer function.
+    fn function(&self) -> Function;
 
     /// Returns the component transfer function parameters.
-    #[inline]
-    fn function_parameters(&self) -> FunctionParameters<'_> {
-        FunctionParameters {
-            table_values: self.table_values.borrow(),
-            slope: self.slope.get(),
-            intercept: self.intercept.get(),
-            amplitude: self.amplitude.get(),
-            exponent: self.exponent.get(),
-            offset: self.offset.get(),
-        }
-    }
+    fn function_parameters(&self) -> FunctionParameters<'_>;
 
-    /// Returns the component transfer function.
-    #[inline]
-    fn function(&self) -> Function {
-        match self.function_type.get() {
-            FunctionType::Identity => identity,
-            FunctionType::Table => table,
-            FunctionType::Discrete => discrete,
-            FunctionType::Linear => linear,
-            FunctionType::Gamma => gamma,
-        }
-    }
+    /// Returns the channel.
+    fn channel(&self) -> Channel;
 }
 
-impl NodeTrait for ComponentTransfer {
-    #[inline]
-    fn set_atts(
-        &self,
-        node: &RsvgNode,
-        handle: *const RsvgHandle,
-        pbag: &PropertyBag<'_>,
-    ) -> NodeResult {
-        self.base.set_atts(node, handle, pbag)
-    }
-}
+macro_rules! func_x {
+    ($func_name:ident, $channel:expr) => {
+        pub struct $func_name {
+            channel: Channel,
+            function_type: FunctionType,
+            table_values: Vec<f64>,
+            slope: f64,
+            intercept: f64,
+            amplitude: f64,
+            exponent: f64,
+            offset: f64,
+        }
 
-impl NodeTrait for FuncX {
-    #[inline]
-    fn set_atts(
-        &self,
-        _node: &RsvgNode,
-        _handle: *const RsvgHandle,
-        pbag: &PropertyBag<'_>,
-    ) -> NodeResult {
-        for (_key, attr, value) in pbag.iter() {
-            match attr {
-                Attribute::Type => self.function_type.set(FunctionType::parse(attr, value)?),
-                Attribute::TableValues => {
-                    self.table_values.replace(
-                        parsers::number_list_from_str(value, ListLength::Unbounded).map_err(
-                            |err| {
-                                if let NumberListError::Parse(err) = err {
-                                    NodeError::parse_error(attr, err)
-                                } else {
-                                    panic!("unexpected number list error");
-                                }
-                            },
-                        )?,
-                    );
+        impl Default for $func_name {
+            #[inline]
+            fn default() -> Self {
+                Self {
+                    channel: $channel,
+                    function_type: FunctionType::Identity,
+                    table_values: Vec::new(),
+                    slope: 1.0,
+                    intercept: 0.0,
+                    amplitude: 1.0,
+                    exponent: 1.0,
+                    offset: 0.0,
                 }
-                Attribute::Slope => self.slope.set(
-                    parsers::number(value).map_err(|err| NodeError::attribute_error(attr, err))?,
-                ),
-                Attribute::Intercept => self.intercept.set(
-                    parsers::number(value).map_err(|err| NodeError::attribute_error(attr, err))?,
-                ),
-                Attribute::Amplitude => self.amplitude.set(
-                    parsers::number(value).map_err(|err| NodeError::attribute_error(attr, err))?,
-                ),
-                Attribute::Exponent => self.exponent.set(
-                    parsers::number(value).map_err(|err| NodeError::attribute_error(attr, err))?,
-                ),
-                Attribute::Offset => self.offset.set(
-                    parsers::number(value).map_err(|err| NodeError::attribute_error(attr, err))?,
-                ),
-                _ => (),
+            }
+        }
+
+        impl FeComponentTransferFunc for $func_name {
+            #[inline]
+            fn function_parameters(&self) -> FunctionParameters<'_> {
+                FunctionParameters {
+                    table_values: &self.table_values,
+                    slope: self.slope,
+                    intercept: self.intercept,
+                    amplitude: self.amplitude,
+                    exponent: self.exponent,
+                    offset: self.offset,
+                }
+            }
+
+            #[inline]
+            fn function(&self) -> Function {
+                match self.function_type {
+                    FunctionType::Identity => identity,
+                    FunctionType::Table => table,
+                    FunctionType::Discrete => discrete,
+                    FunctionType::Linear => linear,
+                    FunctionType::Gamma => gamma,
+                }
+            }
+
+            #[inline]
+            fn channel(&self) -> Channel {
+                self.channel
             }
         }
 
-        // The table function type with empty table_values is considered an identity
-        // function.
-        match self.function_type.get() {
-            FunctionType::Table | FunctionType::Discrete => {
-                if self.table_values.borrow().is_empty() {
-                    self.function_type.set(FunctionType::Identity);
+        impl SetAttributes for $func_name {
+            #[inline]
+            fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+                for (attr, value) in attrs.iter() {
+                    match attr.expanded() {
+                        expanded_name!("", "type") => self.function_type = attr.parse(value)?,
+                        expanded_name!("", "tableValues") => {
+                            let NumberList(v) =
+                                NumberList::parse_str(value, NumberListLength::Unbounded)
+                                    .attribute(attr)?;
+                            self.table_values = v;
+                        }
+                        expanded_name!("", "slope") => self.slope = attr.parse(value)?,
+                        expanded_name!("", "intercept") => self.intercept = attr.parse(value)?,
+                        expanded_name!("", "amplitude") => self.amplitude = attr.parse(value)?,
+                        expanded_name!("", "exponent") => self.exponent = attr.parse(value)?,
+                        expanded_name!("", "offset") => self.offset = attr.parse(value)?,
+
+                        _ => (),
+                    }
                 }
+
+                // The table function type with empty table_values is considered
+                // an identity function.
+                match self.function_type {
+                    FunctionType::Table | FunctionType::Discrete => {
+                        if self.table_values.is_empty() {
+                            self.function_type = FunctionType::Identity;
+                        }
+                    }
+                    _ => (),
+                }
+
+                Ok(())
             }
-            _ => (),
         }
 
-        Ok(())
-    }
+        impl Draw for $func_name {}
+    };
 }
 
-impl Filter for ComponentTransfer {
+// The `<feFuncR>` element
+func_x!(FeFuncR, Channel::R);
+
+// The `<feFuncG>` element
+func_x!(FeFuncG, Channel::G);
+
+// The `<feFuncB>` element
+func_x!(FeFuncB, Channel::B);
+
+// The `<feFuncA>` element
+func_x!(FeFuncA, Channel::A);
+
+macro_rules! func_or_default {
+    ($func_node:ident, $func_type:ident, $func_data:ident, $func_default:ident) => {
+        match $func_node {
+            Some(ref f) => {
+                $func_data = f.borrow_element();
+                match *$func_data {
+                    Element::$func_type(ref e) => &*e,
+                    _ => unreachable!(),
+                }
+            }
+            _ => &$func_default,
+        };
+    };
+}
+
+macro_rules! get_func_x_node {
+    ($func_node:ident, $func_type:ident, $channel:expr) => {
+        $func_node
+            .children()
+            .rev()
+            .filter(|c| c.is_element())
+            .find(|c| match *c.borrow_element() {
+                Element::$func_type(ref f) => f.channel() == $channel,
+                _ => false,
+            })
+    };
+}
+
+impl FilterEffect for FeComponentTransfer {
     fn render(
         &self,
-        node: &RsvgNode,
+        node: &Node,
         ctx: &FilterContext,
-        draw_ctx: &mut DrawingCtx<'_>,
+        acquired_nodes: &mut AcquiredNodes,
+        draw_ctx: &mut DrawingCtx,
     ) -> Result<FilterResult, FilterError> {
-        let input = self.base.get_input(ctx, draw_ctx)?;
+        let input = self.base.get_input(ctx, acquired_nodes, draw_ctx)?;
         let bounds = self
             .base
-            .get_bounds(ctx)
+            .get_bounds(ctx, node.parent().as_ref())?
             .add_input(&input)
             .into_irect(draw_ctx);
 
         // Create the output surface.
-        let mut output_surface = ImageSurface::create(
-            cairo::Format::ARgb32,
+        let mut surface = ExclusiveImageSurface::new(
             ctx.source_graphic().width(),
             ctx.source_graphic().height(),
+            input.surface().surface_type(),
         )?;
 
-        // Enumerate all child <feFuncX> nodes.
-        let functions = node
-            .children()
-            .rev()
-            .filter(|c| c.get_type() == NodeType::ComponentTransferFunction);
+        let func_r_node = get_func_x_node!(node, FeFuncR, Channel::R);
+        let func_g_node = get_func_x_node!(node, FeFuncG, Channel::G);
+        let func_b_node = get_func_x_node!(node, FeFuncB, Channel::B);
+        let func_a_node = get_func_x_node!(node, FeFuncA, Channel::A);
 
-        // Get a node for every pixel component.
-        let get_node = |channel| {
-            functions
-                .clone()
-                .find(|c| c.get_impl::<FuncX>().unwrap().channel == channel)
-        };
-        let func_r = get_node(Channel::R);
-        let func_g = get_node(Channel::G);
-        let func_b = get_node(Channel::B);
-        let func_a = get_node(Channel::A);
-
-        for node in [&func_r, &func_g, &func_b, &func_a]
+        for node in [&func_r_node, &func_g_node, &func_b_node, &func_a_node]
             .iter()
             .filter_map(|x| x.as_ref())
         {
-            if node.is_in_error() {
+            if node.borrow_element().is_in_error() {
                 return Err(FilterError::ChildNodeInError);
             }
         }
 
-        // This is the default node that performs an identity transformation.
-        let func_default = FuncX::default();
+        // These are the default funcs that perform an identity transformation.
+        let func_r_default = FeFuncR::default();
+        let func_g_default = FeFuncG::default();
+        let func_b_default = FeFuncB::default();
+        let func_a_default = FeFuncA::default();
 
-        // Retrieve the compute function and parameters for each pixel component.
-        // Can't make this a closure without hacks since it's not currently possible to
-        // cleanly describe |&'a T| -> &'a U to the type system.
-        #[inline]
-        fn func_or_default<'a>(func: &'a Option<RsvgNode>, default: &'a FuncX) -> &'a FuncX {
-            func.as_ref()
-                .map(|c| c.get_impl::<FuncX>().unwrap())
-                .unwrap_or(default)
-        }
+        // We need to tell the borrow checker that these live long enough
+        let func_r_element;
+        let func_g_element;
+        let func_b_element;
+        let func_a_element;
+
+        let func_r = func_or_default!(func_r_node, FeFuncR, func_r_element, func_r_default);
+        let func_g = func_or_default!(func_g_node, FeFuncG, func_g_element, func_g_default);
+        let func_b = func_or_default!(func_b_node, FeFuncB, func_b_element, func_b_default);
+        let func_a = func_or_default!(func_a_node, FeFuncA, func_a_element, func_a_default);
 
         #[inline]
-        fn compute_func<'a>(func: &'a FuncX) -> impl Fn(u8, f64, f64) -> u8 + 'a {
+        fn compute_func<'a, F>(func: &'a F) -> impl Fn(u8, f64, f64) -> u8 + 'a
+        where
+            F: FeComponentTransferFunc,
+        {
             let compute = func.function();
             let params = func.function_parameters();
 
@@ -348,22 +350,18 @@ impl Filter for ComponentTransfer {
             }
         }
 
-        let compute_r = compute_func(func_or_default(&func_r, &func_default));
-        let compute_g = compute_func(func_or_default(&func_g, &func_default));
-        let compute_b = compute_func(func_or_default(&func_b, &func_default));
+        let compute_r = compute_func::<FeFuncR>(&func_r);
+        let compute_g = compute_func::<FeFuncG>(&func_g);
+        let compute_b = compute_func::<FeFuncB>(&func_b);
 
         // Alpha gets special handling since everything else depends on it.
-        let func_a = func_or_default(&func_a, &func_default);
         let compute_a = func_a.function();
         let params_a = func_a.function_parameters();
         let compute_a = |alpha| compute_a(&params_a, alpha);
 
         // Do the actual processing.
-        let output_stride = output_surface.get_stride() as usize;
-        {
-            let mut output_data = output_surface.get_data().unwrap();
-
-            for (x, y, pixel) in Pixels::new(input.surface(), bounds) {
+        surface.modify(&mut |data, stride| {
+            for (x, y, pixel) in Pixels::within(input.surface(), bounds) {
                 let alpha = f64::from(pixel.a) / 255f64;
                 let new_alpha = compute_a(alpha);
 
@@ -374,14 +372,14 @@ impl Filter for ComponentTransfer {
                     a: ((new_alpha * 255f64) + 0.5) as u8,
                 };
 
-                output_data.set_pixel(output_stride, output_pixel, x, y);
+                data.set_pixel(stride, output_pixel, x, y);
             }
-        }
+        });
 
         Ok(FilterResult {
-            name: self.base.result.borrow().clone(),
+            name: self.base.result.clone(),
             output: FilterOutput {
-                surface: SharedImageSurface::new(output_surface, input.surface().surface_type())?,
+                surface: surface.share()?,
                 bounds,
             },
         })
@@ -389,21 +387,5 @@ impl Filter for ComponentTransfer {
 
     fn is_affected_by_color_interpolation_filters(&self) -> bool {
         true
-    }
-}
-
-impl FunctionType {
-    fn parse(attr: Attribute, s: &str) -> Result<Self, NodeError> {
-        match s {
-            "identity" => Ok(FunctionType::Identity),
-            "table" => Ok(FunctionType::Table),
-            "discrete" => Ok(FunctionType::Discrete),
-            "linear" => Ok(FunctionType::Linear),
-            "gamma" => Ok(FunctionType::Gamma),
-            _ => Err(NodeError::parse_error(
-                attr,
-                ParseError::new("invalid value"),
-            )),
-        }
     }
 }

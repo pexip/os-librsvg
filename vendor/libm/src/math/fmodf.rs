@@ -1,7 +1,7 @@
 use core::f32;
 use core::u32;
 
-#[inline]
+#[cfg_attr(all(test, assert_no_panic), no_panic::no_panic)]
 pub fn fmodf(x: f32, y: f32) -> f32 {
     let mut uxi = x.to_bits();
     let mut uyi = y.to_bits();
@@ -51,7 +51,7 @@ pub fn fmodf(x: f32, y: f32) -> f32 {
 
     /* x mod y */
     while ex > ey {
-        i = uxi - uyi;
+        i = uxi.wrapping_sub(uyi);
         if i >> 31 == 0 {
             if i == 0 {
                 return 0.0 * x;
@@ -63,7 +63,7 @@ pub fn fmodf(x: f32, y: f32) -> f32 {
         ex -= 1;
     }
 
-    i = uxi - uyi;
+    i = uxi.wrapping_sub(uyi);
     if i >> 31 == 0 {
         if i == 0 {
             return 0.0 * x;

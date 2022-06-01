@@ -1,428 +1,304 @@
-use std::cell::Cell;
-use std::cell::RefCell;
+//! Structural elements in SVG: the `g`, `switch`, `svg`, `use`, `symbol`, `clip_path`, `mask`, `link` elements.
 
-use glib::translate::*;
-use glib_sys;
+use markup5ever::{expanded_name, local_name, namespace_url, ns};
 
-use aspect_ratio::*;
-use attributes::Attribute;
-use drawing_ctx::DrawingCtx;
-use error::RenderingError;
-use float_eq_cairo::ApproxEqCairo;
-use handle::RsvgHandle;
-use length::*;
-use libc;
-use node::*;
-use parsers::{parse, parse_and_validate, Parse};
-use property_bag::{OwnedPropertyBag, PropertyBag};
-use state::Overflow;
-use viewbox::*;
-use viewport::{draw_in_viewport, ClipMode};
+use crate::allowed_url::Fragment;
+use crate::aspect_ratio::*;
+use crate::attributes::Attributes;
+use crate::bbox::BoundingBox;
+use crate::coord_units::CoordUnits;
+use crate::document::AcquiredNodes;
+use crate::drawing_ctx::{ClipMode, DrawingCtx, ViewParams};
+use crate::element::{Draw, ElementResult, SetAttributes};
+use crate::error::*;
+use crate::href::{is_href, set_href};
+use crate::length::*;
+use crate::node::{CascadedValues, Node, NodeBorrow, NodeDraw};
+use crate::parsers::{Parse, ParseValue};
+use crate::properties::ComputedValues;
+use crate::rect::Rect;
+use crate::viewbox::*;
 
-pub struct NodeGroup();
+#[derive(Default)]
+pub struct Group();
 
-impl NodeGroup {
-    pub fn new() -> NodeGroup {
-        NodeGroup()
-    }
-}
+impl SetAttributes for Group {}
 
-impl NodeTrait for NodeGroup {
-    fn set_atts(&self, _: &RsvgNode, _: *const RsvgHandle, _: &PropertyBag<'_>) -> NodeResult {
-        Ok(())
-    }
-
+impl Draw for Group {
     fn draw(
         &self,
-        node: &RsvgNode,
+        node: &Node,
+        acquired_nodes: &mut AcquiredNodes,
         cascaded: &CascadedValues<'_>,
-        draw_ctx: &mut DrawingCtx<'_>,
+        draw_ctx: &mut DrawingCtx,
         clipping: bool,
-    ) -> Result<(), RenderingError> {
+    ) -> Result<BoundingBox, RenderingError> {
         let values = cascaded.get();
 
-        draw_ctx.with_discrete_layer(node, values, clipping, &mut |dc| {
-            node.draw_children(cascaded, dc, clipping)
+        draw_ctx.with_discrete_layer(node, acquired_nodes, values, clipping, &mut |an, dc| {
+            node.draw_children(an, cascaded, dc, clipping)
         })
     }
 }
 
-pub struct NodeDefs();
+/// A no-op node that does not render anything
+///
+/// Sometimes we just need a node that can contain children, but doesn't
+/// render itself or its children.  This is just that kind of node.
+#[derive(Default)]
+pub struct NonRendering;
 
-impl NodeDefs {
-    pub fn new() -> NodeDefs {
-        NodeDefs()
-    }
-}
+impl SetAttributes for NonRendering {}
 
-impl NodeTrait for NodeDefs {
-    fn set_atts(&self, _: &RsvgNode, _: *const RsvgHandle, _: &PropertyBag<'_>) -> NodeResult {
-        Ok(())
-    }
-}
+impl Draw for NonRendering {}
 
-pub struct NodeSwitch();
+#[derive(Default)]
+pub struct Switch();
 
-impl NodeSwitch {
-    pub fn new() -> NodeSwitch {
-        NodeSwitch()
-    }
-}
+impl SetAttributes for Switch {}
 
-impl NodeTrait for NodeSwitch {
-    fn set_atts(&self, _: &RsvgNode, _: *const RsvgHandle, _: &PropertyBag<'_>) -> NodeResult {
-        Ok(())
-    }
-
+impl Draw for Switch {
     fn draw(
         &self,
-        node: &RsvgNode,
+        node: &Node,
+        acquired_nodes: &mut AcquiredNodes,
         cascaded: &CascadedValues<'_>,
-        draw_ctx: &mut DrawingCtx<'_>,
+        draw_ctx: &mut DrawingCtx,
         clipping: bool,
-    ) -> Result<(), RenderingError> {
+    ) -> Result<BoundingBox, RenderingError> {
         let values = cascaded.get();
 
-        draw_ctx.with_discrete_layer(node, values, clipping, &mut |dc| {
-            if let Some(child) = node.children().find(|c| c.get_cond()) {
-                dc.draw_node_from_stack(&CascadedValues::new(cascaded, &child), &child, clipping)
+        draw_ctx.with_discrete_layer(node, acquired_nodes, values, clipping, &mut |an, dc| {
+            if let Some(child) = node
+                .children()
+                .filter(|c| c.is_element())
+                .find(|c| c.borrow_element().get_cond())
+            {
+                dc.draw_node_from_stack(
+                    &child,
+                    an,
+                    &CascadedValues::new(cascaded, &child),
+                    clipping,
+                )
             } else {
-                Ok(())
+                Ok(dc.empty_bbox())
             }
         })
     }
 }
 
-pub struct NodeSvg {
-    preserve_aspect_ratio: Cell<AspectRatio>,
-    x: Cell<Length>,
-    y: Cell<Length>,
-    w: Cell<Length>,
-    h: Cell<Length>,
-    vbox: Cell<Option<ViewBox>>,
-    pbag: RefCell<Option<OwnedPropertyBag>>,
+/// Intrinsic dimensions of an SVG document fragment: its `width`, `height`, `viewBox` attributes.
+///
+/// Note that either of those attributes can be omitted, so they are all `Option<T>`.
+/// For example, an element like `<svg viewBox="0 0 100 100">` will have `vbox=Some(...)`,
+/// and the other two fields set to `None`.
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct IntrinsicDimensions {
+    /// Contents of the `width` attribute.
+    pub width: Option<Length<Horizontal>>,
+
+    /// Contents of the `height` attribute.
+    pub height: Option<Length<Vertical>>,
+
+    /// Contents of the `viewBox` attribute.
+    pub vbox: Option<ViewBox>,
 }
 
-impl NodeSvg {
-    pub fn new() -> NodeSvg {
-        NodeSvg {
-            preserve_aspect_ratio: Cell::new(AspectRatio::default()),
-            x: Cell::new(Length::parse_str("0", LengthDir::Horizontal).unwrap()),
-            y: Cell::new(Length::parse_str("0", LengthDir::Vertical).unwrap()),
-            w: Cell::new(Length::parse_str("100%", LengthDir::Horizontal).unwrap()),
-            h: Cell::new(Length::parse_str("100%", LengthDir::Vertical).unwrap()),
-            vbox: Cell::new(None),
-            pbag: RefCell::new(None),
+#[derive(Default)]
+pub struct Svg {
+    preserve_aspect_ratio: AspectRatio,
+    x: Option<Length<Horizontal>>,
+    y: Option<Length<Vertical>>,
+    w: Option<Length<Horizontal>>,
+    h: Option<Length<Vertical>>,
+    vbox: Option<ViewBox>,
+}
+
+impl Svg {
+    pub fn get_intrinsic_dimensions(&self) -> IntrinsicDimensions {
+        IntrinsicDimensions {
+            width: self.w,
+            height: self.h,
+            vbox: self.vbox,
         }
     }
 
-    pub fn set_delayed_style(&self, node: &RsvgNode, handle: *const RsvgHandle) {
-        if let Some(owned_pbag) = self.pbag.borrow().as_ref() {
-            let pbag = PropertyBag::from_owned(owned_pbag);
-            node.set_style(handle, &pbag);
-        }
+    fn get_unnormalized_offset(&self) -> (Length<Horizontal>, Length<Vertical>) {
+        // these defaults are per the spec
+        let x = self
+            .x
+            .unwrap_or_else(|| Length::<Horizontal>::parse_str("0").unwrap());
+        let y = self
+            .y
+            .unwrap_or_else(|| Length::<Vertical>::parse_str("0").unwrap());
+
+        (x, y)
     }
-}
 
-impl NodeTrait for NodeSvg {
-    fn set_atts(
-        &self,
-        node: &RsvgNode,
-        _: *const RsvgHandle,
-        pbag: &PropertyBag<'_>,
-    ) -> NodeResult {
-        // SVG element has overflow:hidden
-        // https://www.w3.org/TR/SVG/styling.html#UAStyleSheet
-        node.set_overflow_hidden();
+    fn get_unnormalized_size(&self) -> (Length<Horizontal>, Length<Vertical>) {
+        // these defaults are per the spec
+        let w = self
+            .w
+            .unwrap_or_else(|| Length::<Horizontal>::parse_str("100%").unwrap());
+        let h = self
+            .h
+            .unwrap_or_else(|| Length::<Vertical>::parse_str("100%").unwrap());
 
+        (w, h)
+    }
+
+    fn get_viewport(&self, values: &ComputedValues, params: &ViewParams, outermost: bool) -> Rect {
         // x & y attributes have no effect on outermost svg
         // http://www.w3.org/TR/SVG/struct.html#SVGElement
-        let is_inner_svg = node.get_parent().is_some();
-
-        for (_key, attr, value) in pbag.iter() {
-            match attr {
-                Attribute::PreserveAspectRatio => {
-                    self.preserve_aspect_ratio
-                        .set(parse("preserveAspectRatio", value, ())?)
-                }
-
-                Attribute::X => {
-                    if is_inner_svg {
-                        self.x.set(parse("x", value, LengthDir::Horizontal)?);
-                    }
-                }
-
-                Attribute::Y => {
-                    if is_inner_svg {
-                        self.y.set(parse("y", value, LengthDir::Vertical)?);
-                    }
-                }
-
-                Attribute::Width => self.w.set(parse_and_validate(
-                    "width",
-                    value,
-                    LengthDir::Horizontal,
-                    Length::check_nonnegative,
-                )?),
-
-                Attribute::Height => self.h.set(parse_and_validate(
-                    "height",
-                    value,
-                    LengthDir::Vertical,
-                    Length::check_nonnegative,
-                )?),
-
-                Attribute::ViewBox => self.vbox.set(parse("viewBox", value, ()).map(Some)?),
-
-                _ => (),
-            }
-        }
-
-        // The "style" sub-element is not loaded yet here, so we need
-        // to store other attributes to be applied later.
-        *self.pbag.borrow_mut() = Some(pbag.to_owned());
-
-        Ok(())
-    }
-
-    fn draw(
-        &self,
-        node: &RsvgNode,
-        cascaded: &CascadedValues<'_>,
-        draw_ctx: &mut DrawingCtx<'_>,
-        clipping: bool,
-    ) -> Result<(), RenderingError> {
-        let values = cascaded.get();
-
-        let params = draw_ctx.get_view_params();
-
-        let nx = self.x.get().normalize(values, &params);
-        let ny = self.y.get().normalize(values, &params);
-        let nw = self.w.get().normalize(values, &params);
-        let nh = self.h.get().normalize(values, &params);
-
-        let do_clip = !values.is_overflow() && node.get_parent().is_some();
-
-        draw_in_viewport(
-            nx,
-            ny,
-            nw,
-            nh,
-            ClipMode::ClipToViewport,
-            do_clip,
-            self.vbox.get(),
-            self.preserve_aspect_ratio.get(),
-            node,
-            values,
-            draw_ctx.get_cairo_context().get_matrix(),
-            draw_ctx,
-            clipping,
-            &mut |dc| {
-                // we don't push a layer because draw_in_viewport() already does it
-                node.draw_children(cascaded, dc, clipping)
-            },
-        )
-    }
-}
-
-pub struct NodeUse {
-    link: RefCell<Option<String>>,
-    x: Cell<Length>,
-    y: Cell<Length>,
-    w: Cell<Option<Length>>,
-    h: Cell<Option<Length>>,
-}
-
-impl NodeUse {
-    pub fn new() -> NodeUse {
-        NodeUse {
-            link: RefCell::new(None),
-            x: Cell::new(Length::default()),
-            y: Cell::new(Length::default()),
-            w: Cell::new(None),
-            h: Cell::new(None),
-        }
-    }
-}
-
-impl NodeTrait for NodeUse {
-    fn set_atts(&self, _: &RsvgNode, _: *const RsvgHandle, pbag: &PropertyBag<'_>) -> NodeResult {
-        for (_key, attr, value) in pbag.iter() {
-            match attr {
-                Attribute::XlinkHref => *self.link.borrow_mut() = Some(value.to_owned()),
-
-                Attribute::X => self.x.set(parse("x", value, LengthDir::Horizontal)?),
-                Attribute::Y => self.y.set(parse("y", value, LengthDir::Vertical)?),
-
-                Attribute::Width => self.w.set(
-                    parse_and_validate(
-                        "width",
-                        value,
-                        LengthDir::Horizontal,
-                        Length::check_nonnegative,
-                    )
-                    .map(Some)?,
-                ),
-                Attribute::Height => self.h.set(
-                    parse_and_validate(
-                        "height",
-                        value,
-                        LengthDir::Vertical,
-                        Length::check_nonnegative,
-                    )
-                    .map(Some)?,
-                ),
-
-                _ => (),
-            }
-        }
-
-        Ok(())
-    }
-
-    fn draw(
-        &self,
-        node: &RsvgNode,
-        cascaded: &CascadedValues<'_>,
-        draw_ctx: &mut DrawingCtx<'_>,
-        clipping: bool,
-    ) -> Result<(), RenderingError> {
-        let values = cascaded.get();
-
-        let link = self.link.borrow();
-
-        if link.is_none() {
-            return Ok(());
-        }
-
-        let uri = link.as_ref().unwrap();
-
-        let child = if let Some(acquired) = draw_ctx.get_acquired_node(uri) {
-            // Here we clone the acquired child, so that we can drop the AcquiredNode as
-            // early as possible.  This is so that the child's drawing method will be able
-            // to re-acquire the child for other purposes.
-            acquired.get().clone()
+        let (nx, ny) = if outermost {
+            (0.0, 0.0)
         } else {
-            rsvg_log!(
-                "element {} references nonexistent \"{}\"",
-                node.get_human_readable_name(),
-                uri,
-            );
-            return Ok(());
+            let (x, y) = self.get_unnormalized_offset();
+            (x.normalize(values, &params), y.normalize(values, &params))
         };
 
-        if Node::is_ancestor(child.clone(), node.clone()) {
-            // or, if we're <use>'ing ourselves
-            return Err(RenderingError::CircularReference);
+        let (w, h) = self.get_unnormalized_size();
+        let (nw, nh) = (w.normalize(values, &params), h.normalize(values, &params));
+
+        Rect::new(nx, ny, nx + nw, ny + nh)
+    }
+}
+
+impl SetAttributes for Svg {
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        for (attr, value) in attrs.iter() {
+            match attr.expanded() {
+                expanded_name!("", "preserveAspectRatio") => {
+                    self.preserve_aspect_ratio = attr.parse(value)?
+                }
+                expanded_name!("", "x") => self.x = Some(attr.parse(value)?),
+                expanded_name!("", "y") => self.y = Some(attr.parse(value)?),
+                expanded_name!("", "width") => {
+                    self.w = Some(
+                        attr.parse_and_validate(value, Length::<Horizontal>::check_nonnegative)?,
+                    )
+                }
+                expanded_name!("", "height") => {
+                    self.h =
+                        Some(attr.parse_and_validate(value, Length::<Vertical>::check_nonnegative)?)
+                }
+                expanded_name!("", "viewBox") => self.vbox = attr.parse(value).map(Some)?,
+                _ => (),
+            }
         }
 
-        draw_ctx.increase_num_elements_rendered_through_use(1);
+        Ok(())
+    }
+}
+
+impl Draw for Svg {
+    fn draw(
+        &self,
+        node: &Node,
+        acquired_nodes: &mut AcquiredNodes,
+        cascaded: &CascadedValues<'_>,
+        draw_ctx: &mut DrawingCtx,
+        clipping: bool,
+    ) -> Result<BoundingBox, RenderingError> {
+        let values = cascaded.get();
 
         let params = draw_ctx.get_view_params();
 
-        let nx = self.x.get().normalize(values, &params);
-        let ny = self.y.get().normalize(values, &params);
+        let has_parent = node.parent().is_some();
+
+        let clip_mode = if !values.is_overflow() && has_parent {
+            Some(ClipMode::ClipToViewport)
+        } else {
+            None
+        };
+
+        let svg_viewport = self.get_viewport(values, &params, !has_parent);
+
+        let is_measuring_toplevel_svg = !has_parent && draw_ctx.is_measuring();
+
+        let (viewport, vbox) = if is_measuring_toplevel_svg || has_parent {
+            // We are obtaining the toplevel SVG's geometry.  This means, don't care about the
+            // DrawingCtx's viewport, just use the SVG's intrinsic dimensions and see how far
+            // it wants to extend.
+            (svg_viewport, self.vbox)
+        } else {
+            (
+                // The client's viewport overrides the toplevel's x/y/w/h viewport
+                draw_ctx.toplevel_viewport(),
+                // Use our viewBox if available, or try to derive one from
+                // the intrinsic dimensions.
+                self.vbox.or_else(|| {
+                    Some(ViewBox::from(Rect::from_size(
+                        svg_viewport.width(),
+                        svg_viewport.height(),
+                    )))
+                }),
+            )
+        };
+
+        draw_ctx.with_discrete_layer(node, acquired_nodes, values, clipping, &mut |an, dc| {
+            let _params =
+                dc.push_new_viewport(vbox, viewport, self.preserve_aspect_ratio, clip_mode);
+
+            node.draw_children(an, cascaded, dc, clipping)
+        })
+    }
+}
+
+#[derive(Default)]
+pub struct Use {
+    link: Option<Fragment>,
+    x: Length<Horizontal>,
+    y: Length<Vertical>,
+    w: Option<Length<Horizontal>>,
+    h: Option<Length<Vertical>>,
+}
+
+impl Use {
+    pub fn get_rect(&self, values: &ComputedValues, params: &ViewParams) -> Rect {
+        let x = self.x.normalize(values, &params);
+        let y = self.y.normalize(values, &params);
 
         // If attributes ‘width’ and/or ‘height’ are not specified,
         // [...] use values of '100%' for these attributes.
         // From https://www.w3.org/TR/SVG/struct.html#UseElement in
         // "If the ‘use’ element references a ‘symbol’ element"
 
-        let nw = self
+        let w = self
             .w
-            .get()
-            .unwrap_or_else(|| Length::parse_str("100%", LengthDir::Horizontal).unwrap())
+            .unwrap_or_else(|| Length::<Horizontal>::parse_str("100%").unwrap())
             .normalize(values, &params);
-        let nh = self
+        let h = self
             .h
-            .get()
-            .unwrap_or_else(|| Length::parse_str("100%", LengthDir::Vertical).unwrap())
+            .unwrap_or_else(|| Length::<Vertical>::parse_str("100%").unwrap())
             .normalize(values, &params);
 
-        // width or height set to 0 disables rendering of the element
-        // https://www.w3.org/TR/SVG/struct.html#UseElementWidthAttribute
-        if nw.approx_eq_cairo(&0.0) || nh.approx_eq_cairo(&0.0) {
-            return Ok(());
-        }
-
-        if child.get_type() != NodeType::Symbol {
-            let cr = draw_ctx.get_cairo_context();
-            cr.translate(nx, ny);
-
-            draw_ctx.with_discrete_layer(node, values, clipping, &mut |dc| {
-                dc.draw_node_from_stack(
-                    &CascadedValues::new_from_values(&child, values),
-                    &child,
-                    clipping,
-                )
-            })
-        } else {
-            child.with_impl(|symbol: &NodeSymbol| {
-                let do_clip = !values.is_overflow()
-                    || (values.overflow == Overflow::Visible && child.is_overflow());
-
-                draw_in_viewport(
-                    nx,
-                    ny,
-                    nw,
-                    nh,
-                    ClipMode::ClipToVbox,
-                    do_clip,
-                    symbol.vbox.get(),
-                    symbol.preserve_aspect_ratio.get(),
-                    node,
-                    values,
-                    draw_ctx.get_cairo_context().get_matrix(),
-                    draw_ctx,
-                    clipping,
-                    &mut |dc| {
-                        // We don't push a layer because draw_in_viewport() already does it
-                        child.draw_children(
-                            &CascadedValues::new_from_values(&child, values),
-                            dc,
-                            clipping,
-                        )
-                    },
-                )
-            })
-        }
+        Rect::new(x, y, x + w, y + h)
     }
 }
 
-pub struct NodeSymbol {
-    preserve_aspect_ratio: Cell<AspectRatio>,
-    vbox: Cell<Option<ViewBox>>,
-}
+impl SetAttributes for Use {
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        for (attr, value) in attrs.iter() {
+            match attr.expanded() {
+                ref a if is_href(a) => set_href(
+                    a,
+                    &mut self.link,
+                    Fragment::parse(value).attribute(attr.clone())?,
+                ),
 
-impl NodeSymbol {
-    pub fn new() -> NodeSymbol {
-        NodeSymbol {
-            preserve_aspect_ratio: Cell::new(AspectRatio::default()),
-            vbox: Cell::new(None),
-        }
-    }
-}
-
-impl NodeTrait for NodeSymbol {
-    fn set_atts(
-        &self,
-        node: &RsvgNode,
-        _: *const RsvgHandle,
-        pbag: &PropertyBag<'_>,
-    ) -> NodeResult {
-        // symbol element has overflow:hidden
-        // https://www.w3.org/TR/SVG/styling.html#UAStyleSheet
-        node.set_overflow_hidden();
-
-        for (_key, attr, value) in pbag.iter() {
-            match attr {
-                Attribute::PreserveAspectRatio => {
-                    self.preserve_aspect_ratio
-                        .set(parse("preserveAspectRatio", value, ())?)
+                expanded_name!("", "x") => self.x = attr.parse(value)?,
+                expanded_name!("", "y") => self.y = attr.parse(value)?,
+                expanded_name!("", "width") => {
+                    self.w = attr
+                        .parse_and_validate(value, Length::<Horizontal>::check_nonnegative)
+                        .map(Some)?
                 }
-
-                Attribute::ViewBox => self.vbox.set(parse("viewBox", value, ()).map(Some)?),
-
+                expanded_name!("", "height") => {
+                    self.h = attr
+                        .parse_and_validate(value, Length::<Vertical>::check_nonnegative)
+                        .map(Some)?
+                }
                 _ => (),
             }
         }
@@ -431,37 +307,192 @@ impl NodeTrait for NodeSymbol {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn rsvg_node_svg_get_size(
-    raw_node: *const RsvgNode,
-    dpi_x: libc::c_double,
-    dpi_y: libc::c_double,
-    out_width: *mut i32,
-    out_height: *mut i32,
-) -> glib_sys::gboolean {
-    assert!(!raw_node.is_null());
-    let node: &RsvgNode = unsafe { &*raw_node };
+impl Draw for Use {
+    fn draw(
+        &self,
+        node: &Node,
+        acquired_nodes: &mut AcquiredNodes,
+        cascaded: &CascadedValues<'_>,
+        draw_ctx: &mut DrawingCtx,
+        clipping: bool,
+    ) -> Result<BoundingBox, RenderingError> {
+        draw_ctx.draw_from_use_node(node, acquired_nodes, cascaded, self.link.as_ref(), clipping)
+    }
+}
 
-    assert!(!out_width.is_null());
-    assert!(!out_height.is_null());
+#[derive(Default)]
+pub struct Symbol {
+    preserve_aspect_ratio: AspectRatio,
+    vbox: Option<ViewBox>,
+}
 
-    node.with_impl(
-        |svg: &NodeSvg| match (svg.w.get(), svg.h.get(), svg.vbox.get()) {
-            (w, h, Some(vb)) => {
-                unsafe {
-                    *out_width = w.hand_normalize(dpi_x, vb.0.width, 12.0).round() as i32;
-                    *out_height = h.hand_normalize(dpi_y, vb.0.height, 12.0).round() as i32;
+impl Symbol {
+    pub fn get_viewbox(&self) -> Option<ViewBox> {
+        self.vbox
+    }
+
+    pub fn get_preserve_aspect_ratio(&self) -> AspectRatio {
+        self.preserve_aspect_ratio
+    }
+}
+
+impl SetAttributes for Symbol {
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        for (attr, value) in attrs.iter() {
+            match attr.expanded() {
+                expanded_name!("", "preserveAspectRatio") => {
+                    self.preserve_aspect_ratio = attr.parse(value)?
                 }
-                true.to_glib()
+                expanded_name!("", "viewBox") => self.vbox = attr.parse(value).map(Some)?,
+                _ => (),
             }
-            (w, h, None) if w.unit != LengthUnit::Percent && h.unit != LengthUnit::Percent => {
-                unsafe {
-                    *out_width = w.hand_normalize(dpi_x, 0.0, 12.0).round() as i32;
-                    *out_height = h.hand_normalize(dpi_y, 0.0, 12.0).round() as i32;
+        }
+
+        Ok(())
+    }
+}
+
+impl Draw for Symbol {}
+
+coord_units!(ClipPathUnits, CoordUnits::UserSpaceOnUse);
+
+#[derive(Default)]
+pub struct ClipPath {
+    units: ClipPathUnits,
+}
+
+impl ClipPath {
+    pub fn get_units(&self) -> CoordUnits {
+        CoordUnits::from(self.units)
+    }
+}
+
+impl SetAttributes for ClipPath {
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        let result = attrs
+            .iter()
+            .find(|(attr, _)| attr.expanded() == expanded_name!("", "clipPathUnits"))
+            .and_then(|(attr, value)| attr.parse(value).ok());
+        if let Some(units) = result {
+            self.units = units
+        }
+
+        Ok(())
+    }
+}
+
+impl Draw for ClipPath {}
+
+coord_units!(MaskUnits, CoordUnits::ObjectBoundingBox);
+coord_units!(MaskContentUnits, CoordUnits::UserSpaceOnUse);
+
+pub struct Mask {
+    x: Length<Horizontal>,
+    y: Length<Vertical>,
+    width: Length<Horizontal>,
+    height: Length<Vertical>,
+
+    units: MaskUnits,
+    content_units: MaskContentUnits,
+}
+
+impl Default for Mask {
+    fn default() -> Mask {
+        Mask {
+            // these values are per the spec
+            x: Length::<Horizontal>::parse_str("-10%").unwrap(),
+            y: Length::<Vertical>::parse_str("-10%").unwrap(),
+            width: Length::<Horizontal>::parse_str("120%").unwrap(),
+            height: Length::<Vertical>::parse_str("120%").unwrap(),
+
+            units: MaskUnits::default(),
+            content_units: MaskContentUnits::default(),
+        }
+    }
+}
+
+impl Mask {
+    pub fn get_units(&self) -> CoordUnits {
+        CoordUnits::from(self.units)
+    }
+
+    pub fn get_content_units(&self) -> CoordUnits {
+        CoordUnits::from(self.content_units)
+    }
+
+    pub fn get_rect(&self, values: &ComputedValues, params: &ViewParams) -> Rect {
+        let x = self.x.normalize(&values, &params);
+        let y = self.y.normalize(&values, &params);
+        let w = self.width.normalize(&values, &params);
+        let h = self.height.normalize(&values, &params);
+
+        Rect::new(x, y, x + w, y + h)
+    }
+}
+
+impl SetAttributes for Mask {
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        for (attr, value) in attrs.iter() {
+            match attr.expanded() {
+                expanded_name!("", "x") => self.x = attr.parse(value)?,
+                expanded_name!("", "y") => self.y = attr.parse(value)?,
+                expanded_name!("", "width") => {
+                    self.width =
+                        attr.parse_and_validate(value, Length::<Horizontal>::check_nonnegative)?
                 }
-                true.to_glib()
+                expanded_name!("", "height") => {
+                    self.height =
+                        attr.parse_and_validate(value, Length::<Vertical>::check_nonnegative)?
+                }
+                expanded_name!("", "maskUnits") => self.units = attr.parse(value)?,
+                expanded_name!("", "maskContentUnits") => self.content_units = attr.parse(value)?,
+                _ => (),
             }
-            (_, _, _) => false.to_glib(),
-        },
-    )
+        }
+
+        Ok(())
+    }
+}
+
+impl Draw for Mask {}
+
+#[derive(Default)]
+pub struct Link {
+    link: Option<String>,
+}
+
+impl SetAttributes for Link {
+    fn set_attributes(&mut self, attrs: &Attributes) -> ElementResult {
+        for (attr, value) in attrs.iter() {
+            match attr.expanded() {
+                ref a if is_href(a) => set_href(a, &mut self.link, value.to_owned()),
+                _ => (),
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Draw for Link {
+    fn draw(
+        &self,
+        node: &Node,
+        acquired_nodes: &mut AcquiredNodes,
+        cascaded: &CascadedValues<'_>,
+        draw_ctx: &mut DrawingCtx,
+        clipping: bool,
+    ) -> Result<BoundingBox, RenderingError> {
+        let cascaded = CascadedValues::new(cascaded, node);
+        let values = cascaded.get();
+
+        draw_ctx.with_discrete_layer(node, acquired_nodes, values, clipping, &mut |an, dc| {
+            match self.link.as_ref() {
+                Some(l) if !l.is_empty() => {
+                    dc.with_link_tag(l, &mut |dc| node.draw_children(an, &cascaded, dc, clipping))
+                }
+                _ => node.draw_children(an, &cascaded, dc, clipping),
+            }
+        })
+    }
 }

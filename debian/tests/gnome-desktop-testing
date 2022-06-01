@@ -1,7 +1,6 @@
 #!/bin/sh
 
 set -e
-
-: "${AUTOPKGTEST_TMP:="${ADTTMP}"}"
+set -u
 
 exec gnome-desktop-testing-runner RSVG

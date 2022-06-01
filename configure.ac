@@ -1,9 +1,27 @@
+# Package version, the "human readable" version
 m4_define([rsvg_major_version],[2])
-m4_define([rsvg_minor_version],[44])
-m4_define([rsvg_micro_version],[10])
-m4_define([rsvg_extra_version],[])
-m4_define([rsvg_version],[rsvg_major_version.rsvg_minor_version.rsvg_micro_version()rsvg_extra_version])
-m4_define([rsvg_lt_version_info],m4_eval(rsvg_major_version + rsvg_minor_version):rsvg_micro_version:rsvg_minor_version)
+m4_define([rsvg_minor_version],[50])
+m4_define([rsvg_micro_version],[3]) # Keep this in sync with librsvg_crate/Cargo.toml
+m4_define([rsvg_version],[rsvg_major_version.rsvg_minor_version.rsvg_micro_version])
+
+# Library version information.  To make a release:
+#
+# - rsvg_lt_revision += 1
+#
+# - Added interfaces?
+#     rsvg_lt_current += 1
+#     rsvg_lt_revision = 0
+#     rsvg_lt_age += 1
+#
+# - Removed/changed interfaces?
+#     Don't do that! (except for a major release, and only extra-carefully)
+#     rsvg_lt_current += 1
+#     rsvg_lt_revision = 0
+#     rsvg_lt_age = 0
+m4_define([rsvg_lt_current],[49])
+m4_define([rsvg_lt_revision],[0])
+m4_define([rsvg_lt_age],[47])
+m4_define([rsvg_lt_version_info],rsvg_lt_current:rsvg_lt_revision:rsvg_lt_age)
 
 AC_INIT([RSVG],[rsvg_version],[https://gitlab.gnome.org/GNOME/librsvg/issues],[librsvg])
 
@@ -37,15 +55,26 @@ AC_SUBST([LIBRSVG_MINOR_VERSION],[rsvg_minor_version])
 AC_SUBST([LIBRSVG_MICRO_VERSION],[rsvg_micro_version])
 
 dnl ===========================================================================
+dnl Gettext stuff
+dnl ===========================================================================
+
+# FIXME: Remove AM_GNU_GETTEXT_VERSION once autoreconf supports REQUIRE_VERSION
+AM_GNU_GETTEXT_VERSION([0.19.8])
+AM_GNU_GETTEXT_REQUIRE_VERSION([0.19.8])
+AM_GNU_GETTEXT([external])
+
+AC_SUBST([GETTEXT_PACKAGE], [librsvg])
+AC_DEFINE_UNQUOTED([GETTEXT_PACKAGE], "$GETTEXT_PACKAGE", [Define to the gettext package name.])
+
+dnl ===========================================================================
 dnl Please update COMPILING.md with version numbers if these change
-CAIRO_REQUIRED=1.15.12
-CROCO_REQUIRED=0.6.1
+CAIRO_REQUIRED=1.16.0
 dnl This corresponds to Freetype2 2.8
 FREETYPE2_REQUIRED=20.0.14
 GDK_PIXBUF_REQUIRED=2.20
 GIO_REQUIRED=2.24.0
-GLIB_REQUIRED=2.48.0
-GTK3_REQUIRED=3.10.0
+GLIB_REQUIRED=2.50.0
+HARFBUZZ_REQUIRED=2.0.0
 LIBXML_REQUIRED=2.9.0
 PANGO_REQUIRED=1.38.0
 
@@ -73,11 +102,11 @@ AC_SUBST(DLOPEN_LIBS)
 
 dnl ===========================================================================
 
-AC_CHECK_PROG(CARGO, [cargo], [yes], [no])
+AC_CHECK_PROGS(CARGO, [cargo], [no])
 AS_IF(test x$CARGO = xno,
     AC_MSG_ERROR([cargo is required.  Please install the Rust toolchain from https://www.rust-lang.org/])
 )
-AC_CHECK_PROG(RUSTC, [rustc], [yes], [no])
+AC_CHECK_PROGS(RUSTC, [rustc], [no])
 AS_IF(test x$RUSTC = xno,
     AC_MSG_ERROR([rustc is required.  Please install the Rust toolchain from https://www.rust-lang.org/])
 )
@@ -85,9 +114,9 @@ AS_IF(test x$RUSTC = xno,
 dnl Minimum version of rustc that we support
 dnl If you change this, please update COMPILING.md
 MINIMUM_RUST_MAJOR=1
-MINIMUM_RUST_MINOR=27
+MINIMUM_RUST_MINOR=40
 
-rust_version=`rustc --version`
+rust_version=`$RUSTC --version`
 version=`echo "$rust_version" | sed -e 's/^rustc //g'`
 major=`echo "$version" | cut -d. -f1`
 minor=`echo "$version" | cut -d. -f2`
@@ -111,6 +140,7 @@ case "$host" in
 esac
 AC_MSG_RESULT([$platform_win32])
 AM_CONDITIONAL(PLATFORM_WIN32, test "$platform_win32" = "yes")
+AM_CONDITIONAL(LIB_NAME_WORKAROUND, test "$platform_win32" = "yes" -a \( "$major" -lt 1 -o "$minor" -lt 44 \))
 
 AC_MSG_CHECKING([for native Win32])
 case "$host" in
@@ -126,20 +156,43 @@ AM_CONDITIONAL(OS_WIN32, test "$native_win32" = "yes")
 
 dnl ===========================================================================
 
+#AC_CANONICAL_HOST
+
+AC_MSG_CHECKING([for darwin])
+case "$host" in
+  *-*-darwin*)
+    native_darwin=yes
+    ;;
+  *)
+    native_darwin=no
+    ;;
+esac
+AC_MSG_RESULT([$native_darwin])
+AM_CONDITIONAL(OS_DARWIN, test "$native_darwin" = "yes")
+
+dnl ===========================================================================
+
 GLIB_MKENUMS=`$PKG_CONFIG --variable=glib_mkenums glib-2.0`
 AC_SUBST(GLIB_MKENUMS)
 
 PKG_CHECK_MODULES(LIBRSVG,                     \
 	cairo >= $CAIRO_REQUIRED               \
 	cairo-png >= $CAIRO_REQUIRED           \
+	cairo-gobject >= $CAIRO_REQUIRED       \
 	freetype2 >= $FREETYPE2_REQUIRED       \
 	gdk-pixbuf-2.0 >= $GDK_PIXBUF_REQUIRED \
 	gio-2.0 >= $GIO_REQUIRED               \
 	glib-2.0 >= $GLIB_REQUIRED             \
+	harfbuzz >= $HARFBUZZ_REQUIRED         \
 	libxml-2.0 >= $LIBXML_REQUIRED         \
 	pangocairo >= $PANGO_REQUIRED          \
-	pangoft2 >= $PANGO_REQUIRED            \
-        libcroco-0.6 >= $CROCO_REQUIRED)
+	pangoft2 >= $PANGO_REQUIRED	       \
+)
+
+CAIRO_VERSION=`$PKG_CONFIG --modversion cairo`
+PANGO_VERSION=`$PKG_CONFIG --modversion pangocairo`
+FREETYPE_VERSION=`$PKG_CONFIG --modversion freetype2`
+HARFBUZZ_VERSION=`$PKG_CONFIG --modversion harfbuzz`
 
 PKG_CHECK_MODULES([GTHREAD],[gthread-2.0 >= $GLIB_REQUIRED])
 
@@ -155,22 +208,6 @@ case "$host" in
 esac
 
 GLIB_TESTS
-
-# ===========================================================================
-# GTK
-# ===========================================================================
-
-PKG_CHECK_MODULES([GTK3],[gtk+-3.0 >= $GTK3_REQUIRED],[have_gtk_3=yes],[have_gtk_3=no])
-
-GTK3_BINARY_VERSION=
-
-if test "$have_gtk_3" = "yes"; then
-    GTK3_BINARY_VERSION="`$PKG_CONFIG --variable=gtk_binary_version gtk+-3.0`"
-fi
-
-AC_SUBST([GTK3_BINARY_VERSION])
-
-AM_CONDITIONAL([HAVE_GTK_3],[test "$have_gtk_3" = "yes"])
 
 dnl ===========================================================================
 dnl GDK-Pixbuf SVG loader
@@ -267,7 +304,7 @@ AC_ARG_ENABLE(debug,
                              [Build Rust code with debugging information [default=no]]),
               [debug_release=$enableval],
 	      [
-	        if test "x$LIBRSVG_DEBUG" == "x"; then
+	        if test "x$LIBRSVG_DEBUG" = "x"; then
 		  debug_release="no"
 		elif test "x$LIBRSVG_DEBUG" = "xyes"; then
 		  debug_release="yes"
@@ -287,7 +324,7 @@ fi
 AM_CONDITIONAL([DEBUG_RELEASE], [test "x$debug_release" = "xyes"])
 
 AC_ARG_VAR(RUST_TARGET, [Set rust target (default=$host)])
-if test "x$RUST_TARGET" == x; then
+if test "x$RUST_TARGET" = x; then
 	RUST_TARGET=$host
 fi
 
@@ -366,16 +403,13 @@ tests/Makefile
 tools/Makefile
 doc/Makefile
 doc/version.xml
-config.h.win32
 win32/Makefile
-win32/vs12/Makefile
-win32/vs12/rsvg-version-paths.props
-win32/vs14/Makefile
-win32/vs15/Makefile
+win32/config.h.win32
+win32/config-msvc.mak
+po/Makefile.in
 ])
 
 AC_CONFIG_FILES([librsvg-${RSVG_API_VERSION}.pc:librsvg.pc.in],[],[RSVG_API_VERSION=$RSVG_API_VERSION])
-AC_CONFIG_FILES([librsvg-${RSVG_API_VERSION}-uninstalled.pc:librsvg-uninstalled.pc.in],[],[RSVG_API_VERSION=$RSVG_API_VERSION])
 
 AC_OUTPUT
 
@@ -387,12 +421,16 @@ librsvg-$VERSION
 	C compiler:                     ${CC}
 	rustc:                          ${rust_version}
 
+	Cairo version:                  ${CAIRO_VERSION}
+	Pango version:                  ${PANGO_VERSION}
+	Freetype version:               ${FREETYPE_VERSION}
+	Harfbuzz version:               ${HARFBUZZ_VERSION}
+
         Debugging information for Rust: ${debug_release}
 
 	Build introspectable bindings:  ${found_introspection}
 	Build Vala bindings:            ${enable_vala}
 	Build GdkPixbuf loader:         ${enable_pixbuf_loader}
-        GTK+ $GTK3_REQUIRED or later:           ${have_gtk_3}
 	Build miscellaneous tools:      ${build_misc_tools}
 	Build HTML documentation:       ${enable_gtk_doc}
 "

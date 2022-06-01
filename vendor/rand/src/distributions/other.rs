@@ -1,6 +1,4 @@
-// Copyright 2017 The Rust Project Developers. See the COPYRIGHT
-// file at the top-level directory of this distribution and at
-// https://rust-lang.org/COPYRIGHT.
+// Copyright 2018 Developers of the Rand project.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
 // https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
@@ -13,29 +11,51 @@
 use core::char;
 use core::num::Wrapping;
 
-use {Rng};
-use distributions::{Distribution, Standard, Uniform};
+use crate::distributions::{Distribution, Standard, Uniform};
+use crate::Rng;
+
+#[cfg(feature = "serde1")]
+use serde::{Serialize, Deserialize};
 
 // ----- Sampling distributions -----
 
-/// Sample a `char`, uniformly distributed over ASCII letters and numbers:
+/// Sample a `u8`, uniformly distributed over ASCII letters and numbers:
 /// a-z, A-Z and 0-9.
-/// 
+///
 /// # Example
 ///
 /// ```
 /// use std::iter;
 /// use rand::{Rng, thread_rng};
 /// use rand::distributions::Alphanumeric;
-/// 
+///
 /// let mut rng = thread_rng();
 /// let chars: String = iter::repeat(())
 ///         .map(|()| rng.sample(Alphanumeric))
+///         .map(char::from)
 ///         .take(7)
 ///         .collect();
 /// println!("Random chars: {}", chars);
 /// ```
+///
+/// # Passwords
+///
+/// Users sometimes ask whether it is safe to use a string of random characters
+/// as a password. In principle, all RNGs in Rand implementing `CryptoRng` are
+/// suitable as a source of randomness for generating passwords (if they are
+/// properly seeded), but it is more conservative to only use randomness
+/// directly from the operating system via the `getrandom` crate, or the
+/// corresponding bindings of a crypto library.
+///
+/// When generating passwords or keys, it is important to consider the threat
+/// model and in some cases the memorability of the password. This is out of
+/// scope of the Rand project, and therefore we defer to the following
+/// references:
+///
+/// - [Wikipedia article on Password Strength](https://en.wikipedia.org/wiki/Password_strength)
+/// - [Diceware for generating memorable passwords](https://en.wikipedia.org/wiki/Diceware)
 #[derive(Debug)]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub struct Alphanumeric;
 
 
@@ -44,23 +64,28 @@ pub struct Alphanumeric;
 impl Distribution<char> for Standard {
     #[inline]
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> char {
-        let range = Uniform::new(0u32, 0x11_0000);
-        loop {
-            match char::from_u32(range.sample(rng)) {
-                Some(c) => return c,
-                // About 0.2% of numbers in the range 0..0x110000 are invalid
-                // codepoints (surrogates).
-                None => {}
-            }
+        // A valid `char` is either in the interval `[0, 0xD800)` or
+        // `(0xDFFF, 0x11_0000)`. All `char`s must therefore be in
+        // `[0, 0x11_0000)` but not in the "gap" `[0xD800, 0xDFFF]` which is
+        // reserved for surrogates. This is the size of that gap.
+        const GAP_SIZE: u32 = 0xDFFF - 0xD800 + 1;
+
+        // Uniform::new(0, 0x11_0000 - GAP_SIZE) can also be used but it
+        // seemed slower.
+        let range = Uniform::new(GAP_SIZE, 0x11_0000);
+
+        let mut n = range.sample(rng);
+        if n <= 0xDFFF {
+            n -= GAP_SIZE;
         }
+        unsafe { char::from_u32_unchecked(n) }
     }
 }
 
-impl Distribution<char> for Alphanumeric {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> char {
+impl Distribution<u8> for Alphanumeric {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> u8 {
         const RANGE: u32 = 26 + 26 + 10;
-        const GEN_ASCII_STR_CHARSET: &[u8] =
-            b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
+        const GEN_ASCII_STR_CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
                 abcdefghijklmnopqrstuvwxyz\
                 0123456789";
         // We can pick from 62 characters. This is so close to a power of 2, 64,
@@ -70,7 +95,7 @@ impl Distribution<char> for Alphanumeric {
         loop {
             let var = rng.next_u32() >> (32 - 6);
             if var < RANGE {
-                return GEN_ASCII_STR_CHARSET[var as usize] as char
+                return GEN_ASCII_STR_CHARSET[var as usize];
             }
         }
     }
@@ -112,21 +137,24 @@ macro_rules! tuple_impl {
 }
 
 impl Distribution<()> for Standard {
+    #[allow(clippy::unused_unit)]
     #[inline]
-    fn sample<R: Rng + ?Sized>(&self, _: &mut R) -> () { () }
+    fn sample<R: Rng + ?Sized>(&self, _: &mut R) -> () {
+        ()
+    }
 }
-tuple_impl!{A}
-tuple_impl!{A, B}
-tuple_impl!{A, B, C}
-tuple_impl!{A, B, C, D}
-tuple_impl!{A, B, C, D, E}
-tuple_impl!{A, B, C, D, E, F}
-tuple_impl!{A, B, C, D, E, F, G}
-tuple_impl!{A, B, C, D, E, F, G, H}
-tuple_impl!{A, B, C, D, E, F, G, H, I}
-tuple_impl!{A, B, C, D, E, F, G, H, I, J}
-tuple_impl!{A, B, C, D, E, F, G, H, I, J, K}
-tuple_impl!{A, B, C, D, E, F, G, H, I, J, K, L}
+tuple_impl! {A}
+tuple_impl! {A, B}
+tuple_impl! {A, B, C}
+tuple_impl! {A, B, C, D}
+tuple_impl! {A, B, C, D, E}
+tuple_impl! {A, B, C, D, E, F}
+tuple_impl! {A, B, C, D, E, F, G}
+tuple_impl! {A, B, C, D, E, F, G, H}
+tuple_impl! {A, B, C, D, E, F, G, H, I}
+tuple_impl! {A, B, C, D, E, F, G, H, I, J}
+tuple_impl! {A, B, C, D, E, F, G, H, I, J, K}
+tuple_impl! {A, B, C, D, E, F, G, H, I, J, K, L}
 
 macro_rules! array_impl {
     // recursive, given at least one type parameter:
@@ -148,9 +176,11 @@ macro_rules! array_impl {
     };
 }
 
-array_impl!{32, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T,}
+array_impl! {32, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T,}
 
-impl<T> Distribution<Option<T>> for Standard where Standard: Distribution<T> {
+impl<T> Distribution<Option<T>> for Standard
+where Standard: Distribution<T>
+{
     #[inline]
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Option<T> {
         // UFCS is needed here: https://github.com/rust-lang/rust/issues/24066
@@ -162,7 +192,9 @@ impl<T> Distribution<Option<T>> for Standard where Standard: Distribution<T> {
     }
 }
 
-impl<T> Distribution<Wrapping<T>> for Standard where Standard: Distribution<T> {
+impl<T> Distribution<Wrapping<T>> for Standard
+where Standard: Distribution<T>
+{
     #[inline]
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Wrapping<T> {
         Wrapping(rng.gen())
@@ -172,44 +204,110 @@ impl<T> Distribution<Wrapping<T>> for Standard where Standard: Distribution<T> {
 
 #[cfg(test)]
 mod tests {
-    use {Rng, RngCore, Standard};
-    use distributions::Alphanumeric;
-    #[cfg(all(not(feature="std"), feature="alloc"))] use alloc::string::String;
+    use super::*;
+    use crate::RngCore;
+    #[cfg(feature = "alloc")] use alloc::string::String;
 
     #[test]
     fn test_misc() {
-        let rng: &mut RngCore = &mut ::test::rng(820);
-        
+        let rng: &mut dyn RngCore = &mut crate::test::rng(820);
+
         rng.sample::<char, _>(Standard);
         rng.sample::<bool, _>(Standard);
     }
-    
-    #[cfg(feature="alloc")]
+
+    #[cfg(feature = "alloc")]
     #[test]
     fn test_chars() {
         use core::iter;
-        let mut rng = ::test::rng(805);
+        let mut rng = crate::test::rng(805);
 
         // Test by generating a relatively large number of chars, so we also
         // take the rejection sampling path.
         let word: String = iter::repeat(())
-                .map(|()| rng.gen::<char>()).take(1000).collect();
+            .map(|()| rng.gen::<char>())
+            .take(1000)
+            .collect();
         assert!(word.len() != 0);
     }
 
     #[test]
     fn test_alphanumeric() {
-        let mut rng = ::test::rng(806);
+        let mut rng = crate::test::rng(806);
 
         // Test by generating a relatively large number of chars, so we also
         // take the rejection sampling path.
         let mut incorrect = false;
         for _ in 0..100 {
-            let c = rng.sample(Alphanumeric);
+            let c: char = rng.sample(Alphanumeric).into();
             incorrect |= !((c >= '0' && c <= '9') ||
                            (c >= 'A' && c <= 'Z') ||
                            (c >= 'a' && c <= 'z') );
         }
         assert!(incorrect == false);
+    }
+
+    #[test]
+    fn value_stability() {
+        fn test_samples<T: Copy + core::fmt::Debug + PartialEq, D: Distribution<T>>(
+            distr: &D, zero: T, expected: &[T],
+        ) {
+            let mut rng = crate::test::rng(807);
+            let mut buf = [zero; 5];
+            for x in &mut buf {
+                *x = rng.sample(&distr);
+            }
+            assert_eq!(&buf, expected);
+        }
+
+        test_samples(&Standard, 'a', &[
+            '\u{8cdac}',
+            '\u{a346a}',
+            '\u{80120}',
+            '\u{ed692}',
+            '\u{35888}',
+        ]);
+        test_samples(&Alphanumeric, 0, &[104, 109, 101, 51, 77]);
+        test_samples(&Standard, false, &[true, true, false, true, false]);
+        test_samples(&Standard, None as Option<bool>, &[
+            Some(true),
+            None,
+            Some(false),
+            None,
+            Some(false),
+        ]);
+        test_samples(&Standard, Wrapping(0i32), &[
+            Wrapping(-2074640887),
+            Wrapping(-1719949321),
+            Wrapping(2018088303),
+            Wrapping(-547181756),
+            Wrapping(838957336),
+        ]);
+
+        // We test only sub-sets of tuple and array impls
+        test_samples(&Standard, (), &[(), (), (), (), ()]);
+        test_samples(&Standard, (false,), &[
+            (true,),
+            (true,),
+            (false,),
+            (true,),
+            (false,),
+        ]);
+        test_samples(&Standard, (false, false), &[
+            (true, true),
+            (false, true),
+            (false, false),
+            (true, false),
+            (false, false),
+        ]);
+
+        test_samples(&Standard, [0u8; 0], &[[], [], [], [], []]);
+        test_samples(&Standard, [0u8; 3], &[
+            [9, 247, 111],
+            [68, 24, 13],
+            [174, 19, 194],
+            [172, 69, 213],
+            [149, 207, 29],
+        ]);
     }
 }

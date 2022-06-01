@@ -6,17 +6,17 @@ use num::{One, Zero};
 use alga::general::{
     AbstractGroup, AbstractGroupAbelian, AbstractLoop, AbstractMagma, AbstractModule,
     AbstractMonoid, AbstractQuasigroup, AbstractSemigroup, Additive, ClosedAdd, ClosedMul,
-    ClosedNeg, Field, Identity, Inverse, JoinSemilattice, Lattice, MeetSemilattice, Module,
-    Multiplicative, Real, RingCommutative,
+    ClosedNeg, ComplexField, Field, Identity, JoinSemilattice, Lattice, MeetSemilattice, Module,
+    Multiplicative, RingCommutative, TwoSidedInverse,
 };
 use alga::linear::{
     FiniteDimInnerSpace, FiniteDimVectorSpace, InnerSpace, NormedSpace, VectorSpace,
 };
 
-use base::allocator::Allocator;
-use base::dimension::{Dim, DimName};
-use base::storage::{Storage, StorageMut};
-use base::{DefaultAllocator, MatrixMN, MatrixN, Scalar};
+use crate::base::allocator::Allocator;
+use crate::base::dimension::{Dim, DimName};
+use crate::base::storage::{Storage, StorageMut};
+use crate::base::{DefaultAllocator, MatrixMN, MatrixN, Scalar};
 
 /*
  *
@@ -45,18 +45,19 @@ where
     }
 }
 
-impl<N, R: DimName, C: DimName> Inverse<Additive> for MatrixMN<N, R, C>
+impl<N, R: DimName, C: DimName> TwoSidedInverse<Additive> for MatrixMN<N, R, C>
 where
     N: Scalar + ClosedNeg,
     DefaultAllocator: Allocator<N, R, C>,
 {
     #[inline]
-    fn inverse(&self) -> MatrixMN<N, R, C> {
+    #[must_use = "Did you mean to use two_sided_inverse_mut()?"]
+    fn two_sided_inverse(&self) -> Self {
         -self
     }
 
     #[inline]
-    fn inverse_mut(&mut self) {
+    fn two_sided_inverse_mut(&mut self) {
         *self = -self.clone()
     }
 }
@@ -145,55 +146,71 @@ where
     }
 }
 
-impl<N: Real, R: DimName, C: DimName> NormedSpace for MatrixMN<N, R, C>
+impl<
+        N: ComplexField + simba::scalar::ComplexField<RealField = <N as ComplexField>::RealField>,
+        R: DimName,
+        C: DimName,
+    > NormedSpace for MatrixMN<N, R, C>
 where
+    <N as ComplexField>::RealField: simba::scalar::RealField,
     DefaultAllocator: Allocator<N, R, C>,
 {
+    type RealField = <N as ComplexField>::RealField;
+    type ComplexField = N;
+
     #[inline]
-    fn norm_squared(&self) -> N {
+    fn norm_squared(&self) -> <N as ComplexField>::RealField {
         self.norm_squared()
     }
 
     #[inline]
-    fn norm(&self) -> N {
+    fn norm(&self) -> <N as ComplexField>::RealField {
         self.norm()
     }
 
     #[inline]
+    #[must_use = "Did you mean to use normalize_mut()?"]
     fn normalize(&self) -> Self {
         self.normalize()
     }
 
     #[inline]
-    fn normalize_mut(&mut self) -> N {
+    fn normalize_mut(&mut self) -> <N as ComplexField>::RealField {
         self.normalize_mut()
     }
 
     #[inline]
-    fn try_normalize(&self, min_norm: N) -> Option<Self> {
+    #[must_use = "Did you mean to use try_normalize_mut()?"]
+    fn try_normalize(&self, min_norm: <N as ComplexField>::RealField) -> Option<Self> {
         self.try_normalize(min_norm)
     }
 
     #[inline]
-    fn try_normalize_mut(&mut self, min_norm: N) -> Option<N> {
+    fn try_normalize_mut(
+        &mut self,
+        min_norm: <N as ComplexField>::RealField,
+    ) -> Option<<N as ComplexField>::RealField> {
         self.try_normalize_mut(min_norm)
     }
 }
 
-impl<N: Real, R: DimName, C: DimName> InnerSpace for MatrixMN<N, R, C>
+impl<
+        N: ComplexField + simba::scalar::ComplexField<RealField = <N as ComplexField>::RealField>,
+        R: DimName,
+        C: DimName,
+    > InnerSpace for MatrixMN<N, R, C>
 where
+    <N as ComplexField>::RealField: simba::scalar::RealField,
     DefaultAllocator: Allocator<N, R, C>,
 {
-    type Real = N;
-
     #[inline]
-    fn angle(&self, other: &Self) -> N {
+    fn angle(&self, other: &Self) -> <N as ComplexField>::RealField {
         self.angle(other)
     }
 
     #[inline]
     fn inner_product(&self, other: &Self) -> N {
-        self.dot(other)
+        self.dotc(other)
     }
 }
 
@@ -201,12 +218,17 @@ where
 // In particular:
 //   − use `x()` instead of `::canonical_basis_element`
 //   − use `::new(x, y, z)` instead of `::from_slice`
-impl<N: Real, R: DimName, C: DimName> FiniteDimInnerSpace for MatrixMN<N, R, C>
+impl<
+        N: ComplexField + simba::scalar::ComplexField<RealField = <N as ComplexField>::RealField>,
+        R: DimName,
+        C: DimName,
+    > FiniteDimInnerSpace for MatrixMN<N, R, C>
 where
+    <N as ComplexField>::RealField: simba::scalar::RealField,
     DefaultAllocator: Allocator<N, R, C>,
 {
     #[inline]
-    fn orthonormalize(vs: &mut [MatrixMN<N, R, C>]) -> usize {
+    fn orthonormalize(vs: &mut [Self]) -> usize {
         let mut nbasis_elements = 0;
 
         for i in 0..vs.len() {
@@ -218,7 +240,10 @@ where
                 }
             }
 
-            if vs[i].try_normalize_mut(N::zero()).is_some() {
+            if vs[i]
+                .try_normalize_mut(<N as ComplexField>::RealField::zero())
+                .is_some()
+            {
                 // FIXME: this will be efficient on dynamically-allocated vectors but for
                 // statically-allocated ones, `.clone_from` would be better.
                 vs.swap(nbasis_elements, i);
@@ -273,7 +298,7 @@ where
                     let v = &vs[0];
                     let mut a;
 
-                    if v[0].abs() > v[1].abs() {
+                    if ComplexField::norm1(v[0]) > ComplexField::norm1(v[1]) {
                         a = Self::from_column_slice(&[v[2], N::zero(), -v[0]]);
                     } else {
                         a = Self::from_column_slice(&[N::zero(), -v[2], v[1]]);
@@ -305,7 +330,9 @@ where
                             elt -= v * elt.dot(v)
                         }
 
-                        if let Some(subsp_elt) = elt.try_normalize(N::zero()) {
+                        if let Some(subsp_elt) =
+                            elt.try_normalize(<N as ComplexField>::RealField::zero())
+                        {
                             if !f(&subsp_elt) {
                                 return;
                             };

@@ -1,27 +1,23 @@
-// Copyright 2017 Serde Developers
-//
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
-// except according to those terms.
+//! Code to convert the Rust-styled field/variant (e.g. `my_field`, `MyType`) to the
+//! case of the source (e.g. `my-field`, `MY_FIELD`).
 
 // See https://users.rust-lang.org/t/psa-dealing-with-warning-unused-import-std-ascii-asciiext-in-today-s-nightly/13726
 #[allow(deprecated, unused_imports)]
 use std::ascii::AsciiExt;
 
-use std::str::FromStr;
+use std::fmt::{self, Debug, Display};
 
 use self::RenameRule::*;
 
-#[derive(PartialEq)]
+/// The different possible ways to change case of fields in a struct, or variants in an enum.
+#[derive(Copy, Clone, PartialEq)]
 pub enum RenameRule {
     /// Don't apply a default rename rule.
     None,
     /// Rename direct children to "lowercase" style.
     LowerCase,
     /// Rename direct children to "UPPERCASE" style.
-    UPPERCASE,
+    UpperCase,
     /// Rename direct children to "PascalCase" style, as typically used for
     /// enum variants.
     PascalCase,
@@ -39,12 +35,35 @@ pub enum RenameRule {
     ScreamingKebabCase,
 }
 
+static RENAME_RULES: &[(&str, RenameRule)] = &[
+    ("lowercase", LowerCase),
+    ("UPPERCASE", UpperCase),
+    ("PascalCase", PascalCase),
+    ("camelCase", CamelCase),
+    ("snake_case", SnakeCase),
+    ("SCREAMING_SNAKE_CASE", ScreamingSnakeCase),
+    ("kebab-case", KebabCase),
+    ("SCREAMING-KEBAB-CASE", ScreamingKebabCase),
+];
+
 impl RenameRule {
+    pub fn from_str(rename_all_str: &str) -> Result<Self, ParseError> {
+        for (name, rule) in RENAME_RULES {
+            if rename_all_str == *name {
+                return Ok(*rule);
+            }
+        }
+        Err(ParseError {
+            unknown: rename_all_str,
+        })
+    }
+
+    /// Apply a renaming rule to an enum variant, returning the version expected in the source.
     pub fn apply_to_variant(&self, variant: &str) -> String {
         match *self {
             None | PascalCase => variant.to_owned(),
             LowerCase => variant.to_ascii_lowercase(),
-            UPPERCASE => variant.to_ascii_uppercase(),
+            UpperCase => variant.to_ascii_uppercase(),
             CamelCase => variant[..1].to_ascii_lowercase() + &variant[1..],
             SnakeCase => {
                 let mut snake = String::new();
@@ -64,10 +83,11 @@ impl RenameRule {
         }
     }
 
+    /// Apply a renaming rule to a struct field, returning the version expected in the source.
     pub fn apply_to_field(&self, field: &str) -> String {
         match *self {
             None | LowerCase | SnakeCase => field.to_owned(),
-            UPPERCASE => field.to_ascii_uppercase(),
+            UpperCase => field.to_ascii_uppercase(),
             PascalCase => {
                 let mut pascal = String::new();
                 let mut capitalize = true;
@@ -94,21 +114,22 @@ impl RenameRule {
     }
 }
 
-impl FromStr for RenameRule {
-    type Err = ();
+pub struct ParseError<'a> {
+    unknown: &'a str,
+}
 
-    fn from_str(rename_all_str: &str) -> Result<Self, Self::Err> {
-        match rename_all_str {
-            "lowercase" => Ok(LowerCase),
-            "UPPERCASE" => Ok(UPPERCASE),
-            "PascalCase" => Ok(PascalCase),
-            "camelCase" => Ok(CamelCase),
-            "snake_case" => Ok(SnakeCase),
-            "SCREAMING_SNAKE_CASE" => Ok(ScreamingSnakeCase),
-            "kebab-case" => Ok(KebabCase),
-            "SCREAMING-KEBAB-CASE" => Ok(ScreamingKebabCase),
-            _ => Err(()),
+impl<'a> Display for ParseError<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("unknown rename rule `rename_all = ")?;
+        Debug::fmt(self.unknown, f)?;
+        f.write_str("`, expected one of ")?;
+        for (i, (name, _rule)) in RENAME_RULES.iter().enumerate() {
+            if i > 0 {
+                f.write_str(", ")?;
+            }
+            Debug::fmt(name, f)?;
         }
+        Ok(())
     }
 }
 
@@ -133,7 +154,7 @@ fn rename_variants() {
     ] {
         assert_eq!(None.apply_to_variant(original), original);
         assert_eq!(LowerCase.apply_to_variant(original), lower);
-        assert_eq!(UPPERCASE.apply_to_variant(original), upper);
+        assert_eq!(UpperCase.apply_to_variant(original), upper);
         assert_eq!(PascalCase.apply_to_variant(original), original);
         assert_eq!(CamelCase.apply_to_variant(original), camel);
         assert_eq!(SnakeCase.apply_to_variant(original), snake);
@@ -165,7 +186,7 @@ fn rename_fields() {
         ("z42", "Z42", "Z42", "z42", "Z42", "z42", "Z42"),
     ] {
         assert_eq!(None.apply_to_field(original), original);
-        assert_eq!(UPPERCASE.apply_to_field(original), upper);
+        assert_eq!(UpperCase.apply_to_field(original), upper);
         assert_eq!(PascalCase.apply_to_field(original), pascal);
         assert_eq!(CamelCase.apply_to_field(original), camel);
         assert_eq!(SnakeCase.apply_to_field(original), original);

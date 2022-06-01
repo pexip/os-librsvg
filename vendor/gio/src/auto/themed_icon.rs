@@ -2,137 +2,113 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use Icon;
-use ffi;
-use glib;
+use gio_sys;
+use glib::object::ObjectType as ObjectType_;
+use glib::signal::connect_raw;
+use glib::signal::SignalHandlerId;
+use glib::translate::*;
+use glib::GString;
 use glib::StaticType;
 use glib::Value;
-use glib::object::Downcast;
-use glib::object::IsA;
-use glib::signal::SignalHandlerId;
-use glib::signal::connect;
-use glib::translate::*;
-use glib_ffi;
-use gobject_ffi;
+use glib_sys;
+use gobject_sys;
 use std::boxed::Box as Box_;
-use std::mem;
+use std::fmt;
 use std::mem::transmute;
-use std::ptr;
+use Icon;
 
 glib_wrapper! {
-    pub struct ThemedIcon(Object<ffi::GThemedIcon, ffi::GThemedIconClass>): Icon;
+    pub struct ThemedIcon(Object<gio_sys::GThemedIcon, gio_sys::GThemedIconClass, ThemedIconClass>) @implements Icon;
 
     match fn {
-        get_type => || ffi::g_themed_icon_get_type(),
+        get_type => || gio_sys::g_themed_icon_get_type(),
     }
 }
 
 impl ThemedIcon {
     pub fn new(iconname: &str) -> ThemedIcon {
-        unsafe {
-            from_glib_full(ffi::g_themed_icon_new(iconname.to_glib_none().0))
-        }
+        unsafe { from_glib_full(gio_sys::g_themed_icon_new(iconname.to_glib_none().0)) }
     }
 
     pub fn new_from_names(iconnames: &[&str]) -> ThemedIcon {
         let len = iconnames.len() as i32;
         unsafe {
-            from_glib_full(ffi::g_themed_icon_new_from_names(iconnames.to_glib_none().0, len))
+            from_glib_full(gio_sys::g_themed_icon_new_from_names(
+                iconnames.to_glib_none().0,
+                len,
+            ))
         }
     }
 
     pub fn new_with_default_fallbacks(iconname: &str) -> ThemedIcon {
         unsafe {
-            from_glib_full(ffi::g_themed_icon_new_with_default_fallbacks(iconname.to_glib_none().0))
+            from_glib_full(gio_sys::g_themed_icon_new_with_default_fallbacks(
+                iconname.to_glib_none().0,
+            ))
         }
     }
-}
 
-pub trait ThemedIconExt {
-    fn append_name(&self, iconname: &str);
-
-    fn get_names(&self) -> Vec<String>;
-
-    fn prepend_name(&self, iconname: &str);
-
-    fn get_property_use_default_fallbacks(&self) -> bool;
-
-    fn connect_property_name_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
-
-    fn connect_property_names_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
-
-    fn connect_property_use_default_fallbacks_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
-}
-
-impl<O: IsA<ThemedIcon> + IsA<glib::object::Object>> ThemedIconExt for O {
-    fn append_name(&self, iconname: &str) {
+    pub fn append_name(&self, iconname: &str) {
         unsafe {
-            ffi::g_themed_icon_append_name(self.to_glib_none().0, iconname.to_glib_none().0);
+            gio_sys::g_themed_icon_append_name(self.to_glib_none().0, iconname.to_glib_none().0);
         }
     }
 
-    fn get_names(&self) -> Vec<String> {
+    pub fn get_names(&self) -> Vec<GString> {
         unsafe {
-            FromGlibPtrContainer::from_glib_none(ffi::g_themed_icon_get_names(self.to_glib_none().0))
+            FromGlibPtrContainer::from_glib_none(gio_sys::g_themed_icon_get_names(
+                self.to_glib_none().0,
+            ))
         }
     }
 
-    fn prepend_name(&self, iconname: &str) {
+    pub fn prepend_name(&self, iconname: &str) {
         unsafe {
-            ffi::g_themed_icon_prepend_name(self.to_glib_none().0, iconname.to_glib_none().0);
+            gio_sys::g_themed_icon_prepend_name(self.to_glib_none().0, iconname.to_glib_none().0);
         }
     }
 
-    fn get_property_use_default_fallbacks(&self) -> bool {
+    pub fn get_property_use_default_fallbacks(&self) -> bool {
         unsafe {
             let mut value = Value::from_type(<bool as StaticType>::static_type());
-            gobject_ffi::g_object_get_property(self.to_glib_none().0, "use-default-fallbacks".to_glib_none().0, value.to_glib_none_mut().0);
-            value.get().unwrap()
+            gobject_sys::g_object_get_property(
+                self.as_ptr() as *mut gobject_sys::GObject,
+                b"use-default-fallbacks\0".as_ptr() as *const _,
+                value.to_glib_none_mut().0,
+            );
+            value
+                .get()
+                .expect("Return Value for property `use-default-fallbacks` getter")
+                .unwrap()
         }
     }
 
-    fn connect_property_name_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
-        unsafe {
-            let f: Box_<Box_<Fn(&Self) + 'static>> = Box_::new(Box_::new(f));
-            connect(self.to_glib_none().0, "notify::name",
-                transmute(notify_name_trampoline::<Self> as usize), Box_::into_raw(f) as *mut _)
+    pub fn connect_property_names_notify<F: Fn(&ThemedIcon) + 'static>(
+        &self,
+        f: F,
+    ) -> SignalHandlerId {
+        unsafe extern "C" fn notify_names_trampoline<F: Fn(&ThemedIcon) + 'static>(
+            this: *mut gio_sys::GThemedIcon,
+            _param_spec: glib_sys::gpointer,
+            f: glib_sys::gpointer,
+        ) {
+            let f: &F = &*(f as *const F);
+            f(&from_glib_borrow(this))
         }
-    }
-
-    fn connect_property_names_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
         unsafe {
-            let f: Box_<Box_<Fn(&Self) + 'static>> = Box_::new(Box_::new(f));
-            connect(self.to_glib_none().0, "notify::names",
-                transmute(notify_names_trampoline::<Self> as usize), Box_::into_raw(f) as *mut _)
-        }
-    }
-
-    fn connect_property_use_default_fallbacks_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
-        unsafe {
-            let f: Box_<Box_<Fn(&Self) + 'static>> = Box_::new(Box_::new(f));
-            connect(self.to_glib_none().0, "notify::use-default-fallbacks",
-                transmute(notify_use_default_fallbacks_trampoline::<Self> as usize), Box_::into_raw(f) as *mut _)
+            let f: Box_<F> = Box_::new(f);
+            connect_raw(
+                self.as_ptr() as *mut _,
+                b"notify::names\0".as_ptr() as *const _,
+                Some(transmute(notify_names_trampoline::<F> as usize)),
+                Box_::into_raw(f),
+            )
         }
     }
 }
 
-unsafe extern "C" fn notify_name_trampoline<P>(this: *mut ffi::GThemedIcon, _param_spec: glib_ffi::gpointer, f: glib_ffi::gpointer)
-where P: IsA<ThemedIcon> {
-    callback_guard!();
-    let f: &&(Fn(&P) + 'static) = transmute(f);
-    f(&ThemedIcon::from_glib_borrow(this).downcast_unchecked())
-}
-
-unsafe extern "C" fn notify_names_trampoline<P>(this: *mut ffi::GThemedIcon, _param_spec: glib_ffi::gpointer, f: glib_ffi::gpointer)
-where P: IsA<ThemedIcon> {
-    callback_guard!();
-    let f: &&(Fn(&P) + 'static) = transmute(f);
-    f(&ThemedIcon::from_glib_borrow(this).downcast_unchecked())
-}
-
-unsafe extern "C" fn notify_use_default_fallbacks_trampoline<P>(this: *mut ffi::GThemedIcon, _param_spec: glib_ffi::gpointer, f: glib_ffi::gpointer)
-where P: IsA<ThemedIcon> {
-    callback_guard!();
-    let f: &&(Fn(&P) + 'static) = transmute(f);
-    f(&ThemedIcon::from_glib_borrow(this).downcast_unchecked())
+impl fmt::Display for ThemedIcon {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ThemedIcon")
+    }
 }

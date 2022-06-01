@@ -4,111 +4,65 @@
 
 pub use ffi::winapi;
 
+use std::convert::TryFrom;
+use std::fmt;
 use std::ops::Deref;
 
+use enums::{Format, SurfaceType};
+use ffi;
 #[cfg(feature = "use_glib")]
 use glib::translate::*;
-use ffi;
-use ffi::enums::{Format, SurfaceType};
-use surface::{Surface, SurfaceExt};
+use surface::Surface;
 use Status;
 
-#[derive(Debug)]
-pub struct Win32Surface(Surface);
+declare_surface!(Win32Surface, SurfaceType::Win32);
 
 impl Win32Surface {
-    pub fn from(surface: Surface) -> Result<Win32Surface, Surface> {
-        if surface.get_type() == SurfaceType::Win32 {
-            Ok(Win32Surface(surface))
-        } else {
-            Err(surface)
-        }
-    }
-
-    #[doc(hidden)]
-    pub unsafe fn from_raw_full(ptr: *mut ffi::cairo_surface_t) -> Result<Win32Surface, Status> {
-        let surface = Self::from(Surface::from_raw_full(ptr)).unwrap();
-        let status = surface.status();
-        match status {
-            Status::Success => Ok(surface),
-            _ => Err(status)
-        }
-    }
-
     pub fn create(hdc: winapi::HDC) -> Result<Win32Surface, Status> {
         unsafe { Self::from_raw_full(ffi::cairo_win32_surface_create(hdc)) }
     }
 
-    pub fn create_with_dib(format: Format, width: i32, height: i32) -> Result<Win32Surface, Status> {
-        unsafe { Self::from_raw_full(ffi::cairo_win32_surface_create_with_dib(format, width, height)) }
+    #[cfg(any(all(windows, feature = "v1_14"), feature = "dox"))]
+    pub fn create_with_format(hdc: winapi::HDC, format: Format) -> Result<Win32Surface, Status> {
+        unsafe {
+            Self::from_raw_full(ffi::cairo_win32_surface_create_with_format(
+                hdc,
+                format.into(),
+            ))
+        }
     }
 
-    pub fn create_with_ddb(hdc: winapi::HDC,
-                           format: Format,
-                           width: i32,
-                           height: i32)
-                           -> Result<Win32Surface, Status> {
+    pub fn create_with_dib(
+        format: Format,
+        width: i32,
+        height: i32,
+    ) -> Result<Win32Surface, Status> {
         unsafe {
-            Self::from_raw_full(ffi::cairo_win32_surface_create_with_ddb(hdc, format, width, height))
+            Self::from_raw_full(ffi::cairo_win32_surface_create_with_dib(
+                format.into(),
+                width,
+                height,
+            ))
+        }
+    }
+
+    pub fn create_with_ddb(
+        hdc: winapi::HDC,
+        format: Format,
+        width: i32,
+        height: i32,
+    ) -> Result<Win32Surface, Status> {
+        unsafe {
+            Self::from_raw_full(ffi::cairo_win32_surface_create_with_ddb(
+                hdc,
+                format.into(),
+                width,
+                height,
+            ))
         }
     }
 
     pub fn printing_surface_create(hdc: winapi::HDC) -> Result<Win32Surface, Status> {
         unsafe { Self::from_raw_full(ffi::cairo_win32_printing_surface_create(hdc)) }
-    }
-}
-
-#[cfg(feature = "use_glib")]
-impl<'a> ToGlibPtr<'a, *mut ffi::cairo_surface_t> for Win32Surface {
-    type Storage = &'a Surface;
-
-    #[inline]
-    fn to_glib_none(&'a self) -> Stash<'a, *mut ffi::cairo_surface_t, Self> {
-        let stash = self.0.to_glib_none();
-        Stash(stash.0, stash.1)
-    }
-}
-
-#[cfg(feature = "use_glib")]
-impl FromGlibPtrNone<*mut ffi::cairo_surface_t> for Win32Surface {
-    #[inline]
-    unsafe fn from_glib_none(ptr: *mut ffi::cairo_surface_t) -> Win32Surface {
-        Self::from(from_glib_none(ptr)).unwrap()
-    }
-}
-
-#[cfg(feature = "use_glib")]
-impl FromGlibPtrBorrow<*mut ffi::cairo_surface_t> for Win32Surface {
-    #[inline]
-    unsafe fn from_glib_borrow(ptr: *mut ffi::cairo_surface_t) -> Win32Surface {
-        Self::from(from_glib_borrow(ptr)).unwrap()
-    }
-}
-
-#[cfg(feature = "use_glib")]
-impl FromGlibPtrFull<*mut ffi::cairo_surface_t> for Win32Surface {
-    #[inline]
-    unsafe fn from_glib_full(ptr: *mut ffi::cairo_surface_t) -> Win32Surface {
-        Self::from(from_glib_full(ptr)).unwrap()
-    }
-}
-
-impl AsRef<Surface> for Win32Surface {
-    fn as_ref(&self) -> &Surface {
-        &self.0
-    }
-}
-
-impl Deref for Win32Surface {
-    type Target = Surface;
-
-    fn deref(&self) -> &Surface {
-        &self.0
-    }
-}
-
-impl Clone for Win32Surface {
-    fn clone(&self) -> Win32Surface {
-        Win32Surface(self.0.clone())
     }
 }
