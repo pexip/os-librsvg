@@ -1,0 +1,25 @@
+From: Simon McVittie <smcv@debian.org>
+Date: Sun, 30 Jul 2023 19:10:40 +0100
+Subject: tests: Fix build with older Autotools
+
+/usr/bin/install: omitting directory '././fixtures/loading/subdir'
+make[5]: *** [Makefile:1143: install-nobase_installed_testDATA] Error 1
+
+Bug-Debian: https://bugs.debian.org/1041810
+---
+ tests/Makefile.am | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/Makefile.am b/tests/Makefile.am
+index b3faf2d..63dd3ef 100644
+--- a/tests/Makefile.am
++++ b/tests/Makefile.am
+@@ -81,7 +81,7 @@ dist_installed_test_data =						\
+ 	$(wildcard $(srcdir)/fixtures/crash/*.png)			\
+ 	$(wildcard $(srcdir)/fixtures/errors/*)				\
+ 	$(wildcard $(srcdir)/fixtures/infinite-loop/*)			\
+-	$(wildcard $(srcdir)/fixtures/loading/*)			\
++	$(wildcard $(srcdir)/fixtures/loading/*.*)			\
+ 	$(wildcard $(srcdir)/fixtures/loading/subdir/*)			\
+ 	$(wildcard $(srcdir)/fixtures/reftests/*.css)			\
+ 	$(wildcard $(srcdir)/fixtures/reftests/*.svg)			\

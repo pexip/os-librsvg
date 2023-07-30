@@ -1,3 +1,18 @@
+librsvg (2.50.3+dfsg-1+deb11u1) bullseye-security; urgency=high
+
+  * Team upload
+  * d/gbp.conf: Branch for bullseye
+  * d/p/996-Fix-arbitrary-file-read-when-href-has-special-charact.patch:
+    Add patch from upstream 2.50.8 to fix a directory traversal
+    vulnerability (Closes: #1041810, CVE-2023-38633)
+  * d/p/Fix-compilation-on-rustc-1.40.0.patch:
+    Add patch from upstream 2.50.9 to fix a build regression in the fix
+    for #1041810
+  * d/p/tests-Fix-build-with-older-Autotools.patch:
+    Fix another build regression in the fix for #1041810
+
+ -- Simon McVittie <smcv@debian.org>  Sun, 30 Jul 2023 19:11:45 +0100
+
 librsvg (2.50.3+dfsg-1) unstable; urgency=medium
 
   * Team upload
