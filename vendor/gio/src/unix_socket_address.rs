@@ -1,21 +1,18 @@
-// Copyright 2013-2018, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
-use gio_sys;
-use glib::object::{Cast, IsA};
+use crate::prelude::*;
+use crate::SocketAddress;
+use crate::UnixSocketAddress;
+use crate::UnixSocketAddressType;
 use glib::translate::*;
-use libc;
+#[cfg(not(feature = "dox"))]
 use std::ffi::OsStr;
 #[cfg(unix)]
+#[cfg(not(feature = "dox"))]
 use std::os::unix::ffi::OsStrExt;
 use std::path;
 use std::ptr;
 use std::slice;
-use SocketAddress;
-use UnixSocketAddress;
-use UnixSocketAddressExt;
-use UnixSocketAddressType;
 
 #[derive(Debug)]
 pub enum UnixSocketAddressPath<'a> {
@@ -39,14 +36,16 @@ impl<'a> UnixSocketAddressPath<'a> {
 }
 
 impl UnixSocketAddress {
+    #[doc(alias = "g_unix_socket_address_new")]
     pub fn new(path: &path::Path) -> UnixSocketAddress {
         unsafe {
-            SocketAddress::from_glib_full(gio_sys::g_unix_socket_address_new(path.to_glib_none().0))
+            SocketAddress::from_glib_full(ffi::g_unix_socket_address_new(path.to_glib_none().0))
                 .unsafe_cast()
         }
     }
 
-    pub fn new_with_type(address_type: UnixSocketAddressPath) -> Self {
+    #[doc(alias = "g_unix_socket_address_new_with_type")]
+    pub fn with_type(address_type: UnixSocketAddressPath) -> Self {
         use self::UnixSocketAddressPath::*;
 
         let type_ = address_type.to_type();
@@ -58,10 +57,10 @@ impl UnixSocketAddress {
             Anonymous => (ptr::null_mut(), 0),
         };
         unsafe {
-            SocketAddress::from_glib_full(gio_sys::g_unix_socket_address_new_with_type(
+            SocketAddress::from_glib_full(ffi::g_unix_socket_address_new_with_type(
                 path,
                 len as i32,
-                type_.to_glib(),
+                type_.into_glib(),
             ))
             .unsafe_cast()
         }
@@ -69,22 +68,24 @@ impl UnixSocketAddress {
 }
 
 pub trait UnixSocketAddressExtManual {
-    fn get_path(&self) -> Option<UnixSocketAddressPath>;
+    #[doc(alias = "g_unix_socket_address_get_path")]
+    #[doc(alias = "get_path")]
+    fn path(&self) -> Option<UnixSocketAddressPath>;
 }
 
 impl<O: IsA<UnixSocketAddress>> UnixSocketAddressExtManual for O {
-    fn get_path(&self) -> Option<UnixSocketAddressPath> {
+    fn path(&self) -> Option<UnixSocketAddressPath> {
         use self::UnixSocketAddressPath::*;
 
         let path = unsafe {
-            let path = gio_sys::g_unix_socket_address_get_path(self.as_ref().to_glib_none().0);
-            if path.is_null() {
+            let path = ffi::g_unix_socket_address_get_path(self.as_ref().to_glib_none().0);
+            if path.is_null() || self.path_len() == 0 {
                 &[]
             } else {
-                slice::from_raw_parts(path as *const u8, self.get_path_len())
+                slice::from_raw_parts(path as *const u8, self.path_len())
             }
         };
-        match self.get_address_type() {
+        match self.address_type() {
             UnixSocketAddressType::Anonymous => Some(Anonymous),
             #[cfg(not(feature = "dox"))]
             UnixSocketAddressType::Path => Some(Path(path::Path::new(OsStr::from_bytes(path)))),

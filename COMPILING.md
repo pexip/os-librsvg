@@ -1,28 +1,27 @@
 Compiling librsvg
 =================
 
-Librsvg uses a mostly normal [autotools] setup, but it has some
-peculiarities due to librsvg's use of a Rust sub-library.  The details
-of how librsvg integrates Cargo and Rust into its autotools setup are
-described in [this blog post][blog], although hopefully you will not
-need to refer to it.
+**For the impatient:**
 
-It is perfectly fine to [ask the maintainer][maintainer] if you have
-questions about the Autotools setup; it's a tricky bit of machinery,
-and we are glad to help.
+First, install librsvg's dependencies; see ["Installing dependencies for
+building"](#installing-dependencies-for-building) below for
+instructions for various operating systems.
 
-There are generic compilation/installation instructions in the
-[`INSTALL`][install] file, which comes from Autotools.  The following
-explains librsvg's peculiarities.
+For everyday hacking, librsvg looks like a regular Rust project.  You
+can `cargo build` to compile the main user-visible artifact for the
+`rsvg-convert` program:
 
-* [Installing dependencies for building](#installing-dependencies-for-building)
-* [Basic compilation instructions](#basic-compilation-instructions)
-* [Verbosity](#verbosity)
-* [Debug or release builds](#debug-or-release-builds)
-* [Selecting a Rust toolchain](#selecting-a-rust-toolchain)
-* [Cross-compilation](#cross-compilation)
-* [Building with no network access](#building-with-no-network-access)
-* [Running `make distcheck`](#running-make-distcheck)
+* `cargo build --release` - will compile `rsvg-convert` and put it in
+  `./target/release/rsvg-convert`.  You can use that binary directly.
+  If you need a debug build, use `cargo build --debug` instead; note
+  that debug binaries run *much* slower!
+
+* `cargo test` - this runs almost all of librsvg's test suite, which
+  includes the Rust API and `rsvg-convert`, and is enough for regular
+  hacking.  The full test suite includes tests for the C API; see the
+  section "Compiling the C API" below.
+
+* `cargo doc` - will produce the documentation for the Rust crate.
 
 # Installing dependencies for building
 
@@ -32,7 +31,7 @@ minimum version is listed here; you may use a newer version instead.
 **Compilers:**
 
 * a C compiler and `make` tool; we recommend GNU `make`.
-* rust 1.40 or later
+* rust 1.56 or later
 * cargo
 
 **Mandatory dependencies:**
@@ -42,9 +41,10 @@ minimum version is listed here; you may use a newer version instead.
 * Gdk-pixbuf 2.20.0
 * GIO 2.24.0
 * GObject-Introspection 0.10.8
-* Gtk-doc 1.13
+* gi-docgen
+* python3-docutils
 * Libxml2 2.9.0
-* Pango 1.38.0
+* Pango 1.46.0
 
 The following sections describe how to install these dependencies on
 several systems.
@@ -58,9 +58,8 @@ As of 2018/Feb/22, librsvg cannot be built in `debian stable` and
 
 ```sh
 apt-get install -y gcc make rustc cargo \
-automake autoconf libtool gettext itstool \
+automake autoconf libtool gi-docgen python3-docutils git \
 libgdk-pixbuf2.0-dev libgirepository1.0-dev \
-gtk-doc-tools git \
 libxml2-dev libcairo2-dev libpango1.0-dev
 ```
 
@@ -74,20 +73,18 @@ PATH="$PATH:/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0"
 
 ```sh
 dnf install -y gcc rust rust-std-static cargo make \
-automake autoconf libtool gettext itstool \
+automake autoconf libtool gi-docgen python3-docutils git redhat-rpm-config \
 gdk-pixbuf2-devel gobject-introspection-devel \
-gtk-doc git redhat-rpm-config gettext-devel \
-libxml2-devel cairo-devel pango-devel
+libxml2-devel cairo-devel cairo-gobject-devel pango-devel
 ```
 
 ### openSUSE based systems
 
 ```sh
 zypper install -y gcc rust rust-std cargo make \
-automake autoconf libtool gettext itstool git \
-gtk-doc gobject-introspection-devel \
-libxml2-devel cairo-devel \
-pango-devel gdk-pixbuf-devel
+automake autoconf libtool python3-gi-docgen python38-docutils git \
+gdk-pixbuf-devel gobject-introspection-devel \
+libxml2-devel cairo-devel pango-devel
 ```
 
 ### macOS systems
@@ -96,33 +93,47 @@ Dependencies may be installed using [Homebrew](https://brew.sh) or another
 package manager.
 
 ```sh
-brew install cairo gdk-pixbuf glib pango \
-gobject-introspection rust
-
-export PKG_CONFIG_PATH="`brew --prefix`/lib/pkgconfig:\
-`brew --prefix libffi`/lib/pkgconfig:\
-/usr/lib/pkgconfig"
-export ARCHFLAGS="-arch x86_64"
+brew install automake gi-docgen pkgconfig libtool gobject-introspection gdk-pixbuf pango
 ```
 
-Note that `PKG_CONFIG_PATH` must be manually set to include Homebrew's libffi,
-as the system libffi is too old but Homebrew does not install it in a public
-location by default.
+# Detailed compilation instructions
 
-Currently, cairo 1.15.4 or later must also be installed manually, as the
-Homebrew package is for the older stable release. This may require adding
-it to `PKG_CONFIG_PATH` as well if you do not install it in `/usr/local`.
+A full build of librsvg requires [autotools].  A full build will produce these:
 
-Setting `ARCHFLAGS` is required if gobject-introspection is using the system
-Python provided by Apple, as on Homebrew.
+* `rsvg-convert` binary.
+* librsvg shared library with the GObject-based API.
+* Gdk-pixbuf loader for SVG files.
+* HTML documentation for the GObject-based API, with `gi-docgen`.
+* GObject-introspection information for language bindings.
+* Vala language bindings.
 
+Librsvg uses a mostly normal [autotools] setup.  The details of how
+librsvg integrates Cargo and Rust into its autotools setup are
+described in [this blog post][blog], although hopefully you will not
+need to refer to it.
+
+It is perfectly fine to [ask the maintainer][maintainer] if you have
+questions about the Autotools setup; it's a tricky bit of machinery,
+and we are glad to help.
+
+There are generic compilation/installation instructions in the
+[`INSTALL`][install] file, which comes from Autotools.  The following
+explains librsvg's peculiarities.
+
+* [Basic compilation instructions](#basic-compilation-instructions)
+* [Verbosity](#verbosity)
+* [Debug or release builds](#debug-or-release-builds)
+* [Selecting a Rust toolchain](#selecting-a-rust-toolchain)
+* [Cross-compilation](#cross-compilation)
+* [Building with no network access](#building-with-no-network-access)
+* [Running `make distcheck`](#running-make-distcheck)
 
 # Basic compilation instructions
 
 If you are compiling a tarball:
 
 ```sh
-./configure
+./configure --enable-vala
 make
 make install
 ```
@@ -134,10 +145,13 @@ library.
 If you are compiling from a git checkout:
 
 ```sh
-./autogen.sh
+./autogen.sh --enable-vala
 make
 make install
 ```
+
+The `--enable-vala` argument is optional.  It will check that you have
+the Vala compiler installed.
 
 # Verbosity
 
@@ -149,12 +163,17 @@ instead of plain "`make`".
 
 # Debug or release builds
 
-Librsvg has code both in C and Rust, and each language has a different
-way of specifying compilation options to select compiler
-optimizations, or whether debug information should be included.
+Librsvg's artifacts have code both in C and Rust, and each language
+has a different way of specifying compilation options to select
+compiler optimizations, or whether debug information should be
+included.
 
-You should set the `CFLAGS` environment variable with compiler flags
-that you want to pass to the C compiler.
+* **Rust code:** the librsvg shared library, and the `rsvg-convert`
+  binary.  See below.
+
+* **C code:** the gdk-pixbuf loader; you should set the `CFLAGS`
+  environment variable with compiler flags that you want to pass to
+  the C compiler.
 
 ## Controlling debug or release mode for Rust
 
@@ -164,7 +183,7 @@ that you want to pass to the C compiler.
 For the Rust part of librsvg, we have a flag that
 you can pass at `configure` time.  When enabled, the Rust
 sub-library will have debugging information and no compiler
-optimizations.  *This flag is off by default:* if the flag is not
+optimizations.  **This flag is off by default:** if the flag is not
 specified, the Rust sub-library will be built in release mode (no
 debug information, full compiler optimizations).
 
@@ -172,14 +191,14 @@ The rationale is that people who already had scripts in place to build
 binary packages for librsvg, generally from release tarballs, are
 already using conventional machinery to specify C compiler options,
 such as that in RPM specfiles or Debian source packages.  However,
-they may not contemplate Rust sub-libraries and they will certainly
+they may not contemplate Rust libraries and they will certainly
 not want to modify their existing packaging scripts too much.
 
 So, by default, the Rust library builds in **release mode**, to make
 life easier to binary distributions.  Librsvg's build scripts will add
 `--release` to the Cargo command line by default.
 
-Developers can request a debug build of the Rust sub-library by
+Developers can request a debug build of the Rust code by
 passing `--enable-debug` to the `configure` script, or by setting the
 `LIBRSVG_DEBUG=yes` environment variable before calling `configure`.
 This will omit the `--release` option from Cargo, so that it will
@@ -215,8 +234,7 @@ librsvg's build scripts to automatically pass `--target=TRIPLE` to
 
 Note, however, that Rust may support different targets than the C
 compiler on your system.  Rust's supported targets can be found in the
-[`rust/src/librustc_back/target`][rust-target-dir] in the Rust
-compiler's source code.
+[rustc manual](https://doc.rust-lang.org/nightly/rustc/platform-support.html)
 
 You can check Jorge Aparicio's [guide on cross-compilation for
 Rust][rust-cross] for more details.
@@ -294,7 +312,7 @@ dependencies when it first compiles a Rust project.
 We use [`cargo vendor`][cargo-vendor] to ship librsvg release tarballs
 with the source code for Rust dependencies **embedded within the
 tarball**.  If you unpack a librsvg tarball, these sources will appear
-in the `rust/vendor` subdirectory.  If you build librsvg from a
+in the `vendor/` subdirectory.  If you build librsvg from a
 tarball, instead of git, it should not need to access the network to
 download extra sources at all.
 
@@ -326,7 +344,6 @@ trying to modify your system locations.
 [blog]: https://people.gnome.org/~federico/blog/librsvg-build-infrastructure.html
 [maintainer]: README.md#maintainers
 [install]: INSTALL
-[rust-target-dir]: https://github.com/rust-lang/rust/tree/master/src/librustc_back/target
 [cargo-vendor]: https://crates.io/crates/cargo-vendor
 [cargo-source-replacement]: http://doc.crates.io/source-replacement.html
 [rust-cross]: https://github.com/japaric/rust-cross

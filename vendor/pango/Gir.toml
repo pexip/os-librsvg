@@ -1,84 +1,85 @@
 [options]
-girs_dir = "gir-files"
+girs_directories = ["../gir-files"]
 library = "Pango"
 version = "1.0"
 target_path = "."
 work_mode = "normal"
 generate_safety_asserts = false
-min_cfg_version = "1.36"
+min_cfg_version = "1.38"
+use_gi_docgen = true
 single_version_file = true
 deprecate_by_min_version = true
 
 generate = [
-    # "Pango.AttrColor",
-    # "Pango.AttrFloat",
-    # "Pango.AttrFontDesc",
-    # "Pango.AttrFontFeatures",
-    # "Pango.AttrInt",
-    # "Pango.AttrLanguage",
-    # "Pango.AttrShape",
-    # "Pango.AttrSize",
-    # "Pango.AttrString",
-    # "Pango.GlyphGeometry",
-    # "Pango.GlyphInfo",
     # "Pango.GlyphVisAttr",
     # "Pango.LogAttr",
-    # "Pango.Map",
-    # "Pango.MapEntry",
-    # "Pango.ScriptForLang",
     # "Pango.ScriptIter",
     "Pango.Alignment",
-    "Pango.Attribute",
-    "Pango.AttrType",
+    "Pango.BaselineShift",
     "Pango.BidiType",
-    "Pango.Color",
     "Pango.CoverageLevel",
     "Pango.Direction",
     "Pango.EllipsizeMode",
-    "Pango.EngineLang",
-    "Pango.EngineShape",
     "Pango.FontFace",
     "Pango.FontFamily",
     "Pango.FontMask",
     "Pango.FontMetrics",
+    "Pango.FontScale",
     "Pango.Fontset",
     "Pango.FontsetSimple",
     "Pango.Glyph",
     "Pango.GlyphItem",
-    "Pango.GlyphItemIter",
-    "Pango.GlyphString",
     "Pango.GlyphUnit",
     "Pango.Gravity",
     "Pango.GravityHint",
     "Pango.Item",
+    "Pango.LayoutDeserializeFlags",
     "Pango.LayoutIter",
-    "Pango.LayoutLine",
     "Pango.LayoutRun",
-    "Pango.Matrix",
+    "Pango.LayoutSerializeFlags",
+    "Pango.Overline",
     "Pango.Renderer",
     "Pango.RenderPart",
     "Pango.Script",
+    "Pango.ShapeFlags",
+    "Pango.ShowFlags",
     "Pango.Stretch",
     "Pango.Style",
-    "Pango.TabAlign",
-    "Pango.TabArray",
+    "Pango.TextTransform",
     "Pango.Underline",
-    "Pango.Variant",
     "Pango.Weight",
     "Pango.WrapMode",
 ]
 
 manual = [
+    "GLib.Bytes",
     "GLib.Error",
+    "GLib.Quark",
     "Pango.Analysis",
     "Pango.AttrClass",
+    "Pango.AttrColor",
+    "Pango.AttrFloat",
+    "Pango.AttrFontDesc",
+    "Pango.AttrFontFeatures",
+    "Pango.AttrInt",
+    "Pango.AttrLanguage",
+    "Pango.AttrShape",
+    "Pango.AttrSize",
+    "Pango.AttrString",
+    "Pango.Coverage",
+    "Pango.GlyphGeometry",
+    "Pango.GlyphInfo",
     "Pango.Language",
+    "Pango.LayoutDeserializeError",
     "Pango.Rectangle",
 ]
 
 [[object]]
 name = "Pango.*"
 status = "generate"
+    [[object.constant]]
+    name = "VERSION_STRING"
+    ignore = true
     [[object.function]]
     name = "extents_to_pixels"
         [[object.function.parameter]]
@@ -113,26 +114,95 @@ status = "generate"
     name = "shape_full"
     # invalid length computation on Stash instead of str
     ignore = true
+    [[object.function]]
+    name = "shape_with_flags"
+    # ivanlid length computation on a Option<str>, it should fallback to 0.
+    ignore = true
+
+[[object]]
+name = "Pango.Attribute"
+status = "generate"
+concurrency = "send+sync"
+    [[object.function]]
+    name = "init"
+    # irrelevant with all the constructors and unusable like this
+    ignore = true
+    [[object.function]]
+    name = "get_type"
+    version = "1.44"
+    [[object.function]]
+    pattern = "as.*"
+    # casting functions, we go with IsAttribute trait in Rust
+    ignore = true
 
 [[object]]
 name = "Pango.AttrIterator"
 status = "generate"
     [[object.function]]
     name = "get_font"
-    ignore = true
+    manual = true
+    [[object.function]]
+    name = "get_type"
+    version = "1.44"
 
 [[object]]
 name = "Pango.AttrList"
 status = "generate"
+    [[object.derive]]
+    name = "Debug"
     [[object.function]]
     name = "change"
-    ignore = true
+    manual = true
     [[object.function]]
     name = "insert"
-    ignore = true
+    manual = true
     [[object.function]]
     name = "insert_before"
+    manual = true
+    [[object.function]]
+    name = "equal"
     ignore = true
+    [[object.function]]
+    name = "from_string"
+        [object.function.return]
+        nullable_return_is_error = "Can't parse AttrList"
+
+[[object]]
+name = "Pango.AttrType"
+status = "generate"
+    [[object.function]]
+    name = "register"
+    # Problematic function needs manual implementation
+    ignore = true
+    [[object.member]]
+    name = "line_height"
+    version = "1.50"
+    [[object.member]]
+    name = "absolute_line_height"
+    version = "1.50"
+    [[object.member]]
+    name = "text_transform"
+    version = "1.50"
+    [[object.member]]
+    name = "word"
+    version = "1.50"
+    [[object.member]]
+    name = "sentence"
+    version = "1.50"
+    [[object.member]]
+    name = "baseline_shift"
+    version = "1.50"
+    [[object.member]]
+    name = "font_scale"
+    version = "1.50"
+
+[[object]]
+name = "Pango.Color"
+status = "generate"
+boxed_inline = true
+    [[object.function]]
+    pattern = "(parse|parse_with_alpha)"
+    manual = true
 
 [[object]]
 name = "Pango.Context"
@@ -152,14 +222,6 @@ status = "generate"
         [[object.function.parameter]]
         name = "language"
         const = true
-
-[[object]]
-name = "Pango.Coverage"
-status = "generate"
-    [[object.function]]
-    name = "new"
-        [object.function.return]
-        nullable = false
 
 [[object]]
 name = "Pango.Font"
@@ -182,10 +244,19 @@ status = "generate"
         [[object.function.parameter]]
         name = "language"
         const = true
+    [[object.function]]
+    name = "get_languages"
+    # TODO: requires FromGlibPtrArrayContainerAsVec implementation
+    ignore = true
+    [[object.function]]
+    pattern = "serialize"
+        [object.function.return]
+        nullable = false
 
 [[object]]
 name = "Pango.FontDescription"
 status = "generate"
+concurrency = "send+sync"
     [[object.function]]
     name = "from_string"
         [object.function.return]
@@ -196,6 +267,9 @@ status = "generate"
     [[object.function]]
     name = "copy_static"
     ignore = true
+    [[object.function]]
+    name = "get_size_is_absolute"
+    rename = "is_size_absolute"
     [[object.function]]
     name = "merge_static"
     ignore = true
@@ -210,6 +284,19 @@ status = "generate"
         const = true
 
 [[object]]
+name = "Pango.GlyphItemIter"
+status = "generate"
+    [[object.function]]
+    pattern = "init.*"
+    # converted to proper constructors
+    manual = true
+
+[[object]]
+name = "Pango.GlyphString"
+status = "generate"
+concurrency = "send+sync"
+
+[[object]]
 name = "Pango.Layout"
 status = "generate"
     [[object.function]]
@@ -221,3 +308,71 @@ status = "generate"
         [[object.function.parameter]]
         name = "tabs"
         const = true
+    [[object.function]]
+    name = "serialize"
+        [object.function.return]
+        nullable = false
+
+[[object]]
+name = "Pango.LayoutLine"
+status = "generate"
+    [[object.function]]
+    name = "x_to_index"
+    manual = true
+
+[[object]]
+name = "Pango.Matrix"
+status = "generate"
+boxed_inline = true
+    [[object.function]]
+    name = "transform_pixel_rectangle"
+    manual = true
+    [[object.function]]
+    name = "transform_rectangle"
+    manual = true
+
+[[object]]
+name = "Pango.TabAlign"
+status = "generate"
+    [[object.member]]
+    name = "right"
+    version = "1.50"
+    [[object.member]]
+    name = "center"
+    version = "1.50"
+    [[object.member]]
+    name = "decimal"
+    version = "1.50"
+
+[[object]]
+name = "Pango.TabArray"
+status = "generate"
+concurrency = "send+sync"
+    [[object.function]]
+    pattern = "(to_string|get_decimal_point|get_positions_in_pixels|get_tab)"
+        [[object.function.parameter]]
+        pattern = "*" # because we can't target self
+        const = true
+    [[object.function]]
+    name = "from_string"
+        [object.function.return]
+        nullable_return_is_error = "Can't parse a TabArray"
+
+[[object]]
+name = "Pango.Variant"
+status = "generate"
+    [[object.member]]
+    name = "all_small_caps"
+    version = "1.50"
+    [[object.member]]
+    name = "petite_caps"
+    version = "1.50"
+    [[object.member]]
+    name = "all_petite_caps"
+    version = "1.50"
+    [[object.member]]
+    name = "unicase"
+    version = "1.50"
+    [[object.member]]
+    name = "title_caps"
+    version = "1.50"

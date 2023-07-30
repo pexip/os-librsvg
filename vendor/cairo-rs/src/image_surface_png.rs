@@ -1,22 +1,20 @@
-// Copyright 2016, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
+use crate::utils::status_to_result;
 use std::any::Any;
-use std::io::{Error, Read, Write};
+use std::io::{self, Read, Write};
 use std::panic::AssertUnwindSafe;
 use std::slice;
 
 use libc::{c_uint, c_void};
 
-use enums::Status;
-use error::IoError;
-use ffi::{self, cairo_status_t};
-use ImageSurface;
+use crate::error::{Error, IoError};
+use crate::ImageSurface;
+use ffi::cairo_status_t;
 
 struct ReadEnv<'a, R: 'a + Read> {
     reader: &'a mut R,
-    io_error: Option<Error>,
+    io_error: Option<io::Error>,
     unwind_payload: Option<Box<dyn Any + Send + 'static>>,
 }
 
@@ -27,30 +25,33 @@ unsafe extern "C" fn read_func<R: Read>(
 ) -> cairo_status_t {
     let read_env: &mut ReadEnv<R> = &mut *(closure as *mut ReadEnv<R>);
 
-    // Don’t attempt another read if a previous one errored or panicked:
+    // Don’t attempt another read, if a previous one errored or panicked:
     if read_env.io_error.is_some() || read_env.unwind_payload.is_some() {
-        return Status::ReadError.into();
+        return Error::ReadError.into();
     }
 
-    let buffer = slice::from_raw_parts_mut(data, len as usize);
+    let buffer = if data.is_null() || len == 0 {
+        &mut []
+    } else {
+        slice::from_raw_parts_mut(data, len as usize)
+    };
     let result = std::panic::catch_unwind(AssertUnwindSafe(|| read_env.reader.read_exact(buffer)));
     match result {
-        Ok(Ok(())) => Status::Success,
+        Ok(Ok(())) => ffi::STATUS_SUCCESS,
         Ok(Err(error)) => {
             read_env.io_error = Some(error);
-            Status::ReadError
+            Error::ReadError.into()
         }
         Err(payload) => {
             read_env.unwind_payload = Some(payload);
-            Status::ReadError
+            Error::ReadError.into()
         }
     }
-    .into()
 }
 
 struct WriteEnv<'a, W: 'a + Write> {
     writer: &'a mut W,
-    io_error: Option<Error>,
+    io_error: Option<io::Error>,
     unwind_payload: Option<Box<dyn Any + Send + 'static>>,
 }
 
@@ -61,28 +62,32 @@ unsafe extern "C" fn write_func<W: Write>(
 ) -> cairo_status_t {
     let write_env: &mut WriteEnv<W> = &mut *(closure as *mut WriteEnv<W>);
 
-    // Don’t attempt another write if a previous one errored or panicked:
+    // Don’t attempt another write, if a previous one errored or panicked:
     if write_env.io_error.is_some() || write_env.unwind_payload.is_some() {
-        return Status::WriteError.into();
+        return Error::WriteError.into();
     }
 
-    let buffer = slice::from_raw_parts(data, len as usize);
+    let buffer = if data.is_null() || len == 0 {
+        &[]
+    } else {
+        slice::from_raw_parts(data, len as usize)
+    };
     let result = std::panic::catch_unwind(AssertUnwindSafe(|| write_env.writer.write_all(buffer)));
     match result {
-        Ok(Ok(())) => Status::Success,
+        Ok(Ok(())) => ffi::STATUS_SUCCESS,
         Ok(Err(error)) => {
             write_env.io_error = Some(error);
-            Status::WriteError
+            Error::WriteError.into()
         }
         Err(payload) => {
             write_env.unwind_payload = Some(payload);
-            Status::WriteError
+            Error::WriteError.into()
         }
     }
-    .into()
 }
 
 impl ImageSurface {
+    #[doc(alias = "cairo_image_surface_create_from_png_stream")]
     pub fn create_from_png<R: Read>(stream: &mut R) -> Result<ImageSurface, IoError> {
         let mut env = ReadEnv {
             reader: stream,
@@ -108,6 +113,7 @@ impl ImageSurface {
         }
     }
 
+    #[doc(alias = "cairo_surface_write_to_png_stream")]
     pub fn write_to_png<W: Write>(&self, stream: &mut W) -> Result<(), IoError> {
         let mut env = WriteEnv {
             writer: stream,
@@ -127,9 +133,9 @@ impl ImageSurface {
         }
 
         match env.io_error {
-            None => match Status::from(status) {
-                Status::Success => Ok(()),
-                st => Err(IoError::Cairo(st.into())),
+            None => match status_to_result(status) {
+                Err(err) => Err(IoError::Cairo(err)),
+                Ok(_) => Ok(()),
             },
             Some(err) => Err(IoError::Io(err)),
         }
@@ -139,15 +145,15 @@ impl ImageSurface {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use enums::Format;
+    use crate::enums::Format;
     use std::io::ErrorKind;
 
     struct IoErrorReader;
 
     // A reader that always returns an error
     impl Read for IoErrorReader {
-        fn read(&mut self, _: &mut [u8]) -> Result<usize, Error> {
-            Err(Error::new(ErrorKind::Other, "yikes!"))
+        fn read(&mut self, _: &mut [u8]) -> Result<usize, io::Error> {
+            Err(io::Error::new(ErrorKind::Other, "yikes!"))
         }
     }
 
@@ -166,17 +172,17 @@ mod tests {
         assert!(r.is_ok());
 
         let mut surface = r.unwrap();
-        assert!(surface.get_width() == 1);
-        assert!(surface.get_height() == 1);
-        assert!(surface.get_format() == Format::Rgb24);
+        assert_eq!(surface.width(), 1);
+        assert_eq!(surface.height(), 1);
+        assert_eq!(surface.format(), Format::Rgb24);
 
-        let data = surface.get_data().unwrap();
+        let data = surface.data().unwrap();
         assert!(data.len() >= 3);
 
         let slice = &data[0..3];
-        assert!(slice[0] == 42);
-        assert!(slice[1] == 42);
-        assert!(slice[2] == 42);
+        assert_eq!(slice[0], 42);
+        assert_eq!(slice[1], 42);
+        assert_eq!(slice[2], 42);
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -203,7 +209,7 @@ mod tests {
         let mut r = IoErrorReader;
 
         match ImageSurface::create_from_png(&mut r) {
-            Err(IoError::Cairo(Status::ReadError)) => (),
+            Err(IoError::Cairo(Error::ReadError)) => (),
             _ => unreachable!(),
         }
     }

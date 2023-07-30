@@ -1,71 +1,65 @@
-// Copyright 2015, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 use glib::translate::*;
-use pango_sys;
-use std::mem;
+use std::fmt;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(C)]
-pub struct Rectangle {
-    pub x: i32,
-    pub y: i32,
-    pub width: i32,
-    pub height: i32,
+glib::wrapper! {
+    #[doc(alias = "PangoRectangle")]
+    pub struct Rectangle(BoxedInline<ffi::PangoRectangle>);
 }
 
 impl Rectangle {
-    pub fn new(x: i32, y: i32, width: i32, height: i32) -> Rectangle {
-        Rectangle {
-            x,
-            y,
-            width,
-            height,
+    pub fn new(x: i32, y: i32, width: i32, height: i32) -> Self {
+        unsafe {
+            Self::unsafe_from(ffi::PangoRectangle {
+                x,
+                y,
+                width,
+                height,
+            })
         }
     }
-}
 
-#[doc(hidden)]
-impl Uninitialized for Rectangle {
-    #[inline]
-    unsafe fn uninitialized() -> Self {
-        mem::zeroed()
+    pub fn x(&self) -> i32 {
+        self.inner.x
+    }
+
+    pub fn set_x(&mut self, x: i32) {
+        self.inner.x = x;
+    }
+
+    pub fn y(&self) -> i32 {
+        self.inner.y
+    }
+
+    pub fn set_y(&mut self, y: i32) {
+        self.inner.y = y;
+    }
+
+    pub fn width(&self) -> i32 {
+        self.inner.width
+    }
+
+    pub fn set_width(&mut self, width: i32) {
+        self.inner.width = width;
+    }
+
+    pub fn height(&self) -> i32 {
+        self.inner.height
+    }
+
+    pub fn set_height(&mut self, height: i32) {
+        self.inner.height = height;
     }
 }
 
-#[doc(hidden)]
-impl<'a> ToGlibPtr<'a, *const pango_sys::PangoRectangle> for Rectangle {
-    type Storage = &'a Self;
-
-    #[inline]
-    fn to_glib_none(&'a self) -> Stash<'a, *const pango_sys::PangoRectangle, Self> {
-        let ptr: *const Rectangle = &*self;
-        Stash(ptr as *const pango_sys::PangoRectangle, self)
-    }
-}
-
-#[doc(hidden)]
-impl<'a> ToGlibPtrMut<'a, *mut pango_sys::PangoRectangle> for Rectangle {
-    type Storage = &'a mut Self;
-
-    #[inline]
-    fn to_glib_none_mut(&'a mut self) -> StashMut<'a, *mut pango_sys::PangoRectangle, Self> {
-        let ptr: *mut Rectangle = &mut *self;
-        StashMut(ptr as *mut pango_sys::PangoRectangle, self)
-    }
-}
-
-#[doc(hidden)]
-impl FromGlibPtrNone<*const pango_sys::PangoRectangle> for Rectangle {
-    unsafe fn from_glib_none(ptr: *const pango_sys::PangoRectangle) -> Self {
-        *(ptr as *const Rectangle)
-    }
-}
-
-#[doc(hidden)]
-impl FromGlibPtrNone<*mut pango_sys::PangoRectangle> for Rectangle {
-    unsafe fn from_glib_none(ptr: *mut pango_sys::PangoRectangle) -> Self {
-        *(ptr as *mut Rectangle)
+impl fmt::Debug for Rectangle {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Rectangle")
+            .field("x", &self.x())
+            .field("y", &self.y())
+            .field("width", &self.width())
+            .field("height", &self.height())
+            .finish()
     }
 }

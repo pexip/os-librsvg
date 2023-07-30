@@ -5,7 +5,6 @@
 use crate::Diagnostic;
 use proc_macro2::{Ident, Span};
 use std::hash::{Hash, Hasher};
-use syn;
 use wasm_bindgen_shared as shared;
 
 /// An abstract syntax tree representing a rust program. Contains
@@ -163,7 +162,7 @@ pub struct ImportFunction {
     /// necessary conversions (EG adding a try/catch to change a thrown error into a Result)
     pub shim: Ident,
     /// The doc comment on this import, if one is provided
-    pub doc_comment: Option<String>,
+    pub doc_comment: String,
 }
 
 /// The type of a function being imported
@@ -261,6 +260,8 @@ pub struct ImportType {
     pub extends: Vec<syn::Path>,
     /// A custom prefix to add and attempt to fall back to, if the type isn't found
     pub vendor_prefixes: Vec<Ident>,
+    /// If present, don't generate a `Deref` impl
+    pub no_deref: bool,
 }
 
 /// The metadata for an Enum being imported
@@ -301,6 +302,8 @@ pub struct Function {
     pub r#async: bool,
     /// Whether to generate a typescript definition for this function
     pub generate_typescript: bool,
+    /// Whether this is a function with a variadict parameter
+    pub variadic: bool,
 }
 
 /// Information about a Struct being exported
@@ -343,6 +346,8 @@ pub struct StructField {
     pub comments: Vec<String>,
     /// Whether to generate a typescript definition for this field
     pub generate_typescript: bool,
+    /// Whether to use .clone() in the auto-generated getter for this field
+    pub getter_with_clone: bool,
 }
 
 /// Information about an Enum being exported

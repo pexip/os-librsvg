@@ -28,6 +28,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// When parsing macro input, the [`parse_macro_input!`] macro handles the
 /// conversion to `compile_error!` automatically.
 ///
+/// [`parse_macro_input!`]: crate::parse_macro_input!
+///
 /// ```
 /// # extern crate proc_macro;
 /// #
@@ -47,10 +49,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// ```
 ///
 /// For errors that arise later than the initial parsing stage, the
-/// [`.to_compile_error()`] method can be used to perform an explicit conversion
-/// to `compile_error!`.
+/// [`.to_compile_error()`] or [`.into_compile_error()`] methods can be used to
+/// perform an explicit conversion to `compile_error!`.
 ///
 /// [`.to_compile_error()`]: Error::to_compile_error
+/// [`.into_compile_error()`]: Error::into_compile_error
 ///
 /// ```
 /// # extern crate proc_macro;
@@ -66,7 +69,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 ///
 ///     // fn(DeriveInput) -> syn::Result<proc_macro2::TokenStream>
 ///     expand::my_derive(input)
-///         .unwrap_or_else(|err| err.to_compile_error())
+///         .unwrap_or_else(syn::Error::into_compile_error)
 ///         .into()
 /// }
 /// #
@@ -190,6 +193,7 @@ impl Error {
     /// this method correctly in a procedural macro.
     ///
     /// [`compile_error!`]: std::compile_error!
+    /// [`parse_macro_input!`]: crate::parse_macro_input!
     pub fn to_compile_error(&self) -> TokenStream {
         self.messages
             .iter()
@@ -236,7 +240,7 @@ impl Error {
     /// Add another error message to self such that when `to_compile_error()` is
     /// called, both errors will be emitted together.
     pub fn combine(&mut self, another: Error) {
-        self.messages.extend(another.messages)
+        self.messages.extend(another.messages);
     }
 }
 
@@ -349,7 +353,7 @@ impl std::error::Error for Error {}
 
 impl From<LexError> for Error {
     fn from(err: LexError) -> Self {
-        Error::new(Span::call_site(), format!("{:?}", err))
+        Error::new(err.span(), "lex error")
     }
 }
 

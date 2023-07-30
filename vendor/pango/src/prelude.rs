@@ -1,9 +1,9 @@
-// Copyright 2015-2016, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
-//! Traits and essential types inteded for blanket imports.
+// rustdoc-stripper-ignore-next
+//! Traits and essential types intended for blanket imports.
 
-pub use auto::traits::*;
+pub use crate::attribute::IsAttribute;
+pub use crate::auto::traits::*;
 #[doc(hidden)]
 pub use glib::prelude::*;

@@ -2,78 +2,83 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
-use glib;
+use crate::OutputStream;
+use crate::PollableOutputStream;
+use crate::Seekable;
 use glib::object::Cast;
 use glib::object::IsA;
 use glib::signal::connect_raw;
 use glib::signal::SignalHandlerId;
 use glib::translate::*;
-use glib_sys;
 use std::boxed::Box as Box_;
 use std::fmt;
 use std::mem::transmute;
-use OutputStream;
-use PollableOutputStream;
-use Seekable;
 
-glib_wrapper! {
-    pub struct MemoryOutputStream(Object<gio_sys::GMemoryOutputStream, gio_sys::GMemoryOutputStreamClass, MemoryOutputStreamClass>) @extends OutputStream, @implements PollableOutputStream, Seekable;
+glib::wrapper! {
+    #[doc(alias = "GMemoryOutputStream")]
+    pub struct MemoryOutputStream(Object<ffi::GMemoryOutputStream, ffi::GMemoryOutputStreamClass>) @extends OutputStream, @implements PollableOutputStream, Seekable;
 
     match fn {
-        get_type => || gio_sys::g_memory_output_stream_get_type(),
+        type_ => || ffi::g_memory_output_stream_get_type(),
     }
 }
 
 impl MemoryOutputStream {
+    pub const NONE: Option<&'static MemoryOutputStream> = None;
+
+    #[doc(alias = "g_memory_output_stream_new_resizable")]
     pub fn new_resizable() -> MemoryOutputStream {
         unsafe {
-            OutputStream::from_glib_full(gio_sys::g_memory_output_stream_new_resizable())
-                .unsafe_cast()
+            OutputStream::from_glib_full(ffi::g_memory_output_stream_new_resizable()).unsafe_cast()
         }
     }
 }
 
-pub const NONE_MEMORY_OUTPUT_STREAM: Option<&MemoryOutputStream> = None;
-
 pub trait MemoryOutputStreamExt: 'static {
-    fn get_data_size(&self) -> usize;
+    #[doc(alias = "g_memory_output_stream_get_data_size")]
+    #[doc(alias = "get_data_size")]
+    fn data_size(&self) -> usize;
 
-    fn steal_as_bytes(&self) -> Option<glib::Bytes>;
+    #[doc(alias = "g_memory_output_stream_steal_as_bytes")]
+    fn steal_as_bytes(&self) -> glib::Bytes;
 
-    fn connect_property_data_size_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
+    #[doc(alias = "data-size")]
+    fn connect_data_size_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
 }
 
 impl<O: IsA<MemoryOutputStream>> MemoryOutputStreamExt for O {
-    fn get_data_size(&self) -> usize {
-        unsafe { gio_sys::g_memory_output_stream_get_data_size(self.as_ref().to_glib_none().0) }
+    fn data_size(&self) -> usize {
+        unsafe { ffi::g_memory_output_stream_get_data_size(self.as_ref().to_glib_none().0) }
     }
 
-    fn steal_as_bytes(&self) -> Option<glib::Bytes> {
+    fn steal_as_bytes(&self) -> glib::Bytes {
         unsafe {
-            from_glib_full(gio_sys::g_memory_output_stream_steal_as_bytes(
+            from_glib_full(ffi::g_memory_output_stream_steal_as_bytes(
                 self.as_ref().to_glib_none().0,
             ))
         }
     }
 
-    fn connect_property_data_size_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
-        unsafe extern "C" fn notify_data_size_trampoline<P, F: Fn(&P) + 'static>(
-            this: *mut gio_sys::GMemoryOutputStream,
-            _param_spec: glib_sys::gpointer,
-            f: glib_sys::gpointer,
-        ) where
+    fn connect_data_size_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
+        unsafe extern "C" fn notify_data_size_trampoline<
             P: IsA<MemoryOutputStream>,
-        {
+            F: Fn(&P) + 'static,
+        >(
+            this: *mut ffi::GMemoryOutputStream,
+            _param_spec: glib::ffi::gpointer,
+            f: glib::ffi::gpointer,
+        ) {
             let f: &F = &*(f as *const F);
-            f(&MemoryOutputStream::from_glib_borrow(this).unsafe_cast())
+            f(MemoryOutputStream::from_glib_borrow(this).unsafe_cast_ref())
         }
         unsafe {
             let f: Box_<F> = Box_::new(f);
             connect_raw(
                 self.as_ptr() as *mut _,
                 b"notify::data-size\0".as_ptr() as *const _,
-                Some(transmute(notify_data_size_trampoline::<Self, F> as usize)),
+                Some(transmute::<_, unsafe extern "C" fn()>(
+                    notify_data_size_trampoline::<Self, F> as *const (),
+                )),
                 Box_::into_raw(f),
             )
         }
@@ -82,6 +87,6 @@ impl<O: IsA<MemoryOutputStream>> MemoryOutputStreamExt for O {
 
 impl fmt::Display for MemoryOutputStream {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "MemoryOutputStream")
+        f.write_str("MemoryOutputStream")
     }
 }

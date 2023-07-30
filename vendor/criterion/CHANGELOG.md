@@ -6,7 +6,23 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
-## [0.3.4]
+## [0.3.6] - 2022-07-06
+### Changed
+- MSRV bumped to 1.49
+- Symbol for microseconds changed from ASCII 'us' to unicode 'µs'
+- Documentation fixes
+- Clippy fixes
+
+## [0.3.5] - 2021-07-26
+### Fixed
+- Corrected `Criterion.toml` in the book.
+- Corrected configuration typo in the book.
+
+### Changed
+- Bump plotters dependency to always include a bug-fix.
+- MSRV bumped to 1.46.
+
+## [0.3.4] - 2021-01-24
 ### Added
 - Added support for benchmarking async functions
 - Added `with_output_color` for enabling or disabling CLI output coloring programmatically.
@@ -388,7 +404,7 @@ more details
 - Initial release on Crates.io.
 
 
-[Unreleased]: https://github.com/bheisler/criterion.rs/compare/0.3.4...HEAD
+[Unreleased]: https://github.com/bheisler/criterion.rs/compare/0.3.6...HEAD
 [0.1.1]: https://github.com/bheisler/criterion.rs/compare/0.1.0...0.1.1
 [0.1.2]: https://github.com/bheisler/criterion.rs/compare/0.1.1...0.1.2
 [0.2.0]: https://github.com/bheisler/criterion.rs/compare/0.1.2...0.2.0
@@ -408,3 +424,5 @@ more details
 [0.3.2]: https://github.com/bheisler/criterion.rs/compare/0.3.1...0.3.2
 [0.3.3]: https://github.com/bheisler/criterion.rs/compare/0.3.2...0.3.3
 [0.3.4]: https://github.com/bheisler/criterion.rs/compare/0.3.3...0.3.4
+[0.3.5]: https://github.com/bheisler/criterion.rs/compare/0.3.4...0.3.5
+[0.3.5]: https://github.com/bheisler/criterion.rs/compare/0.3.5...0.3.6

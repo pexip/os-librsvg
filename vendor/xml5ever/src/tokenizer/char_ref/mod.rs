@@ -9,13 +9,12 @@
 
 use super::{TokenSink, XmlTokenizer};
 use crate::data;
+use crate::tendril::StrTendril;
 use log::debug;
 use mac::{format_if, unwrap_or_return};
 use markup5ever::buffer_queue::BufferQueue;
 use std::borrow::Cow::Borrowed;
 use std::char::from_u32;
-use crate::tendril::StrTendril;
-use crate::util::is_ascii_alnum;
 
 use self::State::*;
 pub use self::Status::*;
@@ -66,7 +65,7 @@ impl CharRefTokenizer {
     pub fn new(addnl_allowed: Option<char>) -> CharRefTokenizer {
         CharRefTokenizer {
             state: Begin,
-            addnl_allowed: addnl_allowed,
+            addnl_allowed,
             result: None,
             num: 0,
             num_too_big: false,
@@ -84,13 +83,13 @@ impl CharRefTokenizer {
         self.result.expect("get_result called before done")
     }
 
-    fn name_buf<'t>(&'t self) -> &'t StrTendril {
+    fn name_buf(&self) -> &StrTendril {
         self.name_buf_opt
             .as_ref()
             .expect("name_buf missing in named character reference")
     }
 
-    fn name_buf_mut<'t>(&'t mut self) -> &'t mut StrTendril {
+    fn name_buf_mut(&mut self) -> &mut StrTendril {
         self.name_buf_opt
             .as_mut()
             .expect("name_buf missing in named character reference")
@@ -323,7 +322,7 @@ impl CharRefTokenizer {
         match self.name_match {
             None => {
                 match end_char {
-                    Some(c) if is_ascii_alnum(c) => {
+                    Some(c) if c.is_ascii_alphanumeric() => {
                         // Keep looking for a semicolon, to determine whether
                         // we emit a parse error.
                         self.state = BogusName;
@@ -378,7 +377,7 @@ impl CharRefTokenizer {
                         ));
                         true
                     },
-                    (Some(_), _, Some(c)) if is_ascii_alnum(c) => true,
+                    (Some(_), _, Some(c)) if c.is_ascii_alphanumeric() => true,
                     _ => {
                         tokenizer.emit_error(Borrowed(
                             "Character reference does not end with semicolon",
@@ -411,7 +410,7 @@ impl CharRefTokenizer {
         let c = unwrap_or_return!(tokenizer.get_char(input), Stuck);
         self.name_buf_mut().push_char(c);
         match c {
-            _ if is_ascii_alnum(c) => return Progress,
+            _ if c.is_ascii_alphanumeric() => return Progress,
             ';' => self.emit_name_error(tokenizer),
             _ => (),
         }

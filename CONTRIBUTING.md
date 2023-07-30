@@ -19,7 +19,7 @@ the web interface here:
 
 https://gitlab.gnome.org/GNOME/librsvg
 
-Development happens in the master branch.  There are also branches for
+Development happens in the `main` branch.  There are also branches for
 stable releases.
 
 Alternatively, you can use the mirror at Github:
@@ -83,10 +83,15 @@ with a sample SVG file.
 ## Hacking on librsvg
 
 The library's internals are being documented at
-https://gnome.pages.gitlab.gnome.org/librsvg/doc/rsvg_internals/index.html
+https://gnome.pages.gitlab.gnome.org/librsvg/internals/librsvg/index.html
 
 Please see that documentation for common tasks like adding support for
 a new CSS property.
+
+What can you hack on?
+
+* [Bugs for newcomers](https://gitlab.gnome.org/GNOME/librsvg/-/issues?label_name%5B%5D=4.+Newcomers)
+* Pick something from the [development roadmap](devel-docs/README.md)!
 
 ### Working on the source
 
@@ -167,20 +172,18 @@ of CI pipelines will fail:
     indentation, but don't want it to make changes on its own:  
     `cargo fmt --all -- --check`
 
-***Installing rustfmt*** As of 2018/Sep, our continuous integration
-pipeline assumes the version of rustfmt that is distributed through the
-nightly channel of [rustup](rustup.rs).  You can install it with
-
-```
-rustup component add rustfmt-preview --toolchain=nightly
-```
-
 ### Test suite
 
 Please make sure that the test suite passes with the changes in your
 branch.  The easiest way to run all the tests is to go to librsvg's
 toplevel directory and run `make check`.  This will run both the small
 unit tests and the black box tests in the `librsvg/tests` directory.
+
+It's possible that a wide swath of tests will fail when you do this,
+don't panic! that's likely just text rendering, which varies a bit
+from distro to distro. To run the test suite on the same OS as the 
+CI, first install docker then see this file 
+[`tools/docker/README.md`][docker-tests-readme].
 
 If you need to add new tests (you should, for new features, or for
 things that we weren't testing!), or for additional information on how
@@ -201,11 +204,11 @@ librsvg, and run this:
 
 ```
 cd /src/librsvg
-libtool --mode=execute ./rsvg-convert -o foo.png foo.svg
+cargo build
+./target/debug/rsvg-convert -o foo.png foo.svg
 ```
 
-Then you can view the resulting `foo.png` image.  Alternatively, you
-can use `./rsvg-view-3` for a quick-and-dirty SVG viewer.
+Then you can view the resulting `foo.png` image.
 
 **Please update the test suite** with a suitable example file once you
 have things working (or before even writing code, if you like
@@ -295,3 +298,4 @@ interesting options to generate plots and such.  You can see the
 [benches]: rsvg-internals/benches
 [Criterion]: https://crates.io/crates/criterion
 [criterion-options]: https://japaric.github.io/criterion.rs/book/user_guide/command_line_options.html
+[docker-tests-readme]: tools/docker/README.md

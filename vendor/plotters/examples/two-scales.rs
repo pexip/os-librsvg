@@ -1,8 +1,8 @@
 use plotters::prelude::*;
 
+const OUT_FILE_NAME: &'static str = "plotters-doc-data/twoscale.png";
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let root =
-        BitMapBackend::new("plotters-doc-data/twoscale.png", (1024, 768)).into_drawing_area();
+    let root = BitMapBackend::new(OUT_FILE_NAME, (1024, 768)).into_drawing_area();
     root.fill(&WHITE)?;
 
     let mut chart = ChartBuilder::on(&root)
@@ -11,7 +11,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .right_y_label_area_size(40)
         .margin(5)
         .caption("Dual Y-Axis Example", ("sans-serif", 50.0).into_font())
-        .build_cartesian_2d(0f32..10f32, LogRange(0.1f32..1e10f32))?
+        .build_cartesian_2d(0f32..10f32, (0.1f32..1e10f32).log_scale())?
         .set_secondary_coord(0f32..10f32, -1.0f32..1.0f32);
 
     chart
@@ -47,6 +47,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .configure_series_labels()
         .background_style(&RGBColor(128, 128, 128))
         .draw()?;
+
+    // To avoid the IO failure being ignored silently, we manually call the present function
+    root.present().expect("Unable to write result to file, please make sure 'plotters-doc-data' dir exists under current dir");
+    println!("Result has been saved to {}", OUT_FILE_NAME);
 
     Ok(())
 }

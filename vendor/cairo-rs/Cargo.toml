@@ -3,74 +3,83 @@
 # When uploading crates to the registry Cargo will automatically
 # "normalize" Cargo.toml files for maximal compatibility
 # with all versions of Cargo and also rewrite `path` dependencies
-# to registry (e.g., crates.io) dependencies
+# to registry (e.g., crates.io) dependencies.
 #
-# If you believe there's an error in this file please file an
-# issue against the rust-lang/cargo repository. If you're
-# editing this file be aware that the upstream Cargo.toml
-# will likely look very different (and much more reasonable)
+# If you are reading this file be aware that the original Cargo.toml
+# will likely look very different (and much more reasonable).
+# See Cargo.toml.orig for the original contents.
 
 [package]
+edition = "2021"
+rust-version = "1.56"
 name = "cairo-rs"
-version = "0.8.1"
-authors = ["The Gtk-rs Project Developers"]
-build = "build.rs"
+version = "0.15.12"
+authors = ["The gtk-rs Project Developers"]
 description = "Rust bindings for the Cairo library"
-homepage = "http://gtk-rs.org/"
-documentation = "http://gtk-rs.org/docs/cairo/"
+homepage = "https://gtk-rs.org/"
+documentation = "https://gtk-rs.org/gtk-rs-core/stable/latest/docs/cairo/"
 readme = "README.md"
-keywords = ["cairo", "gtk-rs", "gnome", "GUI"]
+keywords = [
+    "cairo",
+    "gtk-rs",
+    "gnome",
+    "GUI",
+]
 license = "MIT"
-repository = "https://github.com/gtk-rs/cairo"
+repository = "https://github.com/gtk-rs/gtk-rs-core"
+
 [package.metadata.docs.rs]
-features = ["dox", "embed-lgpl-docs"]
+features = ["dox"]
 
 [lib]
 name = "cairo"
+
 [dependencies.bitflags]
 version = "1.0"
 
-[dependencies.cairo-sys-rs]
-version = "0.9.1"
+[dependencies.ffi]
+version = "0.15.1"
+package = "cairo-sys-rs"
+
+[dependencies.freetype-crate]
+version = "0.7.0"
+optional = true
+package = "freetype"
 
 [dependencies.glib]
-version = "0.9.0"
-optional = true
-
-[dependencies.glib-sys]
-version = "0.9.1"
-optional = true
-
-[dependencies.gobject-sys]
-version = "0.9.1"
+version = "0.15.1"
 optional = true
 
 [dependencies.libc]
 version = "0.2"
+
+[dependencies.thiserror]
+version = "1.0.10"
+
 [dev-dependencies.tempfile]
 version = "3.0"
-[build-dependencies.gtk-rs-lgpl-docs]
-version = "0.1.8"
-optional = true
 
 [features]
 default = ["use_glib"]
-dox = ["cairo-sys-rs/dox", "glib/dox"]
-embed-lgpl-docs = ["gtk-rs-lgpl-docs"]
-pdf = ["cairo-sys-rs/pdf"]
-png = ["cairo-sys-rs/png"]
-ps = ["cairo-sys-rs/ps"]
-purge-lgpl-docs = ["gtk-rs-lgpl-docs"]
-svg = ["cairo-sys-rs/svg"]
-use_glib = ["glib", "glib-sys", "gobject-sys", "cairo-sys-rs/use_glib"]
-v1_14 = ["cairo-sys-rs/v1_14"]
-v1_16 = ["v1_14", "cairo-sys-rs/v1_16"]
-win32-surface = ["cairo-sys-rs/win32-surface"]
-xcb = ["cairo-sys-rs/xcb"]
-xlib = ["cairo-sys-rs/xlib"]
-[badges.appveyor]
-repository = "GuillaumeGomez/cairo"
-service = "github"
-
-[badges.travis-ci]
-repository = "gtk-rs/cairo"
+dox = [
+    "ffi/dox",
+    "glib/dox",
+    "freetype",
+]
+freetype = [
+    "ffi/freetype",
+    "freetype-crate",
+]
+pdf = ["ffi/pdf"]
+png = ["ffi/png"]
+ps = ["ffi/ps"]
+script = ["ffi/script"]
+svg = ["ffi/svg"]
+use_glib = [
+    "glib",
+    "ffi/use_glib",
+]
+v1_16 = ["ffi/v1_16"]
+win32-surface = ["ffi/win32-surface"]
+xcb = ["ffi/xcb"]
+xlib = ["ffi/xlib"]

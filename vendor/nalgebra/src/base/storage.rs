@@ -1,7 +1,6 @@
 //! Abstract definition of a matrix data storage.
 
-use std::fmt::Debug;
-use std::mem;
+use std::ptr;
 
 use crate::base::allocator::{Allocator, SameShapeC, SameShapeR};
 use crate::base::default_allocator::DefaultAllocator;
@@ -12,31 +11,37 @@ use crate::base::Scalar;
  * Aliases for allocation results.
  */
 /// The data storage for the sum of two matrices with dimensions `(R1, C1)` and `(R2, C2)`.
-pub type SameShapeStorage<N, R1, C1, R2, C2> =
-    <DefaultAllocator as Allocator<N, SameShapeR<R1, R2>, SameShapeC<C1, C2>>>::Buffer;
+pub type SameShapeStorage<T, R1, C1, R2, C2> =
+    <DefaultAllocator as Allocator<T, SameShapeR<R1, R2>, SameShapeC<C1, C2>>>::Buffer;
 
-// FIXME: better name than Owned ?
+// TODO: better name than Owned ?
 /// The owned data storage that can be allocated from `S`.
-pub type Owned<N, R, C = U1> = <DefaultAllocator as Allocator<N, R, C>>::Buffer;
+pub type Owned<T, R, C = U1> = <DefaultAllocator as Allocator<T, R, C>>::Buffer;
+
+/// The owned data storage that can be allocated from `S`.
+pub type OwnedUninit<T, R, C = U1> = <DefaultAllocator as Allocator<T, R, C>>::BufferUninit;
 
 /// The row-stride of the owned data storage for a buffer of dimension `(R, C)`.
-pub type RStride<N, R, C = U1> =
-    <<DefaultAllocator as Allocator<N, R, C>>::Buffer as Storage<N, R, C>>::RStride;
+pub type RStride<T, R, C = U1> =
+    <<DefaultAllocator as Allocator<T, R, C>>::Buffer as RawStorage<T, R, C>>::RStride;
 
 /// The column-stride of the owned data storage for a buffer of dimension `(R, C)`.
-pub type CStride<N, R, C = U1> =
-    <<DefaultAllocator as Allocator<N, R, C>>::Buffer as Storage<N, R, C>>::CStride;
+pub type CStride<T, R, C = U1> =
+    <<DefaultAllocator as Allocator<T, R, C>>::Buffer as RawStorage<T, R, C>>::CStride;
 
 /// The trait shared by all matrix data storage.
 ///
-/// FIXME: doc
+/// TODO: doc
+/// In generic code, it is recommended use the `Storage` trait bound instead. The `RawStorage`
+/// trait bound is generally used by code that needs to work with storages that contains
+/// `MaybeUninit<T>` elements.
 ///
 /// Note that `Self` must always have a number of elements compatible with the matrix length (given
 /// by `R` and `C` if they are known at compile-time). For example, implementors of this trait
 /// should **not** allow the user to modify the size of the underlying buffer with safe methods
 /// (for example the `VecStorage::data_mut` method is unsafe because the user could change the
 /// vector's size so that it no longer contains enough elements: this will lead to UB.
-pub unsafe trait Storage<N: Scalar, R: Dim, C: Dim = U1>: Debug + Sized {
+pub unsafe trait RawStorage<T, R: Dim, C: Dim = U1>: Sized {
     /// The static stride of this storage's rows.
     type RStride: Dim;
 
@@ -44,7 +49,7 @@ pub unsafe trait Storage<N: Scalar, R: Dim, C: Dim = U1>: Debug + Sized {
     type CStride: Dim;
 
     /// The matrix data pointer.
-    fn ptr(&self) -> *const N;
+    fn ptr(&self) -> *const T;
 
     /// The dimension of the matrix at run-time. Arr length of zero indicates the additive identity
     /// element of any dimension. Must be equal to `Self::dimension()` if it is not `None`.
@@ -58,9 +63,9 @@ pub unsafe trait Storage<N: Scalar, R: Dim, C: Dim = U1>: Debug + Sized {
     /// Compute the index corresponding to the irow-th row and icol-th column of this matrix. The
     /// index must be such that the following holds:
     ///
-    /// ```.ignore
+    /// ```ignore
     /// let lindex = self.linear_index(irow, icol);
-    /// assert!(*self.get_unchecked(irow, icol) == *self.get_unchecked_linear(lindex)
+    /// assert!(*self.get_unchecked(irow, icol) == *self.get_unchecked_linear(lindex))
     /// ```
     #[inline]
     fn linear_index(&self, irow: usize, icol: usize) -> usize {
@@ -70,91 +75,137 @@ pub unsafe trait Storage<N: Scalar, R: Dim, C: Dim = U1>: Debug + Sized {
     }
 
     /// Gets the address of the i-th matrix component without performing bound-checking.
+    ///
+    /// # Safety
+    /// If the index is out of bounds, dereferencing the result will cause undefined behavior.
     #[inline]
-    unsafe fn get_address_unchecked_linear(&self, i: usize) -> *const N {
-        self.ptr().wrapping_offset(i as isize)
+    fn get_address_unchecked_linear(&self, i: usize) -> *const T {
+        self.ptr().wrapping_add(i)
     }
 
     /// Gets the address of the i-th matrix component without performing bound-checking.
+    ///
+    /// # Safety
+    /// If the index is out of bounds, dereferencing the result will cause undefined behavior.
     #[inline]
-    unsafe fn get_address_unchecked(&self, irow: usize, icol: usize) -> *const N {
+    fn get_address_unchecked(&self, irow: usize, icol: usize) -> *const T {
         self.get_address_unchecked_linear(self.linear_index(irow, icol))
     }
 
     /// Retrieves a reference to the i-th element without bound-checking.
+    ///
+    /// # Safety
+    /// If the index is out of bounds, the method will cause undefined behavior.
     #[inline]
-    unsafe fn get_unchecked_linear(&self, i: usize) -> &N {
+    unsafe fn get_unchecked_linear(&self, i: usize) -> &T {
         &*self.get_address_unchecked_linear(i)
     }
 
     /// Retrieves a reference to the i-th element without bound-checking.
+    ///
+    /// # Safety
+    /// If the index is out of bounds, the method will cause undefined behavior.
     #[inline]
-    unsafe fn get_unchecked(&self, irow: usize, icol: usize) -> &N {
+    unsafe fn get_unchecked(&self, irow: usize, icol: usize) -> &T {
         self.get_unchecked_linear(self.linear_index(irow, icol))
     }
 
     /// Indicates whether this data buffer stores its elements contiguously.
+    ///
+    /// # Safety
+    /// This function must not return `true` if the underlying storage is not contiguous,
+    /// or undefined behaviour will occur.
     fn is_contiguous(&self) -> bool;
 
     /// Retrieves the data buffer as a contiguous slice.
     ///
+    /// # Safety
     /// The matrix components may not be stored in a contiguous way, depending on the strides.
-    fn as_slice(&self) -> &[N];
+    /// This method is unsafe because this can yield to invalid aliasing when called on some pairs
+    /// of matrix slices originating from the same matrix with strides.
+    ///
+    /// Call the safe alternative `matrix.as_slice()` instead.
+    unsafe fn as_slice_unchecked(&self) -> &[T];
+}
 
+/// Trait shared by all matrix data storage that don’t contain any uninitialized elements.
+pub unsafe trait Storage<T, R: Dim, C: Dim = U1>: RawStorage<T, R, C> {
     /// Builds a matrix data storage that does not contain any reference.
-    fn into_owned(self) -> Owned<N, R, C>
+    fn into_owned(self) -> Owned<T, R, C>
     where
-        DefaultAllocator: Allocator<N, R, C>;
+        DefaultAllocator: Allocator<T, R, C>;
 
     /// Clones this data storage to one that does not contain any reference.
-    fn clone_owned(&self) -> Owned<N, R, C>
+    fn clone_owned(&self) -> Owned<T, R, C>
     where
-        DefaultAllocator: Allocator<N, R, C>;
+        DefaultAllocator: Allocator<T, R, C>;
 }
 
 /// Trait implemented by matrix data storage that can provide a mutable access to its elements.
 ///
+/// In generic code, it is recommended use the `StorageMut` trait bound instead. The
+/// `RawStorageMut` trait bound is generally used by code that needs to work with storages that
+/// contains `MaybeUninit<T>` elements.
+///
 /// Note that a mutable access does not mean that the matrix owns its data. For example, a mutable
 /// matrix slice can provide mutable access to its elements even if it does not own its data (it
 /// contains only an internal reference to them).
-pub unsafe trait StorageMut<N: Scalar, R: Dim, C: Dim = U1>: Storage<N, R, C> {
+pub unsafe trait RawStorageMut<T, R: Dim, C: Dim = U1>: RawStorage<T, R, C> {
     /// The matrix mutable data pointer.
-    fn ptr_mut(&mut self) -> *mut N;
+    fn ptr_mut(&mut self) -> *mut T;
 
     /// Gets the mutable address of the i-th matrix component without performing bound-checking.
+    ///
+    /// # Safety
+    /// If the index is out of bounds, dereferencing the result will cause undefined behavior.
     #[inline]
-    unsafe fn get_address_unchecked_linear_mut(&mut self, i: usize) -> *mut N {
-        self.ptr_mut().wrapping_offset(i as isize)
+    fn get_address_unchecked_linear_mut(&mut self, i: usize) -> *mut T {
+        self.ptr_mut().wrapping_add(i)
     }
 
     /// Gets the mutable address of the i-th matrix component without performing bound-checking.
+    ///
+    /// # Safety
+    /// If the index is out of bounds, dereferencing the result will cause undefined behavior.
     #[inline]
-    unsafe fn get_address_unchecked_mut(&mut self, irow: usize, icol: usize) -> *mut N {
+    fn get_address_unchecked_mut(&mut self, irow: usize, icol: usize) -> *mut T {
         let lid = self.linear_index(irow, icol);
         self.get_address_unchecked_linear_mut(lid)
     }
 
     /// Retrieves a mutable reference to the i-th element without bound-checking.
-    unsafe fn get_unchecked_linear_mut(&mut self, i: usize) -> &mut N {
+    ///
+    /// # Safety
+    /// If the index is out of bounds, the method will cause undefined behavior.
+    unsafe fn get_unchecked_linear_mut(&mut self, i: usize) -> &mut T {
         &mut *self.get_address_unchecked_linear_mut(i)
     }
 
     /// Retrieves a mutable reference to the element at `(irow, icol)` without bound-checking.
+    ///
+    /// # Safety
+    /// If the index is out of bounds, the method will cause undefined behavior.
     #[inline]
-    unsafe fn get_unchecked_mut(&mut self, irow: usize, icol: usize) -> &mut N {
+    unsafe fn get_unchecked_mut(&mut self, irow: usize, icol: usize) -> &mut T {
         &mut *self.get_address_unchecked_mut(irow, icol)
     }
 
     /// Swaps two elements using their linear index without bound-checking.
+    ///
+    /// # Safety
+    /// If the indices are out of bounds, the method will cause undefined behavior.
     #[inline]
     unsafe fn swap_unchecked_linear(&mut self, i1: usize, i2: usize) {
         let a = self.get_address_unchecked_linear_mut(i1);
         let b = self.get_address_unchecked_linear_mut(i2);
 
-        mem::swap(&mut *a, &mut *b);
+        ptr::swap(a, b);
     }
 
     /// Swaps two elements without bound-checking.
+    ///
+    /// # Safety
+    /// If the indices are out of bounds, the method will cause undefined behavior.
     #[inline]
     unsafe fn swap_unchecked(&mut self, row_col1: (usize, usize), row_col2: (usize, usize)) {
         let lid1 = self.linear_index(row_col1.0, row_col1.1);
@@ -165,26 +216,48 @@ pub unsafe trait StorageMut<N: Scalar, R: Dim, C: Dim = U1>: Storage<N, R, C> {
 
     /// Retrieves the mutable data buffer as a contiguous slice.
     ///
-    /// Matrix components may not be contiguous, depending on its strides.
-    fn as_mut_slice(&mut self) -> &mut [N];
+    /// Matrix components may not be contiguous, depending on its strides.    
+    ///
+    /// # Safety
+    /// The matrix components may not be stored in a contiguous way, depending on the strides.
+    /// This method is unsafe because this can yield to invalid aliasing when called on some pairs
+    /// of matrix slices originating from the same matrix with strides.
+    unsafe fn as_mut_slice_unchecked(&mut self) -> &mut [T];
 }
 
-/// A matrix storage that is stored contiguously in memory.
-///
-/// The storage requirement means that for any value of `i` in `[0, nrows * ncols[`, the value
-/// `.get_unchecked_linear` returns one of the matrix component. This trait is unsafe because
-/// failing to comply to this may cause Undefined Behaviors.
-pub unsafe trait ContiguousStorage<N: Scalar, R: Dim, C: Dim = U1>:
-    Storage<N, R, C>
+/// Trait shared by all mutable matrix data storage that don’t contain any uninitialized elements.
+pub unsafe trait StorageMut<T, R: Dim, C: Dim = U1>:
+    Storage<T, R, C> + RawStorageMut<T, R, C>
 {
 }
 
-/// A mutable matrix storage that is stored contiguously in memory.
+unsafe impl<S, T, R, C> StorageMut<T, R, C> for S
+where
+    R: Dim,
+    C: Dim,
+    S: Storage<T, R, C> + RawStorageMut<T, R, C>,
+{
+}
+
+/// Marker trait indicating that a storage is stored contiguously in memory.
 ///
-/// The storage requirement means that for any value of `i` in `[0, nrows * ncols[`, the value
+/// The storage requirement means that for any value of `i` in `[0, nrows * ncols - 1]`, the value
 /// `.get_unchecked_linear` returns one of the matrix component. This trait is unsafe because
 /// failing to comply to this may cause Undefined Behaviors.
-pub unsafe trait ContiguousStorageMut<N: Scalar, R: Dim, C: Dim = U1>:
-    ContiguousStorage<N, R, C> + StorageMut<N, R, C>
+pub unsafe trait IsContiguous {}
+
+/// A matrix storage that can be reshaped in-place.
+pub trait ReshapableStorage<T, R1, C1, R2, C2>: RawStorage<T, R1, C1>
+where
+    T: Scalar,
+    R1: Dim,
+    C1: Dim,
+    R2: Dim,
+    C2: Dim,
 {
+    /// The reshaped storage type.
+    type Output: RawStorage<T, R2, C2>;
+
+    /// Reshapes the storage into the output storage type.
+    fn reshape_generic(self, nrows: R2, ncols: C2) -> Self::Output;
 }

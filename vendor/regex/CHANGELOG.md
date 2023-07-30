@@ -1,3 +1,144 @@
+1.6.0 (2022-07-05)
+==================
+This release principally includes an upgrade to Unicode 14.
+
+New features:
+
+* [FEATURE #832](https://github.com/rust-lang/regex/pull/832):
+  Clarify that `Captures::len` includes all groups, not just matching groups.
+* [FEATURE #857](https://github.com/rust-lang/regex/pull/857):
+  Add an `ExactSizeIterator` impl for `SubCaptureMatches`.
+* [FEATURE #861](https://github.com/rust-lang/regex/pull/861):
+  Improve `RegexSet` documentation examples.
+* [FEATURE #877](https://github.com/rust-lang/regex/issues/877):
+  Upgrade to Unicode 14.
+
+Bug fixes:
+
+* [BUG #792](https://github.com/rust-lang/regex/issues/792):
+  Fix error message rendering bug.
+
+
+1.5.6 (2022-05-20)
+==================
+This release includes a few bug fixes, including a bug that produced incorrect
+matches when a non-greedy `?` operator was used.
+
+* [BUG #680](https://github.com/rust-lang/regex/issues/680):
+  Fixes a bug where `[[:alnum:][:^ascii:]]` dropped `[:alnum:]` from the class.
+* [BUG #859](https://github.com/rust-lang/regex/issues/859):
+  Fixes a bug where `Hir::is_match_empty` returned `false` for `\b`.
+* [BUG #862](https://github.com/rust-lang/regex/issues/862):
+  Fixes a bug where 'ab??' matches 'ab' instead of 'a' in 'ab'.
+
+
+1.5.5 (2022-03-08)
+==================
+This releases fixes a security bug in the regex compiler. This bug permits a
+vector for a denial-of-service attack in cases where the regex being compiled
+is untrusted. There are no known problems where the regex is itself trusted,
+including in cases of untrusted haystacks.
+
+* [SECURITY #GHSA-m5pq-gvj9-9vr8](https://github.com/rust-lang/regex/security/advisories/GHSA-m5pq-gvj9-9vr8):
+  Fixes a bug in the regex compiler where empty sub-expressions subverted the
+  existing mitigations in place to enforce a size limit on compiled regexes.
+  The Rust Security Response WG published an advisory about this:
+  https://groups.google.com/g/rustlang-security-announcements/c/NcNNL1Jq7Yw
+
+
+1.5.4 (2021-05-06)
+==================
+This release fixes another compilation failure when building regex. This time,
+the fix is for when the `pattern` feature is enabled, which only works on
+nightly Rust. CI has been updated to test this case.
+
+* [BUG #772](https://github.com/rust-lang/regex/pull/772):
+  Fix build when `pattern` feature is enabled.
+
+
+1.5.3 (2021-05-01)
+==================
+This releases fixes a bug when building regex with only the `unicode-perl`
+feature. It turns out that while CI was building this configuration, it wasn't
+actually failing the overall build on a failed compilation.
+
+* [BUG #769](https://github.com/rust-lang/regex/issues/769):
+  Fix build in `regex-syntax` when only the `unicode-perl` feature is enabled.
+
+
+1.5.2 (2021-05-01)
+==================
+This release fixes a performance bug when Unicode word boundaries are used.
+Namely, for certain regexes on certain inputs, it's possible for the lazy DFA
+to stop searching (causing a fallback to a slower engine) when it doesn't
+actually need to.
+
+[PR #768](https://github.com/rust-lang/regex/pull/768) fixes the bug, which was
+originally reported in
+[ripgrep#1860](https://github.com/BurntSushi/ripgrep/issues/1860).
+
+
+1.5.1 (2021-04-30)
+==================
+This is a patch release that fixes a compilation error when the `perf-literal`
+feature is not enabled.
+
+
+1.5.0 (2021-04-30)
+==================
+This release primarily updates to Rust 2018 (finally) and bumps the MSRV to
+Rust 1.41 (from Rust 1.28). Rust 1.41 was chosen because it's still reasonably
+old, and is what's in Debian stable at the time of writing.
+
+This release also drops this crate's own bespoke substring search algorithms
+in favor of a new
+[`memmem` implementation provided by the `memchr` crate](https://docs.rs/memchr/2.4.0/memchr/memmem/index.html).
+This will change the performance profile of some regexes, sometimes getting a
+little worse, and hopefully more frequently, getting a lot better. Please
+report any serious performance regressions if you find them.
+
+
+1.4.6 (2021-04-22)
+==================
+This is a small patch release that fixes the compiler's size check on how much
+heap memory a regex uses. Previously, the compiler did not account for the
+heap usage of Unicode character classes. Now it does. It's possible that this
+may make some regexes fail to compile that previously did compile. If that
+happens, please file an issue.
+
+* [BUG OSS-fuzz#33579](https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=33579):
+  Some regexes can use more heap memory than one would expect.
+
+
+1.4.5 (2021-03-14)
+==================
+This is a small patch release that fixes a regression in the size of a `Regex`
+in the 1.4.4 release. Prior to 1.4.4, a `Regex` was 552 bytes. In the 1.4.4
+release, it was 856 bytes due to internal changes. In this release, a `Regex`
+is now 16 bytes. In general, the size of a `Regex` was never something that was
+on my radar, but this increased size in the 1.4.4 release seems to have crossed
+a threshold and resulted in stack overflows in some programs.
+
+* [BUG #750](https://github.com/rust-lang/regex/pull/750):
+  Fixes stack overflows seemingly caused by a large `Regex` size by decreasing
+  its size.
+
+
+1.4.4 (2021-03-11)
+==================
+This is a small patch release that contains some bug fixes. Notably, it also
+drops the `thread_local` (and `lazy_static`, via transitivity) dependencies.
+
+Bug fixes:
+
+* [BUG #362](https://github.com/rust-lang/regex/pull/362):
+  Memory leaks caused by an internal caching strategy should now be fixed.
+* [BUG #576](https://github.com/rust-lang/regex/pull/576):
+  All regex types now implement `UnwindSafe` and `RefUnwindSafe`.
+* [BUG #728](https://github.com/rust-lang/regex/pull/749):
+  Add missing `Replacer` impls for `Vec<u8>`, `String`, `Cow`, etc.
+
+
 1.4.3 (2021-01-08)
 ==================
 This is a small patch release that adds some missing standard trait
@@ -576,7 +717,7 @@ New features:
 * Empty sub-expressions are now permitted in most places. That is, `()+` is
   now a valid regex.
 * Almost everything in regex-syntax now uses constant stack space, even when
-  performing anaylsis that requires structural induction. This reduces the risk
+  performing analysis that requires structural induction. This reduces the risk
   of a user provided regular expression causing a stack overflow.
 * [FEATURE #174](https://github.com/rust-lang/regex/issues/174):
   The `Ast` type in `regex-syntax` now contains span information.

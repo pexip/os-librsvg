@@ -2,65 +2,412 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
+use bitflags::bitflags;
 use glib::translate::*;
 use glib::value::FromValue;
-use glib::value::FromValueOptional;
-use glib::value::SetValue;
-use glib::value::Value;
+use glib::value::ToValue;
 use glib::StaticType;
 use glib::Type;
-use gobject_sys;
-use pango_sys;
+use std::fmt;
 
 bitflags! {
+    #[doc(alias = "PangoFontMask")]
     pub struct FontMask: u32 {
-        const FAMILY = 1;
-        const STYLE = 2;
-        const VARIANT = 4;
-        const WEIGHT = 8;
-        const STRETCH = 16;
-        const SIZE = 32;
-        const GRAVITY = 64;
-        const VARIATIONS = 128;
+        #[doc(alias = "PANGO_FONT_MASK_FAMILY")]
+        const FAMILY = ffi::PANGO_FONT_MASK_FAMILY as u32;
+        #[doc(alias = "PANGO_FONT_MASK_STYLE")]
+        const STYLE = ffi::PANGO_FONT_MASK_STYLE as u32;
+        #[doc(alias = "PANGO_FONT_MASK_VARIANT")]
+        const VARIANT = ffi::PANGO_FONT_MASK_VARIANT as u32;
+        #[doc(alias = "PANGO_FONT_MASK_WEIGHT")]
+        const WEIGHT = ffi::PANGO_FONT_MASK_WEIGHT as u32;
+        #[doc(alias = "PANGO_FONT_MASK_STRETCH")]
+        const STRETCH = ffi::PANGO_FONT_MASK_STRETCH as u32;
+        #[doc(alias = "PANGO_FONT_MASK_SIZE")]
+        const SIZE = ffi::PANGO_FONT_MASK_SIZE as u32;
+        #[doc(alias = "PANGO_FONT_MASK_GRAVITY")]
+        const GRAVITY = ffi::PANGO_FONT_MASK_GRAVITY as u32;
+        #[doc(alias = "PANGO_FONT_MASK_VARIATIONS")]
+        const VARIATIONS = ffi::PANGO_FONT_MASK_VARIATIONS as u32;
+    }
+}
+
+impl fmt::Display for FontMask {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        <Self as fmt::Debug>::fmt(self, f)
     }
 }
 
 #[doc(hidden)]
-impl ToGlib for FontMask {
-    type GlibType = pango_sys::PangoFontMask;
+impl IntoGlib for FontMask {
+    type GlibType = ffi::PangoFontMask;
 
-    fn to_glib(&self) -> pango_sys::PangoFontMask {
+    fn into_glib(self) -> ffi::PangoFontMask {
         self.bits()
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoFontMask> for FontMask {
-    fn from_glib(value: pango_sys::PangoFontMask) -> FontMask {
-        FontMask::from_bits_truncate(value)
+impl FromGlib<ffi::PangoFontMask> for FontMask {
+    unsafe fn from_glib(value: ffi::PangoFontMask) -> Self {
+        Self::from_bits_truncate(value)
     }
 }
 
 impl StaticType for FontMask {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_font_mask_get_type()) }
+        unsafe { from_glib(ffi::pango_font_mask_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for FontMask {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for FontMask {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for FontMask {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_flags(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for FontMask {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_flags(value.to_glib_none().0))
+impl ToValue for FontMask {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_flags(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
+    }
+
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
-impl SetValue for FontMask {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_flags(value.to_glib_none_mut().0, this.to_glib())
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+bitflags! {
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PangoLayoutDeserializeFlags")]
+    pub struct LayoutDeserializeFlags: u32 {
+        #[doc(alias = "PANGO_LAYOUT_DESERIALIZE_DEFAULT")]
+        const DEFAULT = ffi::PANGO_LAYOUT_DESERIALIZE_DEFAULT as u32;
+        #[doc(alias = "PANGO_LAYOUT_DESERIALIZE_CONTEXT")]
+        const CONTEXT = ffi::PANGO_LAYOUT_DESERIALIZE_CONTEXT as u32;
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl fmt::Display for LayoutDeserializeFlags {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        <Self as fmt::Debug>::fmt(self, f)
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+#[doc(hidden)]
+impl IntoGlib for LayoutDeserializeFlags {
+    type GlibType = ffi::PangoLayoutDeserializeFlags;
+
+    fn into_glib(self) -> ffi::PangoLayoutDeserializeFlags {
+        self.bits()
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+#[doc(hidden)]
+impl FromGlib<ffi::PangoLayoutDeserializeFlags> for LayoutDeserializeFlags {
+    unsafe fn from_glib(value: ffi::PangoLayoutDeserializeFlags) -> Self {
+        Self::from_bits_truncate(value)
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl StaticType for LayoutDeserializeFlags {
+    fn static_type() -> Type {
+        unsafe { from_glib(ffi::pango_layout_deserialize_flags_get_type()) }
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl glib::value::ValueType for LayoutDeserializeFlags {
+    type Type = Self;
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+unsafe impl<'a> FromValue<'a> for LayoutDeserializeFlags {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_flags(value.to_glib_none().0))
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl ToValue for LayoutDeserializeFlags {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_flags(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
+    }
+
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+bitflags! {
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PangoLayoutSerializeFlags")]
+    pub struct LayoutSerializeFlags: u32 {
+        #[doc(alias = "PANGO_LAYOUT_SERIALIZE_DEFAULT")]
+        const DEFAULT = ffi::PANGO_LAYOUT_SERIALIZE_DEFAULT as u32;
+        #[doc(alias = "PANGO_LAYOUT_SERIALIZE_CONTEXT")]
+        const CONTEXT = ffi::PANGO_LAYOUT_SERIALIZE_CONTEXT as u32;
+        #[doc(alias = "PANGO_LAYOUT_SERIALIZE_OUTPUT")]
+        const OUTPUT = ffi::PANGO_LAYOUT_SERIALIZE_OUTPUT as u32;
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl fmt::Display for LayoutSerializeFlags {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        <Self as fmt::Debug>::fmt(self, f)
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+#[doc(hidden)]
+impl IntoGlib for LayoutSerializeFlags {
+    type GlibType = ffi::PangoLayoutSerializeFlags;
+
+    fn into_glib(self) -> ffi::PangoLayoutSerializeFlags {
+        self.bits()
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+#[doc(hidden)]
+impl FromGlib<ffi::PangoLayoutSerializeFlags> for LayoutSerializeFlags {
+    unsafe fn from_glib(value: ffi::PangoLayoutSerializeFlags) -> Self {
+        Self::from_bits_truncate(value)
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl StaticType for LayoutSerializeFlags {
+    fn static_type() -> Type {
+        unsafe { from_glib(ffi::pango_layout_serialize_flags_get_type()) }
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl glib::value::ValueType for LayoutSerializeFlags {
+    type Type = Self;
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+unsafe impl<'a> FromValue<'a> for LayoutSerializeFlags {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_flags(value.to_glib_none().0))
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl ToValue for LayoutSerializeFlags {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_flags(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
+    }
+
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
+    }
+}
+
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+bitflags! {
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+    #[doc(alias = "PangoShapeFlags")]
+    pub struct ShapeFlags: u32 {
+        #[doc(alias = "PANGO_SHAPE_NONE")]
+        const NONE = ffi::PANGO_SHAPE_NONE as u32;
+        #[doc(alias = "PANGO_SHAPE_ROUND_POSITIONS")]
+        const ROUND_POSITIONS = ffi::PANGO_SHAPE_ROUND_POSITIONS as u32;
+    }
+}
+
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+impl fmt::Display for ShapeFlags {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        <Self as fmt::Debug>::fmt(self, f)
+    }
+}
+
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+#[doc(hidden)]
+impl IntoGlib for ShapeFlags {
+    type GlibType = ffi::PangoShapeFlags;
+
+    fn into_glib(self) -> ffi::PangoShapeFlags {
+        self.bits()
+    }
+}
+
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+#[doc(hidden)]
+impl FromGlib<ffi::PangoShapeFlags> for ShapeFlags {
+    unsafe fn from_glib(value: ffi::PangoShapeFlags) -> Self {
+        Self::from_bits_truncate(value)
+    }
+}
+
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+impl StaticType for ShapeFlags {
+    fn static_type() -> Type {
+        unsafe { from_glib(ffi::pango_shape_flags_get_type()) }
+    }
+}
+
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+impl glib::value::ValueType for ShapeFlags {
+    type Type = Self;
+}
+
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+unsafe impl<'a> FromValue<'a> for ShapeFlags {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_flags(value.to_glib_none().0))
+    }
+}
+
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+impl ToValue for ShapeFlags {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_flags(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
+    }
+
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
+    }
+}
+
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+bitflags! {
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+    #[doc(alias = "PangoShowFlags")]
+    pub struct ShowFlags: u32 {
+        #[doc(alias = "PANGO_SHOW_NONE")]
+        const NONE = ffi::PANGO_SHOW_NONE as u32;
+        #[doc(alias = "PANGO_SHOW_SPACES")]
+        const SPACES = ffi::PANGO_SHOW_SPACES as u32;
+        #[doc(alias = "PANGO_SHOW_LINE_BREAKS")]
+        const LINE_BREAKS = ffi::PANGO_SHOW_LINE_BREAKS as u32;
+        #[doc(alias = "PANGO_SHOW_IGNORABLES")]
+        const IGNORABLES = ffi::PANGO_SHOW_IGNORABLES as u32;
+    }
+}
+
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+impl fmt::Display for ShowFlags {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        <Self as fmt::Debug>::fmt(self, f)
+    }
+}
+
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+#[doc(hidden)]
+impl IntoGlib for ShowFlags {
+    type GlibType = ffi::PangoShowFlags;
+
+    fn into_glib(self) -> ffi::PangoShowFlags {
+        self.bits()
+    }
+}
+
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+#[doc(hidden)]
+impl FromGlib<ffi::PangoShowFlags> for ShowFlags {
+    unsafe fn from_glib(value: ffi::PangoShowFlags) -> Self {
+        Self::from_bits_truncate(value)
+    }
+}
+
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+impl StaticType for ShowFlags {
+    fn static_type() -> Type {
+        unsafe { from_glib(ffi::pango_show_flags_get_type()) }
+    }
+}
+
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+impl glib::value::ValueType for ShowFlags {
+    type Type = Self;
+}
+
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+unsafe impl<'a> FromValue<'a> for ShowFlags {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_flags(value.to_glib_none().0))
+    }
+}
+
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+impl ToValue for ShowFlags {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_flags(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
+    }
+
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }

@@ -24,7 +24,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! predicates = "1.0.6"
+//! predicates = "2.1.1"
 //! ```
 //!
 //! A [prelude] is available to bring in all extension traits as well as providing
@@ -131,15 +131,14 @@
 //! Combinators
 //! - [`pred_a.and(pred_b)`]: Both predicates must succeed.
 //! - [`pred_a.or(pred_b)`]: One or both predicates must succeed.
-//! - [`pred_a.not())`]: The predicate must fail.
+//! - [`pred_a.not()`]: The predicate must fail.
 //!
 //! `String` predicates
 //! - [`predicate::str::is_empty`]: Specified string must be empty
 //! - [`str_pred = predicate::path::eq_file(...).utf8`]: Specified string must equal the contents
 //!   of the given file.
-//! - [`predicate::str::similar`]: Same as `eq` except report a diff.  See [`DifferencePredicate`]
+//! - [`predicate::str::diff`]: Same as `eq` except report a diff.  See [`DifferencePredicate`]
 //!   for more features.
-//! - [`predicate::str::diff`]: Same as `ne`.  See [`DifferencePredicate`] for more features.
 //! - [`predicate::str::starts_with`]: Specified string must start with the given needle.
 //! - [`predicate::str::ends_with`]: Specified string must end with the given needle.
 //! - [`predicate::str::contains`]: Specified string must contain the given needle.
@@ -161,45 +160,43 @@
 //!   file.
 //! - [`path_pred = bytes_pred.from_file_path`]: Specified path's contents must equal the `bytes_pred`.
 //!
-//! [prelude]: prelude/index.html
-//! [`DifferencePredicate`]: https://docs.rs/predicates/0.9.1/predicates/str/struct.DifferencePredicate.html
-//! [`bytes_pred = str_pred.from_utf8()`]: prelude/trait.PredicateStrExt.html#method.from_utf8
-//! [`path_pred = bytes_pred.from_file_path`]: prelude/trait.PredicateFileContentExt.html#method.from_file_path
-//! [`path_pred = predicate::path::eq_file`]: prelude/predicate/path/fn.eq_file.html
-//! [`pred_a.and(pred_b)`]: boolean/trait.PredicateBooleanExt.html#method.and
-//! [`pred_a.not())`]: boolean/trait.PredicateBooleanExt.html#method.not
-//! [`pred_a.or(pred_b)`]: boolean/trait.PredicateBooleanExt.html#method.or
-//! [`predicate::always`]: constant/fn.always.html
-//! [`predicate::eq`]: ord/fn.eq.html
-//! [`predicate::float::is_close`]: prelude/predicate/float/fn.is_close.html
-//! [`predicate::function`]: function/fn.function.html
-//! [`predicate::ge`]: ord/fn.ge.html
-//! [`predicate::gt`]: ord/fn.gt.html
-//! [`predicate::in_hash`]: iter/fn.in_hash.html
-//! [`predicate::in_iter(...).sort`]: iter/struct.InPredicate.html#method.sort
-//! [`predicate::in_iter`]: iter/fn.in_iter.html
-//! [`predicate::le`]: ord/fn.le.html
-//! [`predicate::lt`]: ord/fn.lt.html
-//! [`predicate::name`]: name/trait.PredicateNameExt.html#method.name
-//! [`predicate::ne`]: ord/fn.ne.html
-//! [`predicate::never`]: constant/fn.never.html
-//! [`predicate::path::exists`]: prelude/predicate/path/fn.exists.html
-//! [`predicate::path::is_dir`]: prelude/predicate/path/fn.is_dir.html
-//! [`predicate::path::is_file`]: prelude/predicate/path/fn.is_file.html
-//! [`predicate::path::is_symlink`]: prelude/predicate/path/fn.is_symlink.html
-//! [`predicate::path::missing`]: prelude/predicate/path/fn.missing.html
-//! [`predicate::str::contains(...).count`]: str/struct.ContainsPredicate.html#method.count
-//! [`predicate::str::contains`]: prelude/predicate/str/fn.contains.html
-//! [`predicate::str::diff`]: prelude/predicate/str/fn.diff.html
-//! [`predicate::str::ends_with`]: prelude/predicate/str/fn.ends_with.html
-//! [`predicate::str::is_empty`]: prelude/predicate/str/fn.is_empty.html
-//! [`predicate::str::is_match(...).count`]: str/struct.RegexPredicate.html#method.count
-//! [`predicate::str::is_match`]: prelude/predicate/str/fn.is_match.html
-//! [`predicate::str::similar`]: prelude/predicate/str/fn.similar.html
-//! [`predicate::str::starts_with`]: prelude/predicate/str/fn.starts_with.html
-//! [`str_pred = predicate::path::eq_file(...).utf8`]: path/struct.BinaryFilePredicate.html#method.utf8
-//! [`str_pred.normalize`]: prelude/trait.PredicateStrExt.html#method.normalize
-//! [`str_pred.trim`]: prelude/trait.PredicateStrExt.html#method.trim
+//! [`DifferencePredicate`]: crate::str::DifferencePredicate
+//! [`bytes_pred = str_pred.from_utf8()`]: prelude::PredicateStrExt::from_utf8()
+//! [`path_pred = bytes_pred.from_file_path`]: prelude::PredicateFileContentExt::from_file_path()
+//! [`path_pred = predicate::path::eq_file`]: prelude::predicate::path::eq_file()
+//! [`pred_a.and(pred_b)`]: boolean::PredicateBooleanExt::and()
+//! [`pred_a.not())`]: boolean::PredicateBooleanExt::not()
+//! [`pred_a.or(pred_b)`]: boolean::PredicateBooleanExt::or()
+//! [`predicate::always`]: constant::always()
+//! [`predicate::eq`]: ord::eq()
+//! [`predicate::float::is_close`]: prelude::predicate::float::is_close()
+//! [`predicate::function`]: function::function()
+//! [`predicate::ge`]: ord::ge()
+//! [`predicate::gt`]: ord::gt()
+//! [`predicate::in_hash`]: iter::in_hash()
+//! [`predicate::in_iter(...).sort`]: iter::InPredicate::sort()
+//! [`predicate::in_iter`]: iter::in_iter()
+//! [`predicate::le`]: ord::le()
+//! [`predicate::lt`]: ord::lt()
+//! [`predicate::name`]: name::PredicateNameExt::name()
+//! [`predicate::ne`]: ord::ne()
+//! [`predicate::never`]: constant::never()
+//! [`predicate::path::exists`]: prelude::predicate::path::exists()
+//! [`predicate::path::is_dir`]: prelude::predicate::path::is_dir()
+//! [`predicate::path::is_file`]: prelude::predicate::path::is_file()
+//! [`predicate::path::is_symlink`]: prelude::predicate::path::is_symlink()
+//! [`predicate::path::missing`]: prelude::predicate::path::missing()
+//! [`predicate::str::contains(...).count`]: str::ContainsPredicate::count()
+//! [`predicate::str::contains`]: prelude::predicate::str::contains()
+//! [`predicate::str::diff`]: prelude::predicate::str::diff()
+//! [`predicate::str::ends_with`]: prelude::predicate::str::ends_with()
+//! [`predicate::str::is_empty`]: prelude::predicate::str::is_empty()
+//! [`predicate::str::is_match(...).count`]: str::RegexPredicate::count()
+//! [`predicate::str::is_match`]: prelude::predicate::str::is_match()
+//! [`predicate::str::starts_with`]: prelude::predicate::str::starts_with()
+//! [`str_pred = predicate::path::eq_file(...).utf8`]: path::BinaryFilePredicate::utf8()
+//! [`str_pred.normalize`]: prelude::PredicateStrExt::normalize()
+//! [`str_pred.trim`]: prelude::PredicateStrExt::trim()
 
 #![warn(missing_docs, missing_debug_implementations)]
 
@@ -224,4 +221,6 @@ pub mod float;
 pub mod path;
 pub mod str;
 
+mod color;
+use color::Palette;
 mod utils;

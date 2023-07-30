@@ -2,88 +2,89 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
+use crate::File;
+use crate::FileMonitorEvent;
 use glib::object::Cast;
 use glib::object::IsA;
 use glib::signal::connect_raw;
 use glib::signal::SignalHandlerId;
 use glib::translate::*;
 use glib::StaticType;
-use glib::Value;
-use glib_sys;
-use gobject_sys;
 use std::boxed::Box as Box_;
 use std::fmt;
 use std::mem::transmute;
-use File;
-use FileMonitorEvent;
 
-glib_wrapper! {
-    pub struct FileMonitor(Object<gio_sys::GFileMonitor, gio_sys::GFileMonitorClass, FileMonitorClass>);
+glib::wrapper! {
+    #[doc(alias = "GFileMonitor")]
+    pub struct FileMonitor(Object<ffi::GFileMonitor, ffi::GFileMonitorClass>);
 
     match fn {
-        get_type => || gio_sys::g_file_monitor_get_type(),
+        type_ => || ffi::g_file_monitor_get_type(),
     }
 }
 
-pub const NONE_FILE_MONITOR: Option<&FileMonitor> = None;
+impl FileMonitor {
+    pub const NONE: Option<&'static FileMonitor> = None;
+}
 
 pub trait FileMonitorExt: 'static {
+    #[doc(alias = "g_file_monitor_cancel")]
     fn cancel(&self) -> bool;
 
-    fn emit_event<P: IsA<File>, Q: IsA<File>>(
+    #[doc(alias = "g_file_monitor_emit_event")]
+    fn emit_event(
         &self,
-        child: &P,
-        other_file: &Q,
+        child: &impl IsA<File>,
+        other_file: &impl IsA<File>,
         event_type: FileMonitorEvent,
     );
 
+    #[doc(alias = "g_file_monitor_is_cancelled")]
     fn is_cancelled(&self) -> bool;
 
+    #[doc(alias = "g_file_monitor_set_rate_limit")]
     fn set_rate_limit(&self, limit_msecs: i32);
 
-    fn get_property_cancelled(&self) -> bool;
+    #[doc(alias = "rate-limit")]
+    fn rate_limit(&self) -> i32;
 
-    fn get_property_rate_limit(&self) -> i32;
-
+    #[doc(alias = "changed")]
     fn connect_changed<F: Fn(&Self, &File, Option<&File>, FileMonitorEvent) + 'static>(
         &self,
         f: F,
     ) -> SignalHandlerId;
 
-    fn connect_property_cancelled_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
+    #[doc(alias = "cancelled")]
+    fn connect_cancelled_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
 
-    fn connect_property_rate_limit_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
+    #[doc(alias = "rate-limit")]
+    fn connect_rate_limit_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
 }
 
 impl<O: IsA<FileMonitor>> FileMonitorExt for O {
     fn cancel(&self) -> bool {
-        unsafe {
-            from_glib(gio_sys::g_file_monitor_cancel(
-                self.as_ref().to_glib_none().0,
-            ))
-        }
+        unsafe { from_glib(ffi::g_file_monitor_cancel(self.as_ref().to_glib_none().0)) }
     }
 
-    fn emit_event<P: IsA<File>, Q: IsA<File>>(
+    fn emit_event(
         &self,
-        child: &P,
-        other_file: &Q,
+        child: &impl IsA<File>,
+        other_file: &impl IsA<File>,
         event_type: FileMonitorEvent,
     ) {
         unsafe {
-            gio_sys::g_file_monitor_emit_event(
+            ffi::g_file_monitor_emit_event(
                 self.as_ref().to_glib_none().0,
                 child.as_ref().to_glib_none().0,
                 other_file.as_ref().to_glib_none().0,
-                event_type.to_glib(),
+                event_type.into_glib(),
             );
         }
     }
 
     fn is_cancelled(&self) -> bool {
         unsafe {
-            from_glib(gio_sys::g_file_monitor_is_cancelled(
+            from_glib(ffi::g_file_monitor_is_cancelled(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -91,38 +92,12 @@ impl<O: IsA<FileMonitor>> FileMonitorExt for O {
 
     fn set_rate_limit(&self, limit_msecs: i32) {
         unsafe {
-            gio_sys::g_file_monitor_set_rate_limit(self.as_ref().to_glib_none().0, limit_msecs);
+            ffi::g_file_monitor_set_rate_limit(self.as_ref().to_glib_none().0, limit_msecs);
         }
     }
 
-    fn get_property_cancelled(&self) -> bool {
-        unsafe {
-            let mut value = Value::from_type(<bool as StaticType>::static_type());
-            gobject_sys::g_object_get_property(
-                self.to_glib_none().0 as *mut gobject_sys::GObject,
-                b"cancelled\0".as_ptr() as *const _,
-                value.to_glib_none_mut().0,
-            );
-            value
-                .get()
-                .expect("Return Value for property `cancelled` getter")
-                .unwrap()
-        }
-    }
-
-    fn get_property_rate_limit(&self) -> i32 {
-        unsafe {
-            let mut value = Value::from_type(<i32 as StaticType>::static_type());
-            gobject_sys::g_object_get_property(
-                self.to_glib_none().0 as *mut gobject_sys::GObject,
-                b"rate-limit\0".as_ptr() as *const _,
-                value.to_glib_none_mut().0,
-            );
-            value
-                .get()
-                .expect("Return Value for property `rate-limit` getter")
-                .unwrap()
-        }
+    fn rate_limit(&self) -> i32 {
+        glib::ObjectExt::property(self.as_ref(), "rate-limit")
     }
 
     fn connect_changed<F: Fn(&Self, &File, Option<&File>, FileMonitorEvent) + 'static>(
@@ -130,22 +105,22 @@ impl<O: IsA<FileMonitor>> FileMonitorExt for O {
         f: F,
     ) -> SignalHandlerId {
         unsafe extern "C" fn changed_trampoline<
-            P,
+            P: IsA<FileMonitor>,
             F: Fn(&P, &File, Option<&File>, FileMonitorEvent) + 'static,
         >(
-            this: *mut gio_sys::GFileMonitor,
-            file: *mut gio_sys::GFile,
-            other_file: *mut gio_sys::GFile,
-            event_type: gio_sys::GFileMonitorEvent,
-            f: glib_sys::gpointer,
-        ) where
-            P: IsA<FileMonitor>,
-        {
+            this: *mut ffi::GFileMonitor,
+            file: *mut ffi::GFile,
+            other_file: *mut ffi::GFile,
+            event_type: ffi::GFileMonitorEvent,
+            f: glib::ffi::gpointer,
+        ) {
             let f: &F = &*(f as *const F);
             f(
-                &FileMonitor::from_glib_borrow(this).unsafe_cast(),
+                FileMonitor::from_glib_borrow(this).unsafe_cast_ref(),
                 &from_glib_borrow(file),
-                Option::<File>::from_glib_borrow(other_file).as_ref(),
+                Option::<File>::from_glib_borrow(other_file)
+                    .as_ref()
+                    .as_ref(),
                 from_glib(event_type),
             )
         }
@@ -154,51 +129,59 @@ impl<O: IsA<FileMonitor>> FileMonitorExt for O {
             connect_raw(
                 self.as_ptr() as *mut _,
                 b"changed\0".as_ptr() as *const _,
-                Some(transmute(changed_trampoline::<Self, F> as usize)),
+                Some(transmute::<_, unsafe extern "C" fn()>(
+                    changed_trampoline::<Self, F> as *const (),
+                )),
                 Box_::into_raw(f),
             )
         }
     }
 
-    fn connect_property_cancelled_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
-        unsafe extern "C" fn notify_cancelled_trampoline<P, F: Fn(&P) + 'static>(
-            this: *mut gio_sys::GFileMonitor,
-            _param_spec: glib_sys::gpointer,
-            f: glib_sys::gpointer,
-        ) where
+    fn connect_cancelled_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
+        unsafe extern "C" fn notify_cancelled_trampoline<
             P: IsA<FileMonitor>,
-        {
+            F: Fn(&P) + 'static,
+        >(
+            this: *mut ffi::GFileMonitor,
+            _param_spec: glib::ffi::gpointer,
+            f: glib::ffi::gpointer,
+        ) {
             let f: &F = &*(f as *const F);
-            f(&FileMonitor::from_glib_borrow(this).unsafe_cast())
+            f(FileMonitor::from_glib_borrow(this).unsafe_cast_ref())
         }
         unsafe {
             let f: Box_<F> = Box_::new(f);
             connect_raw(
                 self.as_ptr() as *mut _,
                 b"notify::cancelled\0".as_ptr() as *const _,
-                Some(transmute(notify_cancelled_trampoline::<Self, F> as usize)),
+                Some(transmute::<_, unsafe extern "C" fn()>(
+                    notify_cancelled_trampoline::<Self, F> as *const (),
+                )),
                 Box_::into_raw(f),
             )
         }
     }
 
-    fn connect_property_rate_limit_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
-        unsafe extern "C" fn notify_rate_limit_trampoline<P, F: Fn(&P) + 'static>(
-            this: *mut gio_sys::GFileMonitor,
-            _param_spec: glib_sys::gpointer,
-            f: glib_sys::gpointer,
-        ) where
+    fn connect_rate_limit_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
+        unsafe extern "C" fn notify_rate_limit_trampoline<
             P: IsA<FileMonitor>,
-        {
+            F: Fn(&P) + 'static,
+        >(
+            this: *mut ffi::GFileMonitor,
+            _param_spec: glib::ffi::gpointer,
+            f: glib::ffi::gpointer,
+        ) {
             let f: &F = &*(f as *const F);
-            f(&FileMonitor::from_glib_borrow(this).unsafe_cast())
+            f(FileMonitor::from_glib_borrow(this).unsafe_cast_ref())
         }
         unsafe {
             let f: Box_<F> = Box_::new(f);
             connect_raw(
                 self.as_ptr() as *mut _,
                 b"notify::rate-limit\0".as_ptr() as *const _,
-                Some(transmute(notify_rate_limit_trampoline::<Self, F> as usize)),
+                Some(transmute::<_, unsafe extern "C" fn()>(
+                    notify_rate_limit_trampoline::<Self, F> as *const (),
+                )),
                 Box_::into_raw(f),
             )
         }
@@ -207,6 +190,6 @@ impl<O: IsA<FileMonitor>> FileMonitorExt for O {
 
 impl fmt::Display for FileMonitor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "FileMonitor")
+        f.write_str("FileMonitor")
     }
 }

@@ -1,21 +1,20 @@
-// Copyright 2013-2016, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
-use glib_sys;
+use crate::translate::*;
+use crate::Checksum;
 use libc::size_t;
 use std::vec::Vec;
-use translate::*;
-use Checksum;
 
 impl Checksum {
-    pub fn get_digest(self) -> Vec<u8> {
+    #[doc(alias = "g_checksum_get_digest")]
+    #[doc(alias = "get_digest")]
+    pub fn digest(self) -> Vec<u8> {
         unsafe {
             //Don't forget update when `ChecksumType` contains type bigger that Sha512.
             let mut digest_len: size_t = 512 / 8;
             let mut vec = Vec::with_capacity(digest_len as usize);
 
-            glib_sys::g_checksum_get_digest(
+            ffi::g_checksum_get_digest(
                 mut_override(self.to_glib_none().0),
                 vec.as_mut_ptr(),
                 &mut digest_len,
@@ -26,9 +25,11 @@ impl Checksum {
         }
     }
 
-    pub fn get_string(self) -> Option<String> {
+    #[doc(alias = "g_checksum_get_string")]
+    #[doc(alias = "get_string")]
+    pub fn string(self) -> Option<String> {
         unsafe {
-            from_glib_none(glib_sys::g_checksum_get_string(mut_override(
+            from_glib_none(ffi::g_checksum_get_string(mut_override(
                 self.to_glib_none().0,
             )))
         }
@@ -37,7 +38,7 @@ impl Checksum {
 
 #[cfg(test)]
 mod tests {
-    use {Checksum, ChecksumType};
+    use crate::{Checksum, ChecksumType};
 
     const CS_TYPE: ChecksumType = ChecksumType::Md5;
     const CS_VALUE: &str = "fc3ff98e8c6a0d3087d515c0473f8677";
@@ -48,24 +49,25 @@ mod tests {
 
     #[test]
     fn update() {
-        let mut cs = Checksum::new(CS_TYPE);
-        cs.update("hello world!".as_bytes());
-        assert_eq!(cs.get_string().unwrap(), CS_VALUE);
+        let mut cs = Checksum::new(CS_TYPE).unwrap();
+        cs.update(b"hello world!");
+        assert_eq!(cs.string().unwrap(), CS_VALUE);
     }
 
     #[test]
     fn update_multi_call() {
-        let mut cs = Checksum::new(CS_TYPE);
-        cs.update("hello ".as_bytes());
-        cs.update("world!".as_bytes());
-        assert_eq!(cs.get_string().unwrap(), CS_VALUE);
+        let mut cs = Checksum::new(CS_TYPE).unwrap();
+        cs.update(b"hello ");
+        cs.update(b"world!");
+        assert_eq!(cs.string().unwrap(), CS_VALUE);
     }
 
     #[test]
-    fn get_digest() {
-        let mut cs = Checksum::new(CS_TYPE);
-        cs.update("hello world!".as_bytes());
-        let vec = cs.get_digest();
+    #[doc(alias = "get_digest")]
+    fn digest() {
+        let mut cs = Checksum::new(CS_TYPE).unwrap();
+        cs.update(b"hello world!");
+        let vec = cs.digest();
         assert_eq!(vec, CS_SLICE);
     }
 }

@@ -2,7 +2,6 @@
 
 > An implementation of **boolean-valued predicate functions** in Rust.
 
-[![Build Status](https://dev.azure.com/assert-rs/assert-rs/_apis/build/status/predicates-rs?branchName=master)](https://dev.azure.com/assert-rs/assert-rs/_build/latest?definitionId=1&branchName=master)
 [![Documentation](https://img.shields.io/badge/docs-master-blue.svg)](https://docs.rs/predicates)
 ![License](https://img.shields.io/crates/l/predicates.svg)
 [![Crates.io](https://img.shields.io/crates/v/predicates.svg?maxAge=2592000)](https://crates.io/crates/predicates)
@@ -16,7 +15,7 @@ First, add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-predicates = "1.0.6"
+predicates = "2.1.1"
 ```
 
 Next, add this to your crate:

@@ -1,106 +1,103 @@
-// Copyright 2015-2016, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
+// rustdoc-stripper-ignore-next
 //! `IMPL` Boxed wrapper implementation.
 
+use crate::translate::*;
 use std::cmp;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
-use std::mem;
 use std::ops::{Deref, DerefMut};
 use std::ptr;
-use translate::*;
 
-/// Wrapper implementations for Boxed types. See `glib_wrapper!`.
+// rustdoc-stripper-ignore-next
+/// Wrapper implementations for Boxed types. See `wrapper!`.
 #[macro_export]
 macro_rules! glib_boxed_wrapper {
-    ([$($attr:meta)*] $name:ident, $ffi_name:path, @copy $copy_arg:ident $copy_expr:expr,
-     @free $free_arg:ident $free_expr:expr, @init $init_arg:ident $init_expr:expr, @clear $clear_arg:ident $clear_expr:expr,
-     @get_type $get_type_expr:expr) => {
-        glib_boxed_wrapper!(@generic_impl [$($attr)*] $name, $ffi_name);
-        glib_boxed_wrapper!(@memory_manager_impl $name, $ffi_name, @copy $copy_arg $copy_expr, @free $free_arg $free_expr,
-                            @init $init_arg $init_expr, @clear $clear_arg $clear_expr);
-        glib_boxed_wrapper!(@value_impl $name, $ffi_name, @get_type $get_type_expr);
+    ([$($attr:meta)*] $visibility:vis $name:ident $(<$($generic:ident $(: $bound:tt $(+ $bound2:tt)*)?),+>)?, $ffi_name:ty,
+     @copy $copy_arg:ident $copy_expr:expr, @free $free_arg:ident $free_expr:expr
+     $(, @type_ $get_type_expr:expr)?) => {
+        $crate::glib_boxed_wrapper!(@generic_impl [$($attr)*] $visibility $name $(<$($generic $(: $bound $(+ $bound2)*)?),+>)?, $ffi_name);
+
+        $crate::glib_boxed_wrapper!(
+            @memory_manager_impl $name $(<$($generic $(: $bound $(+ $bound2)*)?),+>)?, $ffi_name,
+            @copy $copy_arg $copy_expr, @free $free_arg $free_expr
+        );
+
+        $crate::glib_boxed_wrapper!(@value_impl $name $(<$($generic $(: $bound $(+ $bound2)*)?),+>)?, $ffi_name $(, @type_ $get_type_expr)?);
     };
 
-    ([$($attr:meta)*] $name:ident, $ffi_name:path, @copy $copy_arg:ident $copy_expr:expr,
-     @free $free_arg:ident $free_expr:expr, @init $init_arg:ident $init_expr:expr, @clear $clear_arg:ident $clear_expr:expr) => {
-        glib_boxed_wrapper!(@generic_impl [$($attr)*] $name, $ffi_name);
-        glib_boxed_wrapper!(@memory_manager_impl $name, $ffi_name, @copy $copy_arg $copy_expr, @free $free_arg $free_expr,
-                            @init $init_arg $init_expr, @clear $clear_arg $clear_expr);
-    };
-
-    ([$($attr:meta)*] $name:ident, $ffi_name:path, @copy $copy_arg:ident $copy_expr:expr,
-     @free $free_arg:ident $free_expr:expr) => {
-        glib_boxed_wrapper!(@generic_impl [$($attr)*] $name, $ffi_name);
-        glib_boxed_wrapper!(@memory_manager_impl $name, $ffi_name, @copy $copy_arg $copy_expr, @free $free_arg $free_expr);
-    };
-
-    ([$($attr:meta)*] $name:ident, $ffi_name:path, @copy $copy_arg:ident $copy_expr:expr,
-     @free $free_arg:ident $free_expr:expr, @get_type $get_type_expr:expr) => {
-        glib_boxed_wrapper!(@generic_impl [$($attr)*] $name, $ffi_name);
-        glib_boxed_wrapper!(@memory_manager_impl $name, $ffi_name, @copy $copy_arg $copy_expr, @free $free_arg $free_expr);
-        glib_boxed_wrapper!(@value_impl $name, $ffi_name, @get_type $get_type_expr);
-    };
-
-    (@generic_impl [$($attr:meta)*] $name:ident, $ffi_name:path) => {
+    (@generic_impl [$($attr:meta)*] $visibility:vis $name:ident $(<$($generic:ident $(: $bound:tt $(+ $bound2:tt)*)?),+>)?, $ffi_name:ty) => {
         $(#[$attr])*
-        #[derive(Clone)]
-        pub struct $name($crate::boxed::Boxed<$ffi_name, MemoryManager>);
+        #[repr(transparent)]
+        $visibility struct $name $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? {
+            inner: $crate::boxed::Boxed<$ffi_name, $name $(<$($generic),+>)?>,
+            phantom: std::marker::PhantomData<($($($generic),+)?)>,
+        }
+
+        impl $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? std::clone::Clone for $name $(<$($generic),+>)? {
+            #[inline]
+            fn clone(&self) -> Self {
+                Self {
+                    inner: std::clone::Clone::clone(&self.inner),
+                    phantom: std::marker::PhantomData,
+                }
+            }
+        }
+
         #[doc(hidden)]
-        impl $crate::translate::GlibPtrDefault for $name {
+        impl $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? $crate::translate::GlibPtrDefault for $name $(<$($generic),+>)? {
             type GlibType = *mut $ffi_name;
         }
 
         #[doc(hidden)]
-        impl<'a> $crate::translate::ToGlibPtr<'a, *const $ffi_name> for $name {
-            type Storage = &'a $crate::boxed::Boxed<$ffi_name, MemoryManager>;
+        impl<'a $(, $($generic $(: $bound $(+ $bound2)*)?),+)?> $crate::translate::ToGlibPtr<'a, *const $ffi_name> for $name $(<$($generic),+>)? {
+            type Storage = &'a $crate::boxed::Boxed<$ffi_name, $name $(<$($generic),+>)?>;
 
             #[inline]
             fn to_glib_none(&'a self) -> $crate::translate::Stash<'a, *const $ffi_name, Self> {
-                let stash = $crate::translate::ToGlibPtr::to_glib_none(&self.0);
+                let stash = $crate::translate::ToGlibPtr::to_glib_none(&self.inner);
                 $crate::translate::Stash(stash.0, stash.1)
             }
 
             #[inline]
             fn to_glib_full(&self) -> *const $ffi_name {
-                $crate::translate::ToGlibPtr::to_glib_full(&self.0)
+                $crate::translate::ToGlibPtr::to_glib_full(&self.inner)
             }
         }
 
         #[doc(hidden)]
-        impl<'a> $crate::translate::ToGlibPtrMut<'a, *mut $ffi_name> for $name {
-            type Storage = &'a mut $crate::boxed::Boxed<$ffi_name, MemoryManager>;
+        impl<'a $(, $($generic $(: $bound $(+ $bound2)*)?),+)?> $crate::translate::ToGlibPtrMut<'a, *mut $ffi_name> for $name $(<$($generic),+>)? {
+            type Storage = &'a mut $crate::boxed::Boxed<$ffi_name, $name $(<$($generic),+>)?>;
 
             #[inline]
             fn to_glib_none_mut(&'a mut self) -> $crate::translate::StashMut<'a, *mut $ffi_name, Self> {
-                let stash = $crate::translate::ToGlibPtrMut::to_glib_none_mut(&mut self.0);
+                let stash = $crate::translate::ToGlibPtrMut::to_glib_none_mut(&mut self.inner);
                 $crate::translate::StashMut(stash.0, stash.1)
             }
         }
 
         #[doc(hidden)]
-        impl<'a> $crate::translate::ToGlibContainerFromSlice<'a, *mut *const $ffi_name> for $name {
-            type Storage = (Vec<$crate::translate::Stash<'a, *const $ffi_name, $name>>, Option<Vec<*const $ffi_name>>);
+        impl<'a $(, $($generic $(: $bound $(+ $bound2)*)?),+)?> $crate::translate::ToGlibContainerFromSlice<'a, *mut *const $ffi_name> for $name $(<$($generic),+>)? {
+            type Storage = (Vec<$crate::translate::Stash<'a, *const $ffi_name, $name $(<$($generic),+>)?>>, Option<Vec<*const $ffi_name>>);
 
-            fn to_glib_none_from_slice(t: &'a [$name]) -> (*mut *const $ffi_name, Self::Storage) {
+            fn to_glib_none_from_slice(t: &'a [$name $(<$($generic),+>)?]) -> (*mut *const $ffi_name, Self::Storage) {
                 let v: Vec<_> = t.iter().map(|s| $crate::translate::ToGlibPtr::to_glib_none(s)).collect();
                 let mut v_ptr: Vec<_> = v.iter().map(|s| s.0).collect();
-                v_ptr.push(::std::ptr::null_mut() as *const $ffi_name);
+                v_ptr.push(std::ptr::null_mut() as *const $ffi_name);
 
                 (v_ptr.as_ptr() as *mut *const $ffi_name, (v, Some(v_ptr)))
             }
 
-            fn to_glib_container_from_slice(t: &'a [$name]) -> (*mut *const $ffi_name, Self::Storage) {
+            fn to_glib_container_from_slice(t: &'a [$name $(<$($generic),+>)?]) -> (*mut *const $ffi_name, Self::Storage) {
                 let v: Vec<_> = t.iter().map(|s| $crate::translate::ToGlibPtr::to_glib_none(s)).collect();
 
                 let v_ptr = unsafe {
-                    let v_ptr = $crate::glib_sys::g_malloc0(::std::mem::size_of::<*const $ffi_name>() * (t.len() + 1)) as *mut *const $ffi_name;
+                    let v_ptr = $crate::ffi::g_malloc0(std::mem::size_of::<*const $ffi_name>() * (t.len() + 1)) as *mut *const $ffi_name;
 
                     for (i, s) in v.iter().enumerate() {
-                        ::std::ptr::write(v_ptr.add(i), s.0);
+                        std::ptr::write(v_ptr.add(i), s.0);
                     }
 
                     v_ptr
@@ -109,12 +106,12 @@ macro_rules! glib_boxed_wrapper {
                 (v_ptr, (v, None))
             }
 
-            fn to_glib_full_from_slice(t: &[$name]) -> *mut *const $ffi_name {
+            fn to_glib_full_from_slice(t: &[$name $(<$($generic),+>)?]) -> *mut *const $ffi_name {
                 unsafe {
-                    let v_ptr = $crate::glib_sys::g_malloc0(::std::mem::size_of::<*const $ffi_name>() * (t.len() + 1)) as *mut *const $ffi_name;
+                    let v_ptr = $crate::ffi::g_malloc0(std::mem::size_of::<*const $ffi_name>() * (t.len() + 1)) as *mut *const $ffi_name;
 
                     for (i, s) in t.iter().enumerate() {
-                        ::std::ptr::write(v_ptr.add(i), $crate::translate::ToGlibPtr::to_glib_full(s));
+                        std::ptr::write(v_ptr.add(i), $crate::translate::ToGlibPtr::to_glib_full(s));
                     }
 
                     v_ptr
@@ -123,82 +120,92 @@ macro_rules! glib_boxed_wrapper {
         }
 
         #[doc(hidden)]
-        impl<'a> $crate::translate::ToGlibContainerFromSlice<'a, *const *const $ffi_name> for $name {
-            type Storage = (Vec<$crate::translate::Stash<'a, *const $ffi_name, $name>>, Option<Vec<*const $ffi_name>>);
+        impl<'a $(, $($generic $(: $bound $(+ $bound2)*)?),+)?> $crate::translate::ToGlibContainerFromSlice<'a, *const *const $ffi_name> for $name $(<$($generic),+>)? {
+            type Storage = (Vec<$crate::translate::Stash<'a, *const $ffi_name, $name $(<$($generic),+>)?>>, Option<Vec<*const $ffi_name>>);
 
-            fn to_glib_none_from_slice(t: &'a [$name]) -> (*const *const $ffi_name, Self::Storage) {
+            fn to_glib_none_from_slice(t: &'a [$name $(<$($generic),+>)?]) -> (*const *const $ffi_name, Self::Storage) {
                 let (ptr, stash) = $crate::translate::ToGlibContainerFromSlice::<'a, *mut *const $ffi_name>::to_glib_none_from_slice(t);
                 (ptr as *const *const $ffi_name, stash)
             }
 
-            fn to_glib_container_from_slice(_: &'a [$name]) -> (*const *const $ffi_name, Self::Storage) {
+            fn to_glib_container_from_slice(_: &'a [$name $(<$($generic),+>)?]) -> (*const *const $ffi_name, Self::Storage) {
                 // Can't have consumer free a *const pointer
                 unimplemented!()
             }
 
-            fn to_glib_full_from_slice(_: &[$name]) -> *const *const $ffi_name {
+            fn to_glib_full_from_slice(_: &[$name $(<$($generic),+>)?]) -> *const *const $ffi_name {
                 // Can't have consumer free a *const pointer
                 unimplemented!()
             }
         }
 
         #[doc(hidden)]
-        impl $crate::translate::FromGlibPtrNone<*mut $ffi_name> for $name {
+        impl $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? $crate::translate::FromGlibPtrNone<*mut $ffi_name> for $name $(<$($generic),+>)? {
             #[inline]
-            #[allow(clippy::missing_safety_doc)]
             unsafe fn from_glib_none(ptr: *mut $ffi_name) -> Self {
-                $name($crate::translate::from_glib_none(ptr))
+                Self {
+                    inner: $crate::translate::from_glib_none(ptr),
+                    phantom: std::marker::PhantomData,
+                }
             }
         }
 
         #[doc(hidden)]
-        impl $crate::translate::FromGlibPtrNone<*const $ffi_name> for $name {
+        impl $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? $crate::translate::FromGlibPtrNone<*const $ffi_name> for $name $(<$($generic),+>)? {
             #[inline]
-            #[allow(clippy::missing_safety_doc)]
             unsafe fn from_glib_none(ptr: *const $ffi_name) -> Self {
-                $name($crate::translate::from_glib_none(ptr))
+                Self {
+                    inner: $crate::translate::from_glib_none(ptr),
+                    phantom: std::marker::PhantomData,
+                }
             }
         }
 
         #[doc(hidden)]
-        impl $crate::translate::FromGlibPtrFull<*mut $ffi_name> for $name {
+        impl $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? $crate::translate::FromGlibPtrFull<*mut $ffi_name> for $name $(<$($generic),+>)? {
             #[inline]
-            #[allow(clippy::missing_safety_doc)]
             unsafe fn from_glib_full(ptr: *mut $ffi_name) -> Self {
-                $name($crate::translate::from_glib_full(ptr))
+                Self {
+                    inner: $crate::translate::from_glib_full(ptr),
+                    phantom: std::marker::PhantomData,
+                }
             }
         }
 
         #[doc(hidden)]
-        impl $crate::translate::FromGlibPtrFull<*const $ffi_name> for $name {
+        impl $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? $crate::translate::FromGlibPtrFull<*const $ffi_name> for $name $(<$($generic),+>)? {
             #[inline]
-            #[allow(clippy::missing_safety_doc)]
             unsafe fn from_glib_full(ptr: *const $ffi_name) -> Self {
-                $name($crate::translate::from_glib_full(ptr))
+                Self {
+                    inner: $crate::translate::from_glib_full(ptr),
+                    phantom: std::marker::PhantomData,
+                }
             }
         }
 
         #[doc(hidden)]
-        impl $crate::translate::FromGlibPtrBorrow<*mut $ffi_name> for $name {
+        impl $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? $crate::translate::FromGlibPtrBorrow<*mut $ffi_name> for $name $(<$($generic),+>)? {
             #[inline]
-            #[allow(clippy::missing_safety_doc)]
-            unsafe fn from_glib_borrow(ptr: *mut $ffi_name) -> Self {
-                $name($crate::translate::from_glib_borrow(ptr))
+            unsafe fn from_glib_borrow(ptr: *mut $ffi_name) -> $crate::translate::Borrowed<Self> {
+                $crate::translate::Borrowed::new(
+                    Self {
+                        inner: $crate::translate::from_glib_borrow::<_, $crate::boxed::Boxed<_, _>>(ptr).into_inner(),
+                        phantom: std::marker::PhantomData,
+                    }
+                )
             }
         }
 
         #[doc(hidden)]
-        impl $crate::translate::FromGlibPtrBorrow<*const $ffi_name> for $name {
+        impl $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? $crate::translate::FromGlibPtrBorrow<*const $ffi_name> for $name $(<$($generic),+>)? {
             #[inline]
-            #[allow(clippy::missing_safety_doc)]
-            unsafe fn from_glib_borrow(ptr: *const $ffi_name) -> Self {
-                $crate::translate::from_glib_borrow(ptr as *mut $ffi_name)
+            unsafe fn from_glib_borrow(ptr: *const $ffi_name) -> $crate::translate::Borrowed<Self> {
+                $crate::translate::from_glib_borrow::<_, $name $(<$($generic),+>)?>(ptr as *mut $ffi_name)
             }
         }
 
         #[doc(hidden)]
-        impl $crate::translate::FromGlibContainerAsVec<*mut $ffi_name, *mut *mut $ffi_name> for $name {
-            #[allow(clippy::missing_safety_doc)]
+        impl $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? $crate::translate::FromGlibContainerAsVec<*mut $ffi_name, *mut *mut $ffi_name> for $name $(<$($generic),+>)? {
             unsafe fn from_glib_none_num_as_vec(ptr: *mut *mut $ffi_name, num: usize) -> Vec<Self> {
                 if num == 0 || ptr.is_null() {
                     return Vec::new();
@@ -206,54 +213,52 @@ macro_rules! glib_boxed_wrapper {
 
                 let mut res = Vec::with_capacity(num);
                 for i in 0..num {
-                    res.push($crate::translate::from_glib_none(::std::ptr::read(ptr.add(i))));
+                    res.push($crate::translate::from_glib_none(std::ptr::read(ptr.add(i))));
                 }
                 res
             }
 
-            #[allow(clippy::missing_safety_doc)]
             unsafe fn from_glib_container_num_as_vec(ptr: *mut *mut $ffi_name, num: usize) -> Vec<Self> {
                 let res = $crate::translate::FromGlibContainerAsVec::from_glib_none_num_as_vec(ptr, num);
-                $crate::glib_sys::g_free(ptr as *mut _);
+                $crate::ffi::g_free(ptr as *mut _);
                 res
             }
 
-            #[allow(clippy::missing_safety_doc)]
             unsafe fn from_glib_full_num_as_vec(ptr: *mut *mut $ffi_name, num: usize) -> Vec<Self> {
                 if num == 0 || ptr.is_null() {
+                    $crate::ffi::g_free(ptr as *mut _);
                     return Vec::new();
                 }
 
                 let mut res = Vec::with_capacity(num);
                 for i in 0..num {
-                    res.push($crate::translate::from_glib_full(::std::ptr::read(ptr.add(i))));
+                    res.push($crate::translate::from_glib_full(std::ptr::read(ptr.add(i))));
                 }
-                $crate::glib_sys::g_free(ptr as *mut _);
+                $crate::ffi::g_free(ptr as *mut _);
                 res
             }
         }
 
         #[doc(hidden)]
-        impl $crate::translate::FromGlibPtrArrayContainerAsVec<*mut $ffi_name, *mut *mut $ffi_name> for $name {
-            #[allow(clippy::missing_safety_doc)]
+        impl $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? $crate::translate::FromGlibPtrArrayContainerAsVec<*mut $ffi_name, *mut *mut $ffi_name> for $name $(<$($generic),+>)? {
             unsafe fn from_glib_none_as_vec(ptr: *mut *mut $ffi_name) -> Vec<Self> {
                 $crate::translate::FromGlibContainerAsVec::from_glib_none_num_as_vec(ptr, $crate::translate::c_ptr_array_len(ptr))
             }
 
-            #[allow(clippy::missing_safety_doc)]
             unsafe fn from_glib_container_as_vec(ptr: *mut *mut $ffi_name) -> Vec<Self> {
                 $crate::translate::FromGlibContainerAsVec::from_glib_container_num_as_vec(ptr, $crate::translate::c_ptr_array_len(ptr))
             }
 
-            #[allow(clippy::missing_safety_doc)]
             unsafe fn from_glib_full_as_vec(ptr: *mut *mut $ffi_name) -> Vec<Self> {
                 $crate::translate::FromGlibContainerAsVec::from_glib_full_num_as_vec(ptr, $crate::translate::c_ptr_array_len(ptr))
             }
         }
     };
 
-    (@value_impl $name:ident, $ffi_name:path, @get_type $get_type_expr:expr) => {
-        impl $crate::types::StaticType for $name {
+    (@value_impl $name:ident $(<$($generic:ident $(: $bound:tt $(+ $bound2:tt)*)?),+>)?, $ffi_name:ty) => { };
+
+    (@value_impl $name:ident $(<$($generic:ident $(: $bound:tt $(+ $bound2:tt)*)?),+>)?, $ffi_name:ty, @type_ $get_type_expr:expr) => {
+        impl $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? $crate::types::StaticType for $name $(<$($generic),+>)? {
             fn static_type() -> $crate::types::Type {
                 #[allow(unused_unsafe)]
                 unsafe { $crate::translate::from_glib($get_type_expr) }
@@ -261,142 +266,102 @@ macro_rules! glib_boxed_wrapper {
         }
 
         #[doc(hidden)]
-        impl<'a> $crate::value::FromValueOptional<'a> for $name {
-            #[allow(clippy::missing_safety_doc)]
-            unsafe fn from_value_optional(value: &$crate::Value) -> Option<Self> {
-                $crate::translate::from_glib_full($crate::gobject_sys::g_value_dup_boxed($crate::translate::ToGlibPtr::to_glib_none(value).0) as *mut $ffi_name)
+        impl $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? $crate::value::ValueType for $name $(<$($generic),+>)? {
+            type Type = $name $(<$($generic),+>)?;
+        }
+
+        #[doc(hidden)]
+        impl $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? $crate::value::ValueTypeOptional for $name $(<$($generic),+>)? { }
+
+        #[doc(hidden)]
+        unsafe impl<'a $(, $($generic $(: $bound $(+ $bound2)*)?),+)?> $crate::value::FromValue<'a> for $name $(<$($generic),+>)? {
+            type Checker = $crate::value::GenericValueTypeOrNoneChecker<Self>;
+
+            unsafe fn from_value(value: &'a $crate::Value) -> Self {
+                let ptr = $crate::gobject_ffi::g_value_dup_boxed($crate::translate::ToGlibPtr::to_glib_none(value).0);
+                assert!(!ptr.is_null());
+                <$name $(<$($generic),+>)? as $crate::translate::FromGlibPtrFull<*mut $ffi_name>>::from_glib_full(ptr as *mut $ffi_name)
             }
         }
 
         #[doc(hidden)]
-        impl $crate::value::SetValue for $name {
-            #[allow(clippy::missing_safety_doc)]
-            unsafe fn set_value(value: &mut $crate::Value, this: &Self) {
-                $crate::gobject_sys::g_value_set_boxed($crate::translate::ToGlibPtrMut::to_glib_none_mut(value).0, $crate::translate::ToGlibPtr::<*const $ffi_name>::to_glib_none(this).0 as $crate::glib_sys::gpointer)
+        unsafe impl<'a $(, $($generic $(: $bound $(+ $bound2)*)?),+)?> $crate::value::FromValue<'a> for &'a $name $(<$($generic),+>)? {
+            type Checker = $crate::value::GenericValueTypeOrNoneChecker<Self>;
+
+            unsafe fn from_value(value: &'a $crate::Value) -> Self {
+                assert_eq!(std::mem::size_of::<$name $(<$($generic),+>)?>(), std::mem::size_of::<$crate::ffi::gpointer>());
+                let value = &*(value as *const $crate::Value as *const $crate::gobject_ffi::GValue);
+                let ptr = &value.data[0].v_pointer as *const $crate::ffi::gpointer as *const *const $ffi_name;
+                assert!(!(*ptr).is_null());
+                &*(ptr as *const $name $(<$($generic),+>)?)
             }
         }
 
         #[doc(hidden)]
-        impl $crate::value::SetValueOptional for $name {
-            #[allow(clippy::missing_safety_doc)]
-            unsafe fn set_value_optional(value: &mut $crate::Value, this: Option<&Self>) {
-                $crate::gobject_sys::g_value_set_boxed($crate::translate::ToGlibPtrMut::to_glib_none_mut(value).0, $crate::translate::ToGlibPtr::<*const $ffi_name>::to_glib_none(&this).0 as $crate::glib_sys::gpointer)
+        impl $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? $crate::value::ToValue for $name $(<$($generic),+>)? {
+            fn to_value(&self) -> $crate::Value {
+                unsafe {
+                    let mut value = $crate::Value::from_type(<$name $(<$($generic),+>)? as $crate::StaticType>::static_type());
+                    $crate::gobject_ffi::g_value_take_boxed(
+                        $crate::translate::ToGlibPtrMut::to_glib_none_mut(&mut value).0,
+                        $crate::translate::ToGlibPtr::<*const $ffi_name>::to_glib_full(self) as *mut _,
+                    );
+                    value
+                }
+            }
+
+            fn value_type(&self) -> $crate::Type {
+                <$name $(<$($generic),+>)? as $crate::StaticType>::static_type()
+            }
+        }
+
+        #[doc(hidden)]
+        impl $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? $crate::value::ToValueOptional for $name $(<$($generic),+>)? {
+            fn to_value_optional(s: Option<&Self>) -> $crate::Value {
+                let mut value = $crate::Value::for_value_type::<Self>();
+                unsafe {
+                    $crate::gobject_ffi::g_value_take_boxed(
+                        $crate::translate::ToGlibPtrMut::to_glib_none_mut(&mut value).0,
+                        $crate::translate::ToGlibPtr::<*const $ffi_name>::to_glib_full(&s) as *mut _,
+                    );
+                }
+
+                value
             }
         }
     };
 
-    (@memory_manager_impl $name:ident, $ffi_name:path, @copy $copy_arg:ident $copy_expr:expr, @free $free_arg:ident $free_expr:expr) => {
+    (@memory_manager_impl $name:ident $(<$($generic:ident $(: $bound:tt $(+ $bound2:tt)*)?),+>)?, $ffi_name:ty, @copy $copy_arg:ident $copy_expr:expr, @free $free_arg:ident $free_expr:expr) => {
         #[doc(hidden)]
-        pub struct MemoryManager;
-
-        impl $crate::boxed::BoxedMemoryManager<$ffi_name> for MemoryManager {
+        impl $(<$($generic $(: $bound $(+ $bound2)*)?),+>)? $crate::boxed::BoxedMemoryManager<$ffi_name> for $name $(<$($generic),+>)? {
             #[inline]
             unsafe fn copy($copy_arg: *const $ffi_name) -> *mut $ffi_name {
                 $copy_expr
             }
 
             #[inline]
+            #[allow(clippy::no_effect)]
             unsafe fn free($free_arg: *mut $ffi_name) {
-                $free_expr
-            }
-
-            #[inline]
-            unsafe fn init(_: *mut $ffi_name) {
-                unimplemented!()
-            }
-
-            #[inline]
-            unsafe fn clear(_: *mut $ffi_name) {
-                unimplemented!()
-            }
-        }
-    };
-
-    (@memory_manager_impl $name:ident, $ffi_name:path, @copy $copy_arg:ident $copy_expr:expr, @free $free_arg:ident $free_expr:expr,
-         @init $init_arg:ident $init_expr:expr, @clear $clear_arg:ident $clear_expr:expr) => {
-        #[doc(hidden)]
-        pub struct MemoryManager;
-
-        impl $crate::boxed::BoxedMemoryManager<$ffi_name> for MemoryManager {
-            #[inline]
-            unsafe fn copy($copy_arg: *const $ffi_name) -> *mut $ffi_name {
-                $copy_expr
-            }
-
-            #[inline]
-            unsafe fn free($free_arg: *mut $ffi_name) {
-                $free_expr
-            }
-
-            #[inline]
-            unsafe fn init($init_arg: *mut $ffi_name) {
-                $init_expr
-            }
-
-            #[inline]
-            unsafe fn clear($clear_arg: *mut $ffi_name) {
-                $clear_expr
-            }
-        }
-
-        #[doc(hidden)]
-        impl $crate::translate::Uninitialized for $name {
-            #[inline]
-            unsafe fn uninitialized() -> Self {
-                $name($crate::boxed::Boxed::uninitialized())
+                $free_expr;
             }
         }
     };
 }
 
-enum AnyBox<T> {
-    Native(Box<T>),
-    ForeignOwned(ptr::NonNull<T>),
-    ForeignBorrowed(ptr::NonNull<T>),
-}
-
-impl<T> fmt::Debug for AnyBox<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use self::AnyBox::*;
-        match *self {
-            Native(ref b) => f.debug_tuple("Native").field(&(&**b as *const T)).finish(),
-            ForeignOwned(ptr) => f.debug_tuple("ForeignOwned").field(&ptr).finish(),
-            ForeignBorrowed(ptr) => f.debug_tuple("ForeignBorrowed").field(&ptr).finish(),
-        }
-    }
-}
-
+// The safety docs really belong in the wrapper!() macro for Boxed<T>
 /// Memory management functions for a boxed type.
 pub trait BoxedMemoryManager<T>: 'static {
     /// Makes a copy.
     unsafe fn copy(ptr: *const T) -> *mut T;
     /// Frees the object.
     unsafe fn free(ptr: *mut T);
-    /// Initializes an already allocated object.
-    unsafe fn init(ptr: *mut T);
-    /// Clears and frees all memory of the object, but not the object itself.
-    unsafe fn clear(ptr: *mut T);
 }
 
 /// Encapsulates memory management logic for boxed types.
+#[repr(transparent)]
 pub struct Boxed<T: 'static, MM: BoxedMemoryManager<T>> {
-    inner: AnyBox<T>,
-    _dummy: PhantomData<MM>,
-}
-
-impl<T: 'static, MM: BoxedMemoryManager<T>> Uninitialized for Boxed<T, MM> {
-    #[inline]
-    unsafe fn uninitialized() -> Self {
-        Boxed {
-            inner: {
-                let mut inner = mem::MaybeUninit::zeroed();
-                MM::init(inner.as_mut_ptr());
-
-                AnyBox::Native(Box::new(inner.assume_init()))
-            },
-            _dummy: PhantomData,
-        }
-    }
+    inner: ptr::NonNull<T>,
+    _dummy: PhantomData<*mut MM>,
 }
 
 impl<'a, T: 'static, MM: BoxedMemoryManager<T>> ToGlibPtr<'a, *const T> for Boxed<T, MM> {
@@ -404,21 +369,13 @@ impl<'a, T: 'static, MM: BoxedMemoryManager<T>> ToGlibPtr<'a, *const T> for Boxe
 
     #[inline]
     fn to_glib_none(&'a self) -> Stash<'a, *const T, Self> {
-        use self::AnyBox::*;
-        let ptr = match self.inner {
-            Native(ref b) => &**b as *const T,
-            ForeignOwned(p) | ForeignBorrowed(p) => p.as_ptr(),
-        };
+        let ptr = self.inner.as_ptr();
         Stash(ptr, self)
     }
 
     #[inline]
     fn to_glib_full(&self) -> *const T {
-        use self::AnyBox::*;
-        let ptr = match self.inner {
-            Native(ref b) => &**b as *const T,
-            ForeignOwned(p) | ForeignBorrowed(p) => p.as_ptr(),
-        };
+        let ptr = self.inner.as_ptr();
         unsafe { MM::copy(ptr) }
     }
 }
@@ -428,11 +385,7 @@ impl<'a, T: 'static, MM: BoxedMemoryManager<T>> ToGlibPtrMut<'a, *mut T> for Box
 
     #[inline]
     fn to_glib_none_mut(&'a mut self) -> StashMut<'a, *mut T, Self> {
-        use self::AnyBox::*;
-        let ptr = match self.inner {
-            Native(ref mut b) => &mut **b as *mut T,
-            ForeignOwned(p) | ForeignBorrowed(p) => p.as_ptr(),
-        };
+        let ptr = self.inner.as_ptr();
         StashMut(ptr, self)
     }
 }
@@ -459,8 +412,8 @@ impl<T: 'static, MM: BoxedMemoryManager<T>> FromGlibPtrFull<*mut T> for Boxed<T,
     #[inline]
     unsafe fn from_glib_full(ptr: *mut T) -> Self {
         assert!(!ptr.is_null());
-        Boxed {
-            inner: AnyBox::ForeignOwned(ptr::NonNull::new_unchecked(ptr)),
+        Self {
+            inner: ptr::NonNull::new_unchecked(ptr),
             _dummy: PhantomData,
         }
     }
@@ -470,8 +423,8 @@ impl<T: 'static, MM: BoxedMemoryManager<T>> FromGlibPtrFull<*const T> for Boxed<
     #[inline]
     unsafe fn from_glib_full(ptr: *const T) -> Self {
         assert!(!ptr.is_null());
-        Boxed {
-            inner: AnyBox::ForeignOwned(ptr::NonNull::new_unchecked(ptr as *mut T)),
+        Self {
+            inner: ptr::NonNull::new_unchecked(ptr as *mut T),
             _dummy: PhantomData,
         }
     }
@@ -479,12 +432,12 @@ impl<T: 'static, MM: BoxedMemoryManager<T>> FromGlibPtrFull<*const T> for Boxed<
 
 impl<T: 'static, MM: BoxedMemoryManager<T>> FromGlibPtrBorrow<*mut T> for Boxed<T, MM> {
     #[inline]
-    unsafe fn from_glib_borrow(ptr: *mut T) -> Self {
+    unsafe fn from_glib_borrow(ptr: *mut T) -> Borrowed<Self> {
         assert!(!ptr.is_null());
-        Boxed {
-            inner: AnyBox::ForeignBorrowed(ptr::NonNull::new_unchecked(ptr)),
+        Borrowed::new(Self {
+            inner: ptr::NonNull::new_unchecked(ptr),
             _dummy: PhantomData,
-        }
+        })
     }
 }
 
@@ -492,15 +445,7 @@ impl<T: 'static, MM: BoxedMemoryManager<T>> Drop for Boxed<T, MM> {
     #[inline]
     fn drop(&mut self) {
         unsafe {
-            match self.inner {
-                AnyBox::ForeignOwned(ptr) => {
-                    MM::free(ptr.as_ptr());
-                }
-                AnyBox::Native(ref mut box_) => {
-                    MM::clear(&mut **box_);
-                }
-                _ => (),
-            }
+            MM::free(self.inner.as_ptr());
         }
     }
 }

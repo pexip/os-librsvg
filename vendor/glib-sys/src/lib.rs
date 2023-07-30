@@ -6,10 +6,10 @@
 #![allow(
     clippy::approx_constant,
     clippy::type_complexity,
-    clippy::unreadable_literal
+    clippy::unreadable_literal,
+    clippy::upper_case_acronyms
 )]
-
-extern crate libc;
+#![cfg_attr(feature = "dox", feature(doc_cfg))]
 
 mod manual;
 
@@ -18,7 +18,7 @@ pub use manual::*;
 #[allow(unused_imports)]
 use libc::{
     c_char, c_double, c_float, c_int, c_long, c_short, c_uchar, c_uint, c_ulong, c_ushort, c_void,
-    intptr_t, size_t, ssize_t, time_t, uintptr_t, FILE,
+    intptr_t, size_t, ssize_t, uintptr_t, FILE,
 };
 
 pub type gboolean = c_int;
@@ -31,6 +31,7 @@ pub type gpointer = *mut c_void;
 // Aliases
 pub type GDateDay = u8;
 pub type GDateYear = u16;
+pub type GMainContextPusher = c_void;
 pub type GMutexLocker = c_void;
 pub type GQuark = u32;
 pub type GRWLockReaderLocker = c_void;
@@ -183,9 +184,13 @@ pub const G_MARKUP_ERROR_MISSING_ATTRIBUTE: GMarkupError = 6;
 
 pub type GNormalizeMode = c_int;
 pub const G_NORMALIZE_DEFAULT: GNormalizeMode = 0;
+pub const G_NORMALIZE_NFD: GNormalizeMode = 0;
 pub const G_NORMALIZE_DEFAULT_COMPOSE: GNormalizeMode = 1;
+pub const G_NORMALIZE_NFC: GNormalizeMode = 1;
 pub const G_NORMALIZE_ALL: GNormalizeMode = 2;
+pub const G_NORMALIZE_NFKD: GNormalizeMode = 2;
 pub const G_NORMALIZE_ALL_COMPOSE: GNormalizeMode = 3;
+pub const G_NORMALIZE_NFKC: GNormalizeMode = 3;
 
 pub type GNumberParserError = c_int;
 pub const G_NUMBER_PARSER_ERROR_INVALID: GNumberParserError = 0;
@@ -296,6 +301,7 @@ pub const G_SPAWN_ERROR_CHDIR: GSpawnError = 2;
 pub const G_SPAWN_ERROR_ACCES: GSpawnError = 3;
 pub const G_SPAWN_ERROR_PERM: GSpawnError = 4;
 pub const G_SPAWN_ERROR_TOO_BIG: GSpawnError = 5;
+pub const G_SPAWN_ERROR_2BIG: GSpawnError = 5;
 pub const G_SPAWN_ERROR_NOEXEC: GSpawnError = 6;
 pub const G_SPAWN_ERROR_NAMETOOLONG: GSpawnError = 7;
 pub const G_SPAWN_ERROR_NOENT: GSpawnError = 8;
@@ -412,6 +418,7 @@ pub const G_UNICODE_BREAK_HANGUL_T_JAMO: GUnicodeBreakType = 33;
 pub const G_UNICODE_BREAK_HANGUL_LV_SYLLABLE: GUnicodeBreakType = 34;
 pub const G_UNICODE_BREAK_HANGUL_LVT_SYLLABLE: GUnicodeBreakType = 35;
 pub const G_UNICODE_BREAK_CLOSE_PARANTHESIS: GUnicodeBreakType = 36;
+pub const G_UNICODE_BREAK_CLOSE_PARENTHESIS: GUnicodeBreakType = 36;
 pub const G_UNICODE_BREAK_CONDITIONAL_JAPANESE_STARTER: GUnicodeBreakType = 37;
 pub const G_UNICODE_BREAK_HEBREW_LETTER: GUnicodeBreakType = 38;
 pub const G_UNICODE_BREAK_REGIONAL_INDICATOR: GUnicodeBreakType = 39;
@@ -574,6 +581,16 @@ pub const G_UNICODE_SCRIPT_ELYMAIC: GUnicodeScript = 149;
 pub const G_UNICODE_SCRIPT_NANDINAGARI: GUnicodeScript = 150;
 pub const G_UNICODE_SCRIPT_NYIAKENG_PUACHUE_HMONG: GUnicodeScript = 151;
 pub const G_UNICODE_SCRIPT_WANCHO: GUnicodeScript = 152;
+pub const G_UNICODE_SCRIPT_CHORASMIAN: GUnicodeScript = 153;
+pub const G_UNICODE_SCRIPT_DIVES_AKURU: GUnicodeScript = 154;
+pub const G_UNICODE_SCRIPT_KHITAN_SMALL_SCRIPT: GUnicodeScript = 155;
+pub const G_UNICODE_SCRIPT_YEZIDI: GUnicodeScript = 156;
+pub const G_UNICODE_SCRIPT_CYPRO_MINOAN: GUnicodeScript = 157;
+pub const G_UNICODE_SCRIPT_OLD_UYGHUR: GUnicodeScript = 158;
+pub const G_UNICODE_SCRIPT_TANGSA: GUnicodeScript = 159;
+pub const G_UNICODE_SCRIPT_TOTO: GUnicodeScript = 160;
+pub const G_UNICODE_SCRIPT_VITHKUQI: GUnicodeScript = 161;
+pub const G_UNICODE_SCRIPT_MATH: GUnicodeScript = 162;
 
 pub type GUnicodeType = c_int;
 pub const G_UNICODE_CONTROL: GUnicodeType = 0;
@@ -606,6 +623,18 @@ pub const G_UNICODE_OTHER_SYMBOL: GUnicodeType = 26;
 pub const G_UNICODE_LINE_SEPARATOR: GUnicodeType = 27;
 pub const G_UNICODE_PARAGRAPH_SEPARATOR: GUnicodeType = 28;
 pub const G_UNICODE_SPACE_SEPARATOR: GUnicodeType = 29;
+
+pub type GUriError = c_int;
+pub const G_URI_ERROR_FAILED: GUriError = 0;
+pub const G_URI_ERROR_BAD_SCHEME: GUriError = 1;
+pub const G_URI_ERROR_BAD_USER: GUriError = 2;
+pub const G_URI_ERROR_BAD_PASSWORD: GUriError = 3;
+pub const G_URI_ERROR_BAD_AUTH_PARAMS: GUriError = 4;
+pub const G_URI_ERROR_BAD_HOST: GUriError = 5;
+pub const G_URI_ERROR_BAD_PORT: GUriError = 6;
+pub const G_URI_ERROR_BAD_PATH: GUriError = 7;
+pub const G_URI_ERROR_BAD_QUERY: GUriError = 8;
+pub const G_URI_ERROR_BAD_FRAGMENT: GUriError = 9;
 
 pub type GUserDirectory = c_int;
 pub const G_USER_DIRECTORY_DESKTOP: GUserDirectory = 0;
@@ -657,6 +686,7 @@ pub const G_VARIANT_PARSE_ERROR_UNEXPECTED_TOKEN: GVariantParseError = 14;
 pub const G_VARIANT_PARSE_ERROR_UNKNOWN_KEYWORD: GVariantParseError = 15;
 pub const G_VARIANT_PARSE_ERROR_UNTERMINATED_STRING_CONSTANT: GVariantParseError = 16;
 pub const G_VARIANT_PARSE_ERROR_VALUE_EXPECTED: GVariantParseError = 17;
+pub const G_VARIANT_PARSE_ERROR_RECURSION: GVariantParseError = 18;
 
 // Constants
 pub const G_ASCII_DTOSTR_BUF_SIZE: c_int = 39;
@@ -674,8 +704,6 @@ pub const G_E: c_double = 2.718282;
 pub const G_HOOK_FLAG_USER_SHIFT: c_int = 4;
 pub const G_IEEE754_DOUBLE_BIAS: c_int = 1023;
 pub const G_IEEE754_FLOAT_BIAS: c_int = 127;
-pub const G_KEY_FILE_DESKTOP_ACTION_GROUP_PREFIX: *const c_char =
-    b"Desktop Action\0" as *const u8 as *const c_char;
 pub const G_KEY_FILE_DESKTOP_GROUP: *const c_char =
     b"Desktop Entry\0" as *const u8 as *const c_char;
 pub const G_KEY_FILE_DESKTOP_KEY_ACTIONS: *const c_char =
@@ -687,16 +715,10 @@ pub const G_KEY_FILE_DESKTOP_KEY_COMMENT: *const c_char =
 pub const G_KEY_FILE_DESKTOP_KEY_DBUS_ACTIVATABLE: *const c_char =
     b"DBusActivatable\0" as *const u8 as *const c_char;
 pub const G_KEY_FILE_DESKTOP_KEY_EXEC: *const c_char = b"Exec\0" as *const u8 as *const c_char;
-pub const G_KEY_FILE_DESKTOP_KEY_FULLNAME: *const c_char =
-    b"X-GNOME-FullName\0" as *const u8 as *const c_char;
 pub const G_KEY_FILE_DESKTOP_KEY_GENERIC_NAME: *const c_char =
     b"GenericName\0" as *const u8 as *const c_char;
-pub const G_KEY_FILE_DESKTOP_KEY_GETTEXT_DOMAIN: *const c_char =
-    b"X-GNOME-Gettext-Domain\0" as *const u8 as *const c_char;
 pub const G_KEY_FILE_DESKTOP_KEY_HIDDEN: *const c_char = b"Hidden\0" as *const u8 as *const c_char;
 pub const G_KEY_FILE_DESKTOP_KEY_ICON: *const c_char = b"Icon\0" as *const u8 as *const c_char;
-pub const G_KEY_FILE_DESKTOP_KEY_KEYWORDS: *const c_char =
-    b"Keywords\0" as *const u8 as *const c_char;
 pub const G_KEY_FILE_DESKTOP_KEY_MIME_TYPE: *const c_char =
     b"MimeType\0" as *const u8 as *const c_char;
 pub const G_KEY_FILE_DESKTOP_KEY_NAME: *const c_char = b"Name\0" as *const u8 as *const c_char;
@@ -765,6 +787,7 @@ pub const G_URI_RESERVED_CHARS_SUBCOMPONENT_DELIMITERS: *const c_char =
     b"!$&'()*+,;=\0" as *const u8 as *const c_char;
 pub const G_USEC_PER_SEC: c_int = 1000000;
 pub const G_WIN32_MSG_HANDLE: c_int = 19981206;
+pub const g_macro__has_attribute___noreturn__: c_int = 0;
 
 // Flags
 pub type GAsciiType = c_uint;
@@ -779,6 +802,12 @@ pub const G_ASCII_PUNCT: GAsciiType = 128;
 pub const G_ASCII_SPACE: GAsciiType = 256;
 pub const G_ASCII_UPPER: GAsciiType = 512;
 pub const G_ASCII_XDIGIT: GAsciiType = 1024;
+
+pub type GFileSetContentsFlags = c_uint;
+pub const G_FILE_SET_CONTENTS_NONE: GFileSetContentsFlags = 0;
+pub const G_FILE_SET_CONTENTS_CONSISTENT: GFileSetContentsFlags = 1;
+pub const G_FILE_SET_CONTENTS_DURABLE: GFileSetContentsFlags = 2;
+pub const G_FILE_SET_CONTENTS_ONLY_EXISTING: GFileSetContentsFlags = 4;
 
 pub type GFileTest = c_uint;
 pub const G_FILE_TEST_IS_REGULAR: GFileTest = 1;
@@ -832,6 +861,10 @@ pub const G_LOG_LEVEL_MESSAGE: GLogLevelFlags = 32;
 pub const G_LOG_LEVEL_INFO: GLogLevelFlags = 64;
 pub const G_LOG_LEVEL_DEBUG: GLogLevelFlags = 128;
 pub const G_LOG_LEVEL_MASK: GLogLevelFlags = 4294967292;
+
+pub type GMainContextFlags = c_uint;
+pub const G_MAIN_CONTEXT_FLAGS_NONE: GMainContextFlags = 0;
+pub const G_MAIN_CONTEXT_FLAGS_OWNERLESS_POLLING: GMainContextFlags = 1;
 
 pub type GMarkupCollectType = c_uint;
 pub const G_MARKUP_COLLECT_INVALID: GMarkupCollectType = 0;
@@ -924,29 +957,61 @@ pub const G_TRAVERSE_MASK: GTraverseFlags = 3;
 pub const G_TRAVERSE_LEAFS: GTraverseFlags = 1;
 pub const G_TRAVERSE_NON_LEAFS: GTraverseFlags = 2;
 
+pub type GUriFlags = c_uint;
+pub const G_URI_FLAGS_NONE: GUriFlags = 0;
+pub const G_URI_FLAGS_PARSE_RELAXED: GUriFlags = 1;
+pub const G_URI_FLAGS_HAS_PASSWORD: GUriFlags = 2;
+pub const G_URI_FLAGS_HAS_AUTH_PARAMS: GUriFlags = 4;
+pub const G_URI_FLAGS_ENCODED: GUriFlags = 8;
+pub const G_URI_FLAGS_NON_DNS: GUriFlags = 16;
+pub const G_URI_FLAGS_ENCODED_QUERY: GUriFlags = 32;
+pub const G_URI_FLAGS_ENCODED_PATH: GUriFlags = 64;
+pub const G_URI_FLAGS_ENCODED_FRAGMENT: GUriFlags = 128;
+pub const G_URI_FLAGS_SCHEME_NORMALIZE: GUriFlags = 256;
+
+pub type GUriHideFlags = c_uint;
+pub const G_URI_HIDE_NONE: GUriHideFlags = 0;
+pub const G_URI_HIDE_USERINFO: GUriHideFlags = 1;
+pub const G_URI_HIDE_PASSWORD: GUriHideFlags = 2;
+pub const G_URI_HIDE_AUTH_PARAMS: GUriHideFlags = 4;
+pub const G_URI_HIDE_QUERY: GUriHideFlags = 8;
+pub const G_URI_HIDE_FRAGMENT: GUriHideFlags = 16;
+
+pub type GUriParamsFlags = c_uint;
+pub const G_URI_PARAMS_NONE: GUriParamsFlags = 0;
+pub const G_URI_PARAMS_CASE_INSENSITIVE: GUriParamsFlags = 1;
+pub const G_URI_PARAMS_WWW_FORM: GUriParamsFlags = 2;
+pub const G_URI_PARAMS_PARSE_RELAXED: GUriParamsFlags = 4;
+
 // Unions
 #[repr(C)]
-pub struct GDoubleIEEE754(c_void);
+pub struct GDoubleIEEE754 {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDoubleIEEE754 {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDoubleIEEE754 @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDoubleIEEE754 @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GFloatIEEE754(c_void);
+pub struct GFloatIEEE754 {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GFloatIEEE754 {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFloatIEEE754 @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFloatIEEE754 @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub union GMutex {
     pub p: gpointer,
     pub i: [c_uint; 2],
@@ -954,13 +1019,12 @@ pub union GMutex {
 
 impl ::std::fmt::Debug for GMutex {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMutex @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GMutex @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub union GTokenValue {
     pub v_symbol: gpointer,
     pub v_identifier: *mut c_char,
@@ -978,7 +1042,7 @@ pub union GTokenValue {
 
 impl ::std::fmt::Debug for GTokenValue {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTokenValue @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTokenValue @ {:p}", self))
             .field("v_symbol", unsafe { &self.v_symbol })
             .field("v_identifier", unsafe { &self.v_identifier })
             .field("v_binary", unsafe { &self.v_binary })
@@ -995,8 +1059,8 @@ impl ::std::fmt::Debug for GTokenValue {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub union GVariantBuilder_u {
     pub s: GVariantBuilder_u_s,
     pub x: [size_t; 16],
@@ -1004,15 +1068,15 @@ pub union GVariantBuilder_u {
 
 impl ::std::fmt::Debug for GVariantBuilder_u {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GVariantBuilder_u @ {:?}", self as *const _))
+        f.debug_struct(&format!("GVariantBuilder_u @ {:p}", self))
             .field("s", unsafe { &self.s })
             .field("x", unsafe { &self.x })
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub union GVariantDict_u {
     pub s: GVariantDict_u_s,
     pub x: [size_t; 16],
@@ -1020,7 +1084,7 @@ pub union GVariantDict_u {
 
 impl ::std::fmt::Debug for GVariantDict_u {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GVariantDict_u @ {:?}", self as *const _))
+        f.debug_struct(&format!("GVariantDict_u @ {:p}", self))
             .field("s", unsafe { &self.s })
             .field("x", unsafe { &self.x })
             .finish()
@@ -1038,6 +1102,9 @@ pub type GDataForeachFunc = Option<unsafe extern "C" fn(GQuark, gpointer, gpoint
 pub type GDestroyNotify = Option<unsafe extern "C" fn(gpointer)>;
 pub type GDuplicateFunc = Option<unsafe extern "C" fn(gpointer, gpointer) -> gpointer>;
 pub type GEqualFunc = Option<unsafe extern "C" fn(gconstpointer, gconstpointer) -> gboolean>;
+pub type GErrorClearFunc = Option<unsafe extern "C" fn(*mut GError)>;
+pub type GErrorCopyFunc = Option<unsafe extern "C" fn(*const GError, *mut GError)>;
+pub type GErrorInitFunc = Option<unsafe extern "C" fn(*mut GError)>;
 pub type GFreeFunc = Option<unsafe extern "C" fn(gpointer)>;
 pub type GFunc = Option<unsafe extern "C" fn(gpointer, gpointer)>;
 pub type GHFunc = Option<unsafe extern "C" fn(gpointer, gpointer, gpointer)>;
@@ -1080,6 +1147,7 @@ pub type GRegexEvalCallback =
 pub type GScannerMsgFunc = Option<unsafe extern "C" fn(*mut GScanner, *mut c_char, gboolean)>;
 pub type GSequenceIterCompareFunc =
     Option<unsafe extern "C" fn(*mut GSequenceIter, *mut GSequenceIter, gpointer) -> c_int>;
+pub type GSourceDisposeFunc = Option<unsafe extern "C" fn(*mut GSource)>;
 pub type GSourceDummyMarshal = Option<unsafe extern "C" fn()>;
 pub type GSourceFunc = Option<unsafe extern "C" fn(gpointer) -> gboolean>;
 pub type GSpawnChildSetupFunc = Option<unsafe extern "C" fn(gpointer)>;
@@ -1092,13 +1160,14 @@ pub type GTestLogFatalFunc = Option<
 pub type GThreadFunc = Option<unsafe extern "C" fn(gpointer) -> gpointer>;
 pub type GTranslateFunc = Option<unsafe extern "C" fn(*const c_char, gpointer) -> *const c_char>;
 pub type GTraverseFunc = Option<unsafe extern "C" fn(gpointer, gpointer, gpointer) -> gboolean>;
+pub type GTraverseNodeFunc = Option<unsafe extern "C" fn(*mut GTreeNode, gpointer) -> gboolean>;
 pub type GUnixFDSourceFunc =
     Option<unsafe extern "C" fn(c_int, GIOCondition, gpointer) -> gboolean>;
 pub type GVoidFunc = Option<unsafe extern "C" fn()>;
 
 // Records
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GArray {
     pub data: *mut c_char,
     pub len: c_uint,
@@ -1106,7 +1175,7 @@ pub struct GArray {
 
 impl ::std::fmt::Debug for GArray {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GArray @ {:?}", self as *const _))
+        f.debug_struct(&format!("GArray @ {:p}", self))
             .field("data", &self.data)
             .field("len", &self.len)
             .finish()
@@ -1114,17 +1183,23 @@ impl ::std::fmt::Debug for GArray {
 }
 
 #[repr(C)]
-pub struct _GAsyncQueue(c_void);
+pub struct _GAsyncQueue {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GAsyncQueue = *mut _GAsyncQueue;
 
 #[repr(C)]
-pub struct _GBookmarkFile(c_void);
+pub struct _GBookmarkFile {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GBookmarkFile = *mut _GBookmarkFile;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GByteArray {
     pub data: *mut u8,
     pub len: c_uint,
@@ -1132,7 +1207,7 @@ pub struct GByteArray {
 
 impl ::std::fmt::Debug for GByteArray {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GByteArray @ {:?}", self as *const _))
+        f.debug_struct(&format!("GByteArray @ {:p}", self))
             .field("data", &self.data)
             .field("len", &self.len)
             .finish()
@@ -1140,27 +1215,31 @@ impl ::std::fmt::Debug for GByteArray {
 }
 
 #[repr(C)]
-pub struct GBytes(c_void);
+pub struct GBytes {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GBytes {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GBytes @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GBytes @ {:p}", self)).finish()
     }
 }
 
 #[repr(C)]
-pub struct GChecksum(c_void);
+pub struct GChecksum {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GChecksum {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GChecksum @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GChecksum @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GCond {
     pub p: gpointer,
     pub i: [c_uint; 2],
@@ -1168,43 +1247,48 @@ pub struct GCond {
 
 impl ::std::fmt::Debug for GCond {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GCond @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GCond @ {:p}", self)).finish()
     }
 }
 
 #[repr(C)]
-pub struct _GData(c_void);
+pub struct _GData {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GData = *mut _GData;
 
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct GDate {
     pub julian_days: c_uint,
-    _truncated_record_marker: c_void,
-    // field julian has incomplete type
+    pub flags_dmy: c_uint,
 }
 
 impl ::std::fmt::Debug for GDate {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDate @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDate @ {:p}", self))
             .field("julian_days", &self.julian_days)
+            .field("flags_dmy", &self.flags_dmy)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GDateTime(c_void);
+pub struct GDateTime {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDateTime {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDateTime @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GDateTime @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDebugKey {
     pub key: *const c_char,
     pub value: c_uint,
@@ -1212,7 +1296,7 @@ pub struct GDebugKey {
 
 impl ::std::fmt::Debug for GDebugKey {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDebugKey @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDebugKey @ {:p}", self))
             .field("key", &self.key)
             .field("value", &self.value)
             .finish()
@@ -1220,7 +1304,10 @@ impl ::std::fmt::Debug for GDebugKey {
 }
 
 #[repr(C)]
-pub struct _GDir(c_void);
+pub struct _GDir {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GDir = *mut _GDir;
 
@@ -1233,14 +1320,14 @@ pub struct GDoubleIEEE754_mpn {
 
 impl ::std::fmt::Debug for GDoubleIEEE754_mpn {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDoubleIEEE754_mpn @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDoubleIEEE754_mpn @ {:p}", self))
             .field("mantissa_low", &self.mantissa_low)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GError {
     pub domain: GQuark,
     pub code: c_int,
@@ -1249,7 +1336,7 @@ pub struct GError {
 
 impl ::std::fmt::Debug for GError {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GError @ {:?}", self as *const _))
+        f.debug_struct(&format!("GError @ {:p}", self))
             .field("domain", &self.domain)
             .field("code", &self.code)
             .field("message", &self.message)
@@ -1266,24 +1353,26 @@ pub struct GFloatIEEE754_mpn {
 
 impl ::std::fmt::Debug for GFloatIEEE754_mpn {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFloatIEEE754_mpn @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFloatIEEE754_mpn @ {:p}", self))
             .field("mantissa", &self.mantissa)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GHashTable(c_void);
+pub struct GHashTable {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GHashTable {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GHashTable @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GHashTable @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GHashTableIter {
     pub dummy1: gpointer,
     pub dummy2: gpointer,
@@ -1295,18 +1384,21 @@ pub struct GHashTableIter {
 
 impl ::std::fmt::Debug for GHashTableIter {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GHashTableIter @ {:?}", self as *const _))
+        f.debug_struct(&format!("GHashTableIter @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GHmac(c_void);
+pub struct _GHmac {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GHmac = *mut _GHmac;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GHook {
     pub data: gpointer,
     pub next: *mut GHook,
@@ -1320,7 +1412,7 @@ pub struct GHook {
 
 impl ::std::fmt::Debug for GHook {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GHook @ {:?}", self as *const _))
+        f.debug_struct(&format!("GHook @ {:p}", self))
             .field("data", &self.data)
             .field("next", &self.next)
             .field("prev", &self.prev)
@@ -1349,12 +1441,15 @@ pub struct GHookList {
 
 impl ::std::fmt::Debug for GHookList {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GHookList @ {:?}", self as *const _)
+        write!(f, "GHookList @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct _GIConv(c_void);
+pub struct _GIConv {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GIConv = *mut _GIConv;
 
@@ -1379,13 +1474,12 @@ pub struct GIOChannel {
 
 impl ::std::fmt::Debug for GIOChannel {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GIOChannel @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GIOChannel @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GIOFuncs {
     pub io_read: Option<
         unsafe extern "C" fn(
@@ -1419,7 +1513,7 @@ pub struct GIOFuncs {
 
 impl ::std::fmt::Debug for GIOFuncs {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GIOFuncs @ {:?}", self as *const _))
+        f.debug_struct(&format!("GIOFuncs @ {:p}", self))
             .field("io_read", &self.io_read)
             .field("io_write", &self.io_write)
             .field("io_seek", &self.io_seek)
@@ -1433,17 +1527,19 @@ impl ::std::fmt::Debug for GIOFuncs {
 }
 
 #[repr(C)]
-pub struct GKeyFile(c_void);
+pub struct GKeyFile {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GKeyFile {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GKeyFile @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GKeyFile @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GList {
     pub data: gpointer,
     pub next: *mut GList,
@@ -1452,7 +1548,7 @@ pub struct GList {
 
 impl ::std::fmt::Debug for GList {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GList @ {:?}", self as *const _))
+        f.debug_struct(&format!("GList @ {:p}", self))
             .field("data", &self.data)
             .field("next", &self.next)
             .field("prev", &self.prev)
@@ -1460,8 +1556,8 @@ impl ::std::fmt::Debug for GList {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GLogField {
     pub key: *const c_char,
     pub value: gconstpointer,
@@ -1470,7 +1566,7 @@ pub struct GLogField {
 
 impl ::std::fmt::Debug for GLogField {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GLogField @ {:?}", self as *const _))
+        f.debug_struct(&format!("GLogField @ {:p}", self))
             .field("key", &self.key)
             .field("value", &self.value)
             .field("length", &self.length)
@@ -1479,47 +1575,58 @@ impl ::std::fmt::Debug for GLogField {
 }
 
 #[repr(C)]
-pub struct GMainContext(c_void);
+pub struct GMainContext {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GMainContext {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMainContext @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMainContext @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GMainLoop(c_void);
+pub struct GMainLoop {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GMainLoop {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMainLoop @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GMainLoop @ {:p}", self)).finish()
     }
 }
 
 #[repr(C)]
-pub struct GMappedFile(c_void);
+pub struct GMappedFile {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GMappedFile {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMappedFile @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMappedFile @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GMarkupParseContext(c_void);
+pub struct GMarkupParseContext {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GMarkupParseContext {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMarkupParseContext @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMarkupParseContext @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GMarkupParser {
     pub start_element: Option<
         unsafe extern "C" fn(
@@ -1557,7 +1664,7 @@ pub struct GMarkupParser {
 
 impl ::std::fmt::Debug for GMarkupParser {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMarkupParser @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMarkupParser @ {:p}", self))
             .field("start_element", &self.start_element)
             .field("end_element", &self.end_element)
             .field("text", &self.text)
@@ -1568,17 +1675,19 @@ impl ::std::fmt::Debug for GMarkupParser {
 }
 
 #[repr(C)]
-pub struct GMatchInfo(c_void);
+pub struct GMatchInfo {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GMatchInfo {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMatchInfo @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GMatchInfo @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GMemVTable {
     pub malloc: Option<unsafe extern "C" fn(size_t) -> gpointer>,
     pub realloc: Option<unsafe extern "C" fn(gpointer, size_t) -> gpointer>,
@@ -1590,7 +1699,7 @@ pub struct GMemVTable {
 
 impl ::std::fmt::Debug for GMemVTable {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMemVTable @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMemVTable @ {:p}", self))
             .field("malloc", &self.malloc)
             .field("realloc", &self.realloc)
             .field("free", &self.free)
@@ -1601,8 +1710,8 @@ impl ::std::fmt::Debug for GMemVTable {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GNode {
     pub data: gpointer,
     pub next: *mut GNode,
@@ -1613,7 +1722,7 @@ pub struct GNode {
 
 impl ::std::fmt::Debug for GNode {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GNode @ {:?}", self as *const _))
+        f.debug_struct(&format!("GNode @ {:p}", self))
             .field("data", &self.data)
             .field("next", &self.next)
             .field("prev", &self.prev)
@@ -1623,8 +1732,8 @@ impl ::std::fmt::Debug for GNode {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GOnce {
     pub status: GOnceStatus,
     pub retval: gpointer,
@@ -1632,18 +1741,20 @@ pub struct GOnce {
 
 impl ::std::fmt::Debug for GOnce {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GOnce @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GOnce @ {:p}", self)).finish()
     }
 }
 
 #[repr(C)]
-pub struct _GOptionContext(c_void);
+pub struct _GOptionContext {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GOptionContext = *mut _GOptionContext;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GOptionEntry {
     pub long_name: *const c_char,
     pub short_name: c_char,
@@ -1656,7 +1767,7 @@ pub struct GOptionEntry {
 
 impl ::std::fmt::Debug for GOptionEntry {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GOptionEntry @ {:?}", self as *const _))
+        f.debug_struct(&format!("GOptionEntry @ {:p}", self))
             .field("long_name", &self.long_name)
             .field("short_name", &self.short_name)
             .field("flags", &self.flags)
@@ -1669,22 +1780,33 @@ impl ::std::fmt::Debug for GOptionEntry {
 }
 
 #[repr(C)]
-pub struct GOptionGroup(c_void);
+pub struct GOptionGroup {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GOptionGroup {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GOptionGroup @ {:?}", self as *const _))
+        f.debug_struct(&format!("GOptionGroup @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GPatternSpec(c_void);
+pub struct GPatternSpec {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
-pub type GPatternSpec = *mut _GPatternSpec;
+impl ::std::fmt::Debug for GPatternSpec {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        f.debug_struct(&format!("GPatternSpec @ {:p}", self))
+            .finish()
+    }
+}
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GPrivate {
     pub p: gpointer,
     pub notify: GDestroyNotify,
@@ -1693,13 +1815,12 @@ pub struct GPrivate {
 
 impl ::std::fmt::Debug for GPrivate {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GPrivate @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GPrivate @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GPtrArray {
     pub pdata: *mut gpointer,
     pub len: c_uint,
@@ -1707,15 +1828,15 @@ pub struct GPtrArray {
 
 impl ::std::fmt::Debug for GPtrArray {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GPtrArray @ {:?}", self as *const _))
+        f.debug_struct(&format!("GPtrArray @ {:p}", self))
             .field("pdata", &self.pdata)
             .field("len", &self.len)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GQueue {
     pub head: *mut GList,
     pub tail: *mut GList,
@@ -1724,7 +1845,7 @@ pub struct GQueue {
 
 impl ::std::fmt::Debug for GQueue {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GQueue @ {:?}", self as *const _))
+        f.debug_struct(&format!("GQueue @ {:p}", self))
             .field("head", &self.head)
             .field("tail", &self.tail)
             .field("length", &self.length)
@@ -1732,8 +1853,8 @@ impl ::std::fmt::Debug for GQueue {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GRWLock {
     pub p: gpointer,
     pub i: [c_uint; 2],
@@ -1741,18 +1862,20 @@ pub struct GRWLock {
 
 impl ::std::fmt::Debug for GRWLock {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GRWLock @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GRWLock @ {:p}", self)).finish()
     }
 }
 
 #[repr(C)]
-pub struct _GRand(c_void);
+pub struct _GRand {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GRand = *mut _GRand;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GRecMutex {
     pub p: gpointer,
     pub i: [c_uint; 2],
@@ -1760,23 +1883,24 @@ pub struct GRecMutex {
 
 impl ::std::fmt::Debug for GRecMutex {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GRecMutex @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GRecMutex @ {:p}", self)).finish()
     }
 }
 
 #[repr(C)]
-pub struct GRegex(c_void);
+pub struct GRegex {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GRegex {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GRegex @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GRegex @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSList {
     pub data: gpointer,
     pub next: *mut GSList,
@@ -1784,15 +1908,15 @@ pub struct GSList {
 
 impl ::std::fmt::Debug for GSList {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSList @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSList @ {:p}", self))
             .field("data", &self.data)
             .field("next", &self.next)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GScanner {
     pub user_data: gpointer,
     pub max_parse_errors: c_uint,
@@ -1819,7 +1943,7 @@ pub struct GScanner {
 
 impl ::std::fmt::Debug for GScanner {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GScanner @ {:?}", self as *const _))
+        f.debug_struct(&format!("GScanner @ {:p}", self))
             .field("user_data", &self.user_data)
             .field("max_parse_errors", &self.max_parse_errors)
             .field("parse_errors", &self.parse_errors)
@@ -1852,7 +1976,7 @@ pub struct GScannerConfig {
 
 impl ::std::fmt::Debug for GScannerConfig {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GScannerConfig @ {:?}", self as *const _))
+        f.debug_struct(&format!("GScannerConfig @ {:p}", self))
             .field("cset_skip_characters", &self.cset_skip_characters)
             .field("cset_identifier_first", &self.cset_identifier_first)
             .field("cset_identifier_nth", &self.cset_identifier_nth)
@@ -1863,17 +1987,23 @@ impl ::std::fmt::Debug for GScannerConfig {
 }
 
 #[repr(C)]
-pub struct _GSequence(c_void);
+pub struct _GSequence {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GSequence = *mut _GSequence;
 
 #[repr(C)]
-pub struct _GSequenceIter(c_void);
+pub struct _GSequenceIter {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GSequenceIter = *mut _GSequenceIter;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSource {
     pub callback_data: gpointer,
     pub callback_funcs: *mut GSourceCallbackFuncs,
@@ -1892,13 +2022,12 @@ pub struct GSource {
 
 impl ::std::fmt::Debug for GSource {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSource @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GSource @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSourceCallbackFuncs {
     pub ref_: Option<unsafe extern "C" fn(gpointer)>,
     pub unref: Option<unsafe extern "C" fn(gpointer)>,
@@ -1907,7 +2036,7 @@ pub struct GSourceCallbackFuncs {
 
 impl ::std::fmt::Debug for GSourceCallbackFuncs {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSourceCallbackFuncs @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSourceCallbackFuncs @ {:p}", self))
             .field("ref_", &self.ref_)
             .field("unref", &self.unref)
             .field("get", &self.get)
@@ -1915,8 +2044,8 @@ impl ::std::fmt::Debug for GSourceCallbackFuncs {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSourceFuncs {
     pub prepare: Option<unsafe extern "C" fn(*mut GSource, *mut c_int) -> gboolean>,
     pub check: Option<unsafe extern "C" fn(*mut GSource) -> gboolean>,
@@ -1928,7 +2057,7 @@ pub struct GSourceFuncs {
 
 impl ::std::fmt::Debug for GSourceFuncs {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSourceFuncs @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSourceFuncs @ {:p}", self))
             .field("prepare", &self.prepare)
             .field("check", &self.check)
             .field("dispatch", &self.dispatch)
@@ -1938,17 +2067,23 @@ impl ::std::fmt::Debug for GSourceFuncs {
 }
 
 #[repr(C)]
-pub struct _GSourcePrivate(c_void);
+pub struct _GSourcePrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GSourcePrivate = *mut _GSourcePrivate;
 
 #[repr(C)]
-pub struct _GStatBuf(c_void);
+pub struct _GStatBuf {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GStatBuf = *mut _GStatBuf;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GString {
     pub str: *mut c_char,
     pub len: size_t,
@@ -1957,7 +2092,7 @@ pub struct GString {
 
 impl ::std::fmt::Debug for GString {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GString @ {:?}", self as *const _))
+        f.debug_struct(&format!("GString @ {:p}", self))
             .field("str", &self.str)
             .field("len", &self.len)
             .field("allocated_len", &self.allocated_len)
@@ -1966,17 +2101,31 @@ impl ::std::fmt::Debug for GString {
 }
 
 #[repr(C)]
-pub struct _GStringChunk(c_void);
+pub struct _GStringChunk {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GStringChunk = *mut _GStringChunk;
 
 #[repr(C)]
-pub struct _GTestCase(c_void);
+pub struct _GStrvBuilder {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
+
+pub type GStrvBuilder = *mut _GStrvBuilder;
+
+#[repr(C)]
+pub struct _GTestCase {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GTestCase = *mut _GTestCase;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTestConfig {
     pub test_initialized: gboolean,
     pub test_quick: gboolean,
@@ -1988,7 +2137,7 @@ pub struct GTestConfig {
 
 impl ::std::fmt::Debug for GTestConfig {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTestConfig @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTestConfig @ {:p}", self))
             .field("test_initialized", &self.test_initialized)
             .field("test_quick", &self.test_quick)
             .field("test_perf", &self.test_perf)
@@ -1999,8 +2148,8 @@ impl ::std::fmt::Debug for GTestConfig {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTestLogBuffer {
     pub data: *mut GString,
     pub msgs: *mut GSList,
@@ -2008,7 +2157,7 @@ pub struct GTestLogBuffer {
 
 impl ::std::fmt::Debug for GTestLogBuffer {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTestLogBuffer @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTestLogBuffer @ {:p}", self))
             .finish()
     }
 }
@@ -2025,7 +2174,7 @@ pub struct GTestLogMsg {
 
 impl ::std::fmt::Debug for GTestLogMsg {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTestLogMsg @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTestLogMsg @ {:p}", self))
             .field("log_type", &self.log_type)
             .field("n_strings", &self.n_strings)
             .field("strings", &self.strings)
@@ -2035,22 +2184,27 @@ impl ::std::fmt::Debug for GTestLogMsg {
 }
 
 #[repr(C)]
-pub struct _GTestSuite(c_void);
+pub struct _GTestSuite {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GTestSuite = *mut _GTestSuite;
 
 #[repr(C)]
-pub struct GThread(c_void);
+pub struct GThread {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GThread {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GThread @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GThread @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GThreadPool {
     pub func: GFunc,
     pub user_data: gpointer,
@@ -2059,7 +2213,7 @@ pub struct GThreadPool {
 
 impl ::std::fmt::Debug for GThreadPool {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GThreadPool @ {:?}", self as *const _))
+        f.debug_struct(&format!("GThreadPool @ {:p}", self))
             .field("func", &self.func)
             .field("user_data", &self.user_data)
             .field("exclusive", &self.exclusive)
@@ -2067,8 +2221,8 @@ impl ::std::fmt::Debug for GThreadPool {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTimeVal {
     pub tv_sec: c_long,
     pub tv_usec: c_long,
@@ -2076,7 +2230,7 @@ pub struct GTimeVal {
 
 impl ::std::fmt::Debug for GTimeVal {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTimeVal @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTimeVal @ {:p}", self))
             .field("tv_sec", &self.tv_sec)
             .field("tv_usec", &self.tv_usec)
             .finish()
@@ -2084,65 +2238,115 @@ impl ::std::fmt::Debug for GTimeVal {
 }
 
 #[repr(C)]
-pub struct GTimeZone(c_void);
+pub struct GTimeZone {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GTimeZone {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTimeZone @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GTimeZone @ {:p}", self)).finish()
     }
 }
 
 #[repr(C)]
-pub struct _GTimer(c_void);
+pub struct _GTimer {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GTimer = *mut _GTimer;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTrashStack {
     pub next: *mut GTrashStack,
 }
 
 impl ::std::fmt::Debug for GTrashStack {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTrashStack @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTrashStack @ {:p}", self))
             .field("next", &self.next)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GTree(c_void);
+pub struct GTree {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
-pub type GTree = *mut _GTree;
+impl ::std::fmt::Debug for GTree {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        f.debug_struct(&format!("GTree @ {:p}", self)).finish()
+    }
+}
 
 #[repr(C)]
-pub struct GVariant(c_void);
+pub struct _GTreeNode {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
-impl ::std::fmt::Debug for GVariant {
+pub type GTreeNode = *mut _GTreeNode;
+
+#[repr(C)]
+pub struct GUri {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
+
+impl ::std::fmt::Debug for GUri {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GVariant @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUri @ {:p}", self)).finish()
+    }
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct GUriParamsIter {
+    pub dummy0: c_int,
+    pub dummy1: gpointer,
+    pub dummy2: gpointer,
+    pub dummy3: [u8; 256],
+}
+
+impl ::std::fmt::Debug for GUriParamsIter {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        f.debug_struct(&format!("GUriParamsIter @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
+pub struct GVariant {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
+
+impl ::std::fmt::Debug for GVariant {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        f.debug_struct(&format!("GVariant @ {:p}", self)).finish()
+    }
+}
+
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GVariantBuilder {
     pub u: GVariantBuilder_u,
 }
 
 impl ::std::fmt::Debug for GVariantBuilder {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GVariantBuilder @ {:?}", self as *const _))
+        f.debug_struct(&format!("GVariantBuilder @ {:p}", self))
             .field("u", &self.u)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GVariantBuilder_u_s {
     pub partial_magic: size_t,
     pub type_: *const GVariantType,
@@ -2151,7 +2355,7 @@ pub struct GVariantBuilder_u_s {
 
 impl ::std::fmt::Debug for GVariantBuilder_u_s {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GVariantBuilder_u_s @ {:?}", self as *const _))
+        f.debug_struct(&format!("GVariantBuilder_u_s @ {:p}", self))
             .field("partial_magic", &self.partial_magic)
             .field("type_", &self.type_)
             .field("y", &self.y)
@@ -2159,22 +2363,22 @@ impl ::std::fmt::Debug for GVariantBuilder_u_s {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GVariantDict {
     pub u: GVariantDict_u,
 }
 
 impl ::std::fmt::Debug for GVariantDict {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GVariantDict @ {:?}", self as *const _))
+        f.debug_struct(&format!("GVariantDict @ {:p}", self))
             .field("u", &self.u)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GVariantDict_u_s {
     pub asv: *mut GVariant,
     pub partial_magic: size_t,
@@ -2183,7 +2387,7 @@ pub struct GVariantDict_u_s {
 
 impl ::std::fmt::Debug for GVariantDict_u_s {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GVariantDict_u_s @ {:?}", self as *const _))
+        f.debug_struct(&format!("GVariantDict_u_s @ {:p}", self))
             .field("asv", &self.asv)
             .field("partial_magic", &self.partial_magic)
             .field("y", &self.y)
@@ -2191,29 +2395,34 @@ impl ::std::fmt::Debug for GVariantDict_u_s {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GVariantIter {
     pub x: [size_t; 16],
 }
 
 impl ::std::fmt::Debug for GVariantIter {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GVariantIter @ {:?}", self as *const _))
+        f.debug_struct(&format!("GVariantIter @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GVariantType(c_void);
+pub struct GVariantType {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GVariantType {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GVariantType @ {:?}", self as *const _))
+        f.debug_struct(&format!("GVariantType @ {:p}", self))
             .finish()
     }
 }
 
+#[link(name = "gobject-2.0")]
+#[link(name = "glib-2.0")]
 extern "C" {
 
     //=========================================================================
@@ -2237,6 +2446,7 @@ extern "C" {
     pub fn g_array_append_vals(array: *mut GArray, data: gconstpointer, len: c_uint)
         -> *mut GArray;
     #[cfg(any(feature = "v2_62", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_62")))]
     pub fn g_array_binary_search(
         array: *mut GArray,
         target: gconstpointer,
@@ -2244,6 +2454,7 @@ extern "C" {
         out_match_index: *mut c_uint,
     ) -> gboolean;
     #[cfg(any(feature = "v2_62", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_62")))]
     pub fn g_array_copy(array: *mut GArray) -> *mut GArray;
     pub fn g_array_free(array: *mut GArray, free_segment: gboolean) -> *mut c_char;
     pub fn g_array_get_element_size(array: *mut GArray) -> c_uint;
@@ -2281,6 +2492,9 @@ extern "C" {
         compare_func: GCompareDataFunc,
         user_data: gpointer,
     );
+    #[cfg(any(feature = "v2_64", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+    pub fn g_array_steal(array: *mut GArray, len: *mut size_t) -> gpointer;
     pub fn g_array_unref(array: *mut GArray);
 
     //=========================================================================
@@ -2292,9 +2506,7 @@ extern "C" {
     pub fn g_async_queue_pop(queue: *mut GAsyncQueue) -> gpointer;
     pub fn g_async_queue_pop_unlocked(queue: *mut GAsyncQueue) -> gpointer;
     pub fn g_async_queue_push(queue: *mut GAsyncQueue, data: gpointer);
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
     pub fn g_async_queue_push_front(queue: *mut GAsyncQueue, item: gpointer);
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
     pub fn g_async_queue_push_front_unlocked(queue: *mut GAsyncQueue, item: gpointer);
     pub fn g_async_queue_push_sorted(
         queue: *mut GAsyncQueue,
@@ -2311,9 +2523,7 @@ extern "C" {
     pub fn g_async_queue_push_unlocked(queue: *mut GAsyncQueue, data: gpointer);
     pub fn g_async_queue_ref(queue: *mut GAsyncQueue) -> *mut GAsyncQueue;
     pub fn g_async_queue_ref_unlocked(queue: *mut GAsyncQueue);
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
     pub fn g_async_queue_remove(queue: *mut GAsyncQueue, item: gpointer) -> gboolean;
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
     pub fn g_async_queue_remove_unlocked(queue: *mut GAsyncQueue, item: gpointer) -> gboolean;
     pub fn g_async_queue_sort(queue: *mut GAsyncQueue, func: GCompareDataFunc, user_data: gpointer);
     pub fn g_async_queue_sort_unlocked(
@@ -2356,6 +2566,13 @@ extern "C" {
         uri: *const c_char,
         error: *mut *mut GError,
     ) -> c_long;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_bookmark_file_get_added_date_time(
+        bookmark: *mut GBookmarkFile,
+        uri: *const c_char,
+        error: *mut *mut GError,
+    ) -> *mut GDateTime;
     pub fn g_bookmark_file_get_app_info(
         bookmark: *mut GBookmarkFile,
         uri: *const c_char,
@@ -2363,6 +2580,17 @@ extern "C" {
         exec: *mut *mut c_char,
         count: *mut c_uint,
         stamp: *mut c_long,
+        error: *mut *mut GError,
+    ) -> gboolean;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_bookmark_file_get_application_info(
+        bookmark: *mut GBookmarkFile,
+        uri: *const c_char,
+        name: *const c_char,
+        exec: *mut *mut c_char,
+        count: *mut c_uint,
+        stamp: *mut *mut GDateTime,
         error: *mut *mut GError,
     ) -> gboolean;
     pub fn g_bookmark_file_get_applications(
@@ -2404,6 +2632,13 @@ extern "C" {
         uri: *const c_char,
         error: *mut *mut GError,
     ) -> c_long;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_bookmark_file_get_modified_date_time(
+        bookmark: *mut GBookmarkFile,
+        uri: *const c_char,
+        error: *mut *mut GError,
+    ) -> *mut GDateTime;
     pub fn g_bookmark_file_get_size(bookmark: *mut GBookmarkFile) -> c_int;
     pub fn g_bookmark_file_get_title(
         bookmark: *mut GBookmarkFile,
@@ -2419,6 +2654,13 @@ extern "C" {
         uri: *const c_char,
         error: *mut *mut GError,
     ) -> c_long;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_bookmark_file_get_visited_date_time(
+        bookmark: *mut GBookmarkFile,
+        uri: *const c_char,
+        error: *mut *mut GError,
+    ) -> *mut GDateTime;
     pub fn g_bookmark_file_has_application(
         bookmark: *mut GBookmarkFile,
         uri: *const c_char,
@@ -2477,6 +2719,13 @@ extern "C" {
         uri: *const c_char,
         added: c_long,
     );
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_bookmark_file_set_added_date_time(
+        bookmark: *mut GBookmarkFile,
+        uri: *const c_char,
+        added: *mut GDateTime,
+    );
     pub fn g_bookmark_file_set_app_info(
         bookmark: *mut GBookmarkFile,
         uri: *const c_char,
@@ -2484,6 +2733,17 @@ extern "C" {
         exec: *const c_char,
         count: c_int,
         stamp: c_long,
+        error: *mut *mut GError,
+    ) -> gboolean;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_bookmark_file_set_application_info(
+        bookmark: *mut GBookmarkFile,
+        uri: *const c_char,
+        name: *const c_char,
+        exec: *const c_char,
+        count: c_int,
+        stamp: *mut GDateTime,
         error: *mut *mut GError,
     ) -> gboolean;
     pub fn g_bookmark_file_set_description(
@@ -2518,6 +2778,13 @@ extern "C" {
         uri: *const c_char,
         modified: c_long,
     );
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_bookmark_file_set_modified_date_time(
+        bookmark: *mut GBookmarkFile,
+        uri: *const c_char,
+        modified: *mut GDateTime,
+    );
     pub fn g_bookmark_file_set_title(
         bookmark: *mut GBookmarkFile,
         uri: *const c_char,
@@ -2527,6 +2794,13 @@ extern "C" {
         bookmark: *mut GBookmarkFile,
         uri: *const c_char,
         visited: c_long,
+    );
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_bookmark_file_set_visited_date_time(
+        bookmark: *mut GBookmarkFile,
+        uri: *const c_char,
+        visited: *mut GDateTime,
     );
     pub fn g_bookmark_file_to_data(
         bookmark: *mut GBookmarkFile,
@@ -2578,6 +2852,9 @@ extern "C" {
         compare_func: GCompareDataFunc,
         user_data: gpointer,
     );
+    #[cfg(any(feature = "v2_64", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+    pub fn g_byte_array_steal(array: *mut GByteArray, len: *mut size_t) -> *mut u8;
     pub fn g_byte_array_unref(array: *mut GByteArray);
 
     //=========================================================================
@@ -2596,6 +2873,14 @@ extern "C" {
     pub fn g_bytes_compare(bytes1: gconstpointer, bytes2: gconstpointer) -> c_int;
     pub fn g_bytes_equal(bytes1: gconstpointer, bytes2: gconstpointer) -> gboolean;
     pub fn g_bytes_get_data(bytes: *mut GBytes, size: *mut size_t) -> gconstpointer;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_bytes_get_region(
+        bytes: *mut GBytes,
+        element_size: size_t,
+        offset: size_t,
+        n_elements: size_t,
+    ) -> gconstpointer;
     pub fn g_bytes_get_size(bytes: *mut GBytes) -> size_t;
     pub fn g_bytes_hash(bytes: gconstpointer) -> c_uint;
     pub fn g_bytes_new_from_bytes(
@@ -2649,6 +2934,7 @@ extern "C" {
     pub fn g_date_clear(date: *mut GDate, n_dates: c_uint);
     pub fn g_date_compare(lhs: *const GDate, rhs: *const GDate) -> c_int;
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_date_copy(date: *const GDate) -> *mut GDate;
     pub fn g_date_days_between(date1: *const GDate, date2: *const GDate) -> c_int;
     pub fn g_date_free(date: *mut GDate);
@@ -2709,6 +2995,7 @@ extern "C" {
         seconds: c_double,
     ) -> *mut GDateTime;
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_date_time_new_from_iso8601(
         text: *const c_char,
         default_tz: *mut GTimeZone,
@@ -2753,9 +3040,12 @@ extern "C" {
     pub fn g_date_time_add_seconds(datetime: *mut GDateTime, seconds: c_double) -> *mut GDateTime;
     pub fn g_date_time_add_weeks(datetime: *mut GDateTime, weeks: c_int) -> *mut GDateTime;
     pub fn g_date_time_add_years(datetime: *mut GDateTime, years: c_int) -> *mut GDateTime;
+    pub fn g_date_time_compare(dt1: gconstpointer, dt2: gconstpointer) -> c_int;
     pub fn g_date_time_difference(end: *mut GDateTime, begin: *mut GDateTime) -> GTimeSpan;
+    pub fn g_date_time_equal(dt1: gconstpointer, dt2: gconstpointer) -> gboolean;
     pub fn g_date_time_format(datetime: *mut GDateTime, format: *const c_char) -> *mut c_char;
     #[cfg(any(feature = "v2_62", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_62")))]
     pub fn g_date_time_format_iso8601(datetime: *mut GDateTime) -> *mut c_char;
     pub fn g_date_time_get_day_of_month(datetime: *mut GDateTime) -> c_int;
     pub fn g_date_time_get_day_of_week(datetime: *mut GDateTime) -> c_int;
@@ -2767,6 +3057,7 @@ extern "C" {
     pub fn g_date_time_get_second(datetime: *mut GDateTime) -> c_int;
     pub fn g_date_time_get_seconds(datetime: *mut GDateTime) -> c_double;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_date_time_get_timezone(datetime: *mut GDateTime) -> *mut GTimeZone;
     pub fn g_date_time_get_timezone_abbreviation(datetime: *mut GDateTime) -> *const c_char;
     pub fn g_date_time_get_utc_offset(datetime: *mut GDateTime) -> GTimeSpan;
@@ -2779,6 +3070,7 @@ extern "C" {
         month: *mut c_int,
         day: *mut c_int,
     );
+    pub fn g_date_time_hash(datetime: gconstpointer) -> c_uint;
     pub fn g_date_time_is_daylight_savings(datetime: *mut GDateTime) -> gboolean;
     pub fn g_date_time_ref(datetime: *mut GDateTime) -> *mut GDateTime;
     pub fn g_date_time_to_local(datetime: *mut GDateTime) -> *mut GDateTime;
@@ -2787,20 +3079,19 @@ extern "C" {
     pub fn g_date_time_to_unix(datetime: *mut GDateTime) -> i64;
     pub fn g_date_time_to_utc(datetime: *mut GDateTime) -> *mut GDateTime;
     pub fn g_date_time_unref(datetime: *mut GDateTime);
-    pub fn g_date_time_compare(dt1: gconstpointer, dt2: gconstpointer) -> c_int;
-    pub fn g_date_time_equal(dt1: gconstpointer, dt2: gconstpointer) -> gboolean;
-    pub fn g_date_time_hash(datetime: gconstpointer) -> c_uint;
 
     //=========================================================================
     // GDir
     //=========================================================================
     pub fn g_dir_close(dir: *mut GDir);
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_dir_read_name_utf8(dir: *mut GDir) -> *const c_char;
     pub fn g_dir_read_name(dir: *mut GDir) -> *const c_char;
     pub fn g_dir_rewind(dir: *mut GDir);
     pub fn g_dir_make_tmp(tmpl: *const c_char, error: *mut *mut GError) -> *mut c_char;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_dir_open_utf8(
         path: *const c_char,
         flags: c_uint,
@@ -2818,6 +3109,24 @@ extern "C" {
     pub fn g_error_copy(error: *const GError) -> *mut GError;
     pub fn g_error_free(error: *mut GError);
     pub fn g_error_matches(error: *const GError, domain: GQuark, code: c_int) -> gboolean;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_error_domain_register(
+        error_type_name: *const c_char,
+        error_type_private_size: size_t,
+        error_type_init: GErrorInitFunc,
+        error_type_copy: GErrorCopyFunc,
+        error_type_clear: GErrorClearFunc,
+    ) -> GQuark;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_error_domain_register_static(
+        error_type_name: *const c_char,
+        error_type_private_size: size_t,
+        error_type_init: GErrorInitFunc,
+        error_type_copy: GErrorCopyFunc,
+        error_type_clear: GErrorClearFunc,
+    ) -> GQuark;
 
     //=========================================================================
     // GHashTable
@@ -2867,6 +3176,9 @@ extern "C" {
         key_destroy_func: GDestroyNotify,
         value_destroy_func: GDestroyNotify,
     ) -> *mut GHashTable;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_hash_table_new_similar(other_hash_table: *mut GHashTable) -> *mut GHashTable;
     pub fn g_hash_table_ref(hash_table: *mut GHashTable) -> *mut GHashTable;
     pub fn g_hash_table_remove(hash_table: *mut GHashTable, key: gconstpointer) -> gboolean;
     pub fn g_hash_table_remove_all(hash_table: *mut GHashTable);
@@ -2879,6 +3191,7 @@ extern "C" {
     pub fn g_hash_table_steal(hash_table: *mut GHashTable, key: gconstpointer) -> gboolean;
     pub fn g_hash_table_steal_all(hash_table: *mut GHashTable);
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_hash_table_steal_extended(
         hash_table: *mut GHashTable,
         lookup_key: gconstpointer,
@@ -2990,6 +3303,7 @@ extern "C" {
     //=========================================================================
     pub fn g_io_channel_get_type() -> GType;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_io_channel_new_file_utf8(
         filename: *const c_char,
         mode: *const c_char,
@@ -3170,6 +3484,7 @@ extern "C" {
         error: *mut *mut GError,
     ) -> *mut *mut c_char;
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_key_file_get_locale_for_key(
         key_file: *mut GKeyFile,
         group_name: *const c_char,
@@ -3225,6 +3540,7 @@ extern "C" {
         error: *mut *mut GError,
     ) -> gboolean;
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_key_file_load_from_bytes(
         key_file: *mut GKeyFile,
         bytes: *mut GBytes,
@@ -3411,6 +3727,7 @@ extern "C" {
         data: gpointer,
     ) -> *mut GList;
     #[cfg(any(feature = "v2_62", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_62")))]
     pub fn g_list_insert_before_link(
         list: *mut GList,
         sibling: *mut GList,
@@ -3447,6 +3764,9 @@ extern "C" {
     //=========================================================================
     pub fn g_main_context_get_type() -> GType;
     pub fn g_main_context_new() -> *mut GMainContext;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_main_context_new_with_flags(flags: GMainContextFlags) -> *mut GMainContext;
     pub fn g_main_context_acquire(context: *mut GMainContext) -> gboolean;
     pub fn g_main_context_add_poll(context: *mut GMainContext, fd: *mut GPollFD, priority: c_int);
     pub fn g_main_context_check(
@@ -3700,7 +4020,6 @@ extern "C" {
     pub fn g_option_context_get_help_enabled(context: *mut GOptionContext) -> gboolean;
     pub fn g_option_context_get_ignore_unknown_options(context: *mut GOptionContext) -> gboolean;
     pub fn g_option_context_get_main_group(context: *mut GOptionContext) -> *mut GOptionGroup;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_option_context_get_strict_posix(context: *mut GOptionContext) -> gboolean;
     pub fn g_option_context_get_summary(context: *mut GOptionContext) -> *const c_char;
     pub fn g_option_context_parse(
@@ -3724,7 +4043,6 @@ extern "C" {
         ignore_unknown: gboolean,
     );
     pub fn g_option_context_set_main_group(context: *mut GOptionContext, group: *mut GOptionGroup);
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_option_context_set_strict_posix(context: *mut GOptionContext, strict_posix: gboolean);
     pub fn g_option_context_set_summary(context: *mut GOptionContext, summary: *const c_char);
     pub fn g_option_context_set_translate_func(
@@ -3752,7 +4070,6 @@ extern "C" {
     ) -> *mut GOptionGroup;
     pub fn g_option_group_add_entries(group: *mut GOptionGroup, entries: *const GOptionEntry);
     pub fn g_option_group_free(group: *mut GOptionGroup);
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_option_group_ref(group: *mut GOptionGroup) -> *mut GOptionGroup;
     pub fn g_option_group_set_error_hook(group: *mut GOptionGroup, error_func: GOptionErrorFunc);
     pub fn g_option_group_set_parse_hooks(
@@ -3767,15 +4084,30 @@ extern "C" {
         destroy_notify: GDestroyNotify,
     );
     pub fn g_option_group_set_translation_domain(group: *mut GOptionGroup, domain: *const c_char);
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_option_group_unref(group: *mut GOptionGroup);
 
     //=========================================================================
     // GPatternSpec
     //=========================================================================
+    pub fn g_pattern_spec_get_type() -> GType;
+    pub fn g_pattern_spec_new(pattern: *const c_char) -> *mut GPatternSpec;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_pattern_spec_copy(pspec: *mut GPatternSpec) -> *mut GPatternSpec;
     pub fn g_pattern_spec_equal(pspec1: *mut GPatternSpec, pspec2: *mut GPatternSpec) -> gboolean;
     pub fn g_pattern_spec_free(pspec: *mut GPatternSpec);
-    pub fn g_pattern_spec_new(pattern: *const c_char) -> *mut GPatternSpec;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_pattern_spec_match(
+        pspec: *mut GPatternSpec,
+        string_length: size_t,
+        string: *const c_char,
+        string_reversed: *const c_char,
+    ) -> gboolean;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_pattern_spec_match_string(pspec: *mut GPatternSpec, string: *const c_char)
+        -> gboolean;
 
     //=========================================================================
     // GPollFD
@@ -3795,12 +4127,14 @@ extern "C" {
     pub fn g_ptr_array_get_type() -> GType;
     pub fn g_ptr_array_add(array: *mut GPtrArray, data: gpointer);
     #[cfg(any(feature = "v2_62", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_62")))]
     pub fn g_ptr_array_copy(
         array: *mut GPtrArray,
         func: GCopyFunc,
         user_data: gpointer,
     ) -> *mut GPtrArray;
     #[cfg(any(feature = "v2_62", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_62")))]
     pub fn g_ptr_array_extend(
         array_to_extend: *mut GPtrArray,
         array: *mut GPtrArray,
@@ -3808,14 +4142,17 @@ extern "C" {
         user_data: gpointer,
     );
     #[cfg(any(feature = "v2_62", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_62")))]
     pub fn g_ptr_array_extend_and_steal(array_to_extend: *mut GPtrArray, array: *mut GPtrArray);
     #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_54")))]
     pub fn g_ptr_array_find(
         haystack: *mut GPtrArray,
         needle: gconstpointer,
         index_: *mut c_uint,
     ) -> gboolean;
     #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_54")))]
     pub fn g_ptr_array_find_with_equal_func(
         haystack: *mut GPtrArray,
         needle: gconstpointer,
@@ -3850,9 +4187,14 @@ extern "C" {
         compare_func: GCompareDataFunc,
         user_data: gpointer,
     );
+    #[cfg(any(feature = "v2_64", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+    pub fn g_ptr_array_steal(array: *mut GPtrArray, len: *mut size_t) -> *mut gpointer;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_ptr_array_steal_index(array: *mut GPtrArray, index_: c_uint) -> gpointer;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_ptr_array_steal_index_fast(array: *mut GPtrArray, index_: c_uint) -> gpointer;
     pub fn g_ptr_array_unref(array: *mut GPtrArray);
 
@@ -3861,6 +4203,7 @@ extern "C" {
     //=========================================================================
     pub fn g_queue_clear(queue: *mut GQueue);
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_queue_clear_full(queue: *mut GQueue, free_func: GDestroyNotify);
     pub fn g_queue_copy(queue: *mut GQueue) -> *mut GQueue;
     pub fn g_queue_delete_link(queue: *mut GQueue, link_: *mut GList);
@@ -3878,9 +4221,11 @@ extern "C" {
     pub fn g_queue_init(queue: *mut GQueue);
     pub fn g_queue_insert_after(queue: *mut GQueue, sibling: *mut GList, data: gpointer);
     #[cfg(any(feature = "v2_62", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_62")))]
     pub fn g_queue_insert_after_link(queue: *mut GQueue, sibling: *mut GList, link_: *mut GList);
     pub fn g_queue_insert_before(queue: *mut GQueue, sibling: *mut GList, data: gpointer);
     #[cfg(any(feature = "v2_62", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_62")))]
     pub fn g_queue_insert_before_link(queue: *mut GQueue, sibling: *mut GList, link_: *mut GList);
     pub fn g_queue_insert_sorted(
         queue: *mut GQueue,
@@ -4195,7 +4540,6 @@ extern "C" {
         iter_cmp: GSequenceIterCompareFunc,
         cmp_data: gpointer,
     ) -> *mut GSequenceIter;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_sequence_is_empty(seq: *mut GSequence) -> gboolean;
     pub fn g_sequence_lookup(
         seq: *mut GSequence,
@@ -4312,10 +4656,16 @@ extern "C" {
         callback_funcs: *mut GSourceCallbackFuncs,
     );
     pub fn g_source_set_can_recurse(source: *mut GSource, can_recurse: gboolean);
+    #[cfg(any(feature = "v2_64", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+    pub fn g_source_set_dispose_function(source: *mut GSource, dispose: GSourceDisposeFunc);
     pub fn g_source_set_funcs(source: *mut GSource, funcs: *mut GSourceFuncs);
     pub fn g_source_set_name(source: *mut GSource, name: *const c_char);
     pub fn g_source_set_priority(source: *mut GSource, priority: c_int);
     pub fn g_source_set_ready_time(source: *mut GSource, ready_time: i64);
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_source_set_static_name(source: *mut GSource, name: *const c_char);
     pub fn g_source_unref(source: *mut GSource);
     pub fn g_source_remove(tag: c_uint) -> gboolean;
     pub fn g_source_remove_by_funcs_user_data(
@@ -4329,6 +4679,9 @@ extern "C" {
     // GString
     //=========================================================================
     pub fn g_gstring_get_type() -> GType;
+    pub fn g_string_new(init: *const c_char) -> *mut GString;
+    pub fn g_string_new_len(init: *const c_char, len: ssize_t) -> *mut GString;
+    pub fn g_string_sized_new(dfl_size: size_t) -> *mut GString;
     pub fn g_string_append(string: *mut GString, val: *const c_char) -> *mut GString;
     pub fn g_string_append_c(string: *mut GString, c: c_char) -> *mut GString;
     pub fn g_string_append_len(
@@ -4383,6 +4736,14 @@ extern "C" {
     ) -> *mut GString;
     pub fn g_string_prepend_unichar(string: *mut GString, wc: u32) -> *mut GString;
     pub fn g_string_printf(string: *mut GString, format: *const c_char, ...);
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_string_replace(
+        string: *mut GString,
+        find: *const c_char,
+        replace: *const c_char,
+        limit: c_uint,
+    ) -> c_uint;
     pub fn g_string_set_size(string: *mut GString, len: size_t) -> *mut GString;
     pub fn g_string_truncate(string: *mut GString, len: size_t) -> *mut GString;
     pub fn g_string_up(string: *mut GString) -> *mut GString;
@@ -4406,6 +4767,38 @@ extern "C" {
     pub fn g_string_chunk_new(size: size_t) -> *mut GStringChunk;
 
     //=========================================================================
+    // GStrvBuilder
+    //=========================================================================
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_strv_builder_add(builder: *mut GStrvBuilder, value: *const c_char);
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_strv_builder_add_many(builder: *mut GStrvBuilder, ...);
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_strv_builder_addv(builder: *mut GStrvBuilder, value: *mut *const c_char);
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_strv_builder_end(builder: *mut GStrvBuilder) -> c_char;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_strv_builder_ref(builder: *mut GStrvBuilder) -> *mut GStrvBuilder;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_strv_builder_unref(builder: *mut GStrvBuilder);
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_strv_builder_new() -> *mut GStrvBuilder;
+
+    //=========================================================================
+    // GTestCase
+    //=========================================================================
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_test_case_free(test_case: *mut GTestCase);
+
+    //=========================================================================
     // GTestLogBuffer
     //=========================================================================
     pub fn g_test_log_buffer_free(tbuffer: *mut GTestLogBuffer);
@@ -4423,6 +4816,9 @@ extern "C" {
     //=========================================================================
     pub fn g_test_suite_add(suite: *mut GTestSuite, test_case: *mut GTestCase);
     pub fn g_test_suite_add_suite(suite: *mut GTestSuite, nestedsuite: *mut GTestSuite);
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_test_suite_free(suite: *mut GTestSuite);
 
     //=========================================================================
     // GThread
@@ -4449,7 +4845,6 @@ extern "C" {
     pub fn g_thread_pool_free(pool: *mut GThreadPool, immediate: gboolean, wait_: gboolean);
     pub fn g_thread_pool_get_max_threads(pool: *mut GThreadPool) -> c_int;
     pub fn g_thread_pool_get_num_threads(pool: *mut GThreadPool) -> c_uint;
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
     pub fn g_thread_pool_move_to_front(pool: *mut GThreadPool, data: gpointer) -> gboolean;
     pub fn g_thread_pool_push(
         pool: *mut GThreadPool,
@@ -4477,6 +4872,16 @@ extern "C" {
         exclusive: gboolean,
         error: *mut *mut GError,
     ) -> *mut GThreadPool;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_thread_pool_new_full(
+        func: GFunc,
+        user_data: gpointer,
+        item_free_func: GDestroyNotify,
+        max_threads: c_int,
+        exclusive: gboolean,
+        error: *mut *mut GError,
+    ) -> *mut GThreadPool;
     pub fn g_thread_pool_set_max_idle_time(interval: c_uint);
     pub fn g_thread_pool_set_max_unused_threads(max_threads: c_int);
     pub fn g_thread_pool_stop_unused_threads();
@@ -4493,14 +4898,19 @@ extern "C" {
     //=========================================================================
     pub fn g_time_zone_get_type() -> GType;
     pub fn g_time_zone_new(identifier: *const c_char) -> *mut GTimeZone;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_time_zone_new_identifier(identifier: *const c_char) -> *mut GTimeZone;
     pub fn g_time_zone_new_local() -> *mut GTimeZone;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_time_zone_new_offset(seconds: i32) -> *mut GTimeZone;
     pub fn g_time_zone_new_utc() -> *mut GTimeZone;
     pub fn g_time_zone_adjust_time(tz: *mut GTimeZone, type_: GTimeType, time_: *mut i64) -> c_int;
     pub fn g_time_zone_find_interval(tz: *mut GTimeZone, type_: GTimeType, time_: i64) -> c_int;
     pub fn g_time_zone_get_abbreviation(tz: *mut GTimeZone, interval: c_int) -> *const c_char;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_time_zone_get_identifier(tz: *mut GTimeZone) -> *const c_char;
     pub fn g_time_zone_get_offset(tz: *mut GTimeZone, interval: c_int) -> i32;
     pub fn g_time_zone_is_dst(tz: *mut GTimeZone, interval: c_int) -> gboolean;
@@ -4514,6 +4924,7 @@ extern "C" {
     pub fn g_timer_destroy(timer: *mut GTimer);
     pub fn g_timer_elapsed(timer: *mut GTimer, microseconds: *mut c_ulong) -> c_double;
     #[cfg(any(feature = "v2_62", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_62")))]
     pub fn g_timer_is_active(timer: *mut GTimer) -> gboolean;
     pub fn g_timer_reset(timer: *mut GTimer);
     pub fn g_timer_start(timer: *mut GTimer);
@@ -4531,34 +4942,7 @@ extern "C" {
     //=========================================================================
     // GTree
     //=========================================================================
-    pub fn g_tree_destroy(tree: *mut GTree);
-    pub fn g_tree_foreach(tree: *mut GTree, func: GTraverseFunc, user_data: gpointer);
-    pub fn g_tree_height(tree: *mut GTree) -> c_int;
-    pub fn g_tree_insert(tree: *mut GTree, key: gpointer, value: gpointer);
-    pub fn g_tree_lookup(tree: *mut GTree, key: gconstpointer) -> gpointer;
-    pub fn g_tree_lookup_extended(
-        tree: *mut GTree,
-        lookup_key: gconstpointer,
-        orig_key: *mut gpointer,
-        value: *mut gpointer,
-    ) -> gboolean;
-    pub fn g_tree_nnodes(tree: *mut GTree) -> c_int;
-    pub fn g_tree_ref(tree: *mut GTree) -> *mut GTree;
-    pub fn g_tree_remove(tree: *mut GTree, key: gconstpointer) -> gboolean;
-    pub fn g_tree_replace(tree: *mut GTree, key: gpointer, value: gpointer);
-    pub fn g_tree_search(
-        tree: *mut GTree,
-        search_func: GCompareFunc,
-        user_data: gconstpointer,
-    ) -> gpointer;
-    pub fn g_tree_steal(tree: *mut GTree, key: gconstpointer) -> gboolean;
-    pub fn g_tree_traverse(
-        tree: *mut GTree,
-        traverse_func: GTraverseFunc,
-        traverse_type: GTraverseType,
-        user_data: gpointer,
-    );
-    pub fn g_tree_unref(tree: *mut GTree);
+    pub fn g_tree_get_type() -> GType;
     pub fn g_tree_new(key_compare_func: GCompareFunc) -> *mut GTree;
     pub fn g_tree_new_full(
         key_compare_func: GCompareDataFunc,
@@ -4570,6 +4954,325 @@ extern "C" {
         key_compare_func: GCompareDataFunc,
         key_compare_data: gpointer,
     ) -> *mut GTree;
+    pub fn g_tree_destroy(tree: *mut GTree);
+    pub fn g_tree_foreach(tree: *mut GTree, func: GTraverseFunc, user_data: gpointer);
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_tree_foreach_node(tree: *mut GTree, func: GTraverseNodeFunc, user_data: gpointer);
+    pub fn g_tree_height(tree: *mut GTree) -> c_int;
+    pub fn g_tree_insert(tree: *mut GTree, key: gpointer, value: gpointer);
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_tree_insert_node(tree: *mut GTree, key: gpointer, value: gpointer) -> *mut GTreeNode;
+    pub fn g_tree_lookup(tree: *mut GTree, key: gconstpointer) -> gpointer;
+    pub fn g_tree_lookup_extended(
+        tree: *mut GTree,
+        lookup_key: gconstpointer,
+        orig_key: *mut gpointer,
+        value: *mut gpointer,
+    ) -> gboolean;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_tree_lookup_node(tree: *mut GTree, key: gconstpointer) -> *mut GTreeNode;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_tree_lower_bound(tree: *mut GTree, key: gconstpointer) -> *mut GTreeNode;
+    pub fn g_tree_nnodes(tree: *mut GTree) -> c_int;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_tree_node_first(tree: *mut GTree) -> *mut GTreeNode;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_tree_node_last(tree: *mut GTree) -> *mut GTreeNode;
+    pub fn g_tree_ref(tree: *mut GTree) -> *mut GTree;
+    pub fn g_tree_remove(tree: *mut GTree, key: gconstpointer) -> gboolean;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_tree_remove_all(tree: *mut GTree);
+    pub fn g_tree_replace(tree: *mut GTree, key: gpointer, value: gpointer);
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_tree_replace_node(tree: *mut GTree, key: gpointer, value: gpointer) -> *mut GTreeNode;
+    pub fn g_tree_search(
+        tree: *mut GTree,
+        search_func: GCompareFunc,
+        user_data: gconstpointer,
+    ) -> gpointer;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_tree_search_node(
+        tree: *mut GTree,
+        search_func: GCompareFunc,
+        user_data: gconstpointer,
+    ) -> *mut GTreeNode;
+    pub fn g_tree_steal(tree: *mut GTree, key: gconstpointer) -> gboolean;
+    pub fn g_tree_traverse(
+        tree: *mut GTree,
+        traverse_func: GTraverseFunc,
+        traverse_type: GTraverseType,
+        user_data: gpointer,
+    );
+    pub fn g_tree_unref(tree: *mut GTree);
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_tree_upper_bound(tree: *mut GTree, key: gconstpointer) -> *mut GTreeNode;
+
+    //=========================================================================
+    // GTreeNode
+    //=========================================================================
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_tree_node_key(node: *mut GTreeNode) -> gpointer;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_tree_node_next(node: *mut GTreeNode) -> *mut GTreeNode;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_tree_node_previous(node: *mut GTreeNode) -> *mut GTreeNode;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_tree_node_value(node: *mut GTreeNode) -> gpointer;
+
+    //=========================================================================
+    // GUri
+    //=========================================================================
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_get_type() -> GType;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_get_auth_params(uri: *mut GUri) -> *const c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_get_flags(uri: *mut GUri) -> GUriFlags;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_get_fragment(uri: *mut GUri) -> *const c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_get_host(uri: *mut GUri) -> *const c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_get_password(uri: *mut GUri) -> *const c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_get_path(uri: *mut GUri) -> *const c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_get_port(uri: *mut GUri) -> c_int;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_get_query(uri: *mut GUri) -> *const c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_get_scheme(uri: *mut GUri) -> *const c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_get_user(uri: *mut GUri) -> *const c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_get_userinfo(uri: *mut GUri) -> *const c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_parse_relative(
+        base_uri: *mut GUri,
+        uri_ref: *const c_char,
+        flags: GUriFlags,
+        error: *mut *mut GError,
+    ) -> *mut GUri;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_ref(uri: *mut GUri) -> *mut GUri;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_to_string(uri: *mut GUri) -> *mut c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_to_string_partial(uri: *mut GUri, flags: GUriHideFlags) -> *mut c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_unref(uri: *mut GUri);
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_build(
+        flags: GUriFlags,
+        scheme: *const c_char,
+        userinfo: *const c_char,
+        host: *const c_char,
+        port: c_int,
+        path: *const c_char,
+        query: *const c_char,
+        fragment: *const c_char,
+    ) -> *mut GUri;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_build_with_user(
+        flags: GUriFlags,
+        scheme: *const c_char,
+        user: *const c_char,
+        password: *const c_char,
+        auth_params: *const c_char,
+        host: *const c_char,
+        port: c_int,
+        path: *const c_char,
+        query: *const c_char,
+        fragment: *const c_char,
+    ) -> *mut GUri;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_error_quark() -> GQuark;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_escape_bytes(
+        unescaped: *const u8,
+        length: size_t,
+        reserved_chars_allowed: *const c_char,
+    ) -> *mut c_char;
+    pub fn g_uri_escape_string(
+        unescaped: *const c_char,
+        reserved_chars_allowed: *const c_char,
+        allow_utf8: gboolean,
+    ) -> *mut c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_is_valid(
+        uri_string: *const c_char,
+        flags: GUriFlags,
+        error: *mut *mut GError,
+    ) -> gboolean;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_join(
+        flags: GUriFlags,
+        scheme: *const c_char,
+        userinfo: *const c_char,
+        host: *const c_char,
+        port: c_int,
+        path: *const c_char,
+        query: *const c_char,
+        fragment: *const c_char,
+    ) -> *mut c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_join_with_user(
+        flags: GUriFlags,
+        scheme: *const c_char,
+        user: *const c_char,
+        password: *const c_char,
+        auth_params: *const c_char,
+        host: *const c_char,
+        port: c_int,
+        path: *const c_char,
+        query: *const c_char,
+        fragment: *const c_char,
+    ) -> *mut c_char;
+    pub fn g_uri_list_extract_uris(uri_list: *const c_char) -> *mut *mut c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_parse(
+        uri_string: *const c_char,
+        flags: GUriFlags,
+        error: *mut *mut GError,
+    ) -> *mut GUri;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_parse_params(
+        params: *const c_char,
+        length: ssize_t,
+        separators: *const c_char,
+        flags: GUriParamsFlags,
+        error: *mut *mut GError,
+    ) -> *mut GHashTable;
+    pub fn g_uri_parse_scheme(uri: *const c_char) -> *mut c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_peek_scheme(uri: *const c_char) -> *const c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_resolve_relative(
+        base_uri_string: *const c_char,
+        uri_ref: *const c_char,
+        flags: GUriFlags,
+        error: *mut *mut GError,
+    ) -> *mut c_char;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_split(
+        uri_ref: *const c_char,
+        flags: GUriFlags,
+        scheme: *mut *mut c_char,
+        userinfo: *mut *mut c_char,
+        host: *mut *mut c_char,
+        port: *mut c_int,
+        path: *mut *mut c_char,
+        query: *mut *mut c_char,
+        fragment: *mut *mut c_char,
+        error: *mut *mut GError,
+    ) -> gboolean;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_split_network(
+        uri_string: *const c_char,
+        flags: GUriFlags,
+        scheme: *mut *mut c_char,
+        host: *mut *mut c_char,
+        port: *mut c_int,
+        error: *mut *mut GError,
+    ) -> gboolean;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_split_with_user(
+        uri_ref: *const c_char,
+        flags: GUriFlags,
+        scheme: *mut *mut c_char,
+        user: *mut *mut c_char,
+        password: *mut *mut c_char,
+        auth_params: *mut *mut c_char,
+        host: *mut *mut c_char,
+        port: *mut c_int,
+        path: *mut *mut c_char,
+        query: *mut *mut c_char,
+        fragment: *mut *mut c_char,
+        error: *mut *mut GError,
+    ) -> gboolean;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_unescape_bytes(
+        escaped_string: *const c_char,
+        length: ssize_t,
+        illegal_characters: *const c_char,
+        error: *mut *mut GError,
+    ) -> *mut GBytes;
+    pub fn g_uri_unescape_segment(
+        escaped_string: *const c_char,
+        escaped_string_end: *const c_char,
+        illegal_characters: *const c_char,
+    ) -> *mut c_char;
+    pub fn g_uri_unescape_string(
+        escaped_string: *const c_char,
+        illegal_characters: *const c_char,
+    ) -> *mut c_char;
+
+    //=========================================================================
+    // GUriParamsIter
+    //=========================================================================
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_params_iter_init(
+        iter: *mut GUriParamsIter,
+        params: *const c_char,
+        length: ssize_t,
+        separators: *const c_char,
+        flags: GUriParamsFlags,
+    );
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_uri_params_iter_next(
+        iter: *mut GUriParamsIter,
+        attribute: *mut *mut c_char,
+        value: *mut *mut c_char,
+        error: *mut *mut GError,
+    ) -> gboolean;
 
     //=========================================================================
     // GVariant
@@ -4857,6 +5560,16 @@ extern "C" {
     // Other functions
     //=========================================================================
     pub fn g_access(filename: *const c_char, mode: c_int) -> c_int;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_aligned_alloc(n_blocks: size_t, n_block_bytes: size_t, alignment: size_t) -> gpointer;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_aligned_alloc0(n_blocks: size_t, n_block_bytes: size_t, alignment: size_t)
+        -> gpointer;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_aligned_free(mem: gpointer);
     pub fn g_ascii_digit_value(c: c_char) -> c_int;
     pub fn g_ascii_dtostr(buffer: *mut c_char, buf_len: c_int, d: c_double) -> *mut c_char;
     pub fn g_ascii_formatd(
@@ -4868,6 +5581,7 @@ extern "C" {
     pub fn g_ascii_strcasecmp(s1: *const c_char, s2: *const c_char) -> c_int;
     pub fn g_ascii_strdown(str: *const c_char, len: ssize_t) -> *mut c_char;
     #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_54")))]
     pub fn g_ascii_string_to_signed(
         str: *const c_char,
         base: c_uint,
@@ -4877,6 +5591,7 @@ extern "C" {
         error: *mut *mut GError,
     ) -> gboolean;
     #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_54")))]
     pub fn g_ascii_string_to_unsigned(
         str: *const c_char,
         base: c_uint,
@@ -4917,6 +5632,16 @@ extern "C" {
         arg1: *const c_char,
         cmp: *const c_char,
         arg2: *const c_char,
+    );
+    pub fn g_assertion_message_cmpstrv(
+        domain: *const c_char,
+        file: *const c_char,
+        line: c_int,
+        func: *const c_char,
+        expr: *const c_char,
+        arg1: *const *const c_char,
+        arg2: *const *const c_char,
+        first_wrong_idx: size_t,
     );
     pub fn g_assertion_message_error(
         domain: *const c_char,
@@ -4962,26 +5687,37 @@ extern "C" {
     pub fn g_atomic_pointer_set(atomic: *mut c_void, newval: gpointer);
     pub fn g_atomic_pointer_xor(atomic: *mut c_void, val: size_t) -> size_t;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_atomic_rc_box_acquire(mem_block: gpointer) -> gpointer;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_atomic_rc_box_alloc(block_size: size_t) -> gpointer;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_atomic_rc_box_alloc0(block_size: size_t) -> gpointer;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_atomic_rc_box_dup(block_size: size_t, mem_block: gconstpointer) -> gpointer;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_atomic_rc_box_get_size(mem_block: gpointer) -> size_t;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_atomic_rc_box_release(mem_block: gpointer);
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_atomic_rc_box_release_full(mem_block: gpointer, clear_func: GDestroyNotify);
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_atomic_ref_count_compare(arc: *mut c_int, val: c_int) -> gboolean;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_atomic_ref_count_dec(arc: *mut c_int) -> gboolean;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_atomic_ref_count_inc(arc: *mut c_int);
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_atomic_ref_count_init(arc: *mut c_int);
     pub fn g_base64_decode(text: *const c_char, out_len: *mut size_t) -> *mut u8;
     pub fn g_base64_decode_inplace(text: *mut u8, out_len: *mut size_t) -> *mut u8;
@@ -5016,12 +5752,14 @@ extern "C" {
     pub fn g_bit_unlock(address: *mut c_int, lock_bit: c_int);
     pub fn g_build_filename(first_element: *const c_char, ...) -> *mut c_char;
     //#[cfg(any(feature = "v2_56", feature = "dox"))]
+    //#[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     //pub fn g_build_filename_valist(first_element: *const c_char, args: /*Unimplemented*/*mut va_list) -> *mut c_char;
     pub fn g_build_filenamev(args: *mut *mut c_char) -> *mut c_char;
     pub fn g_build_path(separator: *const c_char, first_element: *const c_char, ...)
         -> *mut c_char;
     pub fn g_build_pathv(separator: *const c_char, args: *mut *mut c_char) -> *mut c_char;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_canonicalize_filename(
         filename: *const c_char,
         relative_to: *const c_char,
@@ -5043,8 +5781,15 @@ extern "C" {
     pub fn g_child_watch_source_new(pid: GPid) -> *mut GSource;
     pub fn g_clear_error(error: *mut *mut GError);
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_clear_handle_id(tag_ptr: *mut c_uint, clear_func: GClearHandleFunc);
+    #[cfg(any(feature = "v2_64", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+    pub fn g_clear_list(list_ptr: *mut *mut GList, destroy: GDestroyNotify);
     pub fn g_clear_pointer(pp: *mut gpointer, destroy: GDestroyNotify);
+    #[cfg(any(feature = "v2_64", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+    pub fn g_clear_slist(slist_ptr: *mut *mut GSList, destroy: GDestroyNotify);
     pub fn g_close(fd: c_int, error: *mut *mut GError) -> gboolean;
     pub fn g_compute_checksum_for_bytes(
         checksum_type: GChecksumType,
@@ -5061,6 +5806,7 @@ extern "C" {
         length: ssize_t,
     ) -> *mut c_char;
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_compute_hmac_for_bytes(
         digest_type: GChecksumType,
         key: *mut GBytes,
@@ -5195,6 +5941,7 @@ extern "C" {
     pub fn g_file_error_from_errno(err_no: c_int) -> GFileError;
     pub fn g_file_error_quark() -> GQuark;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_file_get_contents_utf8(
         filename: *const c_char,
         contents: *mut *mut u8,
@@ -5208,6 +5955,7 @@ extern "C" {
         error: *mut *mut GError,
     ) -> gboolean;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_file_open_tmp_utf8(
         tmpl: *const c_char,
         name_used: *mut *mut c_char,
@@ -5225,12 +5973,24 @@ extern "C" {
         length: ssize_t,
         error: *mut *mut GError,
     ) -> gboolean;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_file_set_contents_full(
+        filename: *const c_char,
+        contents: *const u8,
+        length: ssize_t,
+        flags: GFileSetContentsFlags,
+        mode: c_int,
+        error: *mut *mut GError,
+    ) -> gboolean;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_file_test_utf8(filename: *const c_char, test: GFileTest) -> gboolean;
     pub fn g_file_test(filename: *const c_char, test: GFileTest) -> gboolean;
     pub fn g_filename_display_basename(filename: *const c_char) -> *mut c_char;
     pub fn g_filename_display_name(filename: *const c_char) -> *mut c_char;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_filename_from_uri_utf8(
         uri: *const c_char,
         hostname: *mut *mut c_char,
@@ -5242,6 +6002,7 @@ extern "C" {
         error: *mut *mut GError,
     ) -> *mut c_char;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_filename_from_utf8_utf8(
         utf8string: *const c_char,
         len: ssize_t,
@@ -5257,6 +6018,7 @@ extern "C" {
         error: *mut *mut GError,
     ) -> *mut c_char;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_filename_to_uri_utf8(
         filename: *const c_char,
         hostname: *const c_char,
@@ -5268,6 +6030,7 @@ extern "C" {
         error: *mut *mut GError,
     ) -> *mut c_char;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_filename_to_utf8_utf8(
         opsysstring: *const c_char,
         len: ssize_t,
@@ -5283,6 +6046,7 @@ extern "C" {
         error: *mut *mut GError,
     ) -> *mut c_char;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_find_program_in_path_utf8(program: *const c_char) -> *mut c_char;
     pub fn g_find_program_in_path(program: *const c_char) -> *mut c_char;
     pub fn g_format_size(size: u64) -> *mut c_char;
@@ -5294,43 +6058,57 @@ extern "C" {
     pub fn g_get_charset(charset: *mut *const c_char) -> gboolean;
     pub fn g_get_codeset() -> *mut c_char;
     #[cfg(any(feature = "v2_62", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_62")))]
     pub fn g_get_console_charset(charset: *mut *const c_char) -> gboolean;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_get_current_dir_utf8() -> *mut c_char;
     pub fn g_get_current_dir() -> *mut c_char;
     pub fn g_get_current_time(result: *mut GTimeVal);
     pub fn g_get_environ() -> *mut *mut c_char;
     pub fn g_get_filename_charsets(filename_charsets: *mut *mut *const c_char) -> gboolean;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_get_home_dir_utf8() -> *const c_char;
     pub fn g_get_home_dir() -> *const c_char;
     pub fn g_get_host_name() -> *const c_char;
     pub fn g_get_language_names() -> *const *const c_char;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_get_language_names_with_category(category_name: *const c_char)
         -> *const *const c_char;
     pub fn g_get_locale_variants(locale: *const c_char) -> *mut *mut c_char;
     pub fn g_get_monotonic_time() -> i64;
     pub fn g_get_num_processors() -> c_uint;
+    #[cfg(any(feature = "v2_64", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+    pub fn g_get_os_info(key_name: *const c_char) -> *mut c_char;
     pub fn g_get_prgname() -> *const c_char;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_get_real_name_utf8() -> *const c_char;
     pub fn g_get_real_name() -> *const c_char;
     pub fn g_get_real_time() -> i64;
     pub fn g_get_system_config_dirs() -> *const *const c_char;
     pub fn g_get_system_data_dirs() -> *const *const c_char;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_get_tmp_dir_utf8() -> *const c_char;
     pub fn g_get_tmp_dir() -> *const c_char;
     pub fn g_get_user_cache_dir() -> *const c_char;
     pub fn g_get_user_config_dir() -> *const c_char;
     pub fn g_get_user_data_dir() -> *const c_char;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_get_user_name_utf8() -> *const c_char;
     pub fn g_get_user_name() -> *const c_char;
     pub fn g_get_user_runtime_dir() -> *const c_char;
     pub fn g_get_user_special_dir(directory: GUserDirectory) -> *const c_char;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_get_user_state_dir() -> *const c_char;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_getenv_utf8(variable: *const c_char) -> *const c_char;
     pub fn g_getenv(variable: *const c_char) -> *const c_char;
     pub fn g_hostname_is_ascii_encoded(hostname: *const c_char) -> gboolean;
@@ -5397,8 +6175,14 @@ extern "C" {
         message: *const c_char,
         unused_data: gpointer,
     );
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_log_get_debug_enabled() -> gboolean;
     pub fn g_log_remove_handler(log_domain: *const c_char, handler_id: c_uint);
     pub fn g_log_set_always_fatal(fatal_mask: GLogLevelFlags) -> GLogLevelFlags;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_log_set_debug_enabled(enabled: gboolean);
     pub fn g_log_set_default_handler(log_func: GLogFunc, user_data: gpointer) -> GLogFunc;
     pub fn g_log_set_fatal_mask(
         log_domain: *const c_char,
@@ -5410,7 +6194,6 @@ extern "C" {
         log_func: GLogFunc,
         user_data: gpointer,
     ) -> c_uint;
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
     pub fn g_log_set_handler_full(
         log_domain: *const c_char,
         log_levels: GLogLevelFlags,
@@ -5419,14 +6202,17 @@ extern "C" {
         destroy: GDestroyNotify,
     ) -> c_uint;
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_log_set_writer_func(
         func: GLogWriterFunc,
         user_data: gpointer,
         user_data_free: GDestroyNotify,
     );
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_log_structured(log_domain: *const c_char, log_level: GLogLevelFlags, ...);
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_log_structured_array(
         log_level: GLogLevelFlags,
         fields: *const GLogField,
@@ -5442,19 +6228,31 @@ extern "C" {
         ...
     );
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_log_variant(
         log_domain: *const c_char,
         log_level: GLogLevelFlags,
         fields: *mut GVariant,
     );
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_log_writer_default(
         log_level: GLogLevelFlags,
         fields: *const GLogField,
         n_fields: size_t,
         user_data: gpointer,
     ) -> GLogWriterOutput;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_log_writer_default_set_use_stderr(use_stderr: gboolean);
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_log_writer_default_would_drop(
+        log_level: GLogLevelFlags,
+        log_domain: *const c_char,
+    ) -> gboolean;
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_log_writer_format_fields(
         log_level: GLogLevelFlags,
         fields: *const GLogField,
@@ -5462,8 +6260,10 @@ extern "C" {
         use_color: gboolean,
     ) -> *mut c_char;
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_log_writer_is_journald(output_fd: c_int) -> gboolean;
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_log_writer_journald(
         log_level: GLogLevelFlags,
         fields: *const GLogField,
@@ -5471,6 +6271,7 @@ extern "C" {
         user_data: gpointer,
     ) -> GLogWriterOutput;
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_log_writer_standard_streams(
         log_level: GLogLevelFlags,
         fields: *const GLogField,
@@ -5478,6 +6279,7 @@ extern "C" {
         user_data: gpointer,
     ) -> GLogWriterOutput;
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_log_writer_supports_color(output_fd: c_int) -> gboolean;
     //pub fn g_logv(log_domain: *const c_char, log_level: GLogLevelFlags, format: *const c_char, args: /*Unimplemented*/va_list);
     pub fn g_main_current_source() -> *mut GSource;
@@ -5503,10 +6305,14 @@ extern "C" {
     pub fn g_mem_profile();
     pub fn g_mem_set_vtable(vtable: *mut GMemVTable);
     pub fn g_memdup(mem: gconstpointer, byte_size: c_uint) -> gpointer;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_memdup2(mem: gconstpointer, byte_size: size_t) -> gpointer;
     pub fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
     pub fn g_mkdtemp(tmpl: *mut c_char) -> *mut c_char;
     pub fn g_mkdtemp_full(tmpl: *mut c_char, mode: c_int) -> *mut c_char;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_mkstemp_utf8(tmpl: *mut c_char) -> c_int;
     pub fn g_mkstemp(tmpl: *mut c_char) -> c_int;
     pub fn g_mkstemp_full(tmpl: *mut c_char, flags: c_int, mode: c_int) -> c_int;
@@ -5537,6 +6343,9 @@ extern "C" {
     pub fn g_pointer_bit_unlock(address: *mut c_void, lock_bit: c_int);
     pub fn g_poll(fds: *mut GPollFD, nfds: c_uint, timeout: c_int) -> c_int;
     pub fn g_prefix_error(err: *mut *mut GError, format: *const c_char, ...);
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_prefix_error_literal(err: *mut *mut GError, prefix: *const c_char);
     pub fn g_print(format: *const c_char, ...);
     pub fn g_printerr(format: *const c_char, ...);
     pub fn g_printf(format: *const c_char, ...) -> c_int;
@@ -5565,40 +6374,57 @@ extern "C" {
     pub fn g_random_int_range(begin: i32, end: i32) -> i32;
     pub fn g_random_set_seed(seed: u32);
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_rc_box_acquire(mem_block: gpointer) -> gpointer;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_rc_box_alloc(block_size: size_t) -> gpointer;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_rc_box_alloc0(block_size: size_t) -> gpointer;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_rc_box_dup(block_size: size_t, mem_block: gconstpointer) -> gpointer;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_rc_box_get_size(mem_block: gpointer) -> size_t;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_rc_box_release(mem_block: gpointer);
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_rc_box_release_full(mem_block: gpointer, clear_func: GDestroyNotify);
     pub fn g_realloc(mem: gpointer, n_bytes: size_t) -> gpointer;
     pub fn g_realloc_n(mem: gpointer, n_blocks: size_t, n_block_bytes: size_t) -> gpointer;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_ref_count_compare(rc: *mut c_int, val: c_int) -> gboolean;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_ref_count_dec(rc: *mut c_int) -> gboolean;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_ref_count_inc(rc: *mut c_int);
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_ref_count_init(rc: *mut c_int);
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_ref_string_acquire(str: *mut c_char) -> *mut c_char;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_ref_string_length(str: *mut c_char) -> size_t;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_ref_string_new(str: *const c_char) -> *mut c_char;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_ref_string_new_intern(str: *const c_char) -> *mut c_char;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_ref_string_new_len(str: *const c_char, len: ssize_t) -> *mut c_char;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_ref_string_release(str: *mut c_char);
     pub fn g_reload_user_special_dirs_cache();
     pub fn g_return_if_fail_warning(
@@ -5625,6 +6451,7 @@ extern "C" {
     pub fn g_set_print_handler(func: GPrintFunc) -> GPrintFunc;
     pub fn g_set_printerr_handler(func: GPrintFunc) -> GPrintFunc;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_setenv_utf8(
         variable: *const c_char,
         value: *const c_char,
@@ -5660,6 +6487,7 @@ extern "C" {
     pub fn g_snprintf(string: *mut c_char, n: c_ulong, format: *const c_char, ...) -> c_int;
     pub fn g_spaced_primes_closest(num: c_uint) -> c_uint;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_spawn_async_utf8(
         working_directory: *const c_char,
         argv: *mut *mut c_char,
@@ -5681,7 +6509,9 @@ extern "C" {
         error: *mut *mut GError,
     ) -> gboolean;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_spawn_async_with_fds_utf8(
         working_directory: *const c_char,
         argv: *mut *mut c_char,
@@ -5696,6 +6526,7 @@ extern "C" {
         error: *mut *mut GError,
     ) -> gboolean;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_spawn_async_with_fds(
         working_directory: *const c_char,
         argv: *mut *mut c_char,
@@ -5710,6 +6541,7 @@ extern "C" {
         error: *mut *mut GError,
     ) -> gboolean;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_spawn_async_with_pipes_utf8(
         working_directory: *const c_char,
         argv: *mut *mut c_char,
@@ -5736,9 +6568,57 @@ extern "C" {
         standard_error: *mut c_int,
         error: *mut *mut GError,
     ) -> gboolean;
-    pub fn g_spawn_check_exit_status(exit_status: c_int, error: *mut *mut GError) -> gboolean;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
+    pub fn g_spawn_async_with_pipes_and_fds_utf8(
+        working_directory: *const c_char,
+        argv: *const *const c_char,
+        envp: *const *const c_char,
+        flags: GSpawnFlags,
+        child_setup: GSpawnChildSetupFunc,
+        user_data: gpointer,
+        stdin_fd: c_int,
+        stdout_fd: c_int,
+        stderr_fd: c_int,
+        source_fds: *const c_int,
+        target_fds: *const c_int,
+        n_fds: size_t,
+        child_pid_out: *mut GPid,
+        stdin_pipe_out: *mut c_int,
+        stdout_pipe_out: *mut c_int,
+        stderr_pipe_out: *mut c_int,
+        error: *mut *mut GError,
+    ) -> gboolean;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_spawn_async_with_pipes_and_fds(
+        working_directory: *const c_char,
+        argv: *const *const c_char,
+        envp: *const *const c_char,
+        flags: GSpawnFlags,
+        child_setup: GSpawnChildSetupFunc,
+        user_data: gpointer,
+        stdin_fd: c_int,
+        stdout_fd: c_int,
+        stderr_fd: c_int,
+        source_fds: *const c_int,
+        target_fds: *const c_int,
+        n_fds: size_t,
+        child_pid_out: *mut GPid,
+        stdin_pipe_out: *mut c_int,
+        stdout_pipe_out: *mut c_int,
+        stderr_pipe_out: *mut c_int,
+        error: *mut *mut GError,
+    ) -> gboolean;
+    pub fn g_spawn_check_exit_status(wait_status: c_int, error: *mut *mut GError) -> gboolean;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_spawn_check_wait_status(wait_status: c_int, error: *mut *mut GError) -> gboolean;
     pub fn g_spawn_close_pid(pid: GPid);
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_spawn_command_line_async_utf8(
         command_line: *const c_char,
         error: *mut *mut GError,
@@ -5748,23 +6628,25 @@ extern "C" {
         error: *mut *mut GError,
     ) -> gboolean;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_spawn_command_line_sync_utf8(
         command_line: *const c_char,
         standard_output: *mut *mut u8,
         standard_error: *mut *mut u8,
-        exit_status: *mut c_int,
+        wait_status: *mut c_int,
         error: *mut *mut GError,
     ) -> gboolean;
     pub fn g_spawn_command_line_sync(
         command_line: *const c_char,
         standard_output: *mut *mut u8,
         standard_error: *mut *mut u8,
-        exit_status: *mut c_int,
+        wait_status: *mut c_int,
         error: *mut *mut GError,
     ) -> gboolean;
     pub fn g_spawn_error_quark() -> GQuark;
     pub fn g_spawn_exit_error_quark() -> GQuark;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_spawn_sync_utf8(
         working_directory: *const c_char,
         argv: *mut *mut c_char,
@@ -5774,7 +6656,7 @@ extern "C" {
         user_data: gpointer,
         standard_output: *mut *mut u8,
         standard_error: *mut *mut u8,
-        exit_status: *mut c_int,
+        wait_status: *mut c_int,
         error: *mut *mut GError,
     ) -> gboolean;
     pub fn g_spawn_sync(
@@ -5786,7 +6668,7 @@ extern "C" {
         user_data: gpointer,
         standard_output: *mut *mut u8,
         standard_error: *mut *mut u8,
-        exit_status: *mut c_int,
+        wait_status: *mut c_int,
         error: *mut *mut GError,
     ) -> gboolean;
     pub fn g_sprintf(string: *mut c_char, format: *const c_char, ...) -> c_int;
@@ -5831,9 +6713,6 @@ extern "C" {
     pub fn g_strerror(errnum: c_int) -> *const c_char;
     pub fn g_strescape(source: *const c_char, exceptions: *const c_char) -> *mut c_char;
     pub fn g_strfreev(str_array: *mut *mut c_char);
-    pub fn g_string_new(init: *const c_char) -> *mut GString;
-    pub fn g_string_new_len(init: *const c_char, len: ssize_t) -> *mut GString;
-    pub fn g_string_sized_new(dfl_size: size_t) -> *mut GString;
     pub fn g_strip_context(msgid: *const c_char, msgval: *const c_char) -> *const c_char;
     pub fn g_strjoin(separator: *const c_char, ...) -> *mut c_char;
     pub fn g_strjoinv(separator: *const c_char, str_array: *mut *mut c_char) -> *mut c_char;
@@ -5867,9 +6746,9 @@ extern "C" {
     ) -> *mut c_char;
     pub fn g_strtod(nptr: *const c_char, endptr: *mut *mut c_char) -> c_double;
     pub fn g_strup(string: *mut c_char) -> *mut c_char;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_strv_contains(strv: *const *const c_char, str: *const c_char) -> gboolean;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_strv_equal(strv1: *const *const c_char, strv2: *const *const c_char) -> gboolean;
     pub fn g_strv_get_type() -> GType;
     pub fn g_strv_length(str_array: *mut *mut c_char) -> c_uint;
@@ -5921,6 +6800,9 @@ extern "C" {
         pattern: *const c_char,
     );
     pub fn g_test_fail();
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_test_fail_printf(format: *const c_char, ...);
     pub fn g_test_failed() -> gboolean;
     pub fn g_test_get_dir(file_type: GTestFileType) -> *const c_char;
     pub fn g_test_get_filename(
@@ -5928,8 +6810,14 @@ extern "C" {
         first_path: *const c_char,
         ...
     ) -> *const c_char;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_test_get_path() -> *const c_char;
     pub fn g_test_get_root() -> *mut GTestSuite;
     pub fn g_test_incomplete(msg: *const c_char);
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_test_incomplete_printf(format: *const c_char, ...);
     pub fn g_test_init(argc: *mut c_int, argv: *mut *mut *mut c_char, ...);
     pub fn g_test_log_set_fatal_handler(log_func: GTestLogFatalFunc, user_data: gpointer);
     pub fn g_test_log_type_name(log_type: GTestLogType) -> *const c_char;
@@ -5946,8 +6834,12 @@ extern "C" {
     pub fn g_test_run_suite(suite: *mut GTestSuite) -> c_int;
     pub fn g_test_set_nonfatal_assertions();
     pub fn g_test_skip(msg: *const c_char);
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_test_skip_printf(format: *const c_char, ...);
     pub fn g_test_subprocess() -> gboolean;
     #[cfg(any(feature = "v2_62", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_62")))]
     pub fn g_test_summary(summary: *const c_char);
     pub fn g_test_timer_elapsed() -> c_double;
     pub fn g_test_timer_last() -> c_double;
@@ -6064,6 +6956,14 @@ extern "C" {
         notify: GDestroyNotify,
     ) -> c_uint;
     pub fn g_unix_fd_source_new(fd: c_int, condition: GIOCondition) -> *mut GSource;
+    #[cfg(any(feature = "v2_64", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+    #[cfg(any(unix, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(unix)))]
+    pub fn g_unix_get_passwd_entry(
+        user_name: *const c_char,
+        error: *mut *mut GError,
+    ) -> *mut passwd;
     pub fn g_unix_open_pipe(fds: *mut c_int, flags: c_int, error: *mut *mut GError) -> gboolean;
     pub fn g_unix_set_fd_nonblocking(
         fd: c_int,
@@ -6081,24 +6981,9 @@ extern "C" {
     pub fn g_unix_signal_source_new(signum: c_int) -> *mut GSource;
     pub fn g_unlink(filename: *const c_char) -> c_int;
     #[cfg(any(windows, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(windows)))]
     pub fn g_unsetenv_utf8(variable: *const c_char);
     pub fn g_unsetenv(variable: *const c_char);
-    pub fn g_uri_escape_string(
-        unescaped: *const c_char,
-        reserved_chars_allowed: *const c_char,
-        allow_utf8: gboolean,
-    ) -> *mut c_char;
-    pub fn g_uri_list_extract_uris(uri_list: *const c_char) -> *mut *mut c_char;
-    pub fn g_uri_parse_scheme(uri: *const c_char) -> *mut c_char;
-    pub fn g_uri_unescape_segment(
-        escaped_string: *const c_char,
-        escaped_string_end: *const c_char,
-        illegal_characters: *const c_char,
-    ) -> *mut c_char;
-    pub fn g_uri_unescape_string(
-        escaped_string: *const c_char,
-        illegal_characters: *const c_char,
-    ) -> *mut c_char;
     pub fn g_usleep(microseconds: c_ulong);
     pub fn g_utf16_to_ucs4(
         str: *const u16,
@@ -6123,6 +7008,7 @@ extern "C" {
     pub fn g_utf8_get_char(p: *const c_char) -> u32;
     pub fn g_utf8_get_char_validated(p: *const c_char, max_len: ssize_t) -> u32;
     #[cfg(any(feature = "v2_52", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_52")))]
     pub fn g_utf8_make_valid(str: *const c_char, len: ssize_t) -> *mut c_char;
     pub fn g_utf8_normalize(str: *const c_char, len: ssize_t, mode: GNormalizeMode) -> *mut c_char;
     pub fn g_utf8_offset_to_pointer(str: *const c_char, offset: c_long) -> *mut c_char;
@@ -6157,14 +7043,17 @@ extern "C" {
     ) -> *mut u16;
     pub fn g_utf8_validate(str: *const u8, max_len: ssize_t, end: *mut *const c_char) -> gboolean;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_utf8_validate_len(
         str: *const u8,
         max_len: size_t,
         end: *mut *const c_char,
     ) -> gboolean;
     #[cfg(any(feature = "v2_52", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_52")))]
     pub fn g_uuid_string_is_valid(str: *const c_char) -> gboolean;
     #[cfg(any(feature = "v2_52", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_52")))]
     pub fn g_uuid_string_random() -> *mut c_char;
     pub fn g_variant_get_gtype() -> GType;
     //pub fn g_vasprintf(string: *mut *mut c_char, format: *const c_char, args: /*Unimplemented*/va_list) -> c_int;

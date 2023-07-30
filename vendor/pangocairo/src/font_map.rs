@@ -1,43 +1,38 @@
-// Copyright 2017, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 use crate::FontMap;
-use cairo;
 use glib::object::IsA;
 use glib::translate::*;
-use pango;
-use pango_cairo_sys;
 
 pub trait FontMapExtManual {
-    fn get_font_type(&self) -> cairo::FontType;
+    #[doc(alias = "pango_cairo_font_map_get_font_type")]
+    #[doc(alias = "get_font_type")]
+    fn font_type(&self) -> cairo::FontType;
 }
 
 impl<O: IsA<FontMap>> FontMapExtManual for O {
-    fn get_font_type(&self) -> cairo::FontType {
-        unsafe {
-            pango_cairo_sys::pango_cairo_font_map_get_font_type(self.as_ref().to_glib_none().0)
-                .into()
-        }
+    fn font_type(&self) -> cairo::FontType {
+        unsafe { ffi::pango_cairo_font_map_get_font_type(self.as_ref().to_glib_none().0).into() }
     }
 }
 
 impl FontMap {
-    pub fn new_for_font_type(fonttype: cairo::FontType) -> Option<pango::FontMap> {
-        unsafe {
-            from_glib_full(pango_cairo_sys::pango_cairo_font_map_new_for_font_type(
-                fonttype.into(),
-            ))
-        }
+    #[doc(alias = "pango_cairo_font_map_new_for_font_type")]
+    #[doc(alias = "new_for_font_type")]
+    pub fn for_font_type(fonttype: cairo::FontType) -> Option<pango::FontMap> {
+        unsafe { from_glib_full(ffi::pango_cairo_font_map_new_for_font_type(fonttype.into())) }
     }
 
+    #[allow(clippy::new_ret_no_self)]
+    #[doc(alias = "pango_cairo_font_map_new")]
     pub fn new() -> Option<pango::FontMap> {
-        unsafe { from_glib_full(pango_cairo_sys::pango_cairo_font_map_new()) }
+        unsafe { from_glib_full(ffi::pango_cairo_font_map_new()) }
     }
 
+    #[doc(alias = "pango_cairo_font_map_set_default")]
     pub fn set_default(font_map: Option<Self>) {
         unsafe {
-            pango_cairo_sys::pango_cairo_font_map_set_default(font_map.as_ref().to_glib_none().0);
+            ffi::pango_cairo_font_map_set_default(font_map.as_ref().to_glib_none().0);
         }
     }
 }

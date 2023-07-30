@@ -1,14 +1,17 @@
+// Take a look at the license at the top of the repository in the LICENSE file.
+
 // e.g. declare_surface(ImageSurface, SurfaceType::Image)
 macro_rules! declare_surface {
     ($surf_name:ident, $surf_type:expr) => {
         #[derive(Debug)]
+        #[repr(transparent)]
         pub struct $surf_name(Surface);
 
         impl TryFrom<Surface> for $surf_name {
             type Error = Surface;
 
             fn try_from(surface: Surface) -> Result<$surf_name, Surface> {
-                if surface.get_type() == $surf_type {
+                if surface.type_() == $surf_type {
                     Ok($surf_name(surface))
                 } else {
                     Err(surface)
@@ -19,9 +22,16 @@ macro_rules! declare_surface {
         impl $surf_name {
             pub unsafe fn from_raw_full(
                 ptr: *mut ffi::cairo_surface_t,
-            ) -> Result<$surf_name, Status> {
+            ) -> Result<$surf_name, crate::error::Error> {
                 let surface = Surface::from_raw_full(ptr)?;
-                Self::try_from(surface).map_err(|_| Status::SurfaceTypeMismatch)
+                Self::try_from(surface).map_err(|_| crate::error::Error::SurfaceTypeMismatch)
+            }
+
+            pub unsafe fn from_raw_none(
+                ptr: *mut ffi::cairo_surface_t,
+            ) -> Result<$surf_name, crate::error::Error> {
+                let surface = Surface::from_raw_none(ptr);
+                Self::try_from(surface).map_err(|_| crate::error::Error::SurfaceTypeMismatch)
             }
         }
 
@@ -52,8 +62,14 @@ macro_rules! declare_surface {
         #[cfg(feature = "use_glib")]
         impl FromGlibPtrBorrow<*mut ffi::cairo_surface_t> for $surf_name {
             #[inline]
-            unsafe fn from_glib_borrow(ptr: *mut ffi::cairo_surface_t) -> $surf_name {
-                Self::try_from(from_glib_borrow::<_, Surface>(ptr)).unwrap()
+            unsafe fn from_glib_borrow(
+                ptr: *mut ffi::cairo_surface_t,
+            ) -> crate::Borrowed<$surf_name> {
+                let surface = from_glib_borrow::<_, Surface>(ptr);
+                let surface = Self::try_from(surface.into_inner())
+                    .map_err(std::mem::forget)
+                    .unwrap();
+                crate::Borrowed::new(surface)
             }
         }
 
@@ -88,7 +104,7 @@ macro_rules! declare_surface {
 
         impl fmt::Display for $surf_name {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                write!(f, "{}", stringify!($surf_name))
+                f.write_str(stringify!($surf_name))
             }
         }
     };

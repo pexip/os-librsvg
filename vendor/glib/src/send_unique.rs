@@ -1,15 +1,14 @@
-// Copyright 2018, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 use std::cell::RefCell;
 use std::ops;
 
+// rustdoc-stripper-ignore-next
 /// Like `Send` but only if we have the unique reference to the object
 ///
 /// Note that implementing this trait has to be done especially careful.
 /// It must only be implemented on types where the uniqueness of a reference
-/// can be determined, i.e. the reference count field is accessible and it
+/// can be determined, i.e. the reference count field is accessible, and it
 /// must only have references itself to other types that are `Send`.
 /// `SendUnique` is *not* enough for the other types unless uniqueness of
 /// all of them can be guaranteed, which is e.g. not the case if there's a
@@ -18,6 +17,7 @@ pub unsafe trait SendUnique: 'static {
     fn is_unique(&self) -> bool;
 }
 
+// rustdoc-stripper-ignore-next
 /// Allows sending reference counted objects that don't implement `Send` to other threads
 /// as long as only a single reference to the object exists.
 #[derive(Debug)]
@@ -33,6 +33,7 @@ unsafe impl<T: SendUnique> Send for SendUniqueCell<T> {}
 pub struct BorrowError;
 
 impl<T: SendUnique> SendUniqueCell<T> {
+    // rustdoc-stripper-ignore-next
     /// Create a new `SendUniqueCell` out of `obj`
     ///
     /// Fails if `obj` is not unique at this time
@@ -47,6 +48,7 @@ impl<T: SendUnique> SendUniqueCell<T> {
         })
     }
 
+    // rustdoc-stripper-ignore-next
     /// Borrow the contained object or panic if borrowing
     /// is not possible at this time
     pub fn borrow(&self) -> Ref<T> {
@@ -57,6 +59,7 @@ impl<T: SendUnique> SendUniqueCell<T> {
         }
     }
 
+    // rustdoc-stripper-ignore-next
     /// Try borrowing the contained object
     ///
     /// Borrowing is possible as long as only a single reference
@@ -70,7 +73,7 @@ impl<T: SendUnique> SendUniqueCell<T> {
         // how often we borrowed it
         if self.obj.is_unique() {
             if *thread == None {
-                *thread = Some((::get_thread_id(), 1));
+                *thread = Some((crate::thread_guard::thread_id(), 1));
             } else {
                 thread.as_mut().unwrap().1 += 1;
             }
@@ -86,7 +89,7 @@ impl<T: SendUnique> SendUniqueCell<T> {
 
         // If the object is not unique, we can only borrow it
         // from the thread that currently has it borrowed
-        if thread.as_ref().unwrap().0 != ::get_thread_id() {
+        if thread.as_ref().unwrap().0 != crate::thread_guard::thread_id() {
             return Err(BorrowError);
         }
 
@@ -95,6 +98,7 @@ impl<T: SendUnique> SendUniqueCell<T> {
         Ok(Ref(self))
     }
 
+    // rustdoc-stripper-ignore-next
     /// Extract the contained object or panic if it is not possible
     /// at this time
     pub fn into_inner(self) -> T {
@@ -105,7 +109,8 @@ impl<T: SendUnique> SendUniqueCell<T> {
         }
     }
 
-    /// Try extracing the contained object
+    // rustdoc-stripper-ignore-next
+    /// Try extracting the contained object
     ///
     /// Borrowing is possible as long as only a single reference
     /// to the object exists, or it is borrowed from the same

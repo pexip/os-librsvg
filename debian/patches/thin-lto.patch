@@ -5,16 +5,17 @@ Subject: enable thin LTO
 (full LTO is not used because of https://github.com/rust-lang/rust/issues/66118).
 See https://gitlab.gnome.org/GNOME/librsvg/-/commit/7ad034d.
 ---
- Cargo.toml | 1 +
- 1 file changed, 1 insertion(+)
+ Cargo.toml | 3 +++
+ 1 file changed, 3 insertions(+)
 
 diff --git a/Cargo.toml b/Cargo.toml
-index 818fa62..921a4c3 100644
+index 8fb4a86..20902fc 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
-@@ -7,4 +7,5 @@ members = [
- ]
- 
- [profile.release]
+@@ -134,3 +134,6 @@ harness = false
+ [[bench]]
+ name = "surface_from_pixbuf"
+ harness = false
++
++[profile.release]
 +lto = 'thin'
- debug = true

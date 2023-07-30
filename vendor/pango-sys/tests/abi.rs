@@ -2,12 +2,10 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-extern crate pango_sys;
-extern crate shell_words;
-extern crate tempfile;
 use pango_sys::*;
 use std::env;
 use std::error::Error;
+use std::ffi::OsString;
 use std::mem::{align_of, size_of};
 use std::path::Path;
 use std::process::Command;
@@ -22,23 +20,17 @@ struct Compiler {
 }
 
 impl Compiler {
-    pub fn new() -> Result<Compiler, Box<dyn Error>> {
+    pub fn new() -> Result<Self, Box<dyn Error>> {
         let mut args = get_var("CC", "cc")?;
         args.push("-Wno-deprecated-declarations".to_owned());
+        // For _Generic
+        args.push("-std=c11".to_owned());
         // For %z support in printf when using MinGW.
         args.push("-D__USE_MINGW_ANSI_STDIO".to_owned());
         args.extend(get_var("CFLAGS", "")?);
         args.extend(get_var("CPPFLAGS", "")?);
         args.extend(pkg_config_cflags(PACKAGES)?);
-        Ok(Compiler { args })
-    }
-
-    pub fn define<'a, V: Into<Option<&'a str>>>(&mut self, var: &str, val: V) {
-        let arg = match val.into() {
-            None => format!("-D{}", var),
-            Some(val) => format!("-D{}={}", var, val),
-        };
-        self.args.push(arg);
+        Ok(Self { args })
     }
 
     pub fn compile(&self, src: &Path, out: &Path) -> Result<(), Box<dyn Error>> {
@@ -72,7 +64,8 @@ fn pkg_config_cflags(packages: &[&str]) -> Result<Vec<String>, Box<dyn Error>> {
     if packages.is_empty() {
         return Ok(Vec::new());
     }
-    let mut cmd = Command::new("pkg-config");
+    let pkg_config = env::var_os("PKG_CONFIG").unwrap_or_else(|| OsString::from("pkg-config"));
+    let mut cmd = Command::new(pkg_config);
     cmd.arg("--cflags");
     cmd.args(packages);
     let out = cmd.output()?;
@@ -95,8 +88,6 @@ struct Results {
     passed: usize,
     /// Total number of failed tests (including those that failed to compile).
     failed: usize,
-    /// Number of tests that failed to compile.
-    failed_to_compile: usize,
 }
 
 impl Results {
@@ -106,15 +97,8 @@ impl Results {
     fn record_failed(&mut self) {
         self.failed += 1;
     }
-    fn record_failed_to_compile(&mut self) {
-        self.failed += 1;
-        self.failed_to_compile += 1;
-    }
     fn summary(&self) -> String {
-        format!(
-            "{} passed; {} failed (compilation errors: {})",
-            self.passed, self.failed, self.failed_to_compile
-        )
+        format!("{} passed; {} failed", self.passed, self.failed)
     }
     fn expect_total_success(&self) {
         if self.failed == 0 {
@@ -126,93 +110,97 @@ impl Results {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn cross_validate_constants_with_c() {
-    let tmpdir = Builder::new()
-        .prefix("abi")
-        .tempdir()
-        .expect("temporary directory");
-    let cc = Compiler::new().expect("configured compiler");
+    let mut c_constants: Vec<(String, String)> = Vec::new();
 
-    assert_eq!(
-        "1",
-        get_c_value(tmpdir.path(), &cc, "1").expect("C constant"),
-        "failed to obtain correct constant value for 1"
-    );
-
-    let mut results: Results = Default::default();
-    for (i, &(name, rust_value)) in RUST_CONSTANTS.iter().enumerate() {
-        match get_c_value(tmpdir.path(), &cc, name) {
-            Err(e) => {
-                results.record_failed_to_compile();
-                eprintln!("{}", e);
-            }
-            Ok(ref c_value) => {
-                if rust_value == c_value {
-                    results.record_passed();
-                } else {
-                    results.record_failed();
-                    eprintln!(
-                        "Constant value mismatch for {}\nRust: {:?}\nC:    {:?}",
-                        name, rust_value, c_value
-                    );
-                }
-            }
-        };
-        if (i + 1) % 25 == 0 {
-            println!("constants ... {}", results.summary());
-        }
+    for l in get_c_output("constant").unwrap().lines() {
+        let mut words = l.trim().split(';');
+        let name = words.next().expect("Failed to parse name").to_owned();
+        let value = words
+            .next()
+            .and_then(|s| s.parse().ok())
+            .expect("Failed to parse value");
+        c_constants.push((name, value));
     }
+
+    let mut results = Results::default();
+
+    for ((rust_name, rust_value), (c_name, c_value)) in
+        RUST_CONSTANTS.iter().zip(c_constants.iter())
+    {
+        if rust_name != c_name {
+            results.record_failed();
+            eprintln!("Name mismatch:\nRust: {:?}\nC:    {:?}", rust_name, c_name,);
+            continue;
+        }
+
+        if rust_value != c_value {
+            results.record_failed();
+            eprintln!(
+                "Constant value mismatch for {}\nRust: {:?}\nC:    {:?}",
+                rust_name, rust_value, &c_value
+            );
+            continue;
+        }
+
+        results.record_passed();
+    }
+
     results.expect_total_success();
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn cross_validate_layout_with_c() {
-    let tmpdir = Builder::new()
-        .prefix("abi")
-        .tempdir()
-        .expect("temporary directory");
-    let cc = Compiler::new().expect("configured compiler");
+    let mut c_layouts = Vec::new();
 
-    assert_eq!(
-        Layout {
-            size: 1,
-            alignment: 1
-        },
-        get_c_layout(tmpdir.path(), &cc, "char").expect("C layout"),
-        "failed to obtain correct layout for char type"
-    );
-
-    let mut results: Results = Default::default();
-    for (i, &(name, rust_layout)) in RUST_LAYOUTS.iter().enumerate() {
-        match get_c_layout(tmpdir.path(), &cc, name) {
-            Err(e) => {
-                results.record_failed_to_compile();
-                eprintln!("{}", e);
-            }
-            Ok(c_layout) => {
-                if rust_layout == c_layout {
-                    results.record_passed();
-                } else {
-                    results.record_failed();
-                    eprintln!(
-                        "Layout mismatch for {}\nRust: {:?}\nC:    {:?}",
-                        name, rust_layout, &c_layout
-                    );
-                }
-            }
-        };
-        if (i + 1) % 25 == 0 {
-            println!("layout    ... {}", results.summary());
-        }
+    for l in get_c_output("layout").unwrap().lines() {
+        let mut words = l.trim().split(';');
+        let name = words.next().expect("Failed to parse name").to_owned();
+        let size = words
+            .next()
+            .and_then(|s| s.parse().ok())
+            .expect("Failed to parse size");
+        let alignment = words
+            .next()
+            .and_then(|s| s.parse().ok())
+            .expect("Failed to parse alignment");
+        c_layouts.push((name, Layout { size, alignment }));
     }
+
+    let mut results = Results::default();
+
+    for ((rust_name, rust_layout), (c_name, c_layout)) in RUST_LAYOUTS.iter().zip(c_layouts.iter())
+    {
+        if rust_name != c_name {
+            results.record_failed();
+            eprintln!("Name mismatch:\nRust: {:?}\nC:    {:?}", rust_name, c_name,);
+            continue;
+        }
+
+        if rust_layout != c_layout {
+            results.record_failed();
+            eprintln!(
+                "Layout mismatch for {}\nRust: {:?}\nC:    {:?}",
+                rust_name, rust_layout, &c_layout
+            );
+            continue;
+        }
+
+        results.record_passed();
+    }
+
     results.expect_total_success();
 }
 
-fn get_c_layout(dir: &Path, cc: &Compiler, name: &str) -> Result<Layout, Box<dyn Error>> {
-    let exe = dir.join("layout");
-    let mut cc = cc.clone();
-    cc.define("ABI_TYPE_NAME", name);
-    cc.compile(Path::new("tests/layout.c"), &exe)?;
+fn get_c_output(name: &str) -> Result<String, Box<dyn Error>> {
+    let tmpdir = Builder::new().prefix("abi").tempdir()?;
+    let exe = tmpdir.path().join(name);
+    let c_file = Path::new("tests").join(name).with_extension("c");
+
+    let cc = Compiler::new().expect("configured compiler");
+    cc.compile(&c_file, &exe)?;
 
     let mut abi_cmd = Command::new(exe);
     let output = abi_cmd.output()?;
@@ -220,35 +208,7 @@ fn get_c_layout(dir: &Path, cc: &Compiler, name: &str) -> Result<Layout, Box<dyn
         return Err(format!("command {:?} failed, {:?}", &abi_cmd, &output).into());
     }
 
-    let stdout = str::from_utf8(&output.stdout)?;
-    let mut words = stdout.trim().split_whitespace();
-    let size = words.next().unwrap().parse().unwrap();
-    let alignment = words.next().unwrap().parse().unwrap();
-    Ok(Layout { size, alignment })
-}
-
-fn get_c_value(dir: &Path, cc: &Compiler, name: &str) -> Result<String, Box<dyn Error>> {
-    let exe = dir.join("constant");
-    let mut cc = cc.clone();
-    cc.define("ABI_CONSTANT_NAME", name);
-    cc.compile(Path::new("tests/constant.c"), &exe)?;
-
-    let mut abi_cmd = Command::new(exe);
-    let output = abi_cmd.output()?;
-    if !output.status.success() {
-        return Err(format!("command {:?} failed, {:?}", &abi_cmd, &output).into());
-    }
-
-    let output = str::from_utf8(&output.stdout)?.trim();
-    if !output.starts_with("###gir test###") || !output.ends_with("###gir test###") {
-        return Err(format!(
-            "command {:?} return invalid output, {:?}",
-            &abi_cmd, &output
-        )
-        .into());
-    }
-
-    Ok(String::from(&output[14..(output.len() - 14)]))
+    Ok(String::from_utf8(output.stdout)?)
 }
 
 const RUST_LAYOUTS: &[(&str, Layout)] = &[
@@ -351,6 +311,13 @@ const RUST_LAYOUTS: &[(&str, Layout)] = &[
         },
     ),
     (
+        "PangoBaselineShift",
+        Layout {
+            size: size_of::<PangoBaselineShift>(),
+            alignment: align_of::<PangoBaselineShift>(),
+        },
+    ),
+    (
         "PangoBidiType",
         Layout {
             size: size_of::<PangoBidiType>(),
@@ -383,62 +350,6 @@ const RUST_LAYOUTS: &[(&str, Layout)] = &[
         Layout {
             size: size_of::<PangoEllipsizeMode>(),
             alignment: align_of::<PangoEllipsizeMode>(),
-        },
-    ),
-    (
-        "PangoEngine",
-        Layout {
-            size: size_of::<PangoEngine>(),
-            alignment: align_of::<PangoEngine>(),
-        },
-    ),
-    (
-        "PangoEngineClass",
-        Layout {
-            size: size_of::<PangoEngineClass>(),
-            alignment: align_of::<PangoEngineClass>(),
-        },
-    ),
-    (
-        "PangoEngineInfo",
-        Layout {
-            size: size_of::<PangoEngineInfo>(),
-            alignment: align_of::<PangoEngineInfo>(),
-        },
-    ),
-    (
-        "PangoEngineLang",
-        Layout {
-            size: size_of::<PangoEngineLang>(),
-            alignment: align_of::<PangoEngineLang>(),
-        },
-    ),
-    (
-        "PangoEngineLangClass",
-        Layout {
-            size: size_of::<PangoEngineLangClass>(),
-            alignment: align_of::<PangoEngineLangClass>(),
-        },
-    ),
-    (
-        "PangoEngineScriptInfo",
-        Layout {
-            size: size_of::<PangoEngineScriptInfo>(),
-            alignment: align_of::<PangoEngineScriptInfo>(),
-        },
-    ),
-    (
-        "PangoEngineShape",
-        Layout {
-            size: size_of::<PangoEngineShape>(),
-            alignment: align_of::<PangoEngineShape>(),
-        },
-    ),
-    (
-        "PangoEngineShapeClass",
-        Layout {
-            size: size_of::<PangoEngineShapeClass>(),
-            alignment: align_of::<PangoEngineShapeClass>(),
         },
     ),
     (
@@ -509,6 +420,13 @@ const RUST_LAYOUTS: &[(&str, Layout)] = &[
         Layout {
             size: size_of::<PangoFontMetrics>(),
             alignment: align_of::<PangoFontMetrics>(),
+        },
+    ),
+    (
+        "PangoFontScale",
+        Layout {
+            size: size_of::<PangoFontScale>(),
+            alignment: align_of::<PangoFontScale>(),
         },
     ),
     (
@@ -596,17 +514,24 @@ const RUST_LAYOUTS: &[(&str, Layout)] = &[
         },
     ),
     (
-        "PangoIncludedModule",
-        Layout {
-            size: size_of::<PangoIncludedModule>(),
-            alignment: align_of::<PangoIncludedModule>(),
-        },
-    ),
-    (
         "PangoItem",
         Layout {
             size: size_of::<PangoItem>(),
             alignment: align_of::<PangoItem>(),
+        },
+    ),
+    (
+        "PangoLayoutDeserializeError",
+        Layout {
+            size: size_of::<PangoLayoutDeserializeError>(),
+            alignment: align_of::<PangoLayoutDeserializeError>(),
+        },
+    ),
+    (
+        "PangoLayoutDeserializeFlags",
+        Layout {
+            size: size_of::<PangoLayoutDeserializeFlags>(),
+            alignment: align_of::<PangoLayoutDeserializeFlags>(),
         },
     ),
     (
@@ -617,10 +542,24 @@ const RUST_LAYOUTS: &[(&str, Layout)] = &[
         },
     ),
     (
+        "PangoLayoutSerializeFlags",
+        Layout {
+            size: size_of::<PangoLayoutSerializeFlags>(),
+            alignment: align_of::<PangoLayoutSerializeFlags>(),
+        },
+    ),
+    (
         "PangoMatrix",
         Layout {
             size: size_of::<PangoMatrix>(),
             alignment: align_of::<PangoMatrix>(),
+        },
+    ),
+    (
+        "PangoOverline",
+        Layout {
+            size: size_of::<PangoOverline>(),
+            alignment: align_of::<PangoOverline>(),
         },
     ),
     (
@@ -659,6 +598,20 @@ const RUST_LAYOUTS: &[(&str, Layout)] = &[
         },
     ),
     (
+        "PangoShapeFlags",
+        Layout {
+            size: size_of::<PangoShapeFlags>(),
+            alignment: align_of::<PangoShapeFlags>(),
+        },
+    ),
+    (
+        "PangoShowFlags",
+        Layout {
+            size: size_of::<PangoShowFlags>(),
+            alignment: align_of::<PangoShowFlags>(),
+        },
+    ),
+    (
         "PangoStretch",
         Layout {
             size: size_of::<PangoStretch>(),
@@ -677,6 +630,13 @@ const RUST_LAYOUTS: &[(&str, Layout)] = &[
         Layout {
             size: size_of::<PangoTabAlign>(),
             alignment: align_of::<PangoTabAlign>(),
+        },
+    ),
+    (
+        "PangoTextTransform",
+        Layout {
+            size: size_of::<PangoTextTransform>(),
+            alignment: align_of::<PangoTextTransform>(),
         },
     ),
     (
@@ -715,33 +675,50 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) PANGO_ALIGN_RIGHT", "2"),
     ("PANGO_ANALYSIS_FLAG_CENTERED_BASELINE", "1"),
     ("PANGO_ANALYSIS_FLAG_IS_ELLIPSIS", "2"),
+    ("PANGO_ANALYSIS_FLAG_NEED_HYPHEN", "4"),
+    ("(gint) PANGO_ATTR_ABSOLUTE_LINE_HEIGHT", "32"),
     ("(gint) PANGO_ATTR_ABSOLUTE_SIZE", "20"),
+    ("(gint) PANGO_ATTR_ALLOW_BREAKS", "26"),
     ("(gint) PANGO_ATTR_BACKGROUND", "10"),
     ("(gint) PANGO_ATTR_BACKGROUND_ALPHA", "25"),
+    ("(gint) PANGO_ATTR_BASELINE_SHIFT", "36"),
     ("(gint) PANGO_ATTR_FALLBACK", "16"),
     ("(gint) PANGO_ATTR_FAMILY", "2"),
     ("(gint) PANGO_ATTR_FONT_DESC", "8"),
     ("(gint) PANGO_ATTR_FONT_FEATURES", "23"),
+    ("(gint) PANGO_ATTR_FONT_SCALE", "37"),
     ("(gint) PANGO_ATTR_FOREGROUND", "9"),
     ("(gint) PANGO_ATTR_FOREGROUND_ALPHA", "24"),
     ("(gint) PANGO_ATTR_GRAVITY", "21"),
     ("(gint) PANGO_ATTR_GRAVITY_HINT", "22"),
     ("PANGO_ATTR_INDEX_FROM_TEXT_BEGINNING", "0"),
+    ("PANGO_ATTR_INDEX_TO_TEXT_END", "4294967295"),
+    ("(gint) PANGO_ATTR_INSERT_HYPHENS", "28"),
     ("(gint) PANGO_ATTR_INVALID", "0"),
     ("(gint) PANGO_ATTR_LANGUAGE", "1"),
     ("(gint) PANGO_ATTR_LETTER_SPACING", "17"),
+    ("(gint) PANGO_ATTR_LINE_HEIGHT", "31"),
+    ("(gint) PANGO_ATTR_OVERLINE", "29"),
+    ("(gint) PANGO_ATTR_OVERLINE_COLOR", "30"),
     ("(gint) PANGO_ATTR_RISE", "13"),
     ("(gint) PANGO_ATTR_SCALE", "15"),
+    ("(gint) PANGO_ATTR_SENTENCE", "35"),
     ("(gint) PANGO_ATTR_SHAPE", "14"),
+    ("(gint) PANGO_ATTR_SHOW", "27"),
     ("(gint) PANGO_ATTR_SIZE", "7"),
     ("(gint) PANGO_ATTR_STRETCH", "6"),
     ("(gint) PANGO_ATTR_STRIKETHROUGH", "12"),
     ("(gint) PANGO_ATTR_STRIKETHROUGH_COLOR", "19"),
     ("(gint) PANGO_ATTR_STYLE", "3"),
+    ("(gint) PANGO_ATTR_TEXT_TRANSFORM", "33"),
     ("(gint) PANGO_ATTR_UNDERLINE", "11"),
     ("(gint) PANGO_ATTR_UNDERLINE_COLOR", "18"),
     ("(gint) PANGO_ATTR_VARIANT", "5"),
     ("(gint) PANGO_ATTR_WEIGHT", "4"),
+    ("(gint) PANGO_ATTR_WORD", "34"),
+    ("(gint) PANGO_BASELINE_SHIFT_NONE", "0"),
+    ("(gint) PANGO_BASELINE_SHIFT_SUBSCRIPT", "2"),
+    ("(gint) PANGO_BASELINE_SHIFT_SUPERSCRIPT", "1"),
     ("(gint) PANGO_BIDI_TYPE_AL", "4"),
     ("(gint) PANGO_BIDI_TYPE_AN", "11"),
     ("(gint) PANGO_BIDI_TYPE_B", "15"),
@@ -750,14 +727,18 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) PANGO_BIDI_TYPE_EN", "8"),
     ("(gint) PANGO_BIDI_TYPE_ES", "9"),
     ("(gint) PANGO_BIDI_TYPE_ET", "10"),
+    ("(gint) PANGO_BIDI_TYPE_FSI", "21"),
     ("(gint) PANGO_BIDI_TYPE_L", "0"),
     ("(gint) PANGO_BIDI_TYPE_LRE", "1"),
+    ("(gint) PANGO_BIDI_TYPE_LRI", "19"),
     ("(gint) PANGO_BIDI_TYPE_LRO", "2"),
     ("(gint) PANGO_BIDI_TYPE_NSM", "13"),
     ("(gint) PANGO_BIDI_TYPE_ON", "18"),
     ("(gint) PANGO_BIDI_TYPE_PDF", "7"),
+    ("(gint) PANGO_BIDI_TYPE_PDI", "22"),
     ("(gint) PANGO_BIDI_TYPE_R", "3"),
     ("(gint) PANGO_BIDI_TYPE_RLE", "5"),
+    ("(gint) PANGO_BIDI_TYPE_RLI", "20"),
     ("(gint) PANGO_BIDI_TYPE_RLO", "6"),
     ("(gint) PANGO_BIDI_TYPE_S", "16"),
     ("(gint) PANGO_BIDI_TYPE_WS", "17"),
@@ -776,8 +757,6 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) PANGO_ELLIPSIZE_MIDDLE", "2"),
     ("(gint) PANGO_ELLIPSIZE_NONE", "0"),
     ("(gint) PANGO_ELLIPSIZE_START", "1"),
-    ("PANGO_ENGINE_TYPE_LANG", "PangoEngineLang"),
-    ("PANGO_ENGINE_TYPE_SHAPE", "PangoEngineShape"),
     ("(guint) PANGO_FONT_MASK_FAMILY", "1"),
     ("(guint) PANGO_FONT_MASK_GRAVITY", "64"),
     ("(guint) PANGO_FONT_MASK_SIZE", "32"),
@@ -786,6 +765,10 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(guint) PANGO_FONT_MASK_VARIANT", "4"),
     ("(guint) PANGO_FONT_MASK_VARIATIONS", "128"),
     ("(guint) PANGO_FONT_MASK_WEIGHT", "8"),
+    ("(gint) PANGO_FONT_SCALE_NONE", "0"),
+    ("(gint) PANGO_FONT_SCALE_SMALL_CAPS", "3"),
+    ("(gint) PANGO_FONT_SCALE_SUBSCRIPT", "2"),
+    ("(gint) PANGO_FONT_SCALE_SUPERSCRIPT", "1"),
     ("PANGO_GLYPH_EMPTY", "268435455"),
     ("PANGO_GLYPH_INVALID_INPUT", "4294967295"),
     ("PANGO_GLYPH_UNKNOWN_FLAG", "268435456"),
@@ -797,11 +780,21 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) PANGO_GRAVITY_NORTH", "2"),
     ("(gint) PANGO_GRAVITY_SOUTH", "0"),
     ("(gint) PANGO_GRAVITY_WEST", "3"),
+    ("(guint) PANGO_LAYOUT_DESERIALIZE_CONTEXT", "1"),
+    ("(guint) PANGO_LAYOUT_DESERIALIZE_DEFAULT", "0"),
+    ("(gint) PANGO_LAYOUT_DESERIALIZE_INVALID", "0"),
+    ("(gint) PANGO_LAYOUT_DESERIALIZE_INVALID_VALUE", "1"),
+    ("(gint) PANGO_LAYOUT_DESERIALIZE_MISSING_VALUE", "2"),
+    ("(guint) PANGO_LAYOUT_SERIALIZE_CONTEXT", "1"),
+    ("(guint) PANGO_LAYOUT_SERIALIZE_DEFAULT", "0"),
+    ("(guint) PANGO_LAYOUT_SERIALIZE_OUTPUT", "2"),
+    ("(gint) PANGO_OVERLINE_NONE", "0"),
+    ("(gint) PANGO_OVERLINE_SINGLE", "1"),
     ("(gint) PANGO_RENDER_PART_BACKGROUND", "1"),
     ("(gint) PANGO_RENDER_PART_FOREGROUND", "0"),
+    ("(gint) PANGO_RENDER_PART_OVERLINE", "4"),
     ("(gint) PANGO_RENDER_PART_STRIKETHROUGH", "3"),
     ("(gint) PANGO_RENDER_PART_UNDERLINE", "2"),
-    ("PANGO_RENDER_TYPE_NONE", "PangoRenderNone"),
     ("PANGO_SCALE", "1024"),
     ("(gint) PANGO_SCRIPT_AHOM", "111"),
     ("(gint) PANGO_SCRIPT_ANATOLIAN_HIEROGLYPHS", "112"),
@@ -921,6 +914,12 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) PANGO_SCRIPT_VAI", "74"),
     ("(gint) PANGO_SCRIPT_WARANG_CITI", "110"),
     ("(gint) PANGO_SCRIPT_YI", "41"),
+    ("(guint) PANGO_SHAPE_NONE", "0"),
+    ("(guint) PANGO_SHAPE_ROUND_POSITIONS", "1"),
+    ("(guint) PANGO_SHOW_IGNORABLES", "4"),
+    ("(guint) PANGO_SHOW_LINE_BREAKS", "2"),
+    ("(guint) PANGO_SHOW_NONE", "0"),
+    ("(guint) PANGO_SHOW_SPACES", "1"),
     ("(gint) PANGO_STRETCH_CONDENSED", "2"),
     ("(gint) PANGO_STRETCH_EXPANDED", "6"),
     ("(gint) PANGO_STRETCH_EXTRA_CONDENSED", "1"),
@@ -933,17 +932,29 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) PANGO_STYLE_ITALIC", "2"),
     ("(gint) PANGO_STYLE_NORMAL", "0"),
     ("(gint) PANGO_STYLE_OBLIQUE", "1"),
+    ("(gint) PANGO_TAB_CENTER", "2"),
+    ("(gint) PANGO_TAB_DECIMAL", "3"),
     ("(gint) PANGO_TAB_LEFT", "0"),
+    ("(gint) PANGO_TAB_RIGHT", "1"),
+    ("(gint) PANGO_TEXT_TRANSFORM_CAPITALIZE", "3"),
+    ("(gint) PANGO_TEXT_TRANSFORM_LOWERCASE", "1"),
+    ("(gint) PANGO_TEXT_TRANSFORM_NONE", "0"),
+    ("(gint) PANGO_TEXT_TRANSFORM_UPPERCASE", "2"),
     ("(gint) PANGO_UNDERLINE_DOUBLE", "2"),
+    ("(gint) PANGO_UNDERLINE_DOUBLE_LINE", "6"),
     ("(gint) PANGO_UNDERLINE_ERROR", "4"),
+    ("(gint) PANGO_UNDERLINE_ERROR_LINE", "7"),
     ("(gint) PANGO_UNDERLINE_LOW", "3"),
     ("(gint) PANGO_UNDERLINE_NONE", "0"),
     ("(gint) PANGO_UNDERLINE_SINGLE", "1"),
-    ("PANGO_UNKNOWN_GLYPH_HEIGHT", "14"),
-    ("PANGO_UNKNOWN_GLYPH_WIDTH", "10"),
+    ("(gint) PANGO_UNDERLINE_SINGLE_LINE", "5"),
+    ("(gint) PANGO_VARIANT_ALL_PETITE_CAPS", "4"),
+    ("(gint) PANGO_VARIANT_ALL_SMALL_CAPS", "2"),
     ("(gint) PANGO_VARIANT_NORMAL", "0"),
+    ("(gint) PANGO_VARIANT_PETITE_CAPS", "3"),
     ("(gint) PANGO_VARIANT_SMALL_CAPS", "1"),
-    ("PANGO_VERSION_MIN_REQUIRED", "2"),
+    ("(gint) PANGO_VARIANT_TITLE_CAPS", "6"),
+    ("(gint) PANGO_VARIANT_UNICASE", "5"),
     ("(gint) PANGO_WEIGHT_BOLD", "700"),
     ("(gint) PANGO_WEIGHT_BOOK", "380"),
     ("(gint) PANGO_WEIGHT_HEAVY", "900"),

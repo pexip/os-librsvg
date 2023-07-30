@@ -1,9 +1,22 @@
-// Copyright 2013-2018, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 #[allow(unused_imports)]
-use libc::{c_int, c_ushort, c_void};
+use libc::{c_char, c_int, c_ushort, c_void};
+
+#[cfg(unix)]
+pub use libc::passwd;
+
+#[cfg(all(not(unix), feature = "dox"))]
+#[repr(C)]
+pub struct passwd {
+    pw_name: *mut c_char,
+    pw_passwd: *mut c_char,
+    pw_uid: u32,
+    pw_gid: u32,
+    pw_gecos: *mut c_char,
+    pw_dir: *mut c_char,
+    pw_shell: *mut c_char,
+}
 
 #[cfg(windows)]
 pub type GPid = *mut c_void;
@@ -28,3 +41,47 @@ pub struct GPollFD {
     pub events: c_ushort,
     pub revents: c_ushort,
 }
+
+#[cfg(target_family = "windows")]
+pub use self::win32::*;
+
+#[cfg(target_family = "windows")]
+mod win32 {
+    use crate::gpointer;
+    use libc::c_char;
+
+    extern "C" {
+        pub fn g_win32_get_package_installation_directory_of_module(
+            hmodule: gpointer,
+        ) -> *mut c_char;
+    }
+}
+
+// These are all non-NUL terminated strings in C
+pub const G_VARIANT_TYPE_BOOLEAN: &str = "b";
+pub const G_VARIANT_TYPE_BYTE: &str = "y";
+pub const G_VARIANT_TYPE_INT16: &str = "n";
+pub const G_VARIANT_TYPE_UINT16: &str = "q";
+pub const G_VARIANT_TYPE_INT32: &str = "i";
+pub const G_VARIANT_TYPE_UINT32: &str = "u";
+pub const G_VARIANT_TYPE_INT64: &str = "x";
+pub const G_VARIANT_TYPE_UINT64: &str = "t";
+pub const G_VARIANT_TYPE_DOUBLE: &str = "d";
+pub const G_VARIANT_TYPE_STRING: &str = "s";
+pub const G_VARIANT_TYPE_OBJECT_PATH: &str = "o";
+pub const G_VARIANT_TYPE_SIGNATURE: &str = "g";
+pub const G_VARIANT_TYPE_VARIANT: &str = "v";
+pub const G_VARIANT_TYPE_HANDLE: &str = "h";
+pub const G_VARIANT_TYPE_UNIT: &str = "()";
+pub const G_VARIANT_TYPE_ANY: &str = "*";
+pub const G_VARIANT_TYPE_BASIC: &str = "?";
+pub const G_VARIANT_TYPE_MAYBE: &str = "m*";
+pub const G_VARIANT_TYPE_ARRAY: &str = "a*";
+pub const G_VARIANT_TYPE_TUPLE: &str = "r";
+pub const G_VARIANT_TYPE_DICT_ENTRY: &str = "{?*}";
+pub const G_VARIANT_TYPE_DICTIONARY: &str = "a{?*}";
+pub const G_VARIANT_TYPE_STRING_ARRAY: &str = "as";
+pub const G_VARIANT_TYPE_OBJECT_PATH_ARRAY: &str = "ao";
+pub const G_VARIANT_TYPE_BYTE_STRING: &str = "ay";
+pub const G_VARIANT_TYPE_BYTE_STRING_ARRAY: &str = "ayy";
+pub const G_VARIANT_TYPE_VARDICT: &str = "a{sv}";

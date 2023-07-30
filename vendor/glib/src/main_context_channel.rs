@@ -1,25 +1,22 @@
-// Copyright 2019, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
-use glib_sys;
+use crate::thread_guard::ThreadGuard;
+use crate::translate::*;
+use crate::Continue;
+use crate::MainContext;
+use crate::Priority;
+use crate::Source;
+use crate::SourceId;
 use std::collections::VecDeque;
 use std::fmt;
 use std::mem;
 use std::ptr;
 use std::sync::mpsc;
 use std::sync::{Arc, Condvar, Mutex};
-use translate::{mut_override, FromGlibPtrFull, ToGlib};
-use Continue;
-use MainContext;
-use Priority;
-use Source;
-use SourceId;
-use ThreadGuard;
 
 enum ChannelSourceState {
     NotAttached,
-    Attached(*mut glib_sys::GSource),
+    Attached(*mut ffi::GSource),
     Destroyed,
 }
 
@@ -38,7 +35,7 @@ impl<T> ChannelInner<T> {
             ChannelSourceState::Destroyed => true,
             // Receiver exists but is already destroyed
             ChannelSourceState::Attached(source)
-                if unsafe { glib_sys::g_source_is_destroyed(source) } != glib_sys::GFALSE =>
+                if unsafe { ffi::g_source_is_destroyed(source) } != ffi::GFALSE =>
             {
                 true
             }
@@ -49,10 +46,11 @@ impl<T> ChannelInner<T> {
         }
     }
 
+    #[doc(alias = "g_source_set_ready_time")]
     fn set_ready_time(&mut self, ready_time: i64) {
         if let ChannelSourceState::Attached(source) = self.source {
             unsafe {
-                glib_sys::g_source_set_ready_time(source, ready_time);
+                ffi::g_source_set_ready_time(source, ready_time);
             }
         }
     }
@@ -179,7 +177,8 @@ impl<T> Channel<T> {
         Ok(())
     }
 
-    fn try_recv(&self) -> Result<T, mpsc::TryRecvError> {
+    // SAFETY: Must be called from the main context the channel was attached to.
+    unsafe fn try_recv(&self) -> Result<T, mpsc::TryRecvError> {
         let mut inner = (self.0).0.lock().unwrap();
 
         // Pop item if we have any
@@ -203,23 +202,23 @@ impl<T> Channel<T> {
 
 #[repr(C)]
 struct ChannelSource<T, F: FnMut(T) -> Continue + 'static> {
-    source: glib_sys::GSource,
-    source_funcs: Option<Box<glib_sys::GSourceFuncs>>,
+    source: ffi::GSource,
+    source_funcs: Option<Box<ffi::GSourceFuncs>>,
     channel: Option<Channel<T>>,
     callback: Option<ThreadGuard<F>>,
 }
 
 unsafe extern "C" fn dispatch<T, F: FnMut(T) -> Continue + 'static>(
-    source: *mut glib_sys::GSource,
-    callback: glib_sys::GSourceFunc,
-    _user_data: glib_sys::gpointer,
-) -> glib_sys::gboolean {
+    source: *mut ffi::GSource,
+    callback: ffi::GSourceFunc,
+    _user_data: ffi::gpointer,
+) -> ffi::gboolean {
     let source = &mut *(source as *mut ChannelSource<T, F>);
     assert!(callback.is_none());
 
     // Set ready-time to -1 so that we won't get called again before a new item is added
     // to the channel queue.
-    glib_sys::g_source_set_ready_time(&mut source.source, -1);
+    ffi::g_source_set_ready_time(&mut source.source, -1);
 
     // Get a reference to the callback. This will panic if we're called from a different
     // thread than where the source was attached to the main context.
@@ -239,27 +238,53 @@ unsafe extern "C" fn dispatch<T, F: FnMut(T) -> Continue + 'static>(
     loop {
         match channel.try_recv() {
             Err(mpsc::TryRecvError::Empty) => break,
-            Err(mpsc::TryRecvError::Disconnected) => return glib_sys::G_SOURCE_REMOVE,
+            Err(mpsc::TryRecvError::Disconnected) => return ffi::G_SOURCE_REMOVE,
             Ok(item) => {
                 if callback(item) == Continue(false) {
-                    return glib_sys::G_SOURCE_REMOVE;
+                    return ffi::G_SOURCE_REMOVE;
                 }
             }
         }
     }
 
-    glib_sys::G_SOURCE_CONTINUE
+    ffi::G_SOURCE_CONTINUE
 }
 
-unsafe extern "C" fn finalize<T, F: FnMut(T) -> Continue + 'static>(
-    source: *mut glib_sys::GSource,
-) {
+#[cfg(feature = "v2_64")]
+unsafe extern "C" fn dispose<T, F: FnMut(T) -> Continue + 'static>(source: *mut ffi::GSource) {
+    let source = &mut *(source as *mut ChannelSource<T, F>);
+
+    if let Some(ref channel) = source.channel {
+        // Set the source inside the channel to None so that all senders know that there
+        // is no receiver left and wake up the condition variable if any
+        let mut inner = (channel.0).0.lock().unwrap();
+        inner.source = ChannelSourceState::Destroyed;
+        if let Some(ChannelBound { ref cond, .. }) = (channel.0).1 {
+            cond.notify_all();
+        }
+    }
+}
+
+unsafe extern "C" fn finalize<T, F: FnMut(T) -> Continue + 'static>(source: *mut ffi::GSource) {
     let source = &mut *(source as *mut ChannelSource<T, F>);
 
     // Drop all memory we own by taking it out of the Options
-    let channel = source.channel.take().expect("Receiver without channel");
 
+    #[cfg(feature = "v2_64")]
     {
+        let _ = source.channel.take().expect("Receiver without channel");
+    }
+    #[cfg(not(feature = "v2_64"))]
+    {
+        let channel = source.channel.take().expect("Receiver without channel");
+
+        // FIXME: This is the same as would otherwise be done in the dispose() function but
+        // unfortunately it doesn't exist in older version of GLib. Doing it only here can
+        // cause a channel sender to get a reference to the source with reference count 0
+        // if it happens just before the mutex is taken below.
+        //
+        // This is exactly the pattern why g_source_set_dispose_function() was added.
+        //
         // Set the source inside the channel to None so that all senders know that there
         // is no receiver left and wake up the condition variable if any
         let mut inner = (channel.0).0.lock().unwrap();
@@ -272,10 +297,29 @@ unsafe extern "C" fn finalize<T, F: FnMut(T) -> Continue + 'static>(
     let _ = source.source_funcs.take();
 
     // Take the callback out of the source. This will panic if the value is dropped
-    // from a different thread than where the callback was created
-    let _ = source.callback.take();
+    // from a different thread than where the callback was created so try to drop it
+    // from the main context if we're on another thread and the main context still exists.
+    //
+    // This can only really happen if the caller to `attach()` gets the `Source` from the returned
+    // `SourceId` and sends it to another thread or otherwise retrieves it from the main context,
+    // but better safe than sorry.
+    let callback = source
+        .callback
+        .take()
+        .expect("channel source finalized twice");
+    if !callback.is_owner() {
+        let context =
+            ffi::g_source_get_context(source as *mut ChannelSource<T, F> as *mut ffi::GSource);
+        if !context.is_null() {
+            let context = MainContext::from_glib_none(context);
+            context.invoke(move || {
+                drop(callback);
+            });
+        }
+    }
 }
 
+// rustdoc-stripper-ignore-next
 /// A `Sender` that can be used to send items to the corresponding main context receiver.
 ///
 /// This `Sender` behaves the same as `std::sync::mpsc::Sender`.
@@ -283,7 +327,11 @@ unsafe extern "C" fn finalize<T, F: FnMut(T) -> Continue + 'static>(
 /// See [`MainContext::channel()`] for how to create such a `Sender`.
 ///
 /// [`MainContext::channel()`]: struct.MainContext.html#method.channel
-pub struct Sender<T>(Option<Channel<T>>);
+pub struct Sender<T>(Channel<T>);
+
+// It's safe to send the Sender to other threads for attaching it as
+// long as the items to be sent can also be sent between threads.
+unsafe impl<T: Send> Send for Sender<T> {}
 
 impl<T> fmt::Debug for Sender<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -293,24 +341,21 @@ impl<T> fmt::Debug for Sender<T> {
 
 impl<T> Clone for Sender<T> {
     fn clone(&self) -> Sender<T> {
-        Sender::new(self.0.as_ref())
+        Self::new(&self.0)
     }
 }
 
 impl<T> Sender<T> {
-    fn new(channel: Option<&Channel<T>>) -> Self {
-        if let Some(channel) = channel {
-            let mut inner = (channel.0).0.lock().unwrap();
-            inner.num_senders += 1;
-            Sender(Some(channel.clone()))
-        } else {
-            Sender(None)
-        }
+    fn new(channel: &Channel<T>) -> Self {
+        let mut inner = (channel.0).0.lock().unwrap();
+        inner.num_senders += 1;
+        Self(channel.clone())
     }
 
+    // rustdoc-stripper-ignore-next
     /// Sends a value to the channel.
     pub fn send(&self, t: T) -> Result<(), mpsc::SendError<T>> {
-        self.0.as_ref().expect("Sender with no channel").send(t)
+        self.0.send(t)
     }
 }
 
@@ -318,8 +363,7 @@ impl<T> Drop for Sender<T> {
     fn drop(&mut self) {
         // Decrease the number of senders and wake up the channel if this
         // was the last sender that was dropped.
-        let channel = self.0.take().expect("Sender with no channel");
-        let mut inner = (channel.0).0.lock().unwrap();
+        let mut inner = ((self.0).0).0.lock().unwrap();
         inner.num_senders -= 1;
         if inner.num_senders == 0 {
             inner.set_ready_time(0);
@@ -327,6 +371,7 @@ impl<T> Drop for Sender<T> {
     }
 }
 
+// rustdoc-stripper-ignore-next
 /// A `SyncSender` that can be used to send items to the corresponding main context receiver.
 ///
 /// This `SyncSender` behaves the same as `std::sync::mpsc::SyncSender`.
@@ -334,7 +379,11 @@ impl<T> Drop for Sender<T> {
 /// See [`MainContext::sync_channel()`] for how to create such a `SyncSender`.
 ///
 /// [`MainContext::sync_channel()`]: struct.MainContext.html#method.sync_channel
-pub struct SyncSender<T>(Option<Channel<T>>);
+pub struct SyncSender<T>(Channel<T>);
+
+// It's safe to send the SyncSender to other threads for attaching it as
+// long as the items to be sent can also be sent between threads.
+unsafe impl<T: Send> Send for SyncSender<T> {}
 
 impl<T> fmt::Debug for SyncSender<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -344,29 +393,27 @@ impl<T> fmt::Debug for SyncSender<T> {
 
 impl<T> Clone for SyncSender<T> {
     fn clone(&self) -> SyncSender<T> {
-        SyncSender::new(self.0.as_ref())
+        Self::new(&self.0)
     }
 }
 
 impl<T> SyncSender<T> {
-    fn new(channel: Option<&Channel<T>>) -> Self {
-        if let Some(channel) = channel {
-            let mut inner = (channel.0).0.lock().unwrap();
-            inner.num_senders += 1;
-            SyncSender(Some(channel.clone()))
-        } else {
-            SyncSender(None)
-        }
+    fn new(channel: &Channel<T>) -> Self {
+        let mut inner = (channel.0).0.lock().unwrap();
+        inner.num_senders += 1;
+        Self(channel.clone())
     }
 
+    // rustdoc-stripper-ignore-next
     /// Sends a value to the channel and blocks if the channel is full.
     pub fn send(&self, t: T) -> Result<(), mpsc::SendError<T>> {
-        self.0.as_ref().expect("Sender with no channel").send(t)
+        self.0.send(t)
     }
 
+    // rustdoc-stripper-ignore-next
     /// Sends a value to the channel.
     pub fn try_send(&self, t: T) -> Result<(), mpsc::TrySendError<T>> {
-        self.0.as_ref().expect("Sender with no channel").try_send(t)
+        self.0.try_send(t)
     }
 }
 
@@ -374,8 +421,7 @@ impl<T> Drop for SyncSender<T> {
     fn drop(&mut self) {
         // Decrease the number of senders and wake up the channel if this
         // was the last sender that was dropped.
-        let channel = self.0.take().expect("Sender with no channel");
-        let mut inner = (channel.0).0.lock().unwrap();
+        let mut inner = ((self.0).0).0.lock().unwrap();
         inner.num_senders -= 1;
         if inner.num_senders == 0 {
             inner.set_ready_time(0);
@@ -383,6 +429,7 @@ impl<T> Drop for SyncSender<T> {
     }
 }
 
+// rustdoc-stripper-ignore-next
 /// A `Receiver` that can be attached to a main context to receive items from its corresponding
 /// `Sender` or `SyncSender`.
 ///
@@ -417,6 +464,7 @@ impl<T> Drop for Receiver<T> {
 }
 
 impl<T> Receiver<T> {
+    // rustdoc-stripper-ignore-next
     /// Attaches the receiver to the given `context` and calls `func` whenever an item is
     /// available on the channel.
     ///
@@ -434,7 +482,7 @@ impl<T> Receiver<T> {
         unsafe {
             let channel = self.0.take().expect("Receiver without channel");
 
-            let source_funcs = Box::new(glib_sys::GSourceFuncs {
+            let source_funcs = Box::new(ffi::GSourceFuncs {
                 check: None,
                 prepare: None,
                 dispatch: Some(dispatch::<T, F>),
@@ -443,21 +491,29 @@ impl<T> Receiver<T> {
                 closure_marshal: None,
             });
 
-            let source = glib_sys::g_source_new(
+            let source = ffi::g_source_new(
                 mut_override(&*source_funcs),
                 mem::size_of::<ChannelSource<T, F>>() as u32,
             ) as *mut ChannelSource<T, F>;
             assert!(!source.is_null());
+
+            #[cfg(feature = "v2_64")]
+            {
+                ffi::g_source_set_dispose_function(
+                    source as *mut ffi::GSource,
+                    Some(dispose::<T, F>),
+                );
+            }
 
             // Set up the GSource
             {
                 let source = &mut *source;
                 let mut inner = (channel.0).0.lock().unwrap();
 
-                glib_sys::g_source_set_priority(mut_override(&source.source), self.1.to_glib());
+                ffi::g_source_set_priority(mut_override(&source.source), self.1.into_glib());
 
                 // We're immediately ready if the queue is not empty or if no sender is left at this point
-                glib_sys::g_source_set_ready_time(
+                ffi::g_source_set_ready_time(
                     mut_override(&source.source),
                     if !inner.queue.is_empty() || inner.num_senders == 0 {
                         0
@@ -477,19 +533,21 @@ impl<T> Receiver<T> {
             }
 
             let source = Source::from_glib_full(mut_override(&(*source).source));
-            if let Some(context) = context {
-                assert!(context.is_owner());
-                source.attach(Some(context))
-            } else {
-                let context = MainContext::ref_thread_default();
-                assert!(context.is_owner());
-                source.attach(Some(&context))
-            }
+            let context = match context {
+                Some(context) => context.clone(),
+                None => MainContext::ref_thread_default(),
+            };
+
+            let _acquire = context
+                .acquire()
+                .expect("main context already acquired by another thread");
+            source.attach(Some(&context))
         }
     }
 }
 
 impl MainContext {
+    // rustdoc-stripper-ignore-next
     /// Creates a channel for a main context.
     ///
     /// The `Receiver` has to be attached to a main context at a later time, together with a
@@ -506,11 +564,12 @@ impl MainContext {
     pub fn channel<T>(priority: Priority) -> (Sender<T>, Receiver<T>) {
         let channel = Channel::new(None);
         let receiver = Receiver(Some(channel.clone()), priority);
-        let sender = Sender::new(Some(&channel));
+        let sender = Sender::new(&channel);
 
         (sender, receiver)
     }
 
+    // rustdoc-stripper-ignore-next
     /// Creates a synchronous channel for a main context with a given bound on the capacity of the
     /// channel.
     ///
@@ -528,7 +587,7 @@ impl MainContext {
     pub fn sync_channel<T>(priority: Priority, bound: usize) -> (SyncSender<T>, Receiver<T>) {
         let channel = Channel::new(Some(bound));
         let receiver = Receiver(Some(channel.clone()), priority);
-        let sender = SyncSender::new(Some(&channel));
+        let sender = SyncSender::new(&channel);
 
         (sender, receiver)
     }
@@ -537,18 +596,19 @@ impl MainContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::MainLoop;
     use std::cell::RefCell;
     use std::rc::Rc;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::thread;
     use std::time;
-    use MainLoop;
 
     #[test]
     fn test_channel() {
         let c = MainContext::new();
         let l = MainLoop::new(Some(&c), false);
 
-        c.acquire();
+        let _guard = c.acquire().unwrap();
 
         let (sender, receiver) = MainContext::channel(Priority::default());
 
@@ -579,7 +639,7 @@ mod tests {
         let c = MainContext::new();
         let l = MainLoop::new(Some(&c), false);
 
-        c.acquire();
+        let _guard = c.acquire().unwrap();
 
         let (sender, receiver) = MainContext::channel::<i32>(Priority::default());
 
@@ -592,8 +652,7 @@ mod tests {
 
         let helper = Helper(l.clone());
         receiver.attach(Some(&c), move |_| {
-            let _ = helper;
-
+            let _helper = &helper;
             Continue(true)
         });
 
@@ -614,7 +673,7 @@ mod tests {
     fn test_remove_receiver() {
         let c = MainContext::new();
 
-        c.acquire();
+        let _guard = c.acquire().unwrap();
 
         let (sender, receiver) = MainContext::channel::<i32>(Priority::default());
 
@@ -630,18 +689,18 @@ mod tests {
     fn test_remove_receiver_and_drop_source() {
         let c = MainContext::new();
 
-        c.acquire();
+        let _guard = c.acquire().unwrap();
 
         let (sender, receiver) = MainContext::channel::<i32>(Priority::default());
 
-        struct Helper(Arc<Mutex<bool>>);
+        struct Helper(Arc<AtomicBool>);
         impl Drop for Helper {
             fn drop(&mut self) {
-                *self.0.lock().unwrap() = true;
+                self.0.store(true, Ordering::Relaxed);
             }
         }
 
-        let dropped = Arc::new(Mutex::new(false));
+        let dropped = Arc::new(AtomicBool::new(false));
         let helper = Helper(dropped.clone());
         let source_id = receiver.attach(Some(&c), move |_| {
             let _helper = &helper;
@@ -654,7 +713,7 @@ mod tests {
         // This should drop the closure
         drop(source);
 
-        assert_eq!(*dropped.lock().unwrap(), true);
+        assert!(dropped.load(Ordering::Relaxed));
         assert_eq!(sender.send(1), Err(mpsc::SendError(1)));
     }
 
@@ -663,7 +722,7 @@ mod tests {
         let c = MainContext::new();
         let l = MainLoop::new(Some(&c), false);
 
-        c.acquire();
+        let _guard = c.acquire().unwrap();
 
         let (sender, receiver) = MainContext::sync_channel(Priority::default(), 2);
 
@@ -687,7 +746,7 @@ mod tests {
             sender.try_send(1).unwrap();
             sender.try_send(2).unwrap();
 
-            // This fills up the channel
+            // This fill up the channel
             assert!(sender.try_send(3).is_err());
             wait_sender.send(()).unwrap();
 
@@ -698,7 +757,7 @@ mod tests {
         // Wait until the channel is full, and then another
         // 50ms to make sure the sender is blocked now and
         // can wake up properly once an item was consumed
-        let _ = wait_receiver.recv().unwrap();
+        assert!(wait_receiver.recv().is_ok());
         thread::sleep(time::Duration::from_millis(50));
         l.run();
 
@@ -712,7 +771,7 @@ mod tests {
         let c = MainContext::new();
         let l = MainLoop::new(Some(&c), false);
 
-        c.acquire();
+        let _guard = c.acquire().unwrap();
 
         let (sender, receiver) = MainContext::sync_channel(Priority::default(), 3);
 
@@ -741,7 +800,7 @@ mod tests {
             for i in 4.. {
                 // This will block at some point until the
                 // receiver is removed from the main context
-                if let Err(_) = sender.send(i) {
+                if sender.send(i).is_err() {
                     break;
                 }
             }
@@ -750,7 +809,7 @@ mod tests {
         // Wait until the channel is full, and then another
         // 50ms to make sure the sender is blocked now and
         // can wake up properly once an item was consumed
-        let _ = wait_receiver.recv().unwrap();
+        assert!(wait_receiver.recv().is_ok());
         thread::sleep(time::Duration::from_millis(50));
         l.run();
 
@@ -763,7 +822,7 @@ mod tests {
     fn test_sync_channel_drop_receiver_wakeup() {
         let c = MainContext::new();
 
-        c.acquire();
+        let _guard = c.acquire().unwrap();
 
         let (sender, receiver) = MainContext::sync_channel(Priority::default(), 2);
 
@@ -782,7 +841,7 @@ mod tests {
         // Wait until the channel is full, and then another
         // 50ms to make sure the sender is blocked now and
         // can wake up properly once an item was consumed
-        let _ = wait_receiver.recv().unwrap();
+        assert!(wait_receiver.recv().is_ok());
         thread::sleep(time::Duration::from_millis(50));
         drop(receiver);
         thread.join().unwrap();
@@ -793,7 +852,7 @@ mod tests {
         let c = MainContext::new();
         let l = MainLoop::new(Some(&c), false);
 
-        c.acquire();
+        let _guard = c.acquire().unwrap();
 
         let (sender, receiver) = MainContext::sync_channel(Priority::default(), 0);
 
@@ -812,7 +871,7 @@ mod tests {
         // Wait until the thread is started, then wait another 50ms and
         // during that time it must not have proceeded yet to send the
         // second item because we did not yet receive the first item.
-        let _ = wait_receiver.recv().unwrap();
+        assert!(wait_receiver.recv().is_ok());
         assert_eq!(
             wait_receiver.recv_timeout(time::Duration::from_millis(50)),
             Err(mpsc::RecvTimeoutError::Timeout)
@@ -824,7 +883,7 @@ mod tests {
         receiver.attach(Some(&c), move |item| {
             // We consumed one item so there should be one item on
             // the other receiver now.
-            let _ = wait_receiver.recv().unwrap();
+            assert!(wait_receiver.recv().is_ok());
             *sum_clone.borrow_mut() += item;
             if *sum_clone.borrow() == 6 {
                 // But as we didn't consume the next one yet, there must be no

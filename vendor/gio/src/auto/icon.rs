@@ -2,40 +2,43 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
-use glib;
 use glib::object::IsA;
 use glib::translate::*;
-use glib::GString;
-use glib_sys;
 use std::fmt;
 use std::ptr;
 
-glib_wrapper! {
-    pub struct Icon(Interface<gio_sys::GIcon>);
+glib::wrapper! {
+    #[doc(alias = "GIcon")]
+    pub struct Icon(Interface<ffi::GIcon, ffi::GIconIface>);
 
     match fn {
-        get_type => || gio_sys::g_icon_get_type(),
+        type_ => || ffi::g_icon_get_type(),
     }
 }
 
 impl Icon {
+    pub const NONE: Option<&'static Icon> = None;
+
+    #[doc(alias = "g_icon_deserialize")]
     pub fn deserialize(value: &glib::Variant) -> Option<Icon> {
-        unsafe { from_glib_full(gio_sys::g_icon_deserialize(value.to_glib_none().0)) }
+        unsafe { from_glib_full(ffi::g_icon_deserialize(value.to_glib_none().0)) }
     }
 
+    #[doc(alias = "g_icon_hash")]
     pub fn hash(&self) -> u32 {
         unsafe {
-            gio_sys::g_icon_hash(
-                ToGlibPtr::<*mut gio_sys::GIcon>::to_glib_none(self).0 as glib_sys::gconstpointer,
+            ffi::g_icon_hash(
+                ToGlibPtr::<*mut ffi::GIcon>::to_glib_none(self).0 as glib::ffi::gconstpointer,
             )
         }
     }
 
-    pub fn new_for_string(str: &str) -> Result<Icon, glib::Error> {
+    #[doc(alias = "g_icon_new_for_string")]
+    #[doc(alias = "new_for_string")]
+    pub fn for_string(str: &str) -> Result<Icon, glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let ret = gio_sys::g_icon_new_for_string(str.to_glib_none().0, &mut error);
+            let ret = ffi::g_icon_new_for_string(str.to_glib_none().0, &mut error);
             if error.is_null() {
                 Ok(from_glib_full(ret))
             } else {
@@ -45,20 +48,21 @@ impl Icon {
     }
 }
 
-pub const NONE_ICON: Option<&Icon> = None;
-
 pub trait IconExt: 'static {
-    fn equal<P: IsA<Icon>>(&self, icon2: Option<&P>) -> bool;
+    #[doc(alias = "g_icon_equal")]
+    fn equal(&self, icon2: Option<&impl IsA<Icon>>) -> bool;
 
+    #[doc(alias = "g_icon_serialize")]
     fn serialize(&self) -> Option<glib::Variant>;
 
-    fn to_string(&self) -> Option<GString>;
+    #[doc(alias = "g_icon_to_string")]
+    fn to_string(&self) -> Option<glib::GString>;
 }
 
 impl<O: IsA<Icon>> IconExt for O {
-    fn equal<P: IsA<Icon>>(&self, icon2: Option<&P>) -> bool {
+    fn equal(&self, icon2: Option<&impl IsA<Icon>>) -> bool {
         unsafe {
-            from_glib(gio_sys::g_icon_equal(
+            from_glib(ffi::g_icon_equal(
                 self.as_ref().to_glib_none().0,
                 icon2.map(|p| p.as_ref()).to_glib_none().0,
             ))
@@ -66,16 +70,16 @@ impl<O: IsA<Icon>> IconExt for O {
     }
 
     fn serialize(&self) -> Option<glib::Variant> {
-        unsafe { from_glib_full(gio_sys::g_icon_serialize(self.as_ref().to_glib_none().0)) }
+        unsafe { from_glib_full(ffi::g_icon_serialize(self.as_ref().to_glib_none().0)) }
     }
 
-    fn to_string(&self) -> Option<GString> {
-        unsafe { from_glib_full(gio_sys::g_icon_to_string(self.as_ref().to_glib_none().0)) }
+    fn to_string(&self) -> Option<glib::GString> {
+        unsafe { from_glib_full(ffi::g_icon_to_string(self.as_ref().to_glib_none().0)) }
     }
 }
 
 impl fmt::Display for Icon {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Icon")
+        f.write_str("Icon")
     }
 }

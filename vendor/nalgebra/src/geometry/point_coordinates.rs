@@ -1,12 +1,9 @@
-use std::mem;
 use std::ops::{Deref, DerefMut};
 
-use crate::base::allocator::Allocator;
 use crate::base::coordinates::{X, XY, XYZ, XYZW, XYZWA, XYZWAB};
-use crate::base::dimension::{U1, U2, U3, U4, U5, U6};
-use crate::base::{DefaultAllocator, Scalar};
+use crate::base::{Scalar, U1, U2, U3, U4, U5, U6};
 
-use crate::geometry::Point;
+use crate::geometry::OPoint;
 
 /*
  *
@@ -16,21 +13,21 @@ use crate::geometry::Point;
 
 macro_rules! deref_impl(
     ($D: ty, $Target: ident $(, $comps: ident)*) => {
-        impl<N: Scalar> Deref for Point<N, $D>
-            where DefaultAllocator: Allocator<N, $D> {
-            type Target = $Target<N>;
+        impl<T: Scalar> Deref for OPoint<T, $D>
+        {
+            type Target = $Target<T>;
 
             #[inline]
             fn deref(&self) -> &Self::Target {
-                unsafe { mem::transmute(self) }
+                &*self.coords
             }
         }
 
-        impl<N: Scalar> DerefMut for Point<N, $D>
-            where DefaultAllocator: Allocator<N, $D> {
+        impl<T: Scalar> DerefMut for OPoint<T, $D>
+        {
             #[inline]
             fn deref_mut(&mut self) -> &mut Self::Target {
-                unsafe { mem::transmute(self) }
+                &mut *self.coords
             }
         }
     }

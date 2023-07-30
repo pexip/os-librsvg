@@ -31,7 +31,12 @@ impl Predicate<path::Path> for ExistencePredicate {
         expected: bool,
         variable: &path::Path,
     ) -> Option<reflection::Case<'a>> {
-        utils::default_find_case(self, expected, variable)
+        utils::default_find_case(self, expected, variable).map(|case| {
+            case.add_product(reflection::Product::new(
+                "var",
+                variable.display().to_string(),
+            ))
+        })
     }
 }
 
@@ -39,7 +44,15 @@ impl reflection::PredicateReflection for ExistencePredicate {}
 
 impl fmt::Display for ExistencePredicate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}(var)", if self.exists { "exists" } else { "missing" })
+        let palette = crate::Palette::current();
+        write!(
+            f,
+            "{}({})",
+            palette
+                .description
+                .paint(if self.exists { "exists" } else { "missing" }),
+            palette.var.paint("var")
+        )
     }
 }
 

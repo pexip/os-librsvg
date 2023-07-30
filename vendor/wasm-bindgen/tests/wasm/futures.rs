@@ -70,18 +70,40 @@ pub async fn async_return_6() -> Result<AsyncCustomReturn, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn async_return_7() -> Result<AsyncCustomReturn, u32> {
-    Ok(AsyncCustomReturn { val: 7 })
+pub async fn async_throw_7() -> Result<AsyncCustomReturn, JsValue> {
+    Err(7.into())
 }
 
 #[wasm_bindgen]
-pub async fn async_return_8() -> Result<AsyncCustomReturn, AsyncCustomReturn> {
-    Ok(AsyncCustomReturn { val: 8 })
+pub async fn async_throw_custom() -> Result<AsyncCustomReturn, JsValue> {
+    Err(AsyncCustomReturn { val: 8 }.into())
 }
 
 #[wasm_bindgen]
-pub async fn async_throw() -> Result<(), js_sys::Error> {
-    Err(js_sys::Error::new("async message"))
+pub async fn async_throw_message() -> Result<(), JsValue> {
+    Err(js_sys::Error::new("async message").into())
+}
+
+#[wasm_bindgen]
+pub async fn async_throw_jserror() -> Result<AsyncCustomReturn, JsError> {
+    Err(JsError::new("async message"))
+}
+
+pub struct AsyncCustomError {
+    pub val: JsValue,
+}
+
+impl Into<JsValue> for AsyncCustomError {
+    fn into(self) -> JsValue {
+        self.val
+    }
+}
+
+#[wasm_bindgen]
+pub async fn async_throw_custom_error() -> Result<AsyncCustomReturn, AsyncCustomError> {
+    Err(AsyncCustomError {
+        val: JsValue::from("custom error"),
+    })
 }
 
 #[wasm_bindgen_test]

@@ -1,4 +1,91 @@
 # `wasm-bindgen` Change Log
+--------------------------------------------------------------------------------
+
+## 0.2.81
+
+Released 2022-06-14.
+
+[changes](https://github.com/rustwasm/wasm-bindgen/compare/0.2.80...0.2.81)
+
+--------------------------------------------------------------------------------
+
+## 0.2.80
+
+Released 2022-04-04.
+
+[changes](https://github.com/rustwasm/wasm-bindgen/compare/0.2.79...0.2.80)
+
+--------------------------------------------------------------------------------
+
+## 0.2.79
+
+Released 2022-01-19.
+
+[changes](https://github.com/rustwasm/wasm-bindgen/compare/0.2.78...0.2.79)
+
+--------------------------------------------------------------------------------
+
+## 0.2.78
+
+Released 2021-09-15.
+
+[changes](https://github.com/rustwasm/wasm-bindgen/compare/0.2.77...0.2.78)
+
+--------------------------------------------------------------------------------
+
+## 0.2.77
+
+Released 2021-09-08.
+
+[changes](https://github.com/rustwasm/wasm-bindgen/compare/0.2.76...0.2.77)
+
+--------------------------------------------------------------------------------
+
+## 0.2.76
+
+Released 2021-08-19.
+
+[changes](https://github.com/rustwasm/wasm-bindgen/compare/0.2.75...0.2.76)
+
+--------------------------------------------------------------------------------
+
+## 0.2.75
+
+Released 2021-08-02.
+
+[changes](https://github.com/rustwasm/wasm-bindgen/compare/0.2.74...0.2.75)
+
+--------------------------------------------------------------------------------
+
+## 0.2.74
+
+Released 2021-05-10.
+
+[changes](https://github.com/rustwasm/wasm-bindgen/compare/0.2.73...0.2.74)
+
+--------------------------------------------------------------------------------
+
+## 0.2.73
+
+Released 2021-03-29.
+
+[changes](https://github.com/rustwasm/wasm-bindgen/compare/0.2.72...0.2.73)
+
+--------------------------------------------------------------------------------
+
+## 0.2.72
+
+Released 2021-03-18.
+
+[changes](https://github.com/rustwasm/wasm-bindgen/compare/0.2.71...0.2.72)
+
+--------------------------------------------------------------------------------
+
+## 0.2.71
+
+Released 2021-02-26.
+
+[changes](https://github.com/rustwasm/wasm-bindgen/compare/0.2.70...0.2.71)
 
 --------------------------------------------------------------------------------
 
@@ -891,8 +978,7 @@ Released 2019-04-10.
 
 ### Added
 
-* Initial support for transitive NPM dependencies has been added, although
-  support has not fully landed in `wasm-pack` yet so it's not 100% integrated.
+* Initial support for transitive NPM dependencies has been added.
   [#1305](https://github.com/rustwasm/wasm-bindgen/pull/1305)
 
 * The `constructor` property of `Object` is now bound in `js-sys`.

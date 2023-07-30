@@ -1,7 +1,12 @@
-use gio_sys;
+// Take a look at the license at the top of the repository in the LICENSE file.
+
+use crate::prelude::*;
+use crate::InetAddress;
+use crate::SocketFamily;
+use glib::object::IsA;
 use glib::translate::*;
-use InetAddress;
-use SocketFamily;
+
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 #[derive(Debug)]
 pub enum InetAddressBytes<'a> {
@@ -21,20 +26,68 @@ impl<'a> InetAddressBytes<'a> {
 }
 
 impl InetAddress {
-    pub fn new_from_bytes(inet_address_bytes: InetAddressBytes) -> Self {
-        use self::InetAddressBytes::*;
-
+    #[doc(alias = "g_inet_address_new_from_bytes")]
+    pub fn from_bytes(inet_address_bytes: InetAddressBytes) -> Self {
         let bytes = inet_address_bytes.deref();
 
         let family = match inet_address_bytes {
-            V4(_) => SocketFamily::Ipv4,
-            V6(_) => SocketFamily::Ipv6,
+            InetAddressBytes::V4(_) => SocketFamily::Ipv4,
+            InetAddressBytes::V6(_) => SocketFamily::Ipv6,
         };
         unsafe {
-            from_glib_full(gio_sys::g_inet_address_new_from_bytes(
+            from_glib_full(ffi::g_inet_address_new_from_bytes(
                 bytes.to_glib_none().0,
-                family.to_glib(),
+                family.into_glib(),
             ))
+        }
+    }
+}
+
+pub trait InetAddressExtManual {
+    #[doc(alias = "g_inet_address_to_bytes")]
+    fn to_bytes(&self) -> Option<InetAddressBytes<'_>>;
+}
+
+impl<O: IsA<InetAddress>> InetAddressExtManual for O {
+    // rustdoc-stripper-ignore-next
+    /// Returns `None` in case the address has a native size different than 4 and 16.
+    #[doc(alias = "g_inet_address_to_bytes")]
+    fn to_bytes(&self) -> Option<InetAddressBytes<'_>> {
+        let size = self.native_size();
+        unsafe {
+            let bytes = ffi::g_inet_address_to_bytes(self.as_ref().to_glib_none().0);
+            if size == 4 {
+                Some(InetAddressBytes::V4(&*(bytes as *const [u8; 4])))
+            } else if size == 16 {
+                Some(InetAddressBytes::V6(&*(bytes as *const [u8; 16])))
+            } else {
+                None
+            }
+        }
+    }
+}
+
+impl From<IpAddr> for InetAddress {
+    fn from(addr: IpAddr) -> Self {
+        match addr {
+            IpAddr::V4(v4) => Self::from_bytes(InetAddressBytes::V4(&v4.octets())),
+            IpAddr::V6(v6) => Self::from_bytes(InetAddressBytes::V6(&v6.octets())),
+        }
+    }
+}
+
+impl From<InetAddress> for IpAddr {
+    fn from(addr: InetAddress) -> Self {
+        let size = addr.native_size();
+        unsafe {
+            let bytes = ffi::g_inet_address_to_bytes(addr.to_glib_none().0);
+            if size == 4 {
+                Self::V4(Ipv4Addr::from(*(bytes as *const [u8; 4])))
+            } else if size == 16 {
+                Self::V6(Ipv6Addr::from(*(bytes as *const [u16; 8])))
+            } else {
+                panic!("Unknown IP kind");
+            }
         }
     }
 }

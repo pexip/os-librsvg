@@ -5,25 +5,80 @@ Subject: Revert ABI breakage
 Provide the rsvg_handle_new_gz function.
 Do not provide the C prototype to force
 applications using it to use rsvg_handle_new instead.
----
- librsvg/rsvg-handle.c | 7 +++++++
- 1 file changed, 7 insertions(+)
 
-diff --git a/librsvg/rsvg-handle.c b/librsvg/rsvg-handle.c
-index 95364db..3226c89 100644
---- a/librsvg/rsvg-handle.c
-+++ b/librsvg/rsvg-handle.c
-@@ -437,6 +437,13 @@ rsvg_handle_free (RsvgHandle *handle)
-     rsvg_rust_handle_free (handle);
+Co-authored-by: Simon McVittie <smcv@debian.org>
+---
+ src/c_api/handle.rs |  6 ++++++
+ tests/api.c         | 28 ++++++++++++++++++++++++++++
+ 2 files changed, 34 insertions(+)
+
+diff --git a/src/c_api/handle.rs b/src/c_api/handle.rs
+index 9106f9d..57d16ba 100644
+--- a/src/c_api/handle.rs
++++ b/src/c_api/handle.rs
+@@ -1498,6 +1498,12 @@ pub unsafe extern "C" fn rsvg_handle_new() -> *const RsvgHandle {
+     obj.to_glib_full()
  }
  
 +/* Debian-specific, for compatibility with old ABI */
-+RsvgHandle *
-+rsvg_handle_new_gz (void)
-+{
-+    return rsvg_handle_new ();
++#[no_mangle]
++pub unsafe extern "C" fn rsvg_handle_new_gz() -> *const RsvgHandle {
++    rsvg_handle_new()
 +}
 +
- /**
-  * rsvg_handle_new:
-  *
+ #[no_mangle]
+ pub unsafe extern "C" fn rsvg_handle_new_with_flags(flags: RsvgHandleFlags) -> *const RsvgHandle {
+     let obj = glib::Object::new::<CHandle>(&[("flags", &HandleFlags::from_bits_truncate(flags))])
+diff --git a/tests/api.c b/tests/api.c
+index 5c494a4..3c87c48 100644
+--- a/tests/api.c
++++ b/tests/api.c
+@@ -20,6 +20,9 @@
+ #include <librsvg/rsvg.h>
+ #include "test-utils.h"
+ 
++/* Debian-specific addition to reflect old ABI */
++RsvgHandle *rsvg_handle_new_gz (void);
++
+ /*
+   Untested:
+   rsvg_handle_internal_set_testing
+@@ -502,6 +505,30 @@ handle_new_from_stream_sync (void)
+     g_object_unref (stream);
+ }
+ 
++static void
++handle_new_gz (void)
++{
++    char *filename = get_test_filename ("example.svg");
++    GError *error = NULL;
++    GFile *file = g_file_new_for_path (filename);
++    g_assert_nonnull (file);
++
++    g_free (filename);
++
++    GFileInputStream *stream = g_file_read (file, NULL, &error);
++    g_assert_nonnull (stream);
++    g_assert_no_error (error);
++
++    RsvgHandle *handle = rsvg_handle_new_gz ();
++
++    g_assert (rsvg_handle_read_stream_sync (handle, G_INPUT_STREAM (stream), NULL, &error));
++    g_assert_no_error (error);
++
++    g_object_unref (handle);
++    g_object_unref (file);
++    g_object_unref (stream);
++}
++
+ static void
+ handle_read_stream_sync (void)
+ {
+@@ -1670,6 +1697,7 @@ add_api_tests (void)
+     g_test_add_func ("/api/handle_new_from_data", handle_new_from_data);
+     g_test_add_func ("/api/handle_new_from_gfile_sync", handle_new_from_gfile_sync);
+     g_test_add_func ("/api/handle_new_from_stream_sync", handle_new_from_stream_sync);
++    g_test_add_func ("/api/handle_new_gz", handle_new_gz);
+     g_test_add_func ("/api/handle_read_stream_sync", handle_read_stream_sync);
+     g_test_add_func ("/api/handle_has_sub", handle_has_sub);
+     g_test_add_func ("/api/handle_get_pixbuf", handle_get_pixbuf);

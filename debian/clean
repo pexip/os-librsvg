@@ -1,1 +1,5 @@
 debian/locales/
+vendor/js-sys/src/
+vendor/web-sys/src/
+vendor/windows-sys/src/
+tests/fixtures/cmdline/a-link-purple-bg.png

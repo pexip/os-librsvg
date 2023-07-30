@@ -2,12 +2,10 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-extern crate glib_sys;
-extern crate shell_words;
-extern crate tempfile;
 use glib_sys::*;
 use std::env;
 use std::error::Error;
+use std::ffi::OsString;
 use std::mem::{align_of, size_of};
 use std::path::Path;
 use std::process::Command;
@@ -22,23 +20,17 @@ struct Compiler {
 }
 
 impl Compiler {
-    pub fn new() -> Result<Compiler, Box<dyn Error>> {
+    pub fn new() -> Result<Self, Box<dyn Error>> {
         let mut args = get_var("CC", "cc")?;
         args.push("-Wno-deprecated-declarations".to_owned());
+        // For _Generic
+        args.push("-std=c11".to_owned());
         // For %z support in printf when using MinGW.
         args.push("-D__USE_MINGW_ANSI_STDIO".to_owned());
         args.extend(get_var("CFLAGS", "")?);
         args.extend(get_var("CPPFLAGS", "")?);
         args.extend(pkg_config_cflags(PACKAGES)?);
-        Ok(Compiler { args })
-    }
-
-    pub fn define<'a, V: Into<Option<&'a str>>>(&mut self, var: &str, val: V) {
-        let arg = match val.into() {
-            None => format!("-D{}", var),
-            Some(val) => format!("-D{}={}", var, val),
-        };
-        self.args.push(arg);
+        Ok(Self { args })
     }
 
     pub fn compile(&self, src: &Path, out: &Path) -> Result<(), Box<dyn Error>> {
@@ -72,7 +64,8 @@ fn pkg_config_cflags(packages: &[&str]) -> Result<Vec<String>, Box<dyn Error>> {
     if packages.is_empty() {
         return Ok(Vec::new());
     }
-    let mut cmd = Command::new("pkg-config");
+    let pkg_config = env::var_os("PKG_CONFIG").unwrap_or_else(|| OsString::from("pkg-config"));
+    let mut cmd = Command::new(pkg_config);
     cmd.arg("--cflags");
     cmd.args(packages);
     let out = cmd.output()?;
@@ -95,8 +88,6 @@ struct Results {
     passed: usize,
     /// Total number of failed tests (including those that failed to compile).
     failed: usize,
-    /// Number of tests that failed to compile.
-    failed_to_compile: usize,
 }
 
 impl Results {
@@ -106,15 +97,8 @@ impl Results {
     fn record_failed(&mut self) {
         self.failed += 1;
     }
-    fn record_failed_to_compile(&mut self) {
-        self.failed += 1;
-        self.failed_to_compile += 1;
-    }
     fn summary(&self) -> String {
-        format!(
-            "{} passed; {} failed (compilation errors: {})",
-            self.passed, self.failed, self.failed_to_compile
-        )
+        format!("{} passed; {} failed", self.passed, self.failed)
     }
     fn expect_total_success(&self) {
         if self.failed == 0 {
@@ -126,93 +110,97 @@ impl Results {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn cross_validate_constants_with_c() {
-    let tmpdir = Builder::new()
-        .prefix("abi")
-        .tempdir()
-        .expect("temporary directory");
-    let cc = Compiler::new().expect("configured compiler");
+    let mut c_constants: Vec<(String, String)> = Vec::new();
 
-    assert_eq!(
-        "1",
-        get_c_value(tmpdir.path(), &cc, "1").expect("C constant"),
-        "failed to obtain correct constant value for 1"
-    );
-
-    let mut results: Results = Default::default();
-    for (i, &(name, rust_value)) in RUST_CONSTANTS.iter().enumerate() {
-        match get_c_value(tmpdir.path(), &cc, name) {
-            Err(e) => {
-                results.record_failed_to_compile();
-                eprintln!("{}", e);
-            }
-            Ok(ref c_value) => {
-                if rust_value == c_value {
-                    results.record_passed();
-                } else {
-                    results.record_failed();
-                    eprintln!(
-                        "Constant value mismatch for {}\nRust: {:?}\nC:    {:?}",
-                        name, rust_value, c_value
-                    );
-                }
-            }
-        };
-        if (i + 1) % 25 == 0 {
-            println!("constants ... {}", results.summary());
-        }
+    for l in get_c_output("constant").unwrap().lines() {
+        let mut words = l.trim().split(';');
+        let name = words.next().expect("Failed to parse name").to_owned();
+        let value = words
+            .next()
+            .and_then(|s| s.parse().ok())
+            .expect("Failed to parse value");
+        c_constants.push((name, value));
     }
+
+    let mut results = Results::default();
+
+    for ((rust_name, rust_value), (c_name, c_value)) in
+        RUST_CONSTANTS.iter().zip(c_constants.iter())
+    {
+        if rust_name != c_name {
+            results.record_failed();
+            eprintln!("Name mismatch:\nRust: {:?}\nC:    {:?}", rust_name, c_name,);
+            continue;
+        }
+
+        if rust_value != c_value {
+            results.record_failed();
+            eprintln!(
+                "Constant value mismatch for {}\nRust: {:?}\nC:    {:?}",
+                rust_name, rust_value, &c_value
+            );
+            continue;
+        }
+
+        results.record_passed();
+    }
+
     results.expect_total_success();
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn cross_validate_layout_with_c() {
-    let tmpdir = Builder::new()
-        .prefix("abi")
-        .tempdir()
-        .expect("temporary directory");
-    let cc = Compiler::new().expect("configured compiler");
+    let mut c_layouts = Vec::new();
 
-    assert_eq!(
-        Layout {
-            size: 1,
-            alignment: 1
-        },
-        get_c_layout(tmpdir.path(), &cc, "char").expect("C layout"),
-        "failed to obtain correct layout for char type"
-    );
-
-    let mut results: Results = Default::default();
-    for (i, &(name, rust_layout)) in RUST_LAYOUTS.iter().enumerate() {
-        match get_c_layout(tmpdir.path(), &cc, name) {
-            Err(e) => {
-                results.record_failed_to_compile();
-                eprintln!("{}", e);
-            }
-            Ok(c_layout) => {
-                if rust_layout == c_layout {
-                    results.record_passed();
-                } else {
-                    results.record_failed();
-                    eprintln!(
-                        "Layout mismatch for {}\nRust: {:?}\nC:    {:?}",
-                        name, rust_layout, &c_layout
-                    );
-                }
-            }
-        };
-        if (i + 1) % 25 == 0 {
-            println!("layout    ... {}", results.summary());
-        }
+    for l in get_c_output("layout").unwrap().lines() {
+        let mut words = l.trim().split(';');
+        let name = words.next().expect("Failed to parse name").to_owned();
+        let size = words
+            .next()
+            .and_then(|s| s.parse().ok())
+            .expect("Failed to parse size");
+        let alignment = words
+            .next()
+            .and_then(|s| s.parse().ok())
+            .expect("Failed to parse alignment");
+        c_layouts.push((name, Layout { size, alignment }));
     }
+
+    let mut results = Results::default();
+
+    for ((rust_name, rust_layout), (c_name, c_layout)) in RUST_LAYOUTS.iter().zip(c_layouts.iter())
+    {
+        if rust_name != c_name {
+            results.record_failed();
+            eprintln!("Name mismatch:\nRust: {:?}\nC:    {:?}", rust_name, c_name,);
+            continue;
+        }
+
+        if rust_layout != c_layout {
+            results.record_failed();
+            eprintln!(
+                "Layout mismatch for {}\nRust: {:?}\nC:    {:?}",
+                rust_name, rust_layout, &c_layout
+            );
+            continue;
+        }
+
+        results.record_passed();
+    }
+
     results.expect_total_success();
 }
 
-fn get_c_layout(dir: &Path, cc: &Compiler, name: &str) -> Result<Layout, Box<dyn Error>> {
-    let exe = dir.join("layout");
-    let mut cc = cc.clone();
-    cc.define("ABI_TYPE_NAME", name);
-    cc.compile(Path::new("tests/layout.c"), &exe)?;
+fn get_c_output(name: &str) -> Result<String, Box<dyn Error>> {
+    let tmpdir = Builder::new().prefix("abi").tempdir()?;
+    let exe = tmpdir.path().join(name);
+    let c_file = Path::new("tests").join(name).with_extension("c");
+
+    let cc = Compiler::new().expect("configured compiler");
+    cc.compile(&c_file, &exe)?;
 
     let mut abi_cmd = Command::new(exe);
     let output = abi_cmd.output()?;
@@ -220,35 +208,7 @@ fn get_c_layout(dir: &Path, cc: &Compiler, name: &str) -> Result<Layout, Box<dyn
         return Err(format!("command {:?} failed, {:?}", &abi_cmd, &output).into());
     }
 
-    let stdout = str::from_utf8(&output.stdout)?;
-    let mut words = stdout.trim().split_whitespace();
-    let size = words.next().unwrap().parse().unwrap();
-    let alignment = words.next().unwrap().parse().unwrap();
-    Ok(Layout { size, alignment })
-}
-
-fn get_c_value(dir: &Path, cc: &Compiler, name: &str) -> Result<String, Box<dyn Error>> {
-    let exe = dir.join("constant");
-    let mut cc = cc.clone();
-    cc.define("ABI_CONSTANT_NAME", name);
-    cc.compile(Path::new("tests/constant.c"), &exe)?;
-
-    let mut abi_cmd = Command::new(exe);
-    let output = abi_cmd.output()?;
-    if !output.status.success() {
-        return Err(format!("command {:?} failed, {:?}", &abi_cmd, &output).into());
-    }
-
-    let output = str::from_utf8(&output.stdout)?.trim();
-    if !output.starts_with("###gir test###") || !output.ends_with("###gir test###") {
-        return Err(format!(
-            "command {:?} return invalid output, {:?}",
-            &abi_cmd, &output
-        )
-        .into());
-    }
-
-    Ok(String::from(&output[14..(output.len() - 14)]))
+    Ok(String::from_utf8(output.stdout)?)
 }
 
 const RUST_LAYOUTS: &[(&str, Layout)] = &[
@@ -299,6 +259,13 @@ const RUST_LAYOUTS: &[(&str, Layout)] = &[
         Layout {
             size: size_of::<GConvertError>(),
             alignment: align_of::<GConvertError>(),
+        },
+    ),
+    (
+        "GDate",
+        Layout {
+            size: size_of::<GDate>(),
+            alignment: align_of::<GDate>(),
         },
     ),
     (
@@ -362,6 +329,13 @@ const RUST_LAYOUTS: &[(&str, Layout)] = &[
         Layout {
             size: size_of::<GFileError>(),
             alignment: align_of::<GFileError>(),
+        },
+    ),
+    (
+        "GFileSetContentsFlags",
+        Layout {
+            size: size_of::<GFileSetContentsFlags>(),
+            alignment: align_of::<GFileSetContentsFlags>(),
         },
     ),
     (
@@ -488,6 +462,13 @@ const RUST_LAYOUTS: &[(&str, Layout)] = &[
         Layout {
             size: size_of::<GLogWriterOutput>(),
             alignment: align_of::<GLogWriterOutput>(),
+        },
+    ),
+    (
+        "GMainContextFlags",
+        Layout {
+            size: size_of::<GMainContextFlags>(),
+            alignment: align_of::<GMainContextFlags>(),
         },
     ),
     (
@@ -925,6 +906,41 @@ const RUST_LAYOUTS: &[(&str, Layout)] = &[
         },
     ),
     (
+        "GUriError",
+        Layout {
+            size: size_of::<GUriError>(),
+            alignment: align_of::<GUriError>(),
+        },
+    ),
+    (
+        "GUriFlags",
+        Layout {
+            size: size_of::<GUriFlags>(),
+            alignment: align_of::<GUriFlags>(),
+        },
+    ),
+    (
+        "GUriHideFlags",
+        Layout {
+            size: size_of::<GUriHideFlags>(),
+            alignment: align_of::<GUriHideFlags>(),
+        },
+    ),
+    (
+        "GUriParamsFlags",
+        Layout {
+            size: size_of::<GUriParamsFlags>(),
+            alignment: align_of::<GUriParamsFlags>(),
+        },
+    ),
+    (
+        "GUriParamsIter",
+        Layout {
+            size: size_of::<GUriParamsIter>(),
+            alignment: align_of::<GUriParamsIter>(),
+        },
+    ),
+    (
         "GUserDirectory",
         Layout {
             size: size_of::<GUserDirectory>(),
@@ -1074,6 +1090,10 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) G_FILE_ERROR_PIPE", "18"),
     ("(gint) G_FILE_ERROR_ROFS", "8"),
     ("(gint) G_FILE_ERROR_TXTBSY", "9"),
+    ("(guint) G_FILE_SET_CONTENTS_CONSISTENT", "1"),
+    ("(guint) G_FILE_SET_CONTENTS_DURABLE", "2"),
+    ("(guint) G_FILE_SET_CONTENTS_NONE", "0"),
+    ("(guint) G_FILE_SET_CONTENTS_ONLY_EXISTING", "4"),
     ("(guint) G_FILE_TEST_EXISTS", "16"),
     ("(guint) G_FILE_TEST_IS_DIR", "4"),
     ("(guint) G_FILE_TEST_IS_EXECUTABLE", "8"),
@@ -1122,22 +1142,15 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) G_IO_STATUS_EOF", "2"),
     ("(gint) G_IO_STATUS_ERROR", "0"),
     ("(gint) G_IO_STATUS_NORMAL", "1"),
-    ("G_KEY_FILE_DESKTOP_ACTION_GROUP_PREFIX", "Desktop Action"),
     ("G_KEY_FILE_DESKTOP_GROUP", "Desktop Entry"),
     ("G_KEY_FILE_DESKTOP_KEY_ACTIONS", "Actions"),
     ("G_KEY_FILE_DESKTOP_KEY_CATEGORIES", "Categories"),
     ("G_KEY_FILE_DESKTOP_KEY_COMMENT", "Comment"),
     ("G_KEY_FILE_DESKTOP_KEY_DBUS_ACTIVATABLE", "DBusActivatable"),
     ("G_KEY_FILE_DESKTOP_KEY_EXEC", "Exec"),
-    ("G_KEY_FILE_DESKTOP_KEY_FULLNAME", "X-GNOME-FullName"),
     ("G_KEY_FILE_DESKTOP_KEY_GENERIC_NAME", "GenericName"),
-    (
-        "G_KEY_FILE_DESKTOP_KEY_GETTEXT_DOMAIN",
-        "X-GNOME-Gettext-Domain",
-    ),
     ("G_KEY_FILE_DESKTOP_KEY_HIDDEN", "Hidden"),
     ("G_KEY_FILE_DESKTOP_KEY_ICON", "Icon"),
-    ("G_KEY_FILE_DESKTOP_KEY_KEYWORDS", "Keywords"),
     ("G_KEY_FILE_DESKTOP_KEY_MIME_TYPE", "MimeType"),
     ("G_KEY_FILE_DESKTOP_KEY_NAME", "Name"),
     ("G_KEY_FILE_DESKTOP_KEY_NOT_SHOW_IN", "NotShowIn"),
@@ -1182,6 +1195,8 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(guint) G_LOG_LEVEL_WARNING", "16"),
     ("(gint) G_LOG_WRITER_HANDLED", "1"),
     ("(gint) G_LOG_WRITER_UNHANDLED", "0"),
+    ("(guint) G_MAIN_CONTEXT_FLAGS_NONE", "0"),
+    ("(guint) G_MAIN_CONTEXT_FLAGS_OWNERLESS_POLLING", "1"),
     ("(guint) G_MARKUP_COLLECT_BOOLEAN", "3"),
     ("(guint) G_MARKUP_COLLECT_INVALID", "0"),
     ("(guint) G_MARKUP_COLLECT_OPTIONAL", "65536"),
@@ -1479,6 +1494,7 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) G_UNICODE_BREAK_BEFORE_AND_AFTER", "12"),
     ("(gint) G_UNICODE_BREAK_CARRIAGE_RETURN", "1"),
     ("(gint) G_UNICODE_BREAK_CLOSE_PARANTHESIS", "36"),
+    ("(gint) G_UNICODE_BREAK_CLOSE_PARENTHESIS", "36"),
     ("(gint) G_UNICODE_BREAK_CLOSE_PUNCTUATION", "16"),
     ("(gint) G_UNICODE_BREAK_COMBINING_MARK", "3"),
     ("(gint) G_UNICODE_BREAK_COMPLEX_CONTEXT", "26"),
@@ -1562,13 +1578,16 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) G_UNICODE_SCRIPT_CHAKMA", "96"),
     ("(gint) G_UNICODE_SCRIPT_CHAM", "72"),
     ("(gint) G_UNICODE_SCRIPT_CHEROKEE", "6"),
+    ("(gint) G_UNICODE_SCRIPT_CHORASMIAN", "153"),
     ("(gint) G_UNICODE_SCRIPT_COMMON", "0"),
     ("(gint) G_UNICODE_SCRIPT_COPTIC", "7"),
     ("(gint) G_UNICODE_SCRIPT_CUNEIFORM", "63"),
     ("(gint) G_UNICODE_SCRIPT_CYPRIOT", "47"),
+    ("(gint) G_UNICODE_SCRIPT_CYPRO_MINOAN", "157"),
     ("(gint) G_UNICODE_SCRIPT_CYRILLIC", "8"),
     ("(gint) G_UNICODE_SCRIPT_DESERET", "9"),
     ("(gint) G_UNICODE_SCRIPT_DEVANAGARI", "10"),
+    ("(gint) G_UNICODE_SCRIPT_DIVES_AKURU", "154"),
     ("(gint) G_UNICODE_SCRIPT_DOGRA", "142"),
     ("(gint) G_UNICODE_SCRIPT_DUPLOYAN", "105"),
     ("(gint) G_UNICODE_SCRIPT_EGYPTIAN_HIEROGLYPHS", "80"),
@@ -1601,6 +1620,7 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) G_UNICODE_SCRIPT_KATAKANA", "22"),
     ("(gint) G_UNICODE_SCRIPT_KAYAH_LI", "67"),
     ("(gint) G_UNICODE_SCRIPT_KHAROSHTHI", "60"),
+    ("(gint) G_UNICODE_SCRIPT_KHITAN_SMALL_SCRIPT", "155"),
     ("(gint) G_UNICODE_SCRIPT_KHMER", "23"),
     ("(gint) G_UNICODE_SCRIPT_KHOJKI", "108"),
     ("(gint) G_UNICODE_SCRIPT_KHUDAWADI", "109"),
@@ -1620,6 +1640,7 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) G_UNICODE_SCRIPT_MANICHAEAN", "112"),
     ("(gint) G_UNICODE_SCRIPT_MARCHEN", "134"),
     ("(gint) G_UNICODE_SCRIPT_MASARAM_GONDI", "138"),
+    ("(gint) G_UNICODE_SCRIPT_MATH", "162"),
     ("(gint) G_UNICODE_SCRIPT_MEDEFAIDRIN", "146"),
     ("(gint) G_UNICODE_SCRIPT_MEETEI_MAYEK", "87"),
     ("(gint) G_UNICODE_SCRIPT_MENDE_KIKAKUI", "113"),
@@ -1647,6 +1668,7 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) G_UNICODE_SCRIPT_OLD_SOGDIAN", "147"),
     ("(gint) G_UNICODE_SCRIPT_OLD_SOUTH_ARABIAN", "88"),
     ("(gint) G_UNICODE_SCRIPT_OLD_TURKIC", "89"),
+    ("(gint) G_UNICODE_SCRIPT_OLD_UYGHUR", "158"),
     ("(gint) G_UNICODE_SCRIPT_OL_CHIKI", "73"),
     ("(gint) G_UNICODE_SCRIPT_ORIYA", "31"),
     ("(gint) G_UNICODE_SCRIPT_OSAGE", "136"),
@@ -1679,6 +1701,7 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) G_UNICODE_SCRIPT_TAI_VIET", "92"),
     ("(gint) G_UNICODE_SCRIPT_TAKRI", "102"),
     ("(gint) G_UNICODE_SCRIPT_TAMIL", "35"),
+    ("(gint) G_UNICODE_SCRIPT_TANGSA", "159"),
     ("(gint) G_UNICODE_SCRIPT_TANGUT", "137"),
     ("(gint) G_UNICODE_SCRIPT_TELUGU", "36"),
     ("(gint) G_UNICODE_SCRIPT_THAANA", "37"),
@@ -1686,11 +1709,14 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) G_UNICODE_SCRIPT_TIBETAN", "39"),
     ("(gint) G_UNICODE_SCRIPT_TIFINAGH", "57"),
     ("(gint) G_UNICODE_SCRIPT_TIRHUTA", "124"),
+    ("(gint) G_UNICODE_SCRIPT_TOTO", "160"),
     ("(gint) G_UNICODE_SCRIPT_UGARITIC", "53"),
     ("(gint) G_UNICODE_SCRIPT_UNKNOWN", "61"),
     ("(gint) G_UNICODE_SCRIPT_VAI", "74"),
+    ("(gint) G_UNICODE_SCRIPT_VITHKUQI", "161"),
     ("(gint) G_UNICODE_SCRIPT_WANCHO", "152"),
     ("(gint) G_UNICODE_SCRIPT_WARANG_CITI", "125"),
+    ("(gint) G_UNICODE_SCRIPT_YEZIDI", "156"),
     ("(gint) G_UNICODE_SCRIPT_YI", "41"),
     ("(gint) G_UNICODE_SCRIPT_ZANABAZAR_SQUARE", "141"),
     ("(gint) G_UNICODE_SPACE_SEPARATOR", "29"),
@@ -1699,6 +1725,36 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) G_UNICODE_TITLECASE_LETTER", "8"),
     ("(gint) G_UNICODE_UNASSIGNED", "2"),
     ("(gint) G_UNICODE_UPPERCASE_LETTER", "9"),
+    ("(gint) G_URI_ERROR_BAD_AUTH_PARAMS", "4"),
+    ("(gint) G_URI_ERROR_BAD_FRAGMENT", "9"),
+    ("(gint) G_URI_ERROR_BAD_HOST", "5"),
+    ("(gint) G_URI_ERROR_BAD_PASSWORD", "3"),
+    ("(gint) G_URI_ERROR_BAD_PATH", "7"),
+    ("(gint) G_URI_ERROR_BAD_PORT", "6"),
+    ("(gint) G_URI_ERROR_BAD_QUERY", "8"),
+    ("(gint) G_URI_ERROR_BAD_SCHEME", "1"),
+    ("(gint) G_URI_ERROR_BAD_USER", "2"),
+    ("(gint) G_URI_ERROR_FAILED", "0"),
+    ("(guint) G_URI_FLAGS_ENCODED", "8"),
+    ("(guint) G_URI_FLAGS_ENCODED_FRAGMENT", "128"),
+    ("(guint) G_URI_FLAGS_ENCODED_PATH", "64"),
+    ("(guint) G_URI_FLAGS_ENCODED_QUERY", "32"),
+    ("(guint) G_URI_FLAGS_HAS_AUTH_PARAMS", "4"),
+    ("(guint) G_URI_FLAGS_HAS_PASSWORD", "2"),
+    ("(guint) G_URI_FLAGS_NONE", "0"),
+    ("(guint) G_URI_FLAGS_NON_DNS", "16"),
+    ("(guint) G_URI_FLAGS_PARSE_RELAXED", "1"),
+    ("(guint) G_URI_FLAGS_SCHEME_NORMALIZE", "256"),
+    ("(guint) G_URI_HIDE_AUTH_PARAMS", "4"),
+    ("(guint) G_URI_HIDE_FRAGMENT", "16"),
+    ("(guint) G_URI_HIDE_NONE", "0"),
+    ("(guint) G_URI_HIDE_PASSWORD", "2"),
+    ("(guint) G_URI_HIDE_QUERY", "8"),
+    ("(guint) G_URI_HIDE_USERINFO", "1"),
+    ("(guint) G_URI_PARAMS_CASE_INSENSITIVE", "1"),
+    ("(guint) G_URI_PARAMS_NONE", "0"),
+    ("(guint) G_URI_PARAMS_PARSE_RELAXED", "4"),
+    ("(guint) G_URI_PARAMS_WWW_FORM", "2"),
     ("G_URI_RESERVED_CHARS_GENERIC_DELIMITERS", ":/?#[]@"),
     (
         "G_URI_RESERVED_CHARS_SUBCOMPONENT_DELIMITERS",
@@ -1745,6 +1801,7 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) G_VARIANT_PARSE_ERROR_NO_COMMON_TYPE", "10"),
     ("(gint) G_VARIANT_PARSE_ERROR_NUMBER_OUT_OF_RANGE", "11"),
     ("(gint) G_VARIANT_PARSE_ERROR_NUMBER_TOO_BIG", "12"),
+    ("(gint) G_VARIANT_PARSE_ERROR_RECURSION", "18"),
     ("(gint) G_VARIANT_PARSE_ERROR_TYPE_ERROR", "13"),
     ("(gint) G_VARIANT_PARSE_ERROR_UNEXPECTED_TOKEN", "14"),
     ("(gint) G_VARIANT_PARSE_ERROR_UNKNOWN_KEYWORD", "15"),
@@ -1754,4 +1811,5 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ),
     ("(gint) G_VARIANT_PARSE_ERROR_VALUE_EXPECTED", "17"),
     ("G_WIN32_MSG_HANDLE", "19981206"),
+    ("g_macro__has_attribute___noreturn__", "0"),
 ];

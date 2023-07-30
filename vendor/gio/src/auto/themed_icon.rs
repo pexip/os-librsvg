@@ -2,95 +2,88 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
+use crate::Icon;
 use glib::object::ObjectType as ObjectType_;
 use glib::signal::connect_raw;
 use glib::signal::SignalHandlerId;
 use glib::translate::*;
-use glib::GString;
 use glib::StaticType;
-use glib::Value;
-use glib_sys;
-use gobject_sys;
 use std::boxed::Box as Box_;
 use std::fmt;
 use std::mem::transmute;
-use Icon;
 
-glib_wrapper! {
-    pub struct ThemedIcon(Object<gio_sys::GThemedIcon, gio_sys::GThemedIconClass, ThemedIconClass>) @implements Icon;
+glib::wrapper! {
+    #[doc(alias = "GThemedIcon")]
+    pub struct ThemedIcon(Object<ffi::GThemedIcon, ffi::GThemedIconClass>) @implements Icon;
 
     match fn {
-        get_type => || gio_sys::g_themed_icon_get_type(),
+        type_ => || ffi::g_themed_icon_get_type(),
     }
 }
 
 impl ThemedIcon {
+    #[doc(alias = "g_themed_icon_new")]
     pub fn new(iconname: &str) -> ThemedIcon {
-        unsafe { from_glib_full(gio_sys::g_themed_icon_new(iconname.to_glib_none().0)) }
+        unsafe { from_glib_full(ffi::g_themed_icon_new(iconname.to_glib_none().0)) }
     }
 
-    pub fn new_from_names(iconnames: &[&str]) -> ThemedIcon {
+    #[doc(alias = "g_themed_icon_new_from_names")]
+    #[doc(alias = "new_from_names")]
+    pub fn from_names(iconnames: &[&str]) -> ThemedIcon {
         let len = iconnames.len() as i32;
         unsafe {
-            from_glib_full(gio_sys::g_themed_icon_new_from_names(
+            from_glib_full(ffi::g_themed_icon_new_from_names(
                 iconnames.to_glib_none().0,
                 len,
             ))
         }
     }
 
-    pub fn new_with_default_fallbacks(iconname: &str) -> ThemedIcon {
+    #[doc(alias = "g_themed_icon_new_with_default_fallbacks")]
+    #[doc(alias = "new_with_default_fallbacks")]
+    pub fn with_default_fallbacks(iconname: &str) -> ThemedIcon {
         unsafe {
-            from_glib_full(gio_sys::g_themed_icon_new_with_default_fallbacks(
+            from_glib_full(ffi::g_themed_icon_new_with_default_fallbacks(
                 iconname.to_glib_none().0,
             ))
         }
     }
 
+    #[doc(alias = "g_themed_icon_append_name")]
     pub fn append_name(&self, iconname: &str) {
         unsafe {
-            gio_sys::g_themed_icon_append_name(self.to_glib_none().0, iconname.to_glib_none().0);
+            ffi::g_themed_icon_append_name(self.to_glib_none().0, iconname.to_glib_none().0);
         }
     }
 
-    pub fn get_names(&self) -> Vec<GString> {
+    #[doc(alias = "g_themed_icon_get_names")]
+    #[doc(alias = "get_names")]
+    pub fn names(&self) -> Vec<glib::GString> {
         unsafe {
-            FromGlibPtrContainer::from_glib_none(gio_sys::g_themed_icon_get_names(
+            FromGlibPtrContainer::from_glib_none(ffi::g_themed_icon_get_names(
                 self.to_glib_none().0,
             ))
         }
     }
 
+    #[doc(alias = "g_themed_icon_prepend_name")]
     pub fn prepend_name(&self, iconname: &str) {
         unsafe {
-            gio_sys::g_themed_icon_prepend_name(self.to_glib_none().0, iconname.to_glib_none().0);
+            ffi::g_themed_icon_prepend_name(self.to_glib_none().0, iconname.to_glib_none().0);
         }
     }
 
-    pub fn get_property_use_default_fallbacks(&self) -> bool {
-        unsafe {
-            let mut value = Value::from_type(<bool as StaticType>::static_type());
-            gobject_sys::g_object_get_property(
-                self.as_ptr() as *mut gobject_sys::GObject,
-                b"use-default-fallbacks\0".as_ptr() as *const _,
-                value.to_glib_none_mut().0,
-            );
-            value
-                .get()
-                .expect("Return Value for property `use-default-fallbacks` getter")
-                .unwrap()
-        }
+    #[doc(alias = "use-default-fallbacks")]
+    pub fn uses_default_fallbacks(&self) -> bool {
+        glib::ObjectExt::property(self, "use-default-fallbacks")
     }
 
-    pub fn connect_property_names_notify<F: Fn(&ThemedIcon) + 'static>(
-        &self,
-        f: F,
-    ) -> SignalHandlerId {
+    #[doc(alias = "names")]
+    pub fn connect_names_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
         unsafe extern "C" fn notify_names_trampoline<F: Fn(&ThemedIcon) + 'static>(
-            this: *mut gio_sys::GThemedIcon,
-            _param_spec: glib_sys::gpointer,
-            f: glib_sys::gpointer,
+            this: *mut ffi::GThemedIcon,
+            _param_spec: glib::ffi::gpointer,
+            f: glib::ffi::gpointer,
         ) {
             let f: &F = &*(f as *const F);
             f(&from_glib_borrow(this))
@@ -100,7 +93,9 @@ impl ThemedIcon {
             connect_raw(
                 self.as_ptr() as *mut _,
                 b"notify::names\0".as_ptr() as *const _,
-                Some(transmute(notify_names_trampoline::<F> as usize)),
+                Some(transmute::<_, unsafe extern "C" fn()>(
+                    notify_names_trampoline::<F> as *const (),
+                )),
                 Box_::into_raw(f),
             )
         }
@@ -109,6 +104,6 @@ impl ThemedIcon {
 
 impl fmt::Display for ThemedIcon {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ThemedIcon")
+        f.write_str("ThemedIcon")
     }
 }

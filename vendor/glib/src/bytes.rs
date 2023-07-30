@@ -1,17 +1,15 @@
-// Copyright 2013-2016, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
-use glib_sys;
+use crate::translate::*;
 use std::borrow::Borrow;
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::slice;
-use translate::*;
 
-glib_wrapper! {
+wrapper! {
+    // rustdoc-stripper-ignore-next
     /// A shared immutable byte slice (the equivalent of `Rc<[u8]>`).
     ///
     /// `From` implementations that take references (e.g. `&[u8]`) copy the
@@ -28,32 +26,38 @@ glib_wrapper! {
     /// let b = Bytes::from_static(s);
     /// assert_eq!(&s[..], b);
     /// ```
-    pub struct Bytes(Shared<glib_sys::GBytes>);
+    #[doc(alias = "GBytes")]
+    pub struct Bytes(Shared<ffi::GBytes>);
 
     match fn {
-        ref => |ptr| glib_sys::g_bytes_ref(ptr),
-        unref => |ptr| glib_sys::g_bytes_unref(ptr),
-        get_type => || glib_sys::g_bytes_get_type(),
+        ref => |ptr| ffi::g_bytes_ref(ptr),
+        unref => |ptr| ffi::g_bytes_unref(ptr),
+        type_ => || ffi::g_bytes_get_type(),
     }
 }
 
 impl Bytes {
+    // rustdoc-stripper-ignore-next
     /// Copies `data` into a new shared slice.
+    #[doc(alias = "g_bytes_new")]
     fn new<T: AsRef<[u8]>>(data: T) -> Bytes {
         let data = data.as_ref();
-        unsafe { from_glib_full(glib_sys::g_bytes_new(data.as_ptr() as *const _, data.len())) }
+        unsafe { from_glib_full(ffi::g_bytes_new(data.as_ptr() as *const _, data.len())) }
     }
 
+    // rustdoc-stripper-ignore-next
     /// Creates a view into static `data` without copying.
+    #[doc(alias = "g_bytes_new_static")]
     pub fn from_static(data: &'static [u8]) -> Bytes {
         unsafe {
-            from_glib_full(glib_sys::g_bytes_new_static(
+            from_glib_full(ffi::g_bytes_new_static(
                 data.as_ptr() as *const _,
                 data.len(),
             ))
         }
     }
 
+    // rustdoc-stripper-ignore-next
     /// Takes ownership of `data` and creates a new `Bytes` without copying.
     pub fn from_owned<T: AsRef<[u8]> + Send + 'static>(data: T) -> Bytes {
         let data: Box<T> = Box::new(data);
@@ -62,12 +66,12 @@ impl Bytes {
             (data.len(), data.as_ptr())
         };
 
-        unsafe extern "C" fn drop_box<T: AsRef<[u8]> + Send + 'static>(b: glib_sys::gpointer) {
+        unsafe extern "C" fn drop_box<T: AsRef<[u8]> + Send + 'static>(b: ffi::gpointer) {
             let _: Box<T> = Box::from_raw(b as *mut _);
         }
 
         unsafe {
-            from_glib_full(glib_sys::g_bytes_new_with_free_func(
+            from_glib_full(ffi::g_bytes_new_with_free_func(
                 data_ptr as *const _,
                 size,
                 Some(drop_box::<T>),
@@ -107,17 +111,21 @@ impl Deref for Bytes {
     fn deref(&self) -> &[u8] {
         unsafe {
             let mut len = 0;
-            let ptr = glib_sys::g_bytes_get_data(self.to_glib_none().0, &mut len);
-            debug_assert!(!ptr.is_null() || len == 0);
-            slice::from_raw_parts(ptr as *const u8, len)
+            let ptr = ffi::g_bytes_get_data(self.to_glib_none().0, &mut len);
+            if ptr.is_null() || len == 0 {
+                &[]
+            } else {
+                slice::from_raw_parts(ptr as *const u8, len)
+            }
         }
     }
 }
 
 impl PartialEq for Bytes {
+    #[doc(alias = "g_bytes_equal")]
     fn eq(&self, other: &Self) -> bool {
         unsafe {
-            from_glib(glib_sys::g_bytes_equal(
+            from_glib(ffi::g_bytes_equal(
                 self.to_glib_none().0 as *const _,
                 other.to_glib_none().0 as *const _,
             ))
@@ -130,7 +138,7 @@ impl Eq for Bytes {}
 impl PartialOrd for Bytes {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         unsafe {
-            let ret = glib_sys::g_bytes_compare(
+            let ret = ffi::g_bytes_compare(
                 self.to_glib_none().0 as *const _,
                 other.to_glib_none().0 as *const _,
             );
@@ -142,7 +150,7 @@ impl PartialOrd for Bytes {
 impl Ord for Bytes {
     fn cmp(&self, other: &Self) -> Ordering {
         unsafe {
-            let ret = glib_sys::g_bytes_compare(
+            let ret = ffi::g_bytes_compare(
                 self.to_glib_none().0 as *const _,
                 other.to_glib_none().0 as *const _,
             );
@@ -153,6 +161,8 @@ impl Ord for Bytes {
 
 macro_rules! impl_cmp {
     ($lhs:ty, $rhs: ty) => {
+        #[allow(clippy::redundant_slicing)]
+        #[allow(clippy::extra_unused_lifetimes)]
         impl<'a, 'b> PartialEq<$rhs> for $lhs {
             #[inline]
             fn eq(&self, other: &$rhs) -> bool {
@@ -160,6 +170,8 @@ macro_rules! impl_cmp {
             }
         }
 
+        #[allow(clippy::redundant_slicing)]
+        #[allow(clippy::extra_unused_lifetimes)]
         impl<'a, 'b> PartialEq<$lhs> for $rhs {
             #[inline]
             fn eq(&self, other: &$lhs) -> bool {
@@ -167,6 +179,8 @@ macro_rules! impl_cmp {
             }
         }
 
+        #[allow(clippy::redundant_slicing)]
+        #[allow(clippy::extra_unused_lifetimes)]
         impl<'a, 'b> PartialOrd<$rhs> for $lhs {
             #[inline]
             fn partial_cmp(&self, other: &$rhs) -> Option<Ordering> {
@@ -174,6 +188,8 @@ macro_rules! impl_cmp {
             }
         }
 
+        #[allow(clippy::redundant_slicing)]
+        #[allow(clippy::extra_unused_lifetimes)]
         impl<'a, 'b> PartialOrd<$lhs> for $rhs {
             #[inline]
             fn partial_cmp(&self, other: &$lhs) -> Option<Ordering> {
@@ -210,8 +226,8 @@ mod tests {
         let d = Bytes::from(def);
         assert_eq!(a1, a2);
         assert_eq!(def, d);
-        assert!(a1 != d);
-        assert!(a1 != def);
+        assert_ne!(a1, d);
+        assert_ne!(a1, def);
     }
 
     #[test]

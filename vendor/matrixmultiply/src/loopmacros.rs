@@ -27,6 +27,14 @@ macro_rules! loop4 {
     }
 }
 
+#[cfg(feature = "cgemm")]
+macro_rules! loop2 {
+    ($i:ident, $e:expr) => {{
+        let $i = 0; $e;
+        let $i = 1; $e;
+    }}
+}
+
 #[cfg(not(debug_assertions))]
 macro_rules! loop4 {
     ($i:ident, $e:expr) => {{
@@ -93,6 +101,7 @@ macro_rules! unroll_by_with_last {
     }}
 }
 
+#[allow(unused)]
 #[cfg(not(debug_assertions))]
 macro_rules! unroll_by_with_last {
     ($by:tt => $ntimes:expr, $is_last:ident, $e:expr) => {{

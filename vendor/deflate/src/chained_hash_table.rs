@@ -32,7 +32,7 @@ impl Tables {
 
 /// Create and box the hash chains.
 fn create_tables() -> Box<Tables> {
-    // Using default here is a trick to get around the lack of box syntax on stable rust.
+    // Using default here is a trick to get around the lack of box syntax on stable Rust.
     //
     // Box::new([0u16,n]) ends up creating an temporary array on the stack which is not optimised
     // but using default, which simply calls `box value` internally allows us to get around this.
@@ -160,17 +160,17 @@ impl ChainedHashTable {
     // Get the head of the hash chain for the current hash value
     #[cfg(test)]
     #[inline]
-    pub fn current_head(&self) -> u16 {
+    pub const fn current_head(&self) -> u16 {
         self.c.head[self.current_hash as usize]
     }
 
     #[inline]
-    pub fn current_hash(&self) -> u16 {
+    pub const fn current_hash(&self) -> u16 {
         self.current_hash
     }
 
     #[inline]
-    pub fn get_prev(&self, bytes: usize) -> u16 {
+    pub const fn get_prev(&self, bytes: usize) -> u16 {
         self.c.prev[bytes & WINDOW_MASK]
     }
 

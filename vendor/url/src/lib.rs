@@ -73,6 +73,9 @@ assert!(data_url.fragment() == Some(""));
 # run().unwrap();
 ```
 
+## Serde
+
+Enable the `serde` feature to include `Deserialize` and `Serialize` implementations for `url::Url`.
 
 # Base URL
 
@@ -103,9 +106,21 @@ assert_eq!(css_url.as_str(), "http://servo.github.io/rust-url/main.css");
 # Ok(())
 # }
 # run().unwrap();
+```
+
+# Feature: `serde`
+
+If you enable the `serde` feature, [`Url`](struct.Url.html) will implement
+[`serde::Serialize`](https://docs.rs/serde/1/serde/trait.Serialize.html) and
+[`serde::Deserialize`](https://docs.rs/serde/1/serde/trait.Deserialize.html).
+See [serde documentation](https://serde.rs) for more information.
+
+```toml
+url = { version = "2", features = ["serde"] }
+```
 */
 
-#![doc(html_root_url = "https://docs.rs/url/2.1.1")]
+#![doc(html_root_url = "https://docs.rs/url/2.2.2")]
 
 #[macro_use]
 extern crate matches;
@@ -119,8 +134,6 @@ use crate::parser::{to_u32, Context, Parser, SchemeType, PATH_SEGMENT, USERINFO}
 use percent_encoding::{percent_decode, percent_encode, utf8_percent_encode};
 use std::borrow::Borrow;
 use std::cmp;
-#[cfg(feature = "serde")]
-use std::error::Error;
 use std::fmt::{self, Write};
 use std::hash;
 use std::io;
@@ -307,6 +320,8 @@ impl Url {
 
     /// Parse a string as an URL, with this URL as the base URL.
     ///
+    /// The inverse of this is [`make_relative`].
+    ///
     /// Note: a trailing slash is significant.
     /// Without it, the last path component is considered to be a “file” name
     /// to be removed to get at the “directory” that is used as the base:
@@ -336,9 +351,142 @@ impl Url {
     /// with this URL as the base URL, a [`ParseError`] variant will be returned.
     ///
     /// [`ParseError`]: enum.ParseError.html
+    /// [`make_relative`]: #method.make_relative
     #[inline]
     pub fn join(&self, input: &str) -> Result<Url, crate::ParseError> {
         Url::options().base_url(Some(self)).parse(input)
+    }
+
+    /// Creates a relative URL if possible, with this URL as the base URL.
+    ///
+    /// This is the inverse of [`join`].
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use url::Url;
+    /// # use url::ParseError;
+    ///
+    /// # fn run() -> Result<(), ParseError> {
+    /// let base = Url::parse("https://example.net/a/b.html")?;
+    /// let url = Url::parse("https://example.net/a/c.png")?;
+    /// let relative = base.make_relative(&url);
+    /// assert_eq!(relative.as_ref().map(|s| s.as_str()), Some("c.png"));
+    ///
+    /// let base = Url::parse("https://example.net/a/b/")?;
+    /// let url = Url::parse("https://example.net/a/b/c.png")?;
+    /// let relative = base.make_relative(&url);
+    /// assert_eq!(relative.as_ref().map(|s| s.as_str()), Some("c.png"));
+    ///
+    /// let base = Url::parse("https://example.net/a/b/")?;
+    /// let url = Url::parse("https://example.net/a/d/c.png")?;
+    /// let relative = base.make_relative(&url);
+    /// assert_eq!(relative.as_ref().map(|s| s.as_str()), Some("../d/c.png"));
+    ///
+    /// let base = Url::parse("https://example.net/a/b.html?c=d")?;
+    /// let url = Url::parse("https://example.net/a/b.html?e=f")?;
+    /// let relative = base.make_relative(&url);
+    /// assert_eq!(relative.as_ref().map(|s| s.as_str()), Some("?e=f"));
+    /// # Ok(())
+    /// # }
+    /// # run().unwrap();
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// If this URL can't be a base for the given URL, `None` is returned.
+    /// This is for example the case if the scheme, host or port are not the same.
+    ///
+    /// [`join`]: #method.join
+    pub fn make_relative(&self, url: &Url) -> Option<String> {
+        if self.cannot_be_a_base() {
+            return None;
+        }
+
+        // Scheme, host and port need to be the same
+        if self.scheme() != url.scheme() || self.host() != url.host() || self.port() != url.port() {
+            return None;
+        }
+
+        // We ignore username/password at this point
+
+        // The path has to be transformed
+        let mut relative = String::new();
+
+        // Extract the filename of both URIs, these need to be handled separately
+        fn extract_path_filename(s: &str) -> (&str, &str) {
+            let last_slash_idx = s.rfind('/').unwrap_or(0);
+            let (path, filename) = s.split_at(last_slash_idx);
+            if filename.is_empty() {
+                (path, "")
+            } else {
+                (path, &filename[1..])
+            }
+        }
+
+        let (base_path, base_filename) = extract_path_filename(self.path());
+        let (url_path, url_filename) = extract_path_filename(url.path());
+
+        let mut base_path = base_path.split('/').peekable();
+        let mut url_path = url_path.split('/').peekable();
+
+        // Skip over the common prefix
+        while base_path.peek().is_some() && base_path.peek() == url_path.peek() {
+            base_path.next();
+            url_path.next();
+        }
+
+        // Add `..` segments for the remainder of the base path
+        for base_path_segment in base_path {
+            // Skip empty last segments
+            if base_path_segment.is_empty() {
+                break;
+            }
+
+            if !relative.is_empty() {
+                relative.push('/');
+            }
+
+            relative.push_str("..");
+        }
+
+        // Append the remainder of the other URI
+        for url_path_segment in url_path {
+            if !relative.is_empty() {
+                relative.push('/');
+            }
+
+            relative.push_str(url_path_segment);
+        }
+
+        // Add the filename if they are not the same
+        if base_filename != url_filename {
+            // If the URIs filename is empty this means that it was a directory
+            // so we'll have to append a '/'.
+            //
+            // Otherwise append it directly as the new filename.
+            if url_filename.is_empty() {
+                relative.push('/');
+            } else {
+                if !relative.is_empty() {
+                    relative.push('/');
+                }
+                relative.push_str(url_filename);
+            }
+        }
+
+        // Query and fragment are only taken from the other URI
+        if let Some(query) = url.query() {
+            relative.push('?');
+            relative.push_str(query);
+        }
+
+        if let Some(fragment) = url.fragment() {
+            relative.push('#');
+            relative.push_str(fragment);
+        }
+
+        Some(relative)
     }
 
     /// Return a default `ParseOptions` that can fully configure the URL parser.
@@ -404,14 +552,15 @@ impl Url {
     /// # fn run() -> Result<(), ParseError> {
     /// let url_str = "https://example.net/";
     /// let url = Url::parse(url_str)?;
-    /// assert_eq!(url.into_string(), url_str);
+    /// assert_eq!(String::from(url), url_str);
     /// # Ok(())
     /// # }
     /// # run().unwrap();
     /// ```
     #[inline]
+    #[deprecated(since = "2.3.0", note = "use Into<String>")]
     pub fn into_string(self) -> String {
-        self.serialization
+        self.into()
     }
 
     /// For internal testing, not part of the public API.
@@ -717,8 +866,9 @@ impl Url {
     /// # run().unwrap();
     /// ```
     pub fn username(&self) -> &str {
-        if self.has_authority() {
-            self.slice(self.scheme_end + ("://".len() as u32)..self.username_end)
+        let scheme_separator_len = "://".len() as u32;
+        if self.has_authority() && self.username_end > self.scheme_end + scheme_separator_len {
+            self.slice(self.scheme_end + scheme_separator_len..self.username_end)
         } else {
             ""
         }
@@ -789,7 +939,8 @@ impl Url {
 
     /// Return the string representation of the host (domain or IP address) for this URL, if any.
     ///
-    /// Non-ASCII domains are punycode-encoded per IDNA.
+    /// Non-ASCII domains are punycode-encoded per IDNA if this is the host
+    /// of a special URL, or percent encoded for non-special URLs.
     /// IPv6 addresses are given between `[` and `]` brackets.
     ///
     /// Cannot-be-a-base URLs (typical of `data:` and `mailto:`) and some `file:` URLs
@@ -828,7 +979,8 @@ impl Url {
     }
 
     /// Return the parsed representation of the host for this URL.
-    /// Non-ASCII domain labels are punycode-encoded per IDNA.
+    /// Non-ASCII domain labels are punycode-encoded per IDNA if this is the host
+    /// of a special URL, or percent encoded for non-special URLs.
     ///
     /// Cannot-be-a-base URLs (typical of `data:` and `mailto:`) and some `file:` URLs
     /// don’t have a host.
@@ -867,6 +1019,8 @@ impl Url {
     }
 
     /// If this URL has a host and it is a domain name (not an IP address), return it.
+    /// Non-ASCII domains are punycode-encoded per IDNA if this is the host
+    /// of a special URL, or percent encoded for non-special URLs.
     ///
     /// # Examples
     ///
@@ -1080,6 +1234,7 @@ impl Url {
     /// # }
     /// # run().unwrap();
     /// ```
+    #[allow(clippy::manual_strip)] // introduced in 1.45, MSRV is 1.36
     pub fn path_segments(&self) -> Option<str::Split<'_, char>> {
         let path = self.path();
         if path.starts_with('/') {
@@ -1414,6 +1569,7 @@ impl Url {
     /// Return an object with methods to manipulate this URL’s path segments.
     ///
     /// Return `Err(())` if this URL is cannot-be-a-base.
+    #[allow(clippy::result_unit_err)]
     pub fn path_segments_mut(&mut self) -> Result<PathSegmentsMut<'_>, ()> {
         if self.cannot_be_a_base() {
             Err(())
@@ -1497,6 +1653,7 @@ impl Url {
     /// # }
     /// # run().unwrap();
     /// ```
+    #[allow(clippy::result_unit_err)]
     pub fn set_port(&mut self, mut port: Option<u16>) -> Result<(), ()> {
         // has_host implies !cannot_be_a_base
         if !self.has_host() || self.host() == Some(Host::Domain("")) || self.scheme() == "file" {
@@ -1636,7 +1793,7 @@ impl Url {
         }
 
         if let Some(host) = host {
-            if host == "" && SchemeType::from(self.scheme()).is_special() {
+            if host.is_empty() && SchemeType::from(self.scheme()).is_special() {
                 return Err(ParseError::EmptyHost);
             }
             let mut host_substr = host;
@@ -1767,6 +1924,7 @@ impl Url {
     /// # run().unwrap();
     /// ```
     ///
+    #[allow(clippy::result_unit_err)]
     pub fn set_ip_host(&mut self, address: IpAddr) -> Result<(), ()> {
         if self.cannot_be_a_base() {
             return Err(());
@@ -1806,6 +1964,7 @@ impl Url {
     /// # }
     /// # run().unwrap();
     /// ```
+    #[allow(clippy::result_unit_err)]
     pub fn set_password(&mut self, password: Option<&str>) -> Result<(), ()> {
         // has_host implies !cannot_be_a_base
         if !self.has_host() || self.host() == Some(Host::Domain("")) || self.scheme() == "file" {
@@ -1898,6 +2057,7 @@ impl Url {
     /// # }
     /// # run().unwrap();
     /// ```
+    #[allow(clippy::result_unit_err)]
     pub fn set_username(&mut self, username: &str) -> Result<(), ()> {
         // has_host implies !cannot_be_a_base
         if !self.has_host() || self.host() == Some(Host::Domain("")) || self.scheme() == "file" {
@@ -2059,6 +2219,7 @@ impl Url {
     /// # }
     /// # run().unwrap();
     /// ```
+    #[allow(clippy::result_unit_err, clippy::suspicious_operation_groupings)]
     pub fn set_scheme(&mut self, scheme: &str) -> Result<(), ()> {
         let mut parser = Parser::for_setter(String::new());
         let remaining = parser.parse_scheme(parser::Input::new(scheme))?;
@@ -2138,6 +2299,7 @@ impl Url {
     /// # }
     /// ```
     #[cfg(any(unix, windows, target_os = "redox"))]
+    #[allow(clippy::result_unit_err)]
     pub fn from_file_path<P: AsRef<Path>>(path: P) -> Result<Url, ()> {
         let mut serialization = "file://".to_owned();
         let host_start = serialization.len() as u32;
@@ -2174,6 +2336,7 @@ impl Url {
     /// Note that `std::path` does not consider trailing slashes significant
     /// and usually does not include them (e.g. in `Path::parent()`).
     #[cfg(any(unix, windows, target_os = "redox"))]
+    #[allow(clippy::result_unit_err)]
     pub fn from_directory_path<P: AsRef<Path>>(path: P) -> Result<Url, ()> {
         let mut url = Url::from_file_path(path)?;
         if !url.serialization.ends_with('/') {
@@ -2290,6 +2453,7 @@ impl Url {
     /// for a Windows path, is not UTF-8.)
     #[inline]
     #[cfg(any(unix, windows, target_os = "redox"))]
+    #[allow(clippy::result_unit_err)]
     pub fn to_file_path(&self) -> Result<PathBuf, ()> {
         if let Some(segments) = self.path_segments() {
             let host = match self.host() {
@@ -2347,6 +2511,13 @@ impl fmt::Display for Url {
     }
 }
 
+/// String converstion.
+impl From<Url> for String {
+    fn from(value: Url) -> String {
+        value.serialization
+    }
+}
+
 /// Debug the serialization of this URL.
 impl fmt::Debug for Url {
     #[inline]
@@ -2354,6 +2525,9 @@ impl fmt::Debug for Url {
         formatter
             .debug_struct("Url")
             .field("scheme", &self.scheme())
+            .field("cannot_be_a_base", &self.cannot_be_a_base())
+            .field("username", &self.username())
+            .field("password", &self.password())
             .field("host", &self.host())
             .field("port", &self.port())
             .field("path", &self.path())
@@ -2471,8 +2645,10 @@ impl<'de> serde::Deserialize<'de> for Url {
             where
                 E: Error,
             {
-                Url::parse(s)
-                    .map_err(|err| Error::invalid_value(Unexpected::Str(s), &err.description()))
+                Url::parse(s).map_err(|err| {
+                    let err_s = format!("{}", err);
+                    Error::invalid_value(Unexpected::Str(s), &err_s.as_str())
+                })
             }
         }
 

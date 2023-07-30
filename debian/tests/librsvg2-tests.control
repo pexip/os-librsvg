@@ -1,5 +1,0 @@
-# TODO: Move this back into d/tests/control when librsvg2-tests has been
-# through the NEW queue
-Tests: gnome-desktop-testing
-Depends: gnome-desktop-testing, librsvg2-tests
-Restrictions: allow-stderr

@@ -2,31 +2,35 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
+use crate::InputStream;
+use crate::PollableInputStream;
 use glib::object::IsA;
 use glib::translate::*;
 use std::fmt;
-use InputStream;
-use PollableInputStream;
 
-glib_wrapper! {
-    pub struct UnixInputStream(Object<gio_sys::GUnixInputStream, gio_sys::GUnixInputStreamClass, UnixInputStreamClass>) @extends InputStream, @implements PollableInputStream;
+glib::wrapper! {
+    #[doc(alias = "GUnixInputStream")]
+    pub struct UnixInputStream(Object<ffi::GUnixInputStream, ffi::GUnixInputStreamClass>) @extends InputStream, @implements PollableInputStream;
 
     match fn {
-        get_type => || gio_sys::g_unix_input_stream_get_type(),
+        type_ => || ffi::g_unix_input_stream_get_type(),
     }
 }
 
-pub const NONE_UNIX_INPUT_STREAM: Option<&UnixInputStream> = None;
+impl UnixInputStream {
+    pub const NONE: Option<&'static UnixInputStream> = None;
+}
 
 pub trait UnixInputStreamExt: 'static {
-    fn get_close_fd(&self) -> bool;
+    #[doc(alias = "g_unix_input_stream_get_close_fd")]
+    #[doc(alias = "get_close_fd")]
+    fn closes_fd(&self) -> bool;
 }
 
 impl<O: IsA<UnixInputStream>> UnixInputStreamExt for O {
-    fn get_close_fd(&self) -> bool {
+    fn closes_fd(&self) -> bool {
         unsafe {
-            from_glib(gio_sys::g_unix_input_stream_get_close_fd(
+            from_glib(ffi::g_unix_input_stream_get_close_fd(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -35,6 +39,6 @@ impl<O: IsA<UnixInputStream>> UnixInputStreamExt for O {
 
 impl fmt::Display for UnixInputStream {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "UnixInputStream")
+        f.write_str("UnixInputStream")
     }
 }

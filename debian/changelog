@@ -1,17 +1,152 @@
-librsvg (2.50.3+dfsg-1+deb11u1) bullseye-security; urgency=high
+librsvg (2.54.7+dfsg-1~deb12u1) bookworm-security; urgency=medium
 
   * Team upload
-  * d/gbp.conf: Branch for bullseye
-  * d/p/996-Fix-arbitrary-file-read-when-href-has-special-charact.patch:
-    Add patch from upstream 2.50.8 to fix a directory traversal
-    vulnerability (Closes: #1041810, CVE-2023-38633)
-  * d/p/Fix-compilation-on-rustc-1.40.0.patch:
-    Add patch from upstream 2.50.9 to fix a build regression in the fix
-    for #1041810
-  * d/p/tests-Fix-build-with-older-Autotools.patch:
-    Fix another build regression in the fix for #1041810
+  * Rebuild for bookworm-security
 
- -- Simon McVittie <smcv@debian.org>  Sun, 30 Jul 2023 19:11:45 +0100
+ -- Simon McVittie <smcv@debian.org>  Sun, 30 Jul 2023 17:13:13 +0100
+
+librsvg (2.54.7+dfsg-1) unstable; urgency=high
+
+  * Team upload
+  * New upstream stable release 2.54.6
+    - Fix a directory traversal vulnerability
+      (Closes: #1041810, CVE-2023-38633)
+    - Drop a redundant test-case that frequently regressed as a result of
+      non-problematic font rendering changes
+  * New upstream stable release 2.54.7
+    - Fix compilation of 2.54.6 on rustc < 1.58
+  * d/rules: Skip several known-failing reftests on big-endian architectures.
+    These succeeded when librsvg_2.54.5+dfsg-1 was uploaded in September
+    2022, but regressed sometime between then and the bookworm release,
+    presumably as a result of changes in some other package.
+    (Mitigates: #1038447)
+
+ -- Simon McVittie <smcv@debian.org>  Sun, 30 Jul 2023 15:13:38 +0100
+
+librsvg (2.54.5+dfsg-3) unstable; urgency=medium
+
+  * Team upload
+  * d/p/debian/tests-Skip-known-failing-tests-on-i386.patch:
+    Skip two tests that have started failing on i386 since October 2022
+    (Mitigates: #1038252)
+
+ -- Simon McVittie <smcv@debian.org>  Sun, 18 Jun 2023 18:53:35 +0100
+
+librsvg (2.54.5+dfsg-2) unstable; urgency=medium
+
+  * Restore the librsvg2-tests build and corresponding autopkgtests
+    which were set up a while ago but disabled to avoid having the upload
+    blocked in the Debian NEW queue. Include the svg needed for the tests.
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Tue, 13 Jun 2023 17:25:43 +0200
+
+librsvg (2.54.5+dfsg-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/librsvg2-2.docs: NEWS.md -> NEWS
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Thu, 22 Sep 2022 17:00:54 -0400
+
+librsvg (2.54.4+dfsg-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/librsvg2-2.docs: NEWS was renamed to NEWS.md
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Wed, 15 Jun 2022 14:12:21 -0400
+
+librsvg (2.54.3+dfsg-1) unstable; urgency=medium
+
+  * Team upload
+  * d/clean: Fix build-twice-in-a-row (Closes: #1012017)
+  * New upstream release
+  * d/librsvg2-doc.install: Update for new upstream documentation
+    install location
+  * Release to unstable
+
+ -- Simon McVittie <smcv@debian.org>  Sun, 29 May 2022 14:34:09 +0100
+
+librsvg (2.54.1+dfsg-1) experimental; urgency=medium
+
+  * Team upload
+  * d/control.in: Drop compatibility with old libgdk-pixbuf2.0-dev
+    package
+  * d/copyright: Exclude larger web and Windows dependencies, to avoid
+    needing to keep track of their contents
+  * New upstream release
+  * d/control.in: Update build-dependencies
+  * d/rules: Disable gi-docgen if not building -doc package
+  * d/rules: Disable man pages in nodoc build profile
+  * Refresh patch series
+  * Tolerate some reftest differences
+  * d/rules, d/log-reftests.py: Output diffs as base64 for analysis
+  * Update documentation installation directories for gi-docgen
+  * Fix a malformed Lintian override
+
+ -- Simon McVittie <smcv@debian.org>  Sun, 08 May 2022 12:13:23 +0100
+
+librsvg (2.52.5+dfsg-3) unstable; urgency=medium
+
+  [ Sebastien Bacher ]
+  * debian/rules: remove a test which is failing due to pango
+    https://gitlab.gnome.org/GNOME/librsvg/-/issues/824
+
+ -- Jeremy Bicha <jbicha@debian.org>  Sat, 22 Jan 2022 06:21:00 -0500
+
+librsvg (2.52.5+dfsg-2) unstable; urgency=medium
+
+  [ Simon McVittie ]
+  * Adjust Lintian overrides
+  * Standards-Version: 4.6.0 (no changes required)
+
+  [ Jeremy Bicha ]
+  * Bump debhelper-compat to 13
+  * debian/control.in: Bump minimum rustc to 1.52
+  * debian/control.in: Build-Depend on cargo instead of dh-cargo
+  * Build-Depend on dh-sequence-gir & dh-sequence-gnome
+  * debian/rules: Drop unneeded -Wl,--as-needed
+  * Release to unstable
+
+ -- Jeremy Bicha <jbicha@debian.org>  Fri, 21 Jan 2022 07:53:46 -0500
+
+librsvg (2.52.5+dfsg-1) experimental; urgency=medium
+
+  * Team upload
+  * New upstream release, required by GTK 4.6
+  * Update patch series
+  * d/copyright: Exclude a CC-BY-SA-2.0 test image.
+    It's not clear whether CC-BY-SA-2.0 is DFSG-compliant (3.0 is, 1.0 isn't).
+  * d/p/debian/tests-Replace-a-CC-BY-SA-2.0-test-image-with-a-simpler-on.patch,
+    d/rules, d/clean, d/source/include-binaries, d/a-link-purple-bg.png:
+    Replace CC-BY-SA-2.0-licensed test image with a simpler one
+  * d/rules: Don't delete *.bak in dh_clean
+  * d/p/Link-librsvg-with-libpthread-fixing-a-link-failure.patch:
+    Link with libpthread
+  * d/rules: Don't try to run tests that are no longer in the Automake build
+    system
+  * d/copyright: Update
+  * d/librsvg2-2.install: Stop installing locales, no longer provided
+  * d/librsvg2-2.symbols: Add new symbols
+  * d/librsvg2-2.symbols: Ignore removal of private symbols
+  * d/rules: Increase reftest tolerance for i386 due to i387 FPU
+  * d/rules: Skip a problematic reftest on i386
+  * Release to experimental for initial testing
+
+ -- Simon McVittie <smcv@debian.org>  Mon, 03 Jan 2022 19:00:55 +0000
+
+librsvg (2.50.7+dfsg-2) unstable; urgency=medium
+
+  * Team upload
+  * Release to unstable
+
+ -- Simon McVittie <smcv@debian.org>  Sun, 12 Sep 2021 21:45:00 +0100
+
+librsvg (2.50.7+dfsg-1) experimental; urgency=medium
+
+  * New upstream release
+  * debian/control.in: Bump Build-Depends on libpango1.0-dev to (>= 1.44.0)
+    per upstream requirement
+
+ -- Olivier Tilloy <olivier.tilloy@canonical.com>  Tue, 22 Jun 2021 16:35:11 +0200
 
 librsvg (2.50.3+dfsg-1) unstable; urgency=medium
 

@@ -54,7 +54,7 @@ where
     P: Predicate<str>,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.p)
+        self.p.fmt(f)
     }
 }
 
@@ -136,7 +136,7 @@ where
     P: Predicate<str>,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.p)
+        self.p.fmt(f)
     }
 }
 
@@ -175,6 +175,7 @@ where
     /// let variable: &[u8] = b"";
     /// assert_eq!(false, predicate_fn.eval(variable));
     /// ```
+    #[allow(clippy::wrong_self_convention)]
     fn from_utf8(self) -> Utf8Predicate<Self> {
         Utf8Predicate { p: self }
     }

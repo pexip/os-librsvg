@@ -6,17 +6,19 @@
 #![allow(
     clippy::approx_constant,
     clippy::type_complexity,
-    clippy::unreadable_literal
+    clippy::unreadable_literal,
+    clippy::upper_case_acronyms
 )]
+#![cfg_attr(feature = "dox", feature(doc_cfg))]
 
-extern crate glib_sys as glib;
-extern crate gobject_sys as gobject;
-extern crate libc;
+mod manual;
+
+pub use manual::*;
 
 #[allow(unused_imports)]
 use libc::{
     c_char, c_double, c_float, c_int, c_long, c_short, c_uchar, c_uint, c_ulong, c_ushort, c_void,
-    intptr_t, size_t, ssize_t, time_t, uintptr_t, FILE,
+    intptr_t, size_t, ssize_t, uintptr_t, FILE,
 };
 
 #[allow(unused_imports)]
@@ -42,6 +44,8 @@ pub const G_CREDENTIALS_TYPE_FREEBSD_CMSGCRED: GCredentialsType = 2;
 pub const G_CREDENTIALS_TYPE_OPENBSD_SOCKPEERCRED: GCredentialsType = 3;
 pub const G_CREDENTIALS_TYPE_SOLARIS_UCRED: GCredentialsType = 4;
 pub const G_CREDENTIALS_TYPE_NETBSD_UNPCBID: GCredentialsType = 5;
+pub const G_CREDENTIALS_TYPE_APPLE_XUCRED: GCredentialsType = 6;
+pub const G_CREDENTIALS_TYPE_WIN32_PID: GCredentialsType = 7;
 
 pub type GDBusError = c_int;
 pub const G_DBUS_ERROR_FAILED: GDBusError = 0;
@@ -227,12 +231,18 @@ pub const G_IO_ERROR_PROXY_AUTH_FAILED: GIOErrorEnum = 41;
 pub const G_IO_ERROR_PROXY_NEED_AUTH: GIOErrorEnum = 42;
 pub const G_IO_ERROR_PROXY_NOT_ALLOWED: GIOErrorEnum = 43;
 pub const G_IO_ERROR_BROKEN_PIPE: GIOErrorEnum = 44;
+pub const G_IO_ERROR_CONNECTION_CLOSED: GIOErrorEnum = 44;
 pub const G_IO_ERROR_NOT_CONNECTED: GIOErrorEnum = 45;
 pub const G_IO_ERROR_MESSAGE_TOO_LARGE: GIOErrorEnum = 46;
 
 pub type GIOModuleScopeFlags = c_int;
 pub const G_IO_MODULE_SCOPE_NONE: GIOModuleScopeFlags = 0;
 pub const G_IO_MODULE_SCOPE_BLOCK_DUPLICATES: GIOModuleScopeFlags = 1;
+
+pub type GMemoryMonitorWarningLevel = c_int;
+pub const G_MEMORY_MONITOR_WARNING_LEVEL_LOW: GMemoryMonitorWarningLevel = 50;
+pub const G_MEMORY_MONITOR_WARNING_LEVEL_MEDIUM: GMemoryMonitorWarningLevel = 100;
+pub const G_MEMORY_MONITOR_WARNING_LEVEL_CRITICAL: GMemoryMonitorWarningLevel = 255;
 
 pub type GMountOperationResult = c_int;
 pub const G_MOUNT_OPERATION_HANDLED: GMountOperationResult = 0;
@@ -288,12 +298,6 @@ pub const G_SOCKET_CLIENT_TLS_HANDSHAKING: GSocketClientEvent = 6;
 pub const G_SOCKET_CLIENT_TLS_HANDSHAKED: GSocketClientEvent = 7;
 pub const G_SOCKET_CLIENT_COMPLETE: GSocketClientEvent = 8;
 
-pub type GSocketFamily = c_int;
-pub const G_SOCKET_FAMILY_INVALID: GSocketFamily = 0;
-pub const G_SOCKET_FAMILY_UNIX: GSocketFamily = 1;
-pub const G_SOCKET_FAMILY_IPV4: GSocketFamily = 2;
-pub const G_SOCKET_FAMILY_IPV6: GSocketFamily = 10;
-
 pub type GSocketListenerEvent = c_int;
 pub const G_SOCKET_LISTENER_BINDING: GSocketListenerEvent = 0;
 pub const G_SOCKET_LISTENER_BOUND: GSocketListenerEvent = 1;
@@ -321,6 +325,17 @@ pub const G_TLS_AUTHENTICATION_REQUIRED: GTlsAuthenticationMode = 2;
 pub type GTlsCertificateRequestFlags = c_int;
 pub const G_TLS_CERTIFICATE_REQUEST_NONE: GTlsCertificateRequestFlags = 0;
 
+pub type GTlsChannelBindingError = c_int;
+pub const G_TLS_CHANNEL_BINDING_ERROR_NOT_IMPLEMENTED: GTlsChannelBindingError = 0;
+pub const G_TLS_CHANNEL_BINDING_ERROR_INVALID_STATE: GTlsChannelBindingError = 1;
+pub const G_TLS_CHANNEL_BINDING_ERROR_NOT_AVAILABLE: GTlsChannelBindingError = 2;
+pub const G_TLS_CHANNEL_BINDING_ERROR_NOT_SUPPORTED: GTlsChannelBindingError = 3;
+pub const G_TLS_CHANNEL_BINDING_ERROR_GENERAL_ERROR: GTlsChannelBindingError = 4;
+
+pub type GTlsChannelBindingType = c_int;
+pub const G_TLS_CHANNEL_BINDING_TLS_UNIQUE: GTlsChannelBindingType = 0;
+pub const G_TLS_CHANNEL_BINDING_TLS_SERVER_END_POINT: GTlsChannelBindingType = 1;
+
 pub type GTlsDatabaseLookupFlags = c_int;
 pub const G_TLS_DATABASE_LOOKUP_NONE: GTlsDatabaseLookupFlags = 0;
 pub const G_TLS_DATABASE_LOOKUP_KEYPAIR: GTlsDatabaseLookupFlags = 1;
@@ -334,11 +349,22 @@ pub const G_TLS_ERROR_HANDSHAKE: GTlsError = 4;
 pub const G_TLS_ERROR_CERTIFICATE_REQUIRED: GTlsError = 5;
 pub const G_TLS_ERROR_EOF: GTlsError = 6;
 pub const G_TLS_ERROR_INAPPROPRIATE_FALLBACK: GTlsError = 7;
+pub const G_TLS_ERROR_BAD_CERTIFICATE_PASSWORD: GTlsError = 8;
 
 pub type GTlsInteractionResult = c_int;
 pub const G_TLS_INTERACTION_UNHANDLED: GTlsInteractionResult = 0;
 pub const G_TLS_INTERACTION_HANDLED: GTlsInteractionResult = 1;
 pub const G_TLS_INTERACTION_FAILED: GTlsInteractionResult = 2;
+
+pub type GTlsProtocolVersion = c_int;
+pub const G_TLS_PROTOCOL_VERSION_UNKNOWN: GTlsProtocolVersion = 0;
+pub const G_TLS_PROTOCOL_VERSION_SSL_3_0: GTlsProtocolVersion = 1;
+pub const G_TLS_PROTOCOL_VERSION_TLS_1_0: GTlsProtocolVersion = 2;
+pub const G_TLS_PROTOCOL_VERSION_TLS_1_1: GTlsProtocolVersion = 3;
+pub const G_TLS_PROTOCOL_VERSION_TLS_1_2: GTlsProtocolVersion = 4;
+pub const G_TLS_PROTOCOL_VERSION_TLS_1_3: GTlsProtocolVersion = 5;
+pub const G_TLS_PROTOCOL_VERSION_DTLS_1_0: GTlsProtocolVersion = 201;
+pub const G_TLS_PROTOCOL_VERSION_DTLS_1_2: GTlsProtocolVersion = 202;
 
 pub type GTlsRehandshakeMode = c_int;
 pub const G_TLS_REHANDSHAKE_NEVER: GTlsRehandshakeMode = 0;
@@ -358,6 +384,10 @@ pub const G_ZLIB_COMPRESSOR_FORMAT_GZIP: GZlibCompressorFormat = 1;
 pub const G_ZLIB_COMPRESSOR_FORMAT_RAW: GZlibCompressorFormat = 2;
 
 // Constants
+pub const G_DBUS_METHOD_INVOCATION_HANDLED: gboolean = glib::GTRUE;
+pub const G_DBUS_METHOD_INVOCATION_UNHANDLED: gboolean = glib::GFALSE;
+pub const G_DEBUG_CONTROLLER_EXTENSION_POINT_NAME: *const c_char =
+    b"gio-debug-controller\0" as *const u8 as *const c_char;
 pub const G_DESKTOP_APP_INFO_LOOKUP_EXTENSION_POINT_NAME: *const c_char =
     b"gio-desktop-app-info-lookup\0" as *const u8 as *const c_char;
 pub const G_DRIVE_IDENTIFIER_KIND_UNIX_DEVICE: *const c_char =
@@ -523,6 +553,8 @@ pub const G_FILE_ATTRIBUTE_UNIX_NLINK: *const c_char =
     b"unix::nlink\0" as *const u8 as *const c_char;
 pub const G_FILE_ATTRIBUTE_UNIX_RDEV: *const c_char = b"unix::rdev\0" as *const u8 as *const c_char;
 pub const G_FILE_ATTRIBUTE_UNIX_UID: *const c_char = b"unix::uid\0" as *const u8 as *const c_char;
+pub const G_MEMORY_MONITOR_EXTENSION_POINT_NAME: *const c_char =
+    b"gio-memory-monitor\0" as *const u8 as *const c_char;
 pub const G_MENU_ATTRIBUTE_ACTION: *const c_char = b"action\0" as *const u8 as *const c_char;
 pub const G_MENU_ATTRIBUTE_ACTION_NAMESPACE: *const c_char =
     b"action-namespace\0" as *const u8 as *const c_char;
@@ -535,6 +567,8 @@ pub const G_NATIVE_VOLUME_MONITOR_EXTENSION_POINT_NAME: *const c_char =
     b"gio-native-volume-monitor\0" as *const u8 as *const c_char;
 pub const G_NETWORK_MONITOR_EXTENSION_POINT_NAME: *const c_char =
     b"gio-network-monitor\0" as *const u8 as *const c_char;
+pub const G_POWER_PROFILE_MONITOR_EXTENSION_POINT_NAME: *const c_char =
+    b"gio-power-profile-monitor\0" as *const u8 as *const c_char;
 pub const G_PROXY_EXTENSION_POINT_NAME: *const c_char =
     b"gio-proxy\0" as *const u8 as *const c_char;
 pub const G_PROXY_RESOLVER_EXTENSION_POINT_NAME: *const c_char =
@@ -618,6 +652,7 @@ pub const G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_SERVER: GDBusConnectionFlags = 
 pub const G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_ALLOW_ANONYMOUS: GDBusConnectionFlags = 4;
 pub const G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION: GDBusConnectionFlags = 8;
 pub const G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING: GDBusConnectionFlags = 16;
+pub const G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_REQUIRE_SAME_USER: GDBusConnectionFlags = 32;
 
 pub type GDBusInterfaceSkeletonFlags = c_uint;
 pub const G_DBUS_INTERFACE_SKELETON_FLAGS_NONE: GDBusInterfaceSkeletonFlags = 0;
@@ -646,6 +681,7 @@ pub const G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS: GDBusProxyFlags = 2;
 pub const G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START: GDBusProxyFlags = 4;
 pub const G_DBUS_PROXY_FLAGS_GET_INVALIDATED_PROPERTIES: GDBusProxyFlags = 8;
 pub const G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START_AT_CONSTRUCTION: GDBusProxyFlags = 16;
+pub const G_DBUS_PROXY_FLAGS_NO_MATCH_RULE: GDBusProxyFlags = 32;
 
 pub type GDBusSendMessageFlags = c_uint;
 pub const G_DBUS_SEND_MESSAGE_FLAGS_NONE: GDBusSendMessageFlags = 0;
@@ -655,6 +691,7 @@ pub type GDBusServerFlags = c_uint;
 pub const G_DBUS_SERVER_FLAGS_NONE: GDBusServerFlags = 0;
 pub const G_DBUS_SERVER_FLAGS_RUN_IN_THREAD: GDBusServerFlags = 1;
 pub const G_DBUS_SERVER_FLAGS_AUTHENTICATION_ALLOW_ANONYMOUS: GDBusServerFlags = 2;
+pub const G_DBUS_SERVER_FLAGS_AUTHENTICATION_REQUIRE_SAME_USER: GDBusServerFlags = 4;
 
 pub type GDBusSignalFlags = c_uint;
 pub const G_DBUS_SIGNAL_FLAGS_NONE: GDBusSignalFlags = 0;
@@ -743,12 +780,6 @@ pub const G_SETTINGS_BIND_NO_SENSITIVITY: GSettingsBindFlags = 4;
 pub const G_SETTINGS_BIND_GET_NO_CHANGES: GSettingsBindFlags = 8;
 pub const G_SETTINGS_BIND_INVERT_BOOLEAN: GSettingsBindFlags = 16;
 
-pub type GSocketMsgFlags = c_uint;
-pub const G_SOCKET_MSG_NONE: GSocketMsgFlags = 0;
-pub const G_SOCKET_MSG_OOB: GSocketMsgFlags = 1;
-pub const G_SOCKET_MSG_PEEK: GSocketMsgFlags = 2;
-pub const G_SOCKET_MSG_DONTROUTE: GSocketMsgFlags = 4;
-
 pub type GSubprocessFlags = c_uint;
 pub const G_SUBPROCESS_FLAGS_NONE: GSubprocessFlags = 0;
 pub const G_SUBPROCESS_FLAGS_STDIN_PIPE: GSubprocessFlags = 1;
@@ -759,6 +790,7 @@ pub const G_SUBPROCESS_FLAGS_STDERR_PIPE: GSubprocessFlags = 16;
 pub const G_SUBPROCESS_FLAGS_STDERR_SILENCE: GSubprocessFlags = 32;
 pub const G_SUBPROCESS_FLAGS_STDERR_MERGE: GSubprocessFlags = 64;
 pub const G_SUBPROCESS_FLAGS_INHERIT_FDS: GSubprocessFlags = 128;
+pub const G_SUBPROCESS_FLAGS_SEARCH_PATH_FROM_ENVP: GSubprocessFlags = 256;
 
 pub type GTestDBusFlags = c_uint;
 pub const G_TEST_DBUS_NONE: GTestDBusFlags = 0;
@@ -781,6 +813,9 @@ pub const G_TLS_PASSWORD_NONE: GTlsPasswordFlags = 0;
 pub const G_TLS_PASSWORD_RETRY: GTlsPasswordFlags = 2;
 pub const G_TLS_PASSWORD_MANY_TRIES: GTlsPasswordFlags = 4;
 pub const G_TLS_PASSWORD_FINAL_TRY: GTlsPasswordFlags = 8;
+pub const G_TLS_PASSWORD_PKCS11_USER: GTlsPasswordFlags = 16;
+pub const G_TLS_PASSWORD_PKCS11_SECURITY_OFFICER: GTlsPasswordFlags = 32;
+pub const G_TLS_PASSWORD_PKCS11_CONTEXT_SPECIFIC: GTlsPasswordFlags = 64;
 
 // Callbacks
 pub type GAsyncReadyCallback =
@@ -922,8 +957,8 @@ pub type GVfsFileLookupFunc =
     Option<unsafe extern "C" fn(*mut GVfs, *const c_char, gpointer) -> *mut GFile>;
 
 // Records
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GActionEntry {
     pub name: *const c_char,
     pub activate: Option<unsafe extern "C" fn(*mut GSimpleAction, *mut glib::GVariant, gpointer)>,
@@ -936,7 +971,7 @@ pub struct GActionEntry {
 
 impl ::std::fmt::Debug for GActionEntry {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GActionEntry @ {:?}", self as *const _))
+        f.debug_struct(&format!("GActionEntry @ {:p}", self))
             .field("name", &self.name)
             .field("activate", &self.activate)
             .field("parameter_type", &self.parameter_type)
@@ -946,8 +981,8 @@ impl ::std::fmt::Debug for GActionEntry {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GActionGroupInterface {
     pub g_iface: gobject::GTypeInterface,
     pub has_action: Option<unsafe extern "C" fn(*mut GActionGroup, *const c_char) -> gboolean>,
@@ -987,7 +1022,7 @@ pub struct GActionGroupInterface {
 
 impl ::std::fmt::Debug for GActionGroupInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GActionGroupInterface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GActionGroupInterface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("has_action", &self.has_action)
             .field("list_actions", &self.list_actions)
@@ -1007,8 +1042,8 @@ impl ::std::fmt::Debug for GActionGroupInterface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GActionInterface {
     pub g_iface: gobject::GTypeInterface,
     pub get_name: Option<unsafe extern "C" fn(*mut GAction) -> *const c_char>,
@@ -1023,7 +1058,7 @@ pub struct GActionInterface {
 
 impl ::std::fmt::Debug for GActionInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GActionInterface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GActionInterface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("get_name", &self.get_name)
             .field("get_parameter_type", &self.get_parameter_type)
@@ -1037,8 +1072,8 @@ impl ::std::fmt::Debug for GActionInterface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GActionMapInterface {
     pub g_iface: gobject::GTypeInterface,
     pub lookup_action: Option<unsafe extern "C" fn(*mut GActionMap, *const c_char) -> *mut GAction>,
@@ -1048,7 +1083,7 @@ pub struct GActionMapInterface {
 
 impl ::std::fmt::Debug for GActionMapInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GActionMapInterface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GActionMapInterface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("lookup_action", &self.lookup_action)
             .field("add_action", &self.add_action)
@@ -1057,8 +1092,8 @@ impl ::std::fmt::Debug for GActionMapInterface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GAppInfoIface {
     pub g_iface: gobject::GTypeInterface,
     pub dup: Option<unsafe extern "C" fn(*mut GAppInfo) -> *mut GAppInfo>,
@@ -1125,7 +1160,7 @@ pub struct GAppInfoIface {
 
 impl ::std::fmt::Debug for GAppInfoIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GAppInfoIface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GAppInfoIface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("dup", &self.dup)
             .field("equal", &self.equal)
@@ -1159,8 +1194,8 @@ impl ::std::fmt::Debug for GAppInfoIface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GAppLaunchContextClass {
     pub parent_class: gobject::GObjectClass,
     pub get_display: Option<
@@ -1180,35 +1215,39 @@ pub struct GAppLaunchContextClass {
     pub launch_failed: Option<unsafe extern "C" fn(*mut GAppLaunchContext, *const c_char)>,
     pub launched:
         Option<unsafe extern "C" fn(*mut GAppLaunchContext, *mut GAppInfo, *mut glib::GVariant)>,
+    pub launch_started:
+        Option<unsafe extern "C" fn(*mut GAppLaunchContext, *mut GAppInfo, *mut glib::GVariant)>,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
     pub _g_reserved2: Option<unsafe extern "C" fn()>,
     pub _g_reserved3: Option<unsafe extern "C" fn()>,
-    pub _g_reserved4: Option<unsafe extern "C" fn()>,
 }
 
 impl ::std::fmt::Debug for GAppLaunchContextClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GAppLaunchContextClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GAppLaunchContextClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("get_display", &self.get_display)
             .field("get_startup_notify_id", &self.get_startup_notify_id)
             .field("launch_failed", &self.launch_failed)
             .field("launched", &self.launched)
+            .field("launch_started", &self.launch_started)
             .field("_g_reserved1", &self._g_reserved1)
             .field("_g_reserved2", &self._g_reserved2)
             .field("_g_reserved3", &self._g_reserved3)
-            .field("_g_reserved4", &self._g_reserved4)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GAppLaunchContextPrivate(c_void);
+pub struct _GAppLaunchContextPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GAppLaunchContextPrivate = *mut _GAppLaunchContextPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GApplicationClass {
     pub parent_class: gobject::GObjectClass,
     pub startup: Option<unsafe extern "C" fn(*mut GApplication)>,
@@ -1245,7 +1284,7 @@ pub struct GApplicationClass {
 
 impl ::std::fmt::Debug for GApplicationClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GApplicationClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GApplicationClass @ {:p}", self))
             .field("startup", &self.startup)
             .field("activate", &self.activate)
             .field("open", &self.open)
@@ -1265,8 +1304,8 @@ impl ::std::fmt::Debug for GApplicationClass {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GApplicationCommandLineClass {
     pub parent_class: gobject::GObjectClass,
     pub print_literal: Option<unsafe extern "C" fn(*mut GApplicationCommandLine, *const c_char)>,
@@ -1277,29 +1316,32 @@ pub struct GApplicationCommandLineClass {
 
 impl ::std::fmt::Debug for GApplicationCommandLineClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GApplicationCommandLineClass @ {:?}",
-            self as *const _
-        ))
-        .field("print_literal", &self.print_literal)
-        .field("printerr_literal", &self.printerr_literal)
-        .field("get_stdin", &self.get_stdin)
-        .finish()
+        f.debug_struct(&format!("GApplicationCommandLineClass @ {:p}", self))
+            .field("print_literal", &self.print_literal)
+            .field("printerr_literal", &self.printerr_literal)
+            .field("get_stdin", &self.get_stdin)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GApplicationCommandLinePrivate(c_void);
+pub struct _GApplicationCommandLinePrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GApplicationCommandLinePrivate = *mut _GApplicationCommandLinePrivate;
 
 #[repr(C)]
-pub struct _GApplicationPrivate(c_void);
+pub struct _GApplicationPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GApplicationPrivate = *mut _GApplicationPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GAsyncInitableIface {
     pub g_iface: gobject::GTypeInterface,
     pub init_async: Option<
@@ -1322,7 +1364,7 @@ pub struct GAsyncInitableIface {
 
 impl ::std::fmt::Debug for GAsyncInitableIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GAsyncInitableIface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GAsyncInitableIface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("init_async", &self.init_async)
             .field("init_finish", &self.init_finish)
@@ -1330,8 +1372,8 @@ impl ::std::fmt::Debug for GAsyncInitableIface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GAsyncResultIface {
     pub g_iface: gobject::GTypeInterface,
     pub get_user_data: Option<unsafe extern "C" fn(*mut GAsyncResult) -> gpointer>,
@@ -1341,7 +1383,7 @@ pub struct GAsyncResultIface {
 
 impl ::std::fmt::Debug for GAsyncResultIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GAsyncResultIface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GAsyncResultIface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("get_user_data", &self.get_user_data)
             .field("get_source_object", &self.get_source_object)
@@ -1350,8 +1392,8 @@ impl ::std::fmt::Debug for GAsyncResultIface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GBufferedInputStreamClass {
     pub parent_class: GFilterInputStreamClass,
     pub fill: Option<
@@ -1388,30 +1430,30 @@ pub struct GBufferedInputStreamClass {
 
 impl ::std::fmt::Debug for GBufferedInputStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GBufferedInputStreamClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .field("fill", &self.fill)
-        .field("fill_async", &self.fill_async)
-        .field("fill_finish", &self.fill_finish)
-        .field("_g_reserved1", &self._g_reserved1)
-        .field("_g_reserved2", &self._g_reserved2)
-        .field("_g_reserved3", &self._g_reserved3)
-        .field("_g_reserved4", &self._g_reserved4)
-        .field("_g_reserved5", &self._g_reserved5)
-        .finish()
+        f.debug_struct(&format!("GBufferedInputStreamClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .field("fill", &self.fill)
+            .field("fill_async", &self.fill_async)
+            .field("fill_finish", &self.fill_finish)
+            .field("_g_reserved1", &self._g_reserved1)
+            .field("_g_reserved2", &self._g_reserved2)
+            .field("_g_reserved3", &self._g_reserved3)
+            .field("_g_reserved4", &self._g_reserved4)
+            .field("_g_reserved5", &self._g_reserved5)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GBufferedInputStreamPrivate(c_void);
+pub struct _GBufferedInputStreamPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GBufferedInputStreamPrivate = *mut _GBufferedInputStreamPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GBufferedOutputStreamClass {
     pub parent_class: GFilterOutputStreamClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -1420,24 +1462,24 @@ pub struct GBufferedOutputStreamClass {
 
 impl ::std::fmt::Debug for GBufferedOutputStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GBufferedOutputStreamClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .field("_g_reserved1", &self._g_reserved1)
-        .field("_g_reserved2", &self._g_reserved2)
-        .finish()
+        f.debug_struct(&format!("GBufferedOutputStreamClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .field("_g_reserved1", &self._g_reserved1)
+            .field("_g_reserved2", &self._g_reserved2)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GBufferedOutputStreamPrivate(c_void);
+pub struct _GBufferedOutputStreamPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GBufferedOutputStreamPrivate = *mut _GBufferedOutputStreamPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GCancellableClass {
     pub parent_class: gobject::GObjectClass,
     pub cancelled: Option<unsafe extern "C" fn(*mut GCancellable)>,
@@ -1450,7 +1492,7 @@ pub struct GCancellableClass {
 
 impl ::std::fmt::Debug for GCancellableClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GCancellableClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GCancellableClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("cancelled", &self.cancelled)
             .field("_g_reserved1", &self._g_reserved1)
@@ -1463,26 +1505,29 @@ impl ::std::fmt::Debug for GCancellableClass {
 }
 
 #[repr(C)]
-pub struct _GCancellablePrivate(c_void);
+pub struct _GCancellablePrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GCancellablePrivate = *mut _GCancellablePrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GCharsetConverterClass {
     pub parent_class: gobject::GObjectClass,
 }
 
 impl ::std::fmt::Debug for GCharsetConverterClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GCharsetConverterClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GCharsetConverterClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GConverterIface {
     pub g_iface: gobject::GTypeInterface,
     pub convert: Option<
@@ -1503,7 +1548,7 @@ pub struct GConverterIface {
 
 impl ::std::fmt::Debug for GConverterIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GConverterIface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GConverterIface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("convert", &self.convert)
             .field("reset", &self.reset)
@@ -1511,8 +1556,8 @@ impl ::std::fmt::Debug for GConverterIface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GConverterInputStreamClass {
     pub parent_class: GFilterInputStreamClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -1524,27 +1569,27 @@ pub struct GConverterInputStreamClass {
 
 impl ::std::fmt::Debug for GConverterInputStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GConverterInputStreamClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .field("_g_reserved1", &self._g_reserved1)
-        .field("_g_reserved2", &self._g_reserved2)
-        .field("_g_reserved3", &self._g_reserved3)
-        .field("_g_reserved4", &self._g_reserved4)
-        .field("_g_reserved5", &self._g_reserved5)
-        .finish()
+        f.debug_struct(&format!("GConverterInputStreamClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .field("_g_reserved1", &self._g_reserved1)
+            .field("_g_reserved2", &self._g_reserved2)
+            .field("_g_reserved3", &self._g_reserved3)
+            .field("_g_reserved4", &self._g_reserved4)
+            .field("_g_reserved5", &self._g_reserved5)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GConverterInputStreamPrivate(c_void);
+pub struct _GConverterInputStreamPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GConverterInputStreamPrivate = *mut _GConverterInputStreamPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GConverterOutputStreamClass {
     pub parent_class: GFilterOutputStreamClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -1556,32 +1601,35 @@ pub struct GConverterOutputStreamClass {
 
 impl ::std::fmt::Debug for GConverterOutputStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GConverterOutputStreamClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .field("_g_reserved1", &self._g_reserved1)
-        .field("_g_reserved2", &self._g_reserved2)
-        .field("_g_reserved3", &self._g_reserved3)
-        .field("_g_reserved4", &self._g_reserved4)
-        .field("_g_reserved5", &self._g_reserved5)
-        .finish()
+        f.debug_struct(&format!("GConverterOutputStreamClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .field("_g_reserved1", &self._g_reserved1)
+            .field("_g_reserved2", &self._g_reserved2)
+            .field("_g_reserved3", &self._g_reserved3)
+            .field("_g_reserved4", &self._g_reserved4)
+            .field("_g_reserved5", &self._g_reserved5)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GConverterOutputStreamPrivate(c_void);
+pub struct _GConverterOutputStreamPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GConverterOutputStreamPrivate = *mut _GConverterOutputStreamPrivate;
 
 #[repr(C)]
-pub struct _GCredentialsClass(c_void);
+pub struct _GCredentialsClass {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GCredentialsClass = *mut _GCredentialsClass;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusAnnotationInfo {
     pub ref_count: c_int,
     pub key: *mut c_char,
@@ -1591,7 +1639,8 @@ pub struct GDBusAnnotationInfo {
 
 impl ::std::fmt::Debug for GDBusAnnotationInfo {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusAnnotationInfo @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusAnnotationInfo @ {:p}", self))
+            .field("ref_count", &self.ref_count)
             .field("key", &self.key)
             .field("value", &self.value)
             .field("annotations", &self.annotations)
@@ -1599,8 +1648,8 @@ impl ::std::fmt::Debug for GDBusAnnotationInfo {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusArgInfo {
     pub ref_count: c_int,
     pub name: *mut c_char,
@@ -1610,7 +1659,8 @@ pub struct GDBusArgInfo {
 
 impl ::std::fmt::Debug for GDBusArgInfo {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusArgInfo @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusArgInfo @ {:p}", self))
+            .field("ref_count", &self.ref_count)
             .field("name", &self.name)
             .field("signature", &self.signature)
             .field("annotations", &self.annotations)
@@ -1618,8 +1668,8 @@ impl ::std::fmt::Debug for GDBusArgInfo {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusErrorEntry {
     pub error_code: c_int,
     pub dbus_error_name: *const c_char,
@@ -1627,15 +1677,15 @@ pub struct GDBusErrorEntry {
 
 impl ::std::fmt::Debug for GDBusErrorEntry {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusErrorEntry @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusErrorEntry @ {:p}", self))
             .field("error_code", &self.error_code)
             .field("dbus_error_name", &self.dbus_error_name)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusInterfaceIface {
     pub parent_iface: gobject::GTypeInterface,
     pub get_info: Option<unsafe extern "C" fn(*mut GDBusInterface) -> *mut GDBusInterfaceInfo>,
@@ -1646,7 +1696,7 @@ pub struct GDBusInterfaceIface {
 
 impl ::std::fmt::Debug for GDBusInterfaceIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusInterfaceIface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusInterfaceIface @ {:p}", self))
             .field("parent_iface", &self.parent_iface)
             .field("get_info", &self.get_info)
             .field("get_object", &self.get_object)
@@ -1656,8 +1706,8 @@ impl ::std::fmt::Debug for GDBusInterfaceIface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusInterfaceInfo {
     pub ref_count: c_int,
     pub name: *mut c_char,
@@ -1669,7 +1719,8 @@ pub struct GDBusInterfaceInfo {
 
 impl ::std::fmt::Debug for GDBusInterfaceInfo {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusInterfaceInfo @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusInterfaceInfo @ {:p}", self))
+            .field("ref_count", &self.ref_count)
             .field("name", &self.name)
             .field("methods", &self.methods)
             .field("signals", &self.signals)
@@ -1679,8 +1730,8 @@ impl ::std::fmt::Debug for GDBusInterfaceInfo {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusInterfaceSkeletonClass {
     pub parent_class: gobject::GObjectClass,
     pub get_info:
@@ -1699,27 +1750,27 @@ pub struct GDBusInterfaceSkeletonClass {
 
 impl ::std::fmt::Debug for GDBusInterfaceSkeletonClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GDBusInterfaceSkeletonClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .field("get_info", &self.get_info)
-        .field("get_vtable", &self.get_vtable)
-        .field("get_properties", &self.get_properties)
-        .field("flush", &self.flush)
-        .field("g_authorize_method", &self.g_authorize_method)
-        .finish()
+        f.debug_struct(&format!("GDBusInterfaceSkeletonClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .field("get_info", &self.get_info)
+            .field("get_vtable", &self.get_vtable)
+            .field("get_properties", &self.get_properties)
+            .field("flush", &self.flush)
+            .field("g_authorize_method", &self.g_authorize_method)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GDBusInterfaceSkeletonPrivate(c_void);
+pub struct _GDBusInterfaceSkeletonPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GDBusInterfaceSkeletonPrivate = *mut _GDBusInterfaceSkeletonPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusInterfaceVTable {
     pub method_call: GDBusInterfaceMethodCallFunc,
     pub get_property: GDBusInterfaceGetPropertyFunc,
@@ -1729,7 +1780,7 @@ pub struct GDBusInterfaceVTable {
 
 impl ::std::fmt::Debug for GDBusInterfaceVTable {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusInterfaceVTable @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusInterfaceVTable @ {:p}", self))
             .field("method_call", &self.method_call)
             .field("get_property", &self.get_property)
             .field("set_property", &self.set_property)
@@ -1737,8 +1788,8 @@ impl ::std::fmt::Debug for GDBusInterfaceVTable {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusMethodInfo {
     pub ref_count: c_int,
     pub name: *mut c_char,
@@ -1749,7 +1800,8 @@ pub struct GDBusMethodInfo {
 
 impl ::std::fmt::Debug for GDBusMethodInfo {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusMethodInfo @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusMethodInfo @ {:p}", self))
+            .field("ref_count", &self.ref_count)
             .field("name", &self.name)
             .field("in_args", &self.in_args)
             .field("out_args", &self.out_args)
@@ -1758,8 +1810,8 @@ impl ::std::fmt::Debug for GDBusMethodInfo {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusNodeInfo {
     pub ref_count: c_int,
     pub path: *mut c_char,
@@ -1770,7 +1822,8 @@ pub struct GDBusNodeInfo {
 
 impl ::std::fmt::Debug for GDBusNodeInfo {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusNodeInfo @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusNodeInfo @ {:p}", self))
+            .field("ref_count", &self.ref_count)
             .field("path", &self.path)
             .field("interfaces", &self.interfaces)
             .field("nodes", &self.nodes)
@@ -1779,8 +1832,8 @@ impl ::std::fmt::Debug for GDBusNodeInfo {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusObjectIface {
     pub parent_iface: gobject::GTypeInterface,
     pub get_object_path: Option<unsafe extern "C" fn(*mut GDBusObject) -> *const c_char>,
@@ -1793,7 +1846,7 @@ pub struct GDBusObjectIface {
 
 impl ::std::fmt::Debug for GDBusObjectIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusObjectIface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusObjectIface @ {:p}", self))
             .field("parent_iface", &self.parent_iface)
             .field("get_object_path", &self.get_object_path)
             .field("get_interfaces", &self.get_interfaces)
@@ -1804,8 +1857,8 @@ impl ::std::fmt::Debug for GDBusObjectIface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusObjectManagerClientClass {
     pub parent_class: gobject::GObjectClass,
     pub interface_proxy_signal: Option<
@@ -1832,27 +1885,27 @@ pub struct GDBusObjectManagerClientClass {
 
 impl ::std::fmt::Debug for GDBusObjectManagerClientClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GDBusObjectManagerClientClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .field("interface_proxy_signal", &self.interface_proxy_signal)
-        .field(
-            "interface_proxy_properties_changed",
-            &self.interface_proxy_properties_changed,
-        )
-        .finish()
+        f.debug_struct(&format!("GDBusObjectManagerClientClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .field("interface_proxy_signal", &self.interface_proxy_signal)
+            .field(
+                "interface_proxy_properties_changed",
+                &self.interface_proxy_properties_changed,
+            )
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GDBusObjectManagerClientPrivate(c_void);
+pub struct _GDBusObjectManagerClientPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GDBusObjectManagerClientPrivate = *mut _GDBusObjectManagerClientPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusObjectManagerIface {
     pub parent_iface: gobject::GTypeInterface,
     pub get_object_path: Option<unsafe extern "C" fn(*mut GDBusObjectManager) -> *const c_char>,
@@ -1878,7 +1931,7 @@ pub struct GDBusObjectManagerIface {
 
 impl ::std::fmt::Debug for GDBusObjectManagerIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusObjectManagerIface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusObjectManagerIface @ {:p}", self))
             .field("parent_iface", &self.parent_iface)
             .field("get_object_path", &self.get_object_path)
             .field("get_objects", &self.get_objects)
@@ -1892,8 +1945,8 @@ impl ::std::fmt::Debug for GDBusObjectManagerIface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusObjectManagerServerClass {
     pub parent_class: gobject::GObjectClass,
     pub padding: [gpointer; 8],
@@ -1901,22 +1954,22 @@ pub struct GDBusObjectManagerServerClass {
 
 impl ::std::fmt::Debug for GDBusObjectManagerServerClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GDBusObjectManagerServerClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .finish()
+        f.debug_struct(&format!("GDBusObjectManagerServerClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GDBusObjectManagerServerPrivate(c_void);
+pub struct _GDBusObjectManagerServerPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GDBusObjectManagerServerPrivate = *mut _GDBusObjectManagerServerPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusObjectProxyClass {
     pub parent_class: gobject::GObjectClass,
     pub padding: [gpointer; 8],
@@ -1924,19 +1977,22 @@ pub struct GDBusObjectProxyClass {
 
 impl ::std::fmt::Debug for GDBusObjectProxyClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusObjectProxyClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusObjectProxyClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GDBusObjectProxyPrivate(c_void);
+pub struct _GDBusObjectProxyPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GDBusObjectProxyPrivate = *mut _GDBusObjectProxyPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusObjectSkeletonClass {
     pub parent_class: gobject::GObjectClass,
     pub authorize_method: Option<
@@ -1951,23 +2007,23 @@ pub struct GDBusObjectSkeletonClass {
 
 impl ::std::fmt::Debug for GDBusObjectSkeletonClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GDBusObjectSkeletonClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .field("authorize_method", &self.authorize_method)
-        .finish()
+        f.debug_struct(&format!("GDBusObjectSkeletonClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .field("authorize_method", &self.authorize_method)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GDBusObjectSkeletonPrivate(c_void);
+pub struct _GDBusObjectSkeletonPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GDBusObjectSkeletonPrivate = *mut _GDBusObjectSkeletonPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusPropertyInfo {
     pub ref_count: c_int,
     pub name: *mut c_char,
@@ -1978,7 +2034,8 @@ pub struct GDBusPropertyInfo {
 
 impl ::std::fmt::Debug for GDBusPropertyInfo {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusPropertyInfo @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusPropertyInfo @ {:p}", self))
+            .field("ref_count", &self.ref_count)
             .field("name", &self.name)
             .field("signature", &self.signature)
             .field("flags", &self.flags)
@@ -1987,8 +2044,8 @@ impl ::std::fmt::Debug for GDBusPropertyInfo {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusProxyClass {
     pub parent_class: gobject::GObjectClass,
     pub g_properties_changed:
@@ -2001,7 +2058,7 @@ pub struct GDBusProxyClass {
 
 impl ::std::fmt::Debug for GDBusProxyClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusProxyClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusProxyClass @ {:p}", self))
             .field("g_properties_changed", &self.g_properties_changed)
             .field("g_signal", &self.g_signal)
             .finish()
@@ -2009,12 +2066,15 @@ impl ::std::fmt::Debug for GDBusProxyClass {
 }
 
 #[repr(C)]
-pub struct _GDBusProxyPrivate(c_void);
+pub struct _GDBusProxyPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GDBusProxyPrivate = *mut _GDBusProxyPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusSignalInfo {
     pub ref_count: c_int,
     pub name: *mut c_char,
@@ -2024,7 +2084,8 @@ pub struct GDBusSignalInfo {
 
 impl ::std::fmt::Debug for GDBusSignalInfo {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusSignalInfo @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusSignalInfo @ {:p}", self))
+            .field("ref_count", &self.ref_count)
             .field("name", &self.name)
             .field("args", &self.args)
             .field("annotations", &self.annotations)
@@ -2032,8 +2093,8 @@ impl ::std::fmt::Debug for GDBusSignalInfo {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusSubtreeVTable {
     pub enumerate: GDBusSubtreeEnumerateFunc,
     pub introspect: GDBusSubtreeIntrospectFunc,
@@ -2043,7 +2104,7 @@ pub struct GDBusSubtreeVTable {
 
 impl ::std::fmt::Debug for GDBusSubtreeVTable {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusSubtreeVTable @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusSubtreeVTable @ {:p}", self))
             .field("enumerate", &self.enumerate)
             .field("introspect", &self.introspect)
             .field("dispatch", &self.dispatch)
@@ -2051,8 +2112,8 @@ impl ::std::fmt::Debug for GDBusSubtreeVTable {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDataInputStreamClass {
     pub parent_class: GBufferedInputStreamClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -2064,7 +2125,7 @@ pub struct GDataInputStreamClass {
 
 impl ::std::fmt::Debug for GDataInputStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDataInputStreamClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDataInputStreamClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("_g_reserved1", &self._g_reserved1)
             .field("_g_reserved2", &self._g_reserved2)
@@ -2076,12 +2137,15 @@ impl ::std::fmt::Debug for GDataInputStreamClass {
 }
 
 #[repr(C)]
-pub struct _GDataInputStreamPrivate(c_void);
+pub struct _GDataInputStreamPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GDataInputStreamPrivate = *mut _GDataInputStreamPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDataOutputStreamClass {
     pub parent_class: GFilterOutputStreamClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -2093,7 +2157,7 @@ pub struct GDataOutputStreamClass {
 
 impl ::std::fmt::Debug for GDataOutputStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDataOutputStreamClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDataOutputStreamClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("_g_reserved1", &self._g_reserved1)
             .field("_g_reserved2", &self._g_reserved2)
@@ -2105,12 +2169,15 @@ impl ::std::fmt::Debug for GDataOutputStreamClass {
 }
 
 #[repr(C)]
-pub struct _GDataOutputStreamPrivate(c_void);
+pub struct _GDataOutputStreamPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GDataOutputStreamPrivate = *mut _GDataOutputStreamPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDatagramBasedInterface {
     pub g_iface: gobject::GTypeInterface,
     pub receive_messages: Option<
@@ -2157,7 +2224,7 @@ pub struct GDatagramBasedInterface {
 
 impl ::std::fmt::Debug for GDatagramBasedInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDatagramBasedInterface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDatagramBasedInterface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("receive_messages", &self.receive_messages)
             .field("send_messages", &self.send_messages)
@@ -2168,22 +2235,55 @@ impl ::std::fmt::Debug for GDatagramBasedInterface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
+pub struct GDebugControllerDBusClass {
+    pub parent_class: gobject::GObjectClass,
+    pub authorize: Option<
+        unsafe extern "C" fn(*mut GDebugControllerDBus, *mut GDBusMethodInvocation) -> gboolean,
+    >,
+    pub padding: [gpointer; 12],
+}
+
+impl ::std::fmt::Debug for GDebugControllerDBusClass {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        f.debug_struct(&format!("GDebugControllerDBusClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .field("authorize", &self.authorize)
+            .field("padding", &self.padding)
+            .finish()
+    }
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct GDebugControllerInterface {
+    pub g_iface: gobject::GTypeInterface,
+}
+
+impl ::std::fmt::Debug for GDebugControllerInterface {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        f.debug_struct(&format!("GDebugControllerInterface @ {:p}", self))
+            .finish()
+    }
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDesktopAppInfoClass {
     pub parent_class: gobject::GObjectClass,
 }
 
 impl ::std::fmt::Debug for GDesktopAppInfoClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDesktopAppInfoClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDesktopAppInfoClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDesktopAppInfoLookupIface {
     pub g_iface: gobject::GTypeInterface,
     pub get_default_for_uri_scheme:
@@ -2192,21 +2292,18 @@ pub struct GDesktopAppInfoLookupIface {
 
 impl ::std::fmt::Debug for GDesktopAppInfoLookupIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GDesktopAppInfoLookupIface @ {:?}",
-            self as *const _
-        ))
-        .field("g_iface", &self.g_iface)
-        .field(
-            "get_default_for_uri_scheme",
-            &self.get_default_for_uri_scheme,
-        )
-        .finish()
+        f.debug_struct(&format!("GDesktopAppInfoLookupIface @ {:p}", self))
+            .field("g_iface", &self.g_iface)
+            .field(
+                "get_default_for_uri_scheme",
+                &self.get_default_for_uri_scheme,
+            )
+            .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDriveIface {
     pub g_iface: gobject::GTypeInterface,
     pub changed: Option<unsafe extern "C" fn(*mut GDrive)>,
@@ -2291,7 +2388,7 @@ pub struct GDriveIface {
 
 impl ::std::fmt::Debug for GDriveIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDriveIface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDriveIface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("changed", &self.changed)
             .field("disconnected", &self.disconnected)
@@ -2332,25 +2429,22 @@ impl ::std::fmt::Debug for GDriveIface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDtlsClientConnectionInterface {
     pub g_iface: gobject::GTypeInterface,
 }
 
 impl ::std::fmt::Debug for GDtlsClientConnectionInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GDtlsClientConnectionInterface @ {:?}",
-            self as *const _
-        ))
-        .field("g_iface", &self.g_iface)
-        .finish()
+        f.debug_struct(&format!("GDtlsClientConnectionInterface @ {:p}", self))
+            .field("g_iface", &self.g_iface)
+            .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDtlsConnectionInterface {
     pub g_iface: gobject::GTypeInterface,
     pub accept_certificate: Option<
@@ -2414,71 +2508,80 @@ pub struct GDtlsConnectionInterface {
         Option<unsafe extern "C" fn(*mut GDtlsConnection, *const *const c_char)>,
     pub get_negotiated_protocol:
         Option<unsafe extern "C" fn(*mut GDtlsConnection) -> *const c_char>,
+    pub get_binding_data: Option<
+        unsafe extern "C" fn(
+            *mut GDtlsConnection,
+            GTlsChannelBindingType,
+            *mut glib::GByteArray,
+            *mut *mut glib::GError,
+        ) -> gboolean,
+    >,
 }
 
 impl ::std::fmt::Debug for GDtlsConnectionInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GDtlsConnectionInterface @ {:?}",
-            self as *const _
-        ))
-        .field("g_iface", &self.g_iface)
-        .field("accept_certificate", &self.accept_certificate)
-        .field("handshake", &self.handshake)
-        .field("handshake_async", &self.handshake_async)
-        .field("handshake_finish", &self.handshake_finish)
-        .field("shutdown", &self.shutdown)
-        .field("shutdown_async", &self.shutdown_async)
-        .field("shutdown_finish", &self.shutdown_finish)
-        .field("set_advertised_protocols", &self.set_advertised_protocols)
-        .field("get_negotiated_protocol", &self.get_negotiated_protocol)
-        .finish()
+        f.debug_struct(&format!("GDtlsConnectionInterface @ {:p}", self))
+            .field("g_iface", &self.g_iface)
+            .field("accept_certificate", &self.accept_certificate)
+            .field("handshake", &self.handshake)
+            .field("handshake_async", &self.handshake_async)
+            .field("handshake_finish", &self.handshake_finish)
+            .field("shutdown", &self.shutdown)
+            .field("shutdown_async", &self.shutdown_async)
+            .field("shutdown_finish", &self.shutdown_finish)
+            .field("set_advertised_protocols", &self.set_advertised_protocols)
+            .field("get_negotiated_protocol", &self.get_negotiated_protocol)
+            .field("get_binding_data", &self.get_binding_data)
+            .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDtlsServerConnectionInterface {
     pub g_iface: gobject::GTypeInterface,
 }
 
 impl ::std::fmt::Debug for GDtlsServerConnectionInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GDtlsServerConnectionInterface @ {:?}",
-            self as *const _
-        ))
-        .field("g_iface", &self.g_iface)
-        .finish()
+        f.debug_struct(&format!("GDtlsServerConnectionInterface @ {:p}", self))
+            .field("g_iface", &self.g_iface)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GEmblemClass(c_void);
+pub struct _GEmblemClass {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GEmblemClass = *mut _GEmblemClass;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GEmblemedIconClass {
     pub parent_class: gobject::GObjectClass,
 }
 
 impl ::std::fmt::Debug for GEmblemedIconClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GEmblemedIconClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GEmblemedIconClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GEmblemedIconPrivate(c_void);
+pub struct _GEmblemedIconPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GEmblemedIconPrivate = *mut _GEmblemedIconPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFileAttributeInfo {
     pub name: *mut c_char,
     pub type_: GFileAttributeType,
@@ -2487,7 +2590,7 @@ pub struct GFileAttributeInfo {
 
 impl ::std::fmt::Debug for GFileAttributeInfo {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFileAttributeInfo @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFileAttributeInfo @ {:p}", self))
             .field("name", &self.name)
             .field("type_", &self.type_)
             .field("flags", &self.flags)
@@ -2495,8 +2598,8 @@ impl ::std::fmt::Debug for GFileAttributeInfo {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFileAttributeInfoList {
     pub infos: *mut GFileAttributeInfo,
     pub n_infos: c_int,
@@ -2504,7 +2607,7 @@ pub struct GFileAttributeInfoList {
 
 impl ::std::fmt::Debug for GFileAttributeInfoList {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFileAttributeInfoList @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFileAttributeInfoList @ {:p}", self))
             .field("infos", &self.infos)
             .field("n_infos", &self.n_infos)
             .finish()
@@ -2512,17 +2615,20 @@ impl ::std::fmt::Debug for GFileAttributeInfoList {
 }
 
 #[repr(C)]
-pub struct GFileAttributeMatcher(c_void);
+pub struct GFileAttributeMatcher {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GFileAttributeMatcher {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFileAttributeMatcher @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFileAttributeMatcher @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFileDescriptorBasedIface {
     pub g_iface: gobject::GTypeInterface,
     pub get_fd: Option<unsafe extern "C" fn(*mut GFileDescriptorBased) -> c_int>,
@@ -2530,18 +2636,15 @@ pub struct GFileDescriptorBasedIface {
 
 impl ::std::fmt::Debug for GFileDescriptorBasedIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GFileDescriptorBasedIface @ {:?}",
-            self as *const _
-        ))
-        .field("g_iface", &self.g_iface)
-        .field("get_fd", &self.get_fd)
-        .finish()
+        f.debug_struct(&format!("GFileDescriptorBasedIface @ {:p}", self))
+            .field("g_iface", &self.g_iface)
+            .field("get_fd", &self.get_fd)
+            .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFileEnumeratorClass {
     pub parent_class: gobject::GObjectClass,
     pub next_file: Option<
@@ -2602,7 +2705,7 @@ pub struct GFileEnumeratorClass {
 
 impl ::std::fmt::Debug for GFileEnumeratorClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFileEnumeratorClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFileEnumeratorClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("next_file", &self.next_file)
             .field("close_fn", &self.close_fn)
@@ -2622,12 +2725,15 @@ impl ::std::fmt::Debug for GFileEnumeratorClass {
 }
 
 #[repr(C)]
-pub struct _GFileEnumeratorPrivate(c_void);
+pub struct _GFileEnumeratorPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GFileEnumeratorPrivate = *mut _GFileEnumeratorPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFileIOStreamClass {
     pub parent_class: GIOStreamClass,
     pub tell: Option<unsafe extern "C" fn(*mut GFileIOStream) -> i64>,
@@ -2685,7 +2791,7 @@ pub struct GFileIOStreamClass {
 
 impl ::std::fmt::Debug for GFileIOStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFileIOStreamClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFileIOStreamClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("tell", &self.tell)
             .field("can_seek", &self.can_seek)
@@ -2706,17 +2812,23 @@ impl ::std::fmt::Debug for GFileIOStreamClass {
 }
 
 #[repr(C)]
-pub struct _GFileIOStreamPrivate(c_void);
+pub struct _GFileIOStreamPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GFileIOStreamPrivate = *mut _GFileIOStreamPrivate;
 
 #[repr(C)]
-pub struct _GFileIconClass(c_void);
+pub struct _GFileIconClass {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GFileIconClass = *mut _GFileIconClass;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFileIface {
     pub g_iface: gobject::GTypeInterface,
     pub dup: Option<unsafe extern "C" fn(*mut GFile) -> *mut GFile>,
@@ -3074,8 +3186,22 @@ pub struct GFileIface {
             *mut *mut glib::GError,
         ) -> gboolean,
     >,
-    pub _move_async: Option<unsafe extern "C" fn()>,
-    pub _move_finish: Option<unsafe extern "C" fn()>,
+    pub move_async: Option<
+        unsafe extern "C" fn(
+            *mut GFile,
+            *mut GFile,
+            GFileCopyFlags,
+            c_int,
+            *mut GCancellable,
+            GFileProgressCallback,
+            gpointer,
+            GAsyncReadyCallback,
+            gpointer,
+        ),
+    >,
+    pub move_finish: Option<
+        unsafe extern "C" fn(*mut GFile, *mut GAsyncResult, *mut *mut glib::GError) -> gboolean,
+    >,
     pub mount_mountable: Option<
         unsafe extern "C" fn(
             *mut GFile,
@@ -3310,7 +3436,7 @@ pub struct GFileIface {
 
 impl ::std::fmt::Debug for GFileIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFileIface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFileIface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("dup", &self.dup)
             .field("hash", &self.hash)
@@ -3410,8 +3536,8 @@ impl ::std::fmt::Debug for GFileIface {
             .field("copy_async", &self.copy_async)
             .field("copy_finish", &self.copy_finish)
             .field("move_", &self.move_)
-            .field("_move_async", &self._move_async)
-            .field("_move_finish", &self._move_finish)
+            .field("move_async", &self.move_async)
+            .field("move_finish", &self.move_finish)
             .field("mount_mountable", &self.mount_mountable)
             .field("mount_mountable_finish", &self.mount_mountable_finish)
             .field("unmount_mountable", &self.unmount_mountable)
@@ -3465,12 +3591,15 @@ impl ::std::fmt::Debug for GFileIface {
 }
 
 #[repr(C)]
-pub struct _GFileInfoClass(c_void);
+pub struct _GFileInfoClass {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GFileInfoClass = *mut _GFileInfoClass;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFileInputStreamClass {
     pub parent_class: GInputStreamClass,
     pub tell: Option<unsafe extern "C" fn(*mut GFileInputStream) -> i64>,
@@ -3518,7 +3647,7 @@ pub struct GFileInputStreamClass {
 
 impl ::std::fmt::Debug for GFileInputStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFileInputStreamClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFileInputStreamClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("tell", &self.tell)
             .field("can_seek", &self.can_seek)
@@ -3536,12 +3665,15 @@ impl ::std::fmt::Debug for GFileInputStreamClass {
 }
 
 #[repr(C)]
-pub struct _GFileInputStreamPrivate(c_void);
+pub struct _GFileInputStreamPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GFileInputStreamPrivate = *mut _GFileInputStreamPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFileMonitorClass {
     pub parent_class: gobject::GObjectClass,
     pub changed:
@@ -3556,7 +3688,7 @@ pub struct GFileMonitorClass {
 
 impl ::std::fmt::Debug for GFileMonitorClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFileMonitorClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFileMonitorClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("changed", &self.changed)
             .field("cancel", &self.cancel)
@@ -3570,12 +3702,15 @@ impl ::std::fmt::Debug for GFileMonitorClass {
 }
 
 #[repr(C)]
-pub struct _GFileMonitorPrivate(c_void);
+pub struct _GFileMonitorPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GFileMonitorPrivate = *mut _GFileMonitorPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFileOutputStreamClass {
     pub parent_class: GOutputStreamClass,
     pub tell: Option<unsafe extern "C" fn(*mut GFileOutputStream) -> i64>,
@@ -3633,7 +3768,7 @@ pub struct GFileOutputStreamClass {
 
 impl ::std::fmt::Debug for GFileOutputStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFileOutputStreamClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFileOutputStreamClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("tell", &self.tell)
             .field("can_seek", &self.can_seek)
@@ -3654,12 +3789,15 @@ impl ::std::fmt::Debug for GFileOutputStreamClass {
 }
 
 #[repr(C)]
-pub struct _GFileOutputStreamPrivate(c_void);
+pub struct _GFileOutputStreamPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GFileOutputStreamPrivate = *mut _GFileOutputStreamPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFilenameCompleterClass {
     pub parent_class: gobject::GObjectClass,
     pub got_completion_data: Option<unsafe extern "C" fn(*mut GFilenameCompleter)>,
@@ -3670,7 +3808,7 @@ pub struct GFilenameCompleterClass {
 
 impl ::std::fmt::Debug for GFilenameCompleterClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFilenameCompleterClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFilenameCompleterClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("got_completion_data", &self.got_completion_data)
             .field("_g_reserved1", &self._g_reserved1)
@@ -3680,8 +3818,8 @@ impl ::std::fmt::Debug for GFilenameCompleterClass {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFilterInputStreamClass {
     pub parent_class: GInputStreamClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -3691,7 +3829,7 @@ pub struct GFilterInputStreamClass {
 
 impl ::std::fmt::Debug for GFilterInputStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFilterInputStreamClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFilterInputStreamClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("_g_reserved1", &self._g_reserved1)
             .field("_g_reserved2", &self._g_reserved2)
@@ -3700,8 +3838,8 @@ impl ::std::fmt::Debug for GFilterInputStreamClass {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFilterOutputStreamClass {
     pub parent_class: GOutputStreamClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -3711,50 +3849,65 @@ pub struct GFilterOutputStreamClass {
 
 impl ::std::fmt::Debug for GFilterOutputStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GFilterOutputStreamClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .field("_g_reserved1", &self._g_reserved1)
-        .field("_g_reserved2", &self._g_reserved2)
-        .field("_g_reserved3", &self._g_reserved3)
-        .finish()
+        f.debug_struct(&format!("GFilterOutputStreamClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .field("_g_reserved1", &self._g_reserved1)
+            .field("_g_reserved2", &self._g_reserved2)
+            .field("_g_reserved3", &self._g_reserved3)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GIOExtension(c_void);
+pub struct _GIOExtension {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GIOExtension = *mut _GIOExtension;
 
 #[repr(C)]
-pub struct _GIOExtensionPoint(c_void);
+pub struct _GIOExtensionPoint {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GIOExtensionPoint = *mut _GIOExtensionPoint;
 
 #[repr(C)]
-pub struct _GIOModuleClass(c_void);
+pub struct _GIOModuleClass {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GIOModuleClass = *mut _GIOModuleClass;
 
 #[repr(C)]
-pub struct _GIOModuleScope(c_void);
+pub struct _GIOModuleScope {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GIOModuleScope = *mut _GIOModuleScope;
 
 #[repr(C)]
-pub struct _GIOSchedulerJob(c_void);
+pub struct _GIOSchedulerJob {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GIOSchedulerJob = *mut _GIOSchedulerJob;
 
 #[repr(C)]
-pub struct _GIOStreamAdapter(c_void);
+pub struct _GIOStreamAdapter {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GIOStreamAdapter = *mut _GIOStreamAdapter;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GIOStreamClass {
     pub parent_class: gobject::GObjectClass,
     pub get_input_stream: Option<unsafe extern "C" fn(*mut GIOStream) -> *mut GInputStream>,
@@ -3788,7 +3941,7 @@ pub struct GIOStreamClass {
 
 impl ::std::fmt::Debug for GIOStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GIOStreamClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GIOStreamClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("get_input_stream", &self.get_input_stream)
             .field("get_output_stream", &self.get_output_stream)
@@ -3810,12 +3963,15 @@ impl ::std::fmt::Debug for GIOStreamClass {
 }
 
 #[repr(C)]
-pub struct _GIOStreamPrivate(c_void);
+pub struct _GIOStreamPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GIOStreamPrivate = *mut _GIOStreamPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GIconIface {
     pub g_iface: gobject::GTypeInterface,
     pub hash: Option<unsafe extern "C" fn(*mut GIcon) -> c_uint>,
@@ -3830,7 +3986,7 @@ pub struct GIconIface {
 
 impl ::std::fmt::Debug for GIconIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GIconIface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GIconIface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("hash", &self.hash)
             .field("equal", &self.equal)
@@ -3841,8 +3997,8 @@ impl ::std::fmt::Debug for GIconIface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GInetAddressClass {
     pub parent_class: gobject::GObjectClass,
     pub to_string: Option<unsafe extern "C" fn(*mut GInetAddress) -> *mut c_char>,
@@ -3851,7 +4007,7 @@ pub struct GInetAddressClass {
 
 impl ::std::fmt::Debug for GInetAddressClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GInetAddressClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GInetAddressClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("to_string", &self.to_string)
             .field("to_bytes", &self.to_bytes)
@@ -3859,51 +4015,60 @@ impl ::std::fmt::Debug for GInetAddressClass {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GInetAddressMaskClass {
     pub parent_class: gobject::GObjectClass,
 }
 
 impl ::std::fmt::Debug for GInetAddressMaskClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GInetAddressMaskClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GInetAddressMaskClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GInetAddressMaskPrivate(c_void);
+pub struct _GInetAddressMaskPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GInetAddressMaskPrivate = *mut _GInetAddressMaskPrivate;
 
 #[repr(C)]
-pub struct _GInetAddressPrivate(c_void);
+pub struct _GInetAddressPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GInetAddressPrivate = *mut _GInetAddressPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GInetSocketAddressClass {
     pub parent_class: GSocketAddressClass,
 }
 
 impl ::std::fmt::Debug for GInetSocketAddressClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GInetSocketAddressClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GInetSocketAddressClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GInetSocketAddressPrivate(c_void);
+pub struct _GInetSocketAddressPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GInetSocketAddressPrivate = *mut _GInetSocketAddressPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GInitableIface {
     pub g_iface: gobject::GTypeInterface,
     pub init: Option<
@@ -3913,15 +4078,15 @@ pub struct GInitableIface {
 
 impl ::std::fmt::Debug for GInitableIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GInitableIface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GInitableIface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("init", &self.init)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GInputMessage {
     pub address: *mut *mut GSocketAddress,
     pub vectors: *mut GInputVector,
@@ -3934,7 +4099,7 @@ pub struct GInputMessage {
 
 impl ::std::fmt::Debug for GInputMessage {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GInputMessage @ {:?}", self as *const _))
+        f.debug_struct(&format!("GInputMessage @ {:p}", self))
             .field("address", &self.address)
             .field("vectors", &self.vectors)
             .field("num_vectors", &self.num_vectors)
@@ -3946,8 +4111,8 @@ impl ::std::fmt::Debug for GInputMessage {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GInputStreamClass {
     pub parent_class: gobject::GObjectClass,
     pub read_fn: Option<
@@ -4034,7 +4199,7 @@ pub struct GInputStreamClass {
 
 impl ::std::fmt::Debug for GInputStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GInputStreamClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GInputStreamClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("read_fn", &self.read_fn)
             .field("skip", &self.skip)
@@ -4055,12 +4220,15 @@ impl ::std::fmt::Debug for GInputStreamClass {
 }
 
 #[repr(C)]
-pub struct _GInputStreamPrivate(c_void);
+pub struct _GInputStreamPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GInputStreamPrivate = *mut _GInputStreamPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GInputVector {
     pub buffer: gpointer,
     pub size: size_t,
@@ -4068,15 +4236,15 @@ pub struct GInputVector {
 
 impl ::std::fmt::Debug for GInputVector {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GInputVector @ {:?}", self as *const _))
+        f.debug_struct(&format!("GInputVector @ {:p}", self))
             .field("buffer", &self.buffer)
             .field("size", &self.size)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GListModelInterface {
     pub g_iface: gobject::GTypeInterface,
     pub get_item_type: Option<unsafe extern "C" fn(*mut GListModel) -> GType>,
@@ -4086,7 +4254,7 @@ pub struct GListModelInterface {
 
 impl ::std::fmt::Debug for GListModelInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GListModelInterface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GListModelInterface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("get_item_type", &self.get_item_type)
             .field("get_n_items", &self.get_n_items)
@@ -4095,22 +4263,22 @@ impl ::std::fmt::Debug for GListModelInterface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GListStoreClass {
     pub parent_class: gobject::GObjectClass,
 }
 
 impl ::std::fmt::Debug for GListStoreClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GListStoreClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GListStoreClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GLoadableIconIface {
     pub g_iface: gobject::GTypeInterface,
     pub load: Option<
@@ -4143,7 +4311,7 @@ pub struct GLoadableIconIface {
 
 impl ::std::fmt::Debug for GLoadableIconIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GLoadableIconIface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GLoadableIconIface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("load", &self.load)
             .field("load_async", &self.load_async)
@@ -4152,8 +4320,8 @@ impl ::std::fmt::Debug for GLoadableIconIface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GMemoryInputStreamClass {
     pub parent_class: GInputStreamClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -4165,7 +4333,7 @@ pub struct GMemoryInputStreamClass {
 
 impl ::std::fmt::Debug for GMemoryInputStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMemoryInputStreamClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMemoryInputStreamClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("_g_reserved1", &self._g_reserved1)
             .field("_g_reserved2", &self._g_reserved2)
@@ -4177,12 +4345,31 @@ impl ::std::fmt::Debug for GMemoryInputStreamClass {
 }
 
 #[repr(C)]
-pub struct _GMemoryInputStreamPrivate(c_void);
+pub struct _GMemoryInputStreamPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GMemoryInputStreamPrivate = *mut _GMemoryInputStreamPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
+pub struct GMemoryMonitorInterface {
+    pub g_iface: gobject::GTypeInterface,
+    pub low_memory_warning:
+        Option<unsafe extern "C" fn(*mut GMemoryMonitor, GMemoryMonitorWarningLevel)>,
+}
+
+impl ::std::fmt::Debug for GMemoryMonitorInterface {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        f.debug_struct(&format!("GMemoryMonitorInterface @ {:p}", self))
+            .field("low_memory_warning", &self.low_memory_warning)
+            .finish()
+    }
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GMemoryOutputStreamClass {
     pub parent_class: GOutputStreamClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -4194,27 +4381,27 @@ pub struct GMemoryOutputStreamClass {
 
 impl ::std::fmt::Debug for GMemoryOutputStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GMemoryOutputStreamClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .field("_g_reserved1", &self._g_reserved1)
-        .field("_g_reserved2", &self._g_reserved2)
-        .field("_g_reserved3", &self._g_reserved3)
-        .field("_g_reserved4", &self._g_reserved4)
-        .field("_g_reserved5", &self._g_reserved5)
-        .finish()
+        f.debug_struct(&format!("GMemoryOutputStreamClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .field("_g_reserved1", &self._g_reserved1)
+            .field("_g_reserved2", &self._g_reserved2)
+            .field("_g_reserved3", &self._g_reserved3)
+            .field("_g_reserved4", &self._g_reserved4)
+            .field("_g_reserved5", &self._g_reserved5)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GMemoryOutputStreamPrivate(c_void);
+pub struct _GMemoryOutputStreamPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GMemoryOutputStreamPrivate = *mut _GMemoryOutputStreamPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GMenuAttributeIterClass {
     pub parent_class: gobject::GObjectClass,
     pub get_next: Option<
@@ -4228,7 +4415,7 @@ pub struct GMenuAttributeIterClass {
 
 impl ::std::fmt::Debug for GMenuAttributeIterClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMenuAttributeIterClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMenuAttributeIterClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("get_next", &self.get_next)
             .finish()
@@ -4236,12 +4423,15 @@ impl ::std::fmt::Debug for GMenuAttributeIterClass {
 }
 
 #[repr(C)]
-pub struct _GMenuAttributeIterPrivate(c_void);
+pub struct _GMenuAttributeIterPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GMenuAttributeIterPrivate = *mut _GMenuAttributeIterPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GMenuLinkIterClass {
     pub parent_class: gobject::GObjectClass,
     pub get_next: Option<
@@ -4255,7 +4445,7 @@ pub struct GMenuLinkIterClass {
 
 impl ::std::fmt::Debug for GMenuLinkIterClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMenuLinkIterClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMenuLinkIterClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("get_next", &self.get_next)
             .finish()
@@ -4263,12 +4453,15 @@ impl ::std::fmt::Debug for GMenuLinkIterClass {
 }
 
 #[repr(C)]
-pub struct _GMenuLinkIterPrivate(c_void);
+pub struct _GMenuLinkIterPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GMenuLinkIterPrivate = *mut _GMenuLinkIterPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GMenuModelClass {
     pub parent_class: gobject::GObjectClass,
     pub is_mutable: Option<unsafe extern "C" fn(*mut GMenuModel) -> gboolean>,
@@ -4295,7 +4488,7 @@ pub struct GMenuModelClass {
 
 impl ::std::fmt::Debug for GMenuModelClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMenuModelClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMenuModelClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("is_mutable", &self.is_mutable)
             .field("get_n_items", &self.get_n_items)
@@ -4310,12 +4503,15 @@ impl ::std::fmt::Debug for GMenuModelClass {
 }
 
 #[repr(C)]
-pub struct _GMenuModelPrivate(c_void);
+pub struct _GMenuModelPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GMenuModelPrivate = *mut _GMenuModelPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GMountIface {
     pub g_iface: gobject::GTypeInterface,
     pub changed: Option<unsafe extern "C" fn(*mut GMount)>,
@@ -4423,7 +4619,7 @@ pub struct GMountIface {
 
 impl ::std::fmt::Debug for GMountIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMountIface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMountIface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("changed", &self.changed)
             .field("unmounted", &self.unmounted)
@@ -4462,8 +4658,8 @@ impl ::std::fmt::Debug for GMountIface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GMountOperationClass {
     pub parent_class: gobject::GObjectClass,
     pub ask_password: Option<
@@ -4502,7 +4698,7 @@ pub struct GMountOperationClass {
 
 impl ::std::fmt::Debug for GMountOperationClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMountOperationClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMountOperationClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("ask_password", &self.ask_password)
             .field("ask_question", &self.ask_question)
@@ -4524,34 +4720,37 @@ impl ::std::fmt::Debug for GMountOperationClass {
 }
 
 #[repr(C)]
-pub struct _GMountOperationPrivate(c_void);
+pub struct _GMountOperationPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GMountOperationPrivate = *mut _GMountOperationPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GNativeSocketAddressClass {
     pub parent_class: GSocketAddressClass,
 }
 
 impl ::std::fmt::Debug for GNativeSocketAddressClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GNativeSocketAddressClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .finish()
+        f.debug_struct(&format!("GNativeSocketAddressClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GNativeSocketAddressPrivate(c_void);
+pub struct _GNativeSocketAddressPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GNativeSocketAddressPrivate = *mut _GNativeSocketAddressPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GNativeVolumeMonitorClass {
     pub parent_class: GVolumeMonitorClass,
     pub get_mount_for_mount_path:
@@ -4560,37 +4759,37 @@ pub struct GNativeVolumeMonitorClass {
 
 impl ::std::fmt::Debug for GNativeVolumeMonitorClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GNativeVolumeMonitorClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .field("get_mount_for_mount_path", &self.get_mount_for_mount_path)
-        .finish()
+        f.debug_struct(&format!("GNativeVolumeMonitorClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .field("get_mount_for_mount_path", &self.get_mount_for_mount_path)
+            .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GNetworkAddressClass {
     pub parent_class: gobject::GObjectClass,
 }
 
 impl ::std::fmt::Debug for GNetworkAddressClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GNetworkAddressClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GNetworkAddressClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GNetworkAddressPrivate(c_void);
+pub struct _GNetworkAddressPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GNetworkAddressPrivate = *mut _GNetworkAddressPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GNetworkMonitorInterface {
     pub g_iface: gobject::GTypeInterface,
     pub network_changed: Option<unsafe extern "C" fn(*mut GNetworkMonitor, gboolean)>,
@@ -4622,40 +4821,40 @@ pub struct GNetworkMonitorInterface {
 
 impl ::std::fmt::Debug for GNetworkMonitorInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GNetworkMonitorInterface @ {:?}",
-            self as *const _
-        ))
-        .field("g_iface", &self.g_iface)
-        .field("network_changed", &self.network_changed)
-        .field("can_reach", &self.can_reach)
-        .field("can_reach_async", &self.can_reach_async)
-        .field("can_reach_finish", &self.can_reach_finish)
-        .finish()
+        f.debug_struct(&format!("GNetworkMonitorInterface @ {:p}", self))
+            .field("g_iface", &self.g_iface)
+            .field("network_changed", &self.network_changed)
+            .field("can_reach", &self.can_reach)
+            .field("can_reach_async", &self.can_reach_async)
+            .field("can_reach_finish", &self.can_reach_finish)
+            .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GNetworkServiceClass {
     pub parent_class: gobject::GObjectClass,
 }
 
 impl ::std::fmt::Debug for GNetworkServiceClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GNetworkServiceClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GNetworkServiceClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GNetworkServicePrivate(c_void);
+pub struct _GNetworkServicePrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GNetworkServicePrivate = *mut _GNetworkServicePrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GOutputMessage {
     pub address: *mut GSocketAddress,
     pub vectors: *mut GOutputVector,
@@ -4667,7 +4866,7 @@ pub struct GOutputMessage {
 
 impl ::std::fmt::Debug for GOutputMessage {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GOutputMessage @ {:?}", self as *const _))
+        f.debug_struct(&format!("GOutputMessage @ {:p}", self))
             .field("address", &self.address)
             .field("vectors", &self.vectors)
             .field("num_vectors", &self.num_vectors)
@@ -4678,8 +4877,8 @@ impl ::std::fmt::Debug for GOutputMessage {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GOutputStreamClass {
     pub parent_class: gobject::GObjectClass,
     pub write_fn: Option<
@@ -4820,7 +5019,7 @@ pub struct GOutputStreamClass {
 
 impl ::std::fmt::Debug for GOutputStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GOutputStreamClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GOutputStreamClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("write_fn", &self.write_fn)
             .field("splice", &self.splice)
@@ -4847,12 +5046,15 @@ impl ::std::fmt::Debug for GOutputStreamClass {
 }
 
 #[repr(C)]
-pub struct _GOutputStreamPrivate(c_void);
+pub struct _GOutputStreamPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GOutputStreamPrivate = *mut _GOutputStreamPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GOutputVector {
     pub buffer: gconstpointer,
     pub size: size_t,
@@ -4860,15 +5062,15 @@ pub struct GOutputVector {
 
 impl ::std::fmt::Debug for GOutputVector {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GOutputVector @ {:?}", self as *const _))
+        f.debug_struct(&format!("GOutputVector @ {:p}", self))
             .field("buffer", &self.buffer)
             .field("size", &self.size)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GPermissionClass {
     pub parent_class: gobject::GObjectClass,
     pub acquire: Option<
@@ -4910,7 +5112,7 @@ pub struct GPermissionClass {
 
 impl ::std::fmt::Debug for GPermissionClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GPermissionClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GPermissionClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("acquire", &self.acquire)
             .field("acquire_async", &self.acquire_async)
@@ -4924,12 +5126,15 @@ impl ::std::fmt::Debug for GPermissionClass {
 }
 
 #[repr(C)]
-pub struct _GPermissionPrivate(c_void);
+pub struct _GPermissionPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GPermissionPrivate = *mut _GPermissionPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GPollableInputStreamInterface {
     pub g_iface: gobject::GTypeInterface,
     pub can_poll: Option<unsafe extern "C" fn(*mut GPollableInputStream) -> gboolean>,
@@ -4949,21 +5154,18 @@ pub struct GPollableInputStreamInterface {
 
 impl ::std::fmt::Debug for GPollableInputStreamInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GPollableInputStreamInterface @ {:?}",
-            self as *const _
-        ))
-        .field("g_iface", &self.g_iface)
-        .field("can_poll", &self.can_poll)
-        .field("is_readable", &self.is_readable)
-        .field("create_source", &self.create_source)
-        .field("read_nonblocking", &self.read_nonblocking)
-        .finish()
+        f.debug_struct(&format!("GPollableInputStreamInterface @ {:p}", self))
+            .field("g_iface", &self.g_iface)
+            .field("can_poll", &self.can_poll)
+            .field("is_readable", &self.is_readable)
+            .field("create_source", &self.create_source)
+            .field("read_nonblocking", &self.read_nonblocking)
+            .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GPollableOutputStreamInterface {
     pub g_iface: gobject::GTypeInterface,
     pub can_poll: Option<unsafe extern "C" fn(*mut GPollableOutputStream) -> gboolean>,
@@ -4992,36 +5194,46 @@ pub struct GPollableOutputStreamInterface {
 
 impl ::std::fmt::Debug for GPollableOutputStreamInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GPollableOutputStreamInterface @ {:?}",
-            self as *const _
-        ))
-        .field("g_iface", &self.g_iface)
-        .field("can_poll", &self.can_poll)
-        .field("is_writable", &self.is_writable)
-        .field("create_source", &self.create_source)
-        .field("write_nonblocking", &self.write_nonblocking)
-        .field("writev_nonblocking", &self.writev_nonblocking)
-        .finish()
+        f.debug_struct(&format!("GPollableOutputStreamInterface @ {:p}", self))
+            .field("g_iface", &self.g_iface)
+            .field("can_poll", &self.can_poll)
+            .field("is_writable", &self.is_writable)
+            .field("create_source", &self.create_source)
+            .field("write_nonblocking", &self.write_nonblocking)
+            .field("writev_nonblocking", &self.writev_nonblocking)
+            .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
+pub struct GPowerProfileMonitorInterface {
+    pub g_iface: gobject::GTypeInterface,
+}
+
+impl ::std::fmt::Debug for GPowerProfileMonitorInterface {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        f.debug_struct(&format!("GPowerProfileMonitorInterface @ {:p}", self))
+            .finish()
+    }
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GProxyAddressClass {
     pub parent_class: GInetSocketAddressClass,
 }
 
 impl ::std::fmt::Debug for GProxyAddressClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GProxyAddressClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GProxyAddressClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GProxyAddressEnumeratorClass {
     pub parent_class: GSocketAddressEnumeratorClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -5035,33 +5247,36 @@ pub struct GProxyAddressEnumeratorClass {
 
 impl ::std::fmt::Debug for GProxyAddressEnumeratorClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GProxyAddressEnumeratorClass @ {:?}",
-            self as *const _
-        ))
-        .field("_g_reserved1", &self._g_reserved1)
-        .field("_g_reserved2", &self._g_reserved2)
-        .field("_g_reserved3", &self._g_reserved3)
-        .field("_g_reserved4", &self._g_reserved4)
-        .field("_g_reserved5", &self._g_reserved5)
-        .field("_g_reserved6", &self._g_reserved6)
-        .field("_g_reserved7", &self._g_reserved7)
-        .finish()
+        f.debug_struct(&format!("GProxyAddressEnumeratorClass @ {:p}", self))
+            .field("_g_reserved1", &self._g_reserved1)
+            .field("_g_reserved2", &self._g_reserved2)
+            .field("_g_reserved3", &self._g_reserved3)
+            .field("_g_reserved4", &self._g_reserved4)
+            .field("_g_reserved5", &self._g_reserved5)
+            .field("_g_reserved6", &self._g_reserved6)
+            .field("_g_reserved7", &self._g_reserved7)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GProxyAddressEnumeratorPrivate(c_void);
+pub struct _GProxyAddressEnumeratorPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GProxyAddressEnumeratorPrivate = *mut _GProxyAddressEnumeratorPrivate;
 
 #[repr(C)]
-pub struct _GProxyAddressPrivate(c_void);
+pub struct _GProxyAddressPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GProxyAddressPrivate = *mut _GProxyAddressPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GProxyInterface {
     pub g_iface: gobject::GTypeInterface,
     pub connect: Option<
@@ -5095,7 +5310,7 @@ pub struct GProxyInterface {
 
 impl ::std::fmt::Debug for GProxyInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GProxyInterface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GProxyInterface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("connect", &self.connect)
             .field("connect_async", &self.connect_async)
@@ -5105,8 +5320,8 @@ impl ::std::fmt::Debug for GProxyInterface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GProxyResolverInterface {
     pub g_iface: gobject::GTypeInterface,
     pub is_supported: Option<unsafe extern "C" fn(*mut GProxyResolver) -> gboolean>,
@@ -5138,7 +5353,7 @@ pub struct GProxyResolverInterface {
 
 impl ::std::fmt::Debug for GProxyResolverInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GProxyResolverInterface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GProxyResolverInterface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("is_supported", &self.is_supported)
             .field("lookup", &self.lookup)
@@ -5148,8 +5363,8 @@ impl ::std::fmt::Debug for GProxyResolverInterface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GRemoteActionGroupInterface {
     pub g_iface: gobject::GTypeInterface,
     pub activate_action_full: Option<
@@ -5172,19 +5387,16 @@ pub struct GRemoteActionGroupInterface {
 
 impl ::std::fmt::Debug for GRemoteActionGroupInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GRemoteActionGroupInterface @ {:?}",
-            self as *const _
-        ))
-        .field("g_iface", &self.g_iface)
-        .field("activate_action_full", &self.activate_action_full)
-        .field("change_action_state_full", &self.change_action_state_full)
-        .finish()
+        f.debug_struct(&format!("GRemoteActionGroupInterface @ {:p}", self))
+            .field("g_iface", &self.g_iface)
+            .field("activate_action_full", &self.activate_action_full)
+            .field("change_action_state_full", &self.change_action_state_full)
+            .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GResolverClass {
     pub parent_class: gobject::GObjectClass,
     pub reload: Option<unsafe extern "C" fn(*mut GResolver)>,
@@ -5316,7 +5528,7 @@ pub struct GResolverClass {
 
 impl ::std::fmt::Debug for GResolverClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GResolverClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GResolverClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("reload", &self.reload)
             .field("lookup_by_name", &self.lookup_by_name)
@@ -5345,22 +5557,27 @@ impl ::std::fmt::Debug for GResolverClass {
 }
 
 #[repr(C)]
-pub struct _GResolverPrivate(c_void);
+pub struct _GResolverPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GResolverPrivate = *mut _GResolverPrivate;
 
 #[repr(C)]
-pub struct GResource(c_void);
+pub struct GResource {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GResource {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GResource @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GResource @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSeekableIface {
     pub g_iface: gobject::GTypeInterface,
     pub tell: Option<unsafe extern "C" fn(*mut GSeekable) -> i64>,
@@ -5387,7 +5604,7 @@ pub struct GSeekableIface {
 
 impl ::std::fmt::Debug for GSeekableIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSeekableIface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSeekableIface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("tell", &self.tell)
             .field("can_seek", &self.can_seek)
@@ -5398,8 +5615,8 @@ impl ::std::fmt::Debug for GSeekableIface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSettingsBackendClass {
     pub parent_class: gobject::GObjectClass,
     pub read: Option<
@@ -5440,7 +5657,7 @@ pub struct GSettingsBackendClass {
 
 impl ::std::fmt::Debug for GSettingsBackendClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSettingsBackendClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSettingsBackendClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("read", &self.read)
             .field("get_writable", &self.get_writable)
@@ -5457,12 +5674,15 @@ impl ::std::fmt::Debug for GSettingsBackendClass {
 }
 
 #[repr(C)]
-pub struct _GSettingsBackendPrivate(c_void);
+pub struct _GSettingsBackendPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GSettingsBackendPrivate = *mut _GSettingsBackendPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSettingsClass {
     pub parent_class: gobject::GObjectClass,
     pub writable_changed: Option<unsafe extern "C" fn(*mut GSettings, *const c_char)>,
@@ -5476,7 +5696,7 @@ pub struct GSettingsClass {
 
 impl ::std::fmt::Debug for GSettingsClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSettingsClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSettingsClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("writable_changed", &self.writable_changed)
             .field("changed", &self.changed)
@@ -5488,42 +5708,54 @@ impl ::std::fmt::Debug for GSettingsClass {
 }
 
 #[repr(C)]
-pub struct _GSettingsPrivate(c_void);
+pub struct _GSettingsPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GSettingsPrivate = *mut _GSettingsPrivate;
 
 #[repr(C)]
-pub struct GSettingsSchema(c_void);
+pub struct GSettingsSchema {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GSettingsSchema {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSettingsSchema @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSettingsSchema @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GSettingsSchemaKey(c_void);
+pub struct GSettingsSchemaKey {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GSettingsSchemaKey {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSettingsSchemaKey @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSettingsSchemaKey @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GSettingsSchemaSource(c_void);
+pub struct GSettingsSchemaSource {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GSettingsSchemaSource {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSettingsSchemaSource @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSettingsSchemaSource @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSimpleActionGroupClass {
     pub parent_class: gobject::GObjectClass,
     pub padding: [gpointer; 12],
@@ -5531,23 +5763,29 @@ pub struct GSimpleActionGroupClass {
 
 impl ::std::fmt::Debug for GSimpleActionGroupClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSimpleActionGroupClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSimpleActionGroupClass @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GSimpleActionGroupPrivate(c_void);
+pub struct _GSimpleActionGroupPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GSimpleActionGroupPrivate = *mut _GSimpleActionGroupPrivate;
 
 #[repr(C)]
-pub struct _GSimpleAsyncResultClass(c_void);
+pub struct _GSimpleAsyncResultClass {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GSimpleAsyncResultClass = *mut _GSimpleAsyncResultClass;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSimpleProxyResolverClass {
     pub parent_class: gobject::GObjectClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -5559,27 +5797,27 @@ pub struct GSimpleProxyResolverClass {
 
 impl ::std::fmt::Debug for GSimpleProxyResolverClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GSimpleProxyResolverClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .field("_g_reserved1", &self._g_reserved1)
-        .field("_g_reserved2", &self._g_reserved2)
-        .field("_g_reserved3", &self._g_reserved3)
-        .field("_g_reserved4", &self._g_reserved4)
-        .field("_g_reserved5", &self._g_reserved5)
-        .finish()
+        f.debug_struct(&format!("GSimpleProxyResolverClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .field("_g_reserved1", &self._g_reserved1)
+            .field("_g_reserved2", &self._g_reserved2)
+            .field("_g_reserved3", &self._g_reserved3)
+            .field("_g_reserved4", &self._g_reserved4)
+            .field("_g_reserved5", &self._g_reserved5)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GSimpleProxyResolverPrivate(c_void);
+pub struct _GSimpleProxyResolverPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GSimpleProxyResolverPrivate = *mut _GSimpleProxyResolverPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocketAddressClass {
     pub parent_class: gobject::GObjectClass,
     pub get_family: Option<unsafe extern "C" fn(*mut GSocketAddress) -> GSocketFamily>,
@@ -5596,7 +5834,7 @@ pub struct GSocketAddressClass {
 
 impl ::std::fmt::Debug for GSocketAddressClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSocketAddressClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSocketAddressClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("get_family", &self.get_family)
             .field("get_native_size", &self.get_native_size)
@@ -5605,8 +5843,8 @@ impl ::std::fmt::Debug for GSocketAddressClass {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocketAddressEnumeratorClass {
     pub parent_class: gobject::GObjectClass,
     pub next: Option<
@@ -5635,19 +5873,16 @@ pub struct GSocketAddressEnumeratorClass {
 
 impl ::std::fmt::Debug for GSocketAddressEnumeratorClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GSocketAddressEnumeratorClass @ {:?}",
-            self as *const _
-        ))
-        .field("next", &self.next)
-        .field("next_async", &self.next_async)
-        .field("next_finish", &self.next_finish)
-        .finish()
+        f.debug_struct(&format!("GSocketAddressEnumeratorClass @ {:p}", self))
+            .field("next", &self.next)
+            .field("next_async", &self.next_async)
+            .field("next_finish", &self.next_finish)
+            .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocketClass {
     pub parent_class: gobject::GObjectClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -5664,7 +5899,7 @@ pub struct GSocketClass {
 
 impl ::std::fmt::Debug for GSocketClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSocketClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSocketClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("_g_reserved1", &self._g_reserved1)
             .field("_g_reserved2", &self._g_reserved2)
@@ -5680,8 +5915,8 @@ impl ::std::fmt::Debug for GSocketClass {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocketClientClass {
     pub parent_class: gobject::GObjectClass,
     pub event: Option<
@@ -5700,7 +5935,7 @@ pub struct GSocketClientClass {
 
 impl ::std::fmt::Debug for GSocketClientClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSocketClientClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSocketClientClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("event", &self.event)
             .field("_g_reserved1", &self._g_reserved1)
@@ -5712,12 +5947,15 @@ impl ::std::fmt::Debug for GSocketClientClass {
 }
 
 #[repr(C)]
-pub struct _GSocketClientPrivate(c_void);
+pub struct _GSocketClientPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GSocketClientPrivate = *mut _GSocketClientPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocketConnectableIface {
     pub g_iface: gobject::GTypeInterface,
     pub enumerate:
@@ -5729,7 +5967,7 @@ pub struct GSocketConnectableIface {
 
 impl ::std::fmt::Debug for GSocketConnectableIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSocketConnectableIface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSocketConnectableIface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("enumerate", &self.enumerate)
             .field("proxy_enumerate", &self.proxy_enumerate)
@@ -5738,8 +5976,8 @@ impl ::std::fmt::Debug for GSocketConnectableIface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocketConnectionClass {
     pub parent_class: GIOStreamClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -5752,7 +5990,7 @@ pub struct GSocketConnectionClass {
 
 impl ::std::fmt::Debug for GSocketConnectionClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSocketConnectionClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSocketConnectionClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("_g_reserved1", &self._g_reserved1)
             .field("_g_reserved2", &self._g_reserved2)
@@ -5765,12 +6003,15 @@ impl ::std::fmt::Debug for GSocketConnectionClass {
 }
 
 #[repr(C)]
-pub struct _GSocketConnectionPrivate(c_void);
+pub struct _GSocketConnectionPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GSocketConnectionPrivate = *mut _GSocketConnectionPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocketControlMessageClass {
     pub parent_class: gobject::GObjectClass,
     pub get_size: Option<unsafe extern "C" fn(*mut GSocketControlMessage) -> size_t>,
@@ -5788,32 +6029,32 @@ pub struct GSocketControlMessageClass {
 
 impl ::std::fmt::Debug for GSocketControlMessageClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GSocketControlMessageClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .field("get_size", &self.get_size)
-        .field("get_level", &self.get_level)
-        .field("get_type", &self.get_type)
-        .field("serialize", &self.serialize)
-        .field("deserialize", &self.deserialize)
-        .field("_g_reserved1", &self._g_reserved1)
-        .field("_g_reserved2", &self._g_reserved2)
-        .field("_g_reserved3", &self._g_reserved3)
-        .field("_g_reserved4", &self._g_reserved4)
-        .field("_g_reserved5", &self._g_reserved5)
-        .finish()
+        f.debug_struct(&format!("GSocketControlMessageClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .field("get_size", &self.get_size)
+            .field("get_level", &self.get_level)
+            .field("get_type", &self.get_type)
+            .field("serialize", &self.serialize)
+            .field("deserialize", &self.deserialize)
+            .field("_g_reserved1", &self._g_reserved1)
+            .field("_g_reserved2", &self._g_reserved2)
+            .field("_g_reserved3", &self._g_reserved3)
+            .field("_g_reserved4", &self._g_reserved4)
+            .field("_g_reserved5", &self._g_reserved5)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GSocketControlMessagePrivate(c_void);
+pub struct _GSocketControlMessagePrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GSocketControlMessagePrivate = *mut _GSocketControlMessagePrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocketListenerClass {
     pub parent_class: gobject::GObjectClass,
     pub changed: Option<unsafe extern "C" fn(*mut GSocketListener)>,
@@ -5828,7 +6069,7 @@ pub struct GSocketListenerClass {
 
 impl ::std::fmt::Debug for GSocketListenerClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSocketListenerClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSocketListenerClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("changed", &self.changed)
             .field("event", &self.event)
@@ -5842,17 +6083,23 @@ impl ::std::fmt::Debug for GSocketListenerClass {
 }
 
 #[repr(C)]
-pub struct _GSocketListenerPrivate(c_void);
+pub struct _GSocketListenerPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GSocketListenerPrivate = *mut _GSocketListenerPrivate;
 
 #[repr(C)]
-pub struct _GSocketPrivate(c_void);
+pub struct _GSocketPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GSocketPrivate = *mut _GSocketPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocketServiceClass {
     pub parent_class: GSocketListenerClass,
     pub incoming: Option<
@@ -5872,7 +6119,7 @@ pub struct GSocketServiceClass {
 
 impl ::std::fmt::Debug for GSocketServiceClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSocketServiceClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSocketServiceClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("incoming", &self.incoming)
             .field("_g_reserved1", &self._g_reserved1)
@@ -5886,22 +6133,27 @@ impl ::std::fmt::Debug for GSocketServiceClass {
 }
 
 #[repr(C)]
-pub struct _GSocketServicePrivate(c_void);
+pub struct _GSocketServicePrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GSocketServicePrivate = *mut _GSocketServicePrivate;
 
 #[repr(C)]
-pub struct GSrvTarget(c_void);
+pub struct GSrvTarget {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GSrvTarget {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSrvTarget @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GSrvTarget @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GStaticResource {
     pub data: *const u8,
     pub data_len: size_t,
@@ -5912,64 +6164,73 @@ pub struct GStaticResource {
 
 impl ::std::fmt::Debug for GStaticResource {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GStaticResource @ {:?}", self as *const _))
+        f.debug_struct(&format!("GStaticResource @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GTaskClass(c_void);
+pub struct _GTaskClass {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GTaskClass = *mut _GTaskClass;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTcpConnectionClass {
     pub parent_class: GSocketConnectionClass,
 }
 
 impl ::std::fmt::Debug for GTcpConnectionClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTcpConnectionClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTcpConnectionClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GTcpConnectionPrivate(c_void);
+pub struct _GTcpConnectionPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GTcpConnectionPrivate = *mut _GTcpConnectionPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTcpWrapperConnectionClass {
     pub parent_class: GTcpConnectionClass,
 }
 
 impl ::std::fmt::Debug for GTcpWrapperConnectionClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GTcpWrapperConnectionClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .finish()
+        f.debug_struct(&format!("GTcpWrapperConnectionClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GTcpWrapperConnectionPrivate(c_void);
+pub struct _GTcpWrapperConnectionPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GTcpWrapperConnectionPrivate = *mut _GTcpWrapperConnectionPrivate;
 
 #[repr(C)]
-pub struct _GThemedIconClass(c_void);
+pub struct _GThemedIconClass {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GThemedIconClass = *mut _GThemedIconClass;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GThreadedSocketServiceClass {
     pub parent_class: GSocketServiceClass,
     pub run: Option<
@@ -5988,28 +6249,28 @@ pub struct GThreadedSocketServiceClass {
 
 impl ::std::fmt::Debug for GThreadedSocketServiceClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GThreadedSocketServiceClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .field("run", &self.run)
-        .field("_g_reserved1", &self._g_reserved1)
-        .field("_g_reserved2", &self._g_reserved2)
-        .field("_g_reserved3", &self._g_reserved3)
-        .field("_g_reserved4", &self._g_reserved4)
-        .field("_g_reserved5", &self._g_reserved5)
-        .finish()
+        f.debug_struct(&format!("GThreadedSocketServiceClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .field("run", &self.run)
+            .field("_g_reserved1", &self._g_reserved1)
+            .field("_g_reserved2", &self._g_reserved2)
+            .field("_g_reserved3", &self._g_reserved3)
+            .field("_g_reserved4", &self._g_reserved4)
+            .field("_g_reserved5", &self._g_reserved5)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GThreadedSocketServicePrivate(c_void);
+pub struct _GThreadedSocketServicePrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GThreadedSocketServicePrivate = *mut _GThreadedSocketServicePrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTlsBackendInterface {
     pub g_iface: gobject::GTypeInterface,
     pub supports_tls: Option<unsafe extern "C" fn(*mut GTlsBackend) -> gboolean>,
@@ -6025,7 +6286,7 @@ pub struct GTlsBackendInterface {
 
 impl ::std::fmt::Debug for GTlsBackendInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTlsBackendInterface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTlsBackendInterface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("supports_tls", &self.supports_tls)
             .field("get_certificate_type", &self.get_certificate_type)
@@ -6052,8 +6313,8 @@ impl ::std::fmt::Debug for GTlsBackendInterface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTlsCertificateClass {
     pub parent_class: gobject::GObjectClass,
     pub verify: Option<
@@ -6068,7 +6329,7 @@ pub struct GTlsCertificateClass {
 
 impl ::std::fmt::Debug for GTlsCertificateClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTlsCertificateClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTlsCertificateClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("verify", &self.verify)
             .finish()
@@ -6076,12 +6337,15 @@ impl ::std::fmt::Debug for GTlsCertificateClass {
 }
 
 #[repr(C)]
-pub struct _GTlsCertificatePrivate(c_void);
+pub struct _GTlsCertificatePrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GTlsCertificatePrivate = *mut _GTlsCertificatePrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTlsClientConnectionInterface {
     pub g_iface: gobject::GTypeInterface,
     pub copy_session_state:
@@ -6090,18 +6354,15 @@ pub struct GTlsClientConnectionInterface {
 
 impl ::std::fmt::Debug for GTlsClientConnectionInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GTlsClientConnectionInterface @ {:?}",
-            self as *const _
-        ))
-        .field("g_iface", &self.g_iface)
-        .field("copy_session_state", &self.copy_session_state)
-        .finish()
+        f.debug_struct(&format!("GTlsClientConnectionInterface @ {:p}", self))
+            .field("g_iface", &self.g_iface)
+            .field("copy_session_state", &self.copy_session_state)
+            .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTlsConnectionClass {
     pub parent_class: GIOStreamClass,
     pub accept_certificate: Option<
@@ -6134,28 +6395,42 @@ pub struct GTlsConnectionClass {
             *mut *mut glib::GError,
         ) -> gboolean,
     >,
-    pub padding: [gpointer; 8],
+    pub get_binding_data: Option<
+        unsafe extern "C" fn(
+            *mut GTlsConnection,
+            GTlsChannelBindingType,
+            *mut glib::GByteArray,
+            *mut *mut glib::GError,
+        ) -> gboolean,
+    >,
+    pub get_negotiated_protocol: Option<unsafe extern "C" fn(*mut GTlsConnection) -> *const c_char>,
+    pub padding: [gpointer; 6],
 }
 
 impl ::std::fmt::Debug for GTlsConnectionClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTlsConnectionClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTlsConnectionClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("accept_certificate", &self.accept_certificate)
             .field("handshake", &self.handshake)
             .field("handshake_async", &self.handshake_async)
             .field("handshake_finish", &self.handshake_finish)
+            .field("get_binding_data", &self.get_binding_data)
+            .field("get_negotiated_protocol", &self.get_negotiated_protocol)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GTlsConnectionPrivate(c_void);
+pub struct _GTlsConnectionPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GTlsConnectionPrivate = *mut _GTlsConnectionPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTlsDatabaseClass {
     pub parent_class: gobject::GObjectClass,
     pub verify_chain: Option<
@@ -6281,7 +6556,7 @@ pub struct GTlsDatabaseClass {
 
 impl ::std::fmt::Debug for GTlsDatabaseClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTlsDatabaseClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTlsDatabaseClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("verify_chain", &self.verify_chain)
             .field("verify_chain_async", &self.verify_chain_async)
@@ -6325,12 +6600,15 @@ impl ::std::fmt::Debug for GTlsDatabaseClass {
 }
 
 #[repr(C)]
-pub struct _GTlsDatabasePrivate(c_void);
+pub struct _GTlsDatabasePrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GTlsDatabasePrivate = *mut _GTlsDatabasePrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTlsFileDatabaseInterface {
     pub g_iface: gobject::GTypeInterface,
     pub padding: [gpointer; 8],
@@ -6338,17 +6616,14 @@ pub struct GTlsFileDatabaseInterface {
 
 impl ::std::fmt::Debug for GTlsFileDatabaseInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GTlsFileDatabaseInterface @ {:?}",
-            self as *const _
-        ))
-        .field("g_iface", &self.g_iface)
-        .finish()
+        f.debug_struct(&format!("GTlsFileDatabaseInterface @ {:p}", self))
+            .field("g_iface", &self.g_iface)
+            .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTlsInteractionClass {
     pub parent_class: gobject::GObjectClass,
     pub ask_password: Option<
@@ -6406,7 +6681,7 @@ pub struct GTlsInteractionClass {
 
 impl ::std::fmt::Debug for GTlsInteractionClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTlsInteractionClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTlsInteractionClass @ {:p}", self))
             .field("ask_password", &self.ask_password)
             .field("ask_password_async", &self.ask_password_async)
             .field("ask_password_finish", &self.ask_password_finish)
@@ -6421,12 +6696,15 @@ impl ::std::fmt::Debug for GTlsInteractionClass {
 }
 
 #[repr(C)]
-pub struct _GTlsInteractionPrivate(c_void);
+pub struct _GTlsInteractionPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GTlsInteractionPrivate = *mut _GTlsInteractionPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTlsPasswordClass {
     pub parent_class: gobject::GObjectClass,
     pub get_value: Option<unsafe extern "C" fn(*mut GTlsPassword, *mut size_t) -> *const u8>,
@@ -6438,7 +6716,7 @@ pub struct GTlsPasswordClass {
 
 impl ::std::fmt::Debug for GTlsPasswordClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTlsPasswordClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTlsPasswordClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("get_value", &self.get_value)
             .field("set_value", &self.set_value)
@@ -6448,48 +6726,51 @@ impl ::std::fmt::Debug for GTlsPasswordClass {
 }
 
 #[repr(C)]
-pub struct _GTlsPasswordPrivate(c_void);
+pub struct _GTlsPasswordPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GTlsPasswordPrivate = *mut _GTlsPasswordPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTlsServerConnectionInterface {
     pub g_iface: gobject::GTypeInterface,
 }
 
 impl ::std::fmt::Debug for GTlsServerConnectionInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GTlsServerConnectionInterface @ {:?}",
-            self as *const _
-        ))
-        .field("g_iface", &self.g_iface)
-        .finish()
+        f.debug_struct(&format!("GTlsServerConnectionInterface @ {:p}", self))
+            .field("g_iface", &self.g_iface)
+            .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GUnixConnectionClass {
     pub parent_class: GSocketConnectionClass,
 }
 
 impl ::std::fmt::Debug for GUnixConnectionClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GUnixConnectionClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUnixConnectionClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GUnixConnectionPrivate(c_void);
+pub struct _GUnixConnectionPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GUnixConnectionPrivate = *mut _GUnixConnectionPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GUnixCredentialsMessageClass {
     pub parent_class: GSocketControlMessageClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -6498,24 +6779,24 @@ pub struct GUnixCredentialsMessageClass {
 
 impl ::std::fmt::Debug for GUnixCredentialsMessageClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GUnixCredentialsMessageClass @ {:?}",
-            self as *const _
-        ))
-        .field("parent_class", &self.parent_class)
-        .field("_g_reserved1", &self._g_reserved1)
-        .field("_g_reserved2", &self._g_reserved2)
-        .finish()
+        f.debug_struct(&format!("GUnixCredentialsMessageClass @ {:p}", self))
+            .field("parent_class", &self.parent_class)
+            .field("_g_reserved1", &self._g_reserved1)
+            .field("_g_reserved2", &self._g_reserved2)
+            .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GUnixCredentialsMessagePrivate(c_void);
+pub struct _GUnixCredentialsMessagePrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GUnixCredentialsMessagePrivate = *mut _GUnixCredentialsMessagePrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GUnixFDListClass {
     pub parent_class: gobject::GObjectClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -6527,7 +6808,7 @@ pub struct GUnixFDListClass {
 
 impl ::std::fmt::Debug for GUnixFDListClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GUnixFDListClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUnixFDListClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("_g_reserved1", &self._g_reserved1)
             .field("_g_reserved2", &self._g_reserved2)
@@ -6539,12 +6820,15 @@ impl ::std::fmt::Debug for GUnixFDListClass {
 }
 
 #[repr(C)]
-pub struct _GUnixFDListPrivate(c_void);
+pub struct _GUnixFDListPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GUnixFDListPrivate = *mut _GUnixFDListPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GUnixFDMessageClass {
     pub parent_class: GSocketControlMessageClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -6553,7 +6837,7 @@ pub struct GUnixFDMessageClass {
 
 impl ::std::fmt::Debug for GUnixFDMessageClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GUnixFDMessageClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUnixFDMessageClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("_g_reserved1", &self._g_reserved1)
             .field("_g_reserved2", &self._g_reserved2)
@@ -6562,12 +6846,15 @@ impl ::std::fmt::Debug for GUnixFDMessageClass {
 }
 
 #[repr(C)]
-pub struct _GUnixFDMessagePrivate(c_void);
+pub struct _GUnixFDMessagePrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GUnixFDMessagePrivate = *mut _GUnixFDMessagePrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GUnixInputStreamClass {
     pub parent_class: GInputStreamClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -6579,7 +6866,7 @@ pub struct GUnixInputStreamClass {
 
 impl ::std::fmt::Debug for GUnixInputStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GUnixInputStreamClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUnixInputStreamClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("_g_reserved1", &self._g_reserved1)
             .field("_g_reserved2", &self._g_reserved2)
@@ -6591,37 +6878,49 @@ impl ::std::fmt::Debug for GUnixInputStreamClass {
 }
 
 #[repr(C)]
-pub struct _GUnixInputStreamPrivate(c_void);
+pub struct _GUnixInputStreamPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GUnixInputStreamPrivate = *mut _GUnixInputStreamPrivate;
 
 #[repr(C)]
-pub struct GUnixMountEntry(c_void);
+pub struct GUnixMountEntry {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GUnixMountEntry {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GUnixMountEntry @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUnixMountEntry @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GUnixMountMonitorClass(c_void);
+pub struct _GUnixMountMonitorClass {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GUnixMountMonitorClass = *mut _GUnixMountMonitorClass;
 
 #[repr(C)]
-pub struct GUnixMountPoint(c_void);
+pub struct GUnixMountPoint {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GUnixMountPoint {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GUnixMountPoint @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUnixMountPoint @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GUnixOutputStreamClass {
     pub parent_class: GOutputStreamClass,
     pub _g_reserved1: Option<unsafe extern "C" fn()>,
@@ -6633,7 +6932,7 @@ pub struct GUnixOutputStreamClass {
 
 impl ::std::fmt::Debug for GUnixOutputStreamClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GUnixOutputStreamClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUnixOutputStreamClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("_g_reserved1", &self._g_reserved1)
             .field("_g_reserved2", &self._g_reserved2)
@@ -6645,31 +6944,37 @@ impl ::std::fmt::Debug for GUnixOutputStreamClass {
 }
 
 #[repr(C)]
-pub struct _GUnixOutputStreamPrivate(c_void);
+pub struct _GUnixOutputStreamPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GUnixOutputStreamPrivate = *mut _GUnixOutputStreamPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GUnixSocketAddressClass {
     pub parent_class: GSocketAddressClass,
 }
 
 impl ::std::fmt::Debug for GUnixSocketAddressClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GUnixSocketAddressClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUnixSocketAddressClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct _GUnixSocketAddressPrivate(c_void);
+pub struct _GUnixSocketAddressPrivate {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GUnixSocketAddressPrivate = *mut _GUnixSocketAddressPrivate;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GVfsClass {
     pub parent_class: gobject::GObjectClass,
     pub is_active: Option<unsafe extern "C" fn(*mut GVfs) -> gboolean>,
@@ -6715,7 +7020,7 @@ pub struct GVfsClass {
 
 impl ::std::fmt::Debug for GVfsClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GVfsClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GVfsClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("is_active", &self.is_active)
             .field("get_file_for_path", &self.get_file_for_path)
@@ -6738,8 +7043,8 @@ impl ::std::fmt::Debug for GVfsClass {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GVolumeIface {
     pub g_iface: gobject::GTypeInterface,
     pub changed: Option<unsafe extern "C" fn(*mut GVolume)>,
@@ -6799,7 +7104,7 @@ pub struct GVolumeIface {
 
 impl ::std::fmt::Debug for GVolumeIface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GVolumeIface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GVolumeIface @ {:p}", self))
             .field("g_iface", &self.g_iface)
             .field("changed", &self.changed)
             .field("removed", &self.removed)
@@ -6829,8 +7134,8 @@ impl ::std::fmt::Debug for GVolumeIface {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GVolumeMonitorClass {
     pub parent_class: gobject::GObjectClass,
     pub volume_added: Option<unsafe extern "C" fn(*mut GVolumeMonitor, *mut GVolume)>,
@@ -6865,7 +7170,7 @@ pub struct GVolumeMonitorClass {
 
 impl ::std::fmt::Debug for GVolumeMonitorClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GVolumeMonitorClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GVolumeMonitorClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("volume_added", &self.volume_added)
             .field("volume_removed", &self.volume_removed)
@@ -6896,29 +7201,29 @@ impl ::std::fmt::Debug for GVolumeMonitorClass {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GZlibCompressorClass {
     pub parent_class: gobject::GObjectClass,
 }
 
 impl ::std::fmt::Debug for GZlibCompressorClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GZlibCompressorClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GZlibCompressorClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GZlibDecompressorClass {
     pub parent_class: gobject::GObjectClass,
 }
 
 impl ::std::fmt::Debug for GZlibDecompressorClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GZlibDecompressorClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GZlibDecompressorClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .finish()
     }
@@ -6926,17 +7231,20 @@ impl ::std::fmt::Debug for GZlibDecompressorClass {
 
 // Classes
 #[repr(C)]
-pub struct GAppInfoMonitor(c_void);
+pub struct GAppInfoMonitor {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GAppInfoMonitor {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GAppInfoMonitor @ {:?}", self as *const _))
+        f.debug_struct(&format!("GAppInfoMonitor @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GAppLaunchContext {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GAppLaunchContextPrivate,
@@ -6944,14 +7252,14 @@ pub struct GAppLaunchContext {
 
 impl ::std::fmt::Debug for GAppLaunchContext {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GAppLaunchContext @ {:?}", self as *const _))
+        f.debug_struct(&format!("GAppLaunchContext @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GApplication {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GApplicationPrivate,
@@ -6959,13 +7267,13 @@ pub struct GApplication {
 
 impl ::std::fmt::Debug for GApplication {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GApplication @ {:?}", self as *const _))
+        f.debug_struct(&format!("GApplication @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GApplicationCommandLine {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GApplicationCommandLinePrivate,
@@ -6973,13 +7281,13 @@ pub struct GApplicationCommandLine {
 
 impl ::std::fmt::Debug for GApplicationCommandLine {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GApplicationCommandLine @ {:?}", self as *const _))
+        f.debug_struct(&format!("GApplicationCommandLine @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GBufferedInputStream {
     pub parent_instance: GFilterInputStream,
     pub priv_: *mut GBufferedInputStreamPrivate,
@@ -6987,14 +7295,14 @@ pub struct GBufferedInputStream {
 
 impl ::std::fmt::Debug for GBufferedInputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GBufferedInputStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GBufferedInputStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GBufferedOutputStream {
     pub parent_instance: GFilterOutputStream,
     pub priv_: *mut GBufferedOutputStreamPrivate,
@@ -7002,7 +7310,7 @@ pub struct GBufferedOutputStream {
 
 impl ::std::fmt::Debug for GBufferedOutputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GBufferedOutputStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GBufferedOutputStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
@@ -7010,17 +7318,19 @@ impl ::std::fmt::Debug for GBufferedOutputStream {
 }
 
 #[repr(C)]
-pub struct GBytesIcon(c_void);
+pub struct GBytesIcon {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GBytesIcon {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GBytesIcon @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GBytesIcon @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GCancellable {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GCancellablePrivate,
@@ -7028,24 +7338,27 @@ pub struct GCancellable {
 
 impl ::std::fmt::Debug for GCancellable {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GCancellable @ {:?}", self as *const _))
+        f.debug_struct(&format!("GCancellable @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GCharsetConverter(c_void);
+pub struct GCharsetConverter {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GCharsetConverter {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GCharsetConverter @ {:?}", self as *const _))
+        f.debug_struct(&format!("GCharsetConverter @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GConverterInputStream {
     pub parent_instance: GFilterInputStream,
     pub priv_: *mut GConverterInputStreamPrivate,
@@ -7053,14 +7366,14 @@ pub struct GConverterInputStream {
 
 impl ::std::fmt::Debug for GConverterInputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GConverterInputStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GConverterInputStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GConverterOutputStream {
     pub parent_instance: GFilterOutputStream,
     pub priv_: *mut GConverterOutputStreamPrivate,
@@ -7068,54 +7381,66 @@ pub struct GConverterOutputStream {
 
 impl ::std::fmt::Debug for GConverterOutputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GConverterOutputStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GConverterOutputStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GCredentials(c_void);
+pub struct GCredentials {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GCredentials {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GCredentials @ {:?}", self as *const _))
+        f.debug_struct(&format!("GCredentials @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GDBusActionGroup(c_void);
+pub struct GDBusActionGroup {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDBusActionGroup {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusActionGroup @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusActionGroup @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GDBusAuthObserver(c_void);
+pub struct GDBusAuthObserver {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDBusAuthObserver {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusAuthObserver @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusAuthObserver @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GDBusConnection(c_void);
+pub struct GDBusConnection {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDBusConnection {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusConnection @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusConnection @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusInterfaceSkeleton {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GDBusInterfaceSkeletonPrivate,
@@ -7123,43 +7448,52 @@ pub struct GDBusInterfaceSkeleton {
 
 impl ::std::fmt::Debug for GDBusInterfaceSkeleton {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusInterfaceSkeleton @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusInterfaceSkeleton @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GDBusMenuModel(c_void);
+pub struct GDBusMenuModel {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDBusMenuModel {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusMenuModel @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusMenuModel @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GDBusMessage(c_void);
+pub struct GDBusMessage {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDBusMessage {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusMessage @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusMessage @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GDBusMethodInvocation(c_void);
+pub struct GDBusMethodInvocation {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDBusMethodInvocation {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusMethodInvocation @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusMethodInvocation @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusObjectManagerClient {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GDBusObjectManagerClientPrivate,
@@ -7167,16 +7501,13 @@ pub struct GDBusObjectManagerClient {
 
 impl ::std::fmt::Debug for GDBusObjectManagerClient {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GDBusObjectManagerClient @ {:?}",
-            self as *const _
-        ))
-        .finish()
+        f.debug_struct(&format!("GDBusObjectManagerClient @ {:p}", self))
+            .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusObjectManagerServer {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GDBusObjectManagerServerPrivate,
@@ -7184,16 +7515,13 @@ pub struct GDBusObjectManagerServer {
 
 impl ::std::fmt::Debug for GDBusObjectManagerServer {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GDBusObjectManagerServer @ {:?}",
-            self as *const _
-        ))
-        .finish()
+        f.debug_struct(&format!("GDBusObjectManagerServer @ {:p}", self))
+            .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusObjectProxy {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GDBusObjectProxyPrivate,
@@ -7201,13 +7529,13 @@ pub struct GDBusObjectProxy {
 
 impl ::std::fmt::Debug for GDBusObjectProxy {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusObjectProxy @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusObjectProxy @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusObjectSkeleton {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GDBusObjectSkeletonPrivate,
@@ -7215,13 +7543,13 @@ pub struct GDBusObjectSkeleton {
 
 impl ::std::fmt::Debug for GDBusObjectSkeleton {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusObjectSkeleton @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusObjectSkeleton @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDBusProxy {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GDBusProxyPrivate,
@@ -7229,23 +7557,25 @@ pub struct GDBusProxy {
 
 impl ::std::fmt::Debug for GDBusProxy {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusProxy @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GDBusProxy @ {:p}", self)).finish()
     }
 }
 
 #[repr(C)]
-pub struct GDBusServer(c_void);
+pub struct GDBusServer {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDBusServer {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDBusServer @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDBusServer @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDataInputStream {
     pub parent_instance: GBufferedInputStream,
     pub priv_: *mut GDataInputStreamPrivate,
@@ -7253,14 +7583,14 @@ pub struct GDataInputStream {
 
 impl ::std::fmt::Debug for GDataInputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDataInputStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDataInputStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GDataOutputStream {
     pub parent_instance: GFilterOutputStream,
     pub priv_: *mut GDataOutputStreamPrivate,
@@ -7268,34 +7598,53 @@ pub struct GDataOutputStream {
 
 impl ::std::fmt::Debug for GDataOutputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDataOutputStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDataOutputStream @ {:p}", self))
+            .field("parent_instance", &self.parent_instance)
+            .finish()
+    }
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct GDebugControllerDBus {
+    pub parent_instance: gobject::GObject,
+}
+
+impl ::std::fmt::Debug for GDebugControllerDBus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        f.debug_struct(&format!("GDebugControllerDBus @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GDesktopAppInfo(c_void);
+pub struct GDesktopAppInfo {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDesktopAppInfo {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GDesktopAppInfo @ {:?}", self as *const _))
+        f.debug_struct(&format!("GDesktopAppInfo @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GEmblem(c_void);
+pub struct GEmblem {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GEmblem {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GEmblem @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GEmblem @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GEmblemedIcon {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GEmblemedIconPrivate,
@@ -7303,14 +7652,14 @@ pub struct GEmblemedIcon {
 
 impl ::std::fmt::Debug for GEmblemedIcon {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GEmblemedIcon @ {:?}", self as *const _))
+        f.debug_struct(&format!("GEmblemedIcon @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFileEnumerator {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GFileEnumeratorPrivate,
@@ -7318,14 +7667,14 @@ pub struct GFileEnumerator {
 
 impl ::std::fmt::Debug for GFileEnumerator {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFileEnumerator @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFileEnumerator @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFileIOStream {
     pub parent_instance: GIOStream,
     pub priv_: *mut GFileIOStreamPrivate,
@@ -7333,34 +7682,38 @@ pub struct GFileIOStream {
 
 impl ::std::fmt::Debug for GFileIOStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFileIOStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFileIOStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GFileIcon(c_void);
+pub struct GFileIcon {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GFileIcon {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFileIcon @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GFileIcon @ {:p}", self)).finish()
     }
 }
 
 #[repr(C)]
-pub struct GFileInfo(c_void);
+pub struct GFileInfo {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GFileInfo {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFileInfo @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GFileInfo @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFileInputStream {
     pub parent_instance: GInputStream,
     pub priv_: *mut GFileInputStreamPrivate,
@@ -7368,14 +7721,14 @@ pub struct GFileInputStream {
 
 impl ::std::fmt::Debug for GFileInputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFileInputStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFileInputStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFileMonitor {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GFileMonitorPrivate,
@@ -7383,14 +7736,14 @@ pub struct GFileMonitor {
 
 impl ::std::fmt::Debug for GFileMonitor {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFileMonitor @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFileMonitor @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFileOutputStream {
     pub parent_instance: GOutputStream,
     pub priv_: *mut GFileOutputStreamPrivate,
@@ -7398,24 +7751,27 @@ pub struct GFileOutputStream {
 
 impl ::std::fmt::Debug for GFileOutputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFileOutputStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFileOutputStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GFilenameCompleter(c_void);
+pub struct GFilenameCompleter {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GFilenameCompleter {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFilenameCompleter @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFilenameCompleter @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFilterInputStream {
     pub parent_instance: GInputStream,
     pub base_stream: *mut GInputStream,
@@ -7423,15 +7779,15 @@ pub struct GFilterInputStream {
 
 impl ::std::fmt::Debug for GFilterInputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFilterInputStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFilterInputStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("base_stream", &self.base_stream)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFilterOutputStream {
     pub parent_instance: GOutputStream,
     pub base_stream: *mut GOutputStream,
@@ -7439,7 +7795,7 @@ pub struct GFilterOutputStream {
 
 impl ::std::fmt::Debug for GFilterOutputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFilterOutputStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFilterOutputStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("base_stream", &self.base_stream)
             .finish()
@@ -7447,17 +7803,19 @@ impl ::std::fmt::Debug for GFilterOutputStream {
 }
 
 #[repr(C)]
-pub struct GIOModule(c_void);
+pub struct GIOModule {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GIOModule {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GIOModule @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GIOModule @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GIOStream {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GIOStreamPrivate,
@@ -7465,14 +7823,14 @@ pub struct GIOStream {
 
 impl ::std::fmt::Debug for GIOStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GIOStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GIOStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GInetAddress {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GInetAddressPrivate,
@@ -7480,14 +7838,14 @@ pub struct GInetAddress {
 
 impl ::std::fmt::Debug for GInetAddress {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GInetAddress @ {:?}", self as *const _))
+        f.debug_struct(&format!("GInetAddress @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GInetAddressMask {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GInetAddressMaskPrivate,
@@ -7495,14 +7853,14 @@ pub struct GInetAddressMask {
 
 impl ::std::fmt::Debug for GInetAddressMask {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GInetAddressMask @ {:?}", self as *const _))
+        f.debug_struct(&format!("GInetAddressMask @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GInetSocketAddress {
     pub parent_instance: GSocketAddress,
     pub priv_: *mut GInetSocketAddressPrivate,
@@ -7510,14 +7868,14 @@ pub struct GInetSocketAddress {
 
 impl ::std::fmt::Debug for GInetSocketAddress {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GInetSocketAddress @ {:?}", self as *const _))
+        f.debug_struct(&format!("GInetSocketAddress @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GInputStream {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GInputStreamPrivate,
@@ -7525,24 +7883,26 @@ pub struct GInputStream {
 
 impl ::std::fmt::Debug for GInputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GInputStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GInputStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GListStore(c_void);
+pub struct GListStore {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GListStore {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GListStore @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GListStore @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GMemoryInputStream {
     pub parent_instance: GInputStream,
     pub priv_: *mut GMemoryInputStreamPrivate,
@@ -7550,14 +7910,14 @@ pub struct GMemoryInputStream {
 
 impl ::std::fmt::Debug for GMemoryInputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMemoryInputStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMemoryInputStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GMemoryOutputStream {
     pub parent_instance: GOutputStream,
     pub priv_: *mut GMemoryOutputStreamPrivate,
@@ -7565,24 +7925,26 @@ pub struct GMemoryOutputStream {
 
 impl ::std::fmt::Debug for GMemoryOutputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMemoryOutputStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMemoryOutputStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GMenu(c_void);
+pub struct GMenu {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GMenu {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMenu @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GMenu @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GMenuAttributeIter {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GMenuAttributeIterPrivate,
@@ -7590,7 +7952,7 @@ pub struct GMenuAttributeIter {
 
 impl ::std::fmt::Debug for GMenuAttributeIter {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMenuAttributeIter @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMenuAttributeIter @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
@@ -7598,17 +7960,19 @@ impl ::std::fmt::Debug for GMenuAttributeIter {
 }
 
 #[repr(C)]
-pub struct GMenuItem(c_void);
+pub struct GMenuItem {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GMenuItem {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMenuItem @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GMenuItem @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GMenuLinkIter {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GMenuLinkIterPrivate,
@@ -7616,15 +7980,15 @@ pub struct GMenuLinkIter {
 
 impl ::std::fmt::Debug for GMenuLinkIter {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMenuLinkIter @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMenuLinkIter @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GMenuModel {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GMenuModelPrivate,
@@ -7632,15 +7996,15 @@ pub struct GMenuModel {
 
 impl ::std::fmt::Debug for GMenuModel {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMenuModel @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMenuModel @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GMountOperation {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GMountOperationPrivate,
@@ -7648,15 +8012,15 @@ pub struct GMountOperation {
 
 impl ::std::fmt::Debug for GMountOperation {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GMountOperation @ {:?}", self as *const _))
+        f.debug_struct(&format!("GMountOperation @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GNativeSocketAddress {
     pub parent_instance: GSocketAddress,
     pub priv_: *mut GNativeSocketAddressPrivate,
@@ -7664,28 +8028,28 @@ pub struct GNativeSocketAddress {
 
 impl ::std::fmt::Debug for GNativeSocketAddress {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GNativeSocketAddress @ {:?}", self as *const _))
+        f.debug_struct(&format!("GNativeSocketAddress @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GNativeVolumeMonitor {
     pub parent_instance: GVolumeMonitor,
 }
 
 impl ::std::fmt::Debug for GNativeVolumeMonitor {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GNativeVolumeMonitor @ {:?}", self as *const _))
+        f.debug_struct(&format!("GNativeVolumeMonitor @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GNetworkAddress {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GNetworkAddressPrivate,
@@ -7693,14 +8057,14 @@ pub struct GNetworkAddress {
 
 impl ::std::fmt::Debug for GNetworkAddress {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GNetworkAddress @ {:?}", self as *const _))
+        f.debug_struct(&format!("GNetworkAddress @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GNetworkService {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GNetworkServicePrivate,
@@ -7708,24 +8072,27 @@ pub struct GNetworkService {
 
 impl ::std::fmt::Debug for GNetworkService {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GNetworkService @ {:?}", self as *const _))
+        f.debug_struct(&format!("GNetworkService @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GNotification(c_void);
+pub struct GNotification {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GNotification {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GNotification @ {:?}", self as *const _))
+        f.debug_struct(&format!("GNotification @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GOutputStream {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GOutputStreamPrivate,
@@ -7733,14 +8100,14 @@ pub struct GOutputStream {
 
 impl ::std::fmt::Debug for GOutputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GOutputStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GOutputStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GPermission {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GPermissionPrivate,
@@ -7748,24 +8115,27 @@ pub struct GPermission {
 
 impl ::std::fmt::Debug for GPermission {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GPermission @ {:?}", self as *const _))
+        f.debug_struct(&format!("GPermission @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GPropertyAction(c_void);
+pub struct GPropertyAction {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GPropertyAction {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GPropertyAction @ {:?}", self as *const _))
+        f.debug_struct(&format!("GPropertyAction @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GProxyAddress {
     pub parent_instance: GInetSocketAddress,
     pub priv_: *mut GProxyAddressPrivate,
@@ -7773,14 +8143,14 @@ pub struct GProxyAddress {
 
 impl ::std::fmt::Debug for GProxyAddress {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GProxyAddress @ {:?}", self as *const _))
+        f.debug_struct(&format!("GProxyAddress @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GProxyAddressEnumerator {
     pub parent_instance: GSocketAddressEnumerator,
     pub priv_: *mut GProxyAddressEnumeratorPrivate,
@@ -7788,13 +8158,13 @@ pub struct GProxyAddressEnumerator {
 
 impl ::std::fmt::Debug for GProxyAddressEnumerator {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GProxyAddressEnumerator @ {:?}", self as *const _))
+        f.debug_struct(&format!("GProxyAddressEnumerator @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GResolver {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GResolverPrivate,
@@ -7802,15 +8172,15 @@ pub struct GResolver {
 
 impl ::std::fmt::Debug for GResolver {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GResolver @ {:?}", self as *const _))
+        f.debug_struct(&format!("GResolver @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSettings {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GSettingsPrivate,
@@ -7818,15 +8188,15 @@ pub struct GSettings {
 
 impl ::std::fmt::Debug for GSettings {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSettings @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSettings @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSettingsBackend {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GSettingsBackendPrivate,
@@ -7834,24 +8204,27 @@ pub struct GSettingsBackend {
 
 impl ::std::fmt::Debug for GSettingsBackend {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSettingsBackend @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSettingsBackend @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GSimpleAction(c_void);
+pub struct GSimpleAction {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GSimpleAction {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSimpleAction @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSimpleAction @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSimpleActionGroup {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GSimpleActionGroupPrivate,
@@ -7859,43 +8232,52 @@ pub struct GSimpleActionGroup {
 
 impl ::std::fmt::Debug for GSimpleActionGroup {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSimpleActionGroup @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSimpleActionGroup @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GSimpleAsyncResult(c_void);
+pub struct GSimpleAsyncResult {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GSimpleAsyncResult {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSimpleAsyncResult @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSimpleAsyncResult @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GSimpleIOStream(c_void);
+pub struct GSimpleIOStream {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GSimpleIOStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSimpleIOStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSimpleIOStream @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GSimplePermission(c_void);
+pub struct GSimplePermission {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GSimplePermission {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSimplePermission @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSimplePermission @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSimpleProxyResolver {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GSimpleProxyResolverPrivate,
@@ -7903,14 +8285,14 @@ pub struct GSimpleProxyResolver {
 
 impl ::std::fmt::Debug for GSimpleProxyResolver {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSimpleProxyResolver @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSimpleProxyResolver @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocket {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GSocketPrivate,
@@ -7918,45 +8300,42 @@ pub struct GSocket {
 
 impl ::std::fmt::Debug for GSocket {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSocket @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSocket @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocketAddress {
     pub parent_instance: gobject::GObject,
 }
 
 impl ::std::fmt::Debug for GSocketAddress {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSocketAddress @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSocketAddress @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocketAddressEnumerator {
     pub parent_instance: gobject::GObject,
 }
 
 impl ::std::fmt::Debug for GSocketAddressEnumerator {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!(
-            "GSocketAddressEnumerator @ {:?}",
-            self as *const _
-        ))
-        .finish()
+        f.debug_struct(&format!("GSocketAddressEnumerator @ {:p}", self))
+            .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocketClient {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GSocketClientPrivate,
@@ -7964,15 +8343,15 @@ pub struct GSocketClient {
 
 impl ::std::fmt::Debug for GSocketClient {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSocketClient @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSocketClient @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocketConnection {
     pub parent_instance: GIOStream,
     pub priv_: *mut GSocketConnectionPrivate,
@@ -7980,15 +8359,15 @@ pub struct GSocketConnection {
 
 impl ::std::fmt::Debug for GSocketConnection {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSocketConnection @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSocketConnection @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocketControlMessage {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GSocketControlMessagePrivate,
@@ -7996,15 +8375,15 @@ pub struct GSocketControlMessage {
 
 impl ::std::fmt::Debug for GSocketControlMessage {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSocketControlMessage @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSocketControlMessage @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocketListener {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GSocketListenerPrivate,
@@ -8012,15 +8391,15 @@ pub struct GSocketListener {
 
 impl ::std::fmt::Debug for GSocketListener {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSocketListener @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSocketListener @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSocketService {
     pub parent_instance: GSocketListener,
     pub priv_: *mut GSocketServicePrivate,
@@ -8028,7 +8407,7 @@ pub struct GSocketService {
 
 impl ::std::fmt::Debug for GSocketService {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSocketService @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSocketService @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
@@ -8036,37 +8415,45 @@ impl ::std::fmt::Debug for GSocketService {
 }
 
 #[repr(C)]
-pub struct GSubprocess(c_void);
+pub struct GSubprocess {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GSubprocess {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSubprocess @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSubprocess @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GSubprocessLauncher(c_void);
+pub struct GSubprocessLauncher {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GSubprocessLauncher {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSubprocessLauncher @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSubprocessLauncher @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GTask(c_void);
+pub struct GTask {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GTask {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTask @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GTask @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTcpConnection {
     pub parent_instance: GSocketConnection,
     pub priv_: *mut GTcpConnectionPrivate,
@@ -8074,15 +8461,15 @@ pub struct GTcpConnection {
 
 impl ::std::fmt::Debug for GTcpConnection {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTcpConnection @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTcpConnection @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTcpWrapperConnection {
     pub parent_instance: GTcpConnection,
     pub priv_: *mut GTcpWrapperConnectionPrivate,
@@ -8090,7 +8477,7 @@ pub struct GTcpWrapperConnection {
 
 impl ::std::fmt::Debug for GTcpWrapperConnection {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTcpWrapperConnection @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTcpWrapperConnection @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
@@ -8098,27 +8485,32 @@ impl ::std::fmt::Debug for GTcpWrapperConnection {
 }
 
 #[repr(C)]
-pub struct GTestDBus(c_void);
+pub struct GTestDBus {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GTestDBus {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTestDBus @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GTestDBus @ {:p}", self)).finish()
     }
 }
 
 #[repr(C)]
-pub struct GThemedIcon(c_void);
+pub struct GThemedIcon {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GThemedIcon {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GThemedIcon @ {:?}", self as *const _))
+        f.debug_struct(&format!("GThemedIcon @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GThreadedSocketService {
     pub parent_instance: GSocketService,
     pub priv_: *mut GThreadedSocketServicePrivate,
@@ -8126,15 +8518,15 @@ pub struct GThreadedSocketService {
 
 impl ::std::fmt::Debug for GThreadedSocketService {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GThreadedSocketService @ {:?}", self as *const _))
+        f.debug_struct(&format!("GThreadedSocketService @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTlsCertificate {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GTlsCertificatePrivate,
@@ -8142,15 +8534,15 @@ pub struct GTlsCertificate {
 
 impl ::std::fmt::Debug for GTlsCertificate {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTlsCertificate @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTlsCertificate @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTlsConnection {
     pub parent_instance: GIOStream,
     pub priv_: *mut GTlsConnectionPrivate,
@@ -8158,15 +8550,15 @@ pub struct GTlsConnection {
 
 impl ::std::fmt::Debug for GTlsConnection {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTlsConnection @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTlsConnection @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTlsDatabase {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GTlsDatabasePrivate,
@@ -8174,15 +8566,15 @@ pub struct GTlsDatabase {
 
 impl ::std::fmt::Debug for GTlsDatabase {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTlsDatabase @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTlsDatabase @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTlsInteraction {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GTlsInteractionPrivate,
@@ -8190,13 +8582,13 @@ pub struct GTlsInteraction {
 
 impl ::std::fmt::Debug for GTlsInteraction {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTlsInteraction @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTlsInteraction @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTlsPassword {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GTlsPasswordPrivate,
@@ -8204,15 +8596,15 @@ pub struct GTlsPassword {
 
 impl ::std::fmt::Debug for GTlsPassword {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTlsPassword @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTlsPassword @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GUnixConnection {
     pub parent_instance: GSocketConnection,
     pub priv_: *mut GUnixConnectionPrivate,
@@ -8220,15 +8612,15 @@ pub struct GUnixConnection {
 
 impl ::std::fmt::Debug for GUnixConnection {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GUnixConnection @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUnixConnection @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GUnixCredentialsMessage {
     pub parent_instance: GSocketControlMessage,
     pub priv_: *mut GUnixCredentialsMessagePrivate,
@@ -8236,15 +8628,15 @@ pub struct GUnixCredentialsMessage {
 
 impl ::std::fmt::Debug for GUnixCredentialsMessage {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GUnixCredentialsMessage @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUnixCredentialsMessage @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GUnixFDList {
     pub parent_instance: gobject::GObject,
     pub priv_: *mut GUnixFDListPrivate,
@@ -8252,15 +8644,15 @@ pub struct GUnixFDList {
 
 impl ::std::fmt::Debug for GUnixFDList {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GUnixFDList @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUnixFDList @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GUnixFDMessage {
     pub parent_instance: GSocketControlMessage,
     pub priv_: *mut GUnixFDMessagePrivate,
@@ -8268,15 +8660,15 @@ pub struct GUnixFDMessage {
 
 impl ::std::fmt::Debug for GUnixFDMessage {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GUnixFDMessage @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUnixFDMessage @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("priv_", &self.priv_)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GUnixInputStream {
     pub parent_instance: GInputStream,
     pub priv_: *mut GUnixInputStreamPrivate,
@@ -8284,24 +8676,27 @@ pub struct GUnixInputStream {
 
 impl ::std::fmt::Debug for GUnixInputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GUnixInputStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUnixInputStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GUnixMountMonitor(c_void);
+pub struct GUnixMountMonitor {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GUnixMountMonitor {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GUnixMountMonitor @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUnixMountMonitor @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GUnixOutputStream {
     pub parent_instance: GOutputStream,
     pub priv_: *mut GUnixOutputStreamPrivate,
@@ -8309,14 +8704,14 @@ pub struct GUnixOutputStream {
 
 impl ::std::fmt::Debug for GUnixOutputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GUnixOutputStream @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUnixOutputStream @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GUnixSocketAddress {
     pub parent_instance: GSocketAddress,
     pub priv_: *mut GUnixSocketAddressPrivate,
@@ -8324,28 +8719,28 @@ pub struct GUnixSocketAddress {
 
 impl ::std::fmt::Debug for GUnixSocketAddress {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GUnixSocketAddress @ {:?}", self as *const _))
+        f.debug_struct(&format!("GUnixSocketAddress @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GVfs {
     pub parent_instance: gobject::GObject,
 }
 
 impl ::std::fmt::Debug for GVfs {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GVfs @ {:?}", self as *const _))
+        f.debug_struct(&format!("GVfs @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GVolumeMonitor {
     pub parent_instance: gobject::GObject,
     pub priv_: gpointer,
@@ -8353,357 +8748,508 @@ pub struct GVolumeMonitor {
 
 impl ::std::fmt::Debug for GVolumeMonitor {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GVolumeMonitor @ {:?}", self as *const _))
+        f.debug_struct(&format!("GVolumeMonitor @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GZlibCompressor(c_void);
+pub struct GZlibCompressor {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GZlibCompressor {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GZlibCompressor @ {:?}", self as *const _))
+        f.debug_struct(&format!("GZlibCompressor @ {:p}", self))
             .finish()
     }
 }
 
 #[repr(C)]
-pub struct GZlibDecompressor(c_void);
+pub struct GZlibDecompressor {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GZlibDecompressor {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GZlibDecompressor @ {:?}", self as *const _))
+        f.debug_struct(&format!("GZlibDecompressor @ {:p}", self))
             .finish()
     }
 }
 
 // Interfaces
 #[repr(C)]
-pub struct GAction(c_void);
+pub struct GAction {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GAction {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GAction @ {:?}", self as *const _)
+        write!(f, "GAction @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GActionGroup(c_void);
+pub struct GActionGroup {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GActionGroup {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GActionGroup @ {:?}", self as *const _)
+        write!(f, "GActionGroup @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GActionMap(c_void);
+pub struct GActionMap {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GActionMap {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GActionMap @ {:?}", self as *const _)
+        write!(f, "GActionMap @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GAppInfo(c_void);
+pub struct GAppInfo {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GAppInfo {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GAppInfo @ {:?}", self as *const _)
+        write!(f, "GAppInfo @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GAsyncInitable(c_void);
+pub struct GAsyncInitable {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GAsyncInitable {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GAsyncInitable @ {:?}", self as *const _)
+        write!(f, "GAsyncInitable @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GAsyncResult(c_void);
+pub struct GAsyncResult {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GAsyncResult {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GAsyncResult @ {:?}", self as *const _)
+        write!(f, "GAsyncResult @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GConverter(c_void);
+pub struct GConverter {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GConverter {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GConverter @ {:?}", self as *const _)
+        write!(f, "GConverter @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GDBusInterface(c_void);
+pub struct GDBusInterface {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDBusInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GDBusInterface @ {:?}", self as *const _)
+        write!(f, "GDBusInterface @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GDBusObject(c_void);
+pub struct GDBusObject {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDBusObject {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GDBusObject @ {:?}", self as *const _)
+        write!(f, "GDBusObject @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GDBusObjectManager(c_void);
+pub struct GDBusObjectManager {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDBusObjectManager {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GDBusObjectManager @ {:?}", self as *const _)
+        write!(f, "GDBusObjectManager @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GDatagramBased(c_void);
+pub struct GDatagramBased {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDatagramBased {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GDatagramBased @ {:?}", self as *const _)
+        write!(f, "GDatagramBased @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GDesktopAppInfoLookup(c_void);
+pub struct GDebugController {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
+
+impl ::std::fmt::Debug for GDebugController {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        write!(f, "GDebugController @ {:p}", self)
+    }
+}
+
+#[repr(C)]
+pub struct GDesktopAppInfoLookup {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDesktopAppInfoLookup {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GDesktopAppInfoLookup @ {:?}", self as *const _)
+        write!(f, "GDesktopAppInfoLookup @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GDrive(c_void);
+pub struct GDrive {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDrive {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GDrive @ {:?}", self as *const _)
+        write!(f, "GDrive @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GDtlsClientConnection(c_void);
+pub struct GDtlsClientConnection {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDtlsClientConnection {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GDtlsClientConnection @ {:?}", self as *const _)
+        write!(f, "GDtlsClientConnection @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GDtlsConnection(c_void);
+pub struct GDtlsConnection {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDtlsConnection {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GDtlsConnection @ {:?}", self as *const _)
+        write!(f, "GDtlsConnection @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GDtlsServerConnection(c_void);
+pub struct GDtlsServerConnection {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GDtlsServerConnection {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GDtlsServerConnection @ {:?}", self as *const _)
+        write!(f, "GDtlsServerConnection @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GFile(c_void);
+pub struct GFile {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GFile {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GFile @ {:?}", self as *const _)
+        write!(f, "GFile @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GFileDescriptorBased(c_void);
+pub struct GFileDescriptorBased {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GFileDescriptorBased {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GFileDescriptorBased @ {:?}", self as *const _)
+        write!(f, "GFileDescriptorBased @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GIcon(c_void);
+pub struct GIcon {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GIcon {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GIcon @ {:?}", self as *const _)
+        write!(f, "GIcon @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GInitable(c_void);
+pub struct GInitable {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GInitable {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GInitable @ {:?}", self as *const _)
+        write!(f, "GInitable @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GListModel(c_void);
+pub struct GListModel {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GListModel {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GListModel @ {:?}", self as *const _)
+        write!(f, "GListModel @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GLoadableIcon(c_void);
+pub struct GLoadableIcon {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GLoadableIcon {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GLoadableIcon @ {:?}", self as *const _)
+        write!(f, "GLoadableIcon @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GMount(c_void);
+pub struct GMemoryMonitor {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
+
+impl ::std::fmt::Debug for GMemoryMonitor {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        write!(f, "GMemoryMonitor @ {:p}", self)
+    }
+}
+
+#[repr(C)]
+pub struct GMount {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GMount {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GMount @ {:?}", self as *const _)
+        write!(f, "GMount @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GNetworkMonitor(c_void);
+pub struct GNetworkMonitor {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GNetworkMonitor {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GNetworkMonitor @ {:?}", self as *const _)
+        write!(f, "GNetworkMonitor @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GPollableInputStream(c_void);
+pub struct GPollableInputStream {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GPollableInputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GPollableInputStream @ {:?}", self as *const _)
+        write!(f, "GPollableInputStream @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GPollableOutputStream(c_void);
+pub struct GPollableOutputStream {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GPollableOutputStream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GPollableOutputStream @ {:?}", self as *const _)
+        write!(f, "GPollableOutputStream @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GProxy(c_void);
+pub struct GPowerProfileMonitor {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
+
+impl ::std::fmt::Debug for GPowerProfileMonitor {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        write!(f, "GPowerProfileMonitor @ {:p}", self)
+    }
+}
+
+#[repr(C)]
+pub struct GProxy {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GProxy {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GProxy @ {:?}", self as *const _)
+        write!(f, "GProxy @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GProxyResolver(c_void);
+pub struct GProxyResolver {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GProxyResolver {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GProxyResolver @ {:?}", self as *const _)
+        write!(f, "GProxyResolver @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GRemoteActionGroup(c_void);
+pub struct GRemoteActionGroup {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GRemoteActionGroup {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GRemoteActionGroup @ {:?}", self as *const _)
+        write!(f, "GRemoteActionGroup @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GSeekable(c_void);
+pub struct GSeekable {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GSeekable {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GSeekable @ {:?}", self as *const _)
+        write!(f, "GSeekable @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GSocketConnectable(c_void);
+pub struct GSocketConnectable {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GSocketConnectable {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GSocketConnectable @ {:?}", self as *const _)
+        write!(f, "GSocketConnectable @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GTlsBackend(c_void);
+pub struct GTlsBackend {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GTlsBackend {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GTlsBackend @ {:?}", self as *const _)
+        write!(f, "GTlsBackend @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GTlsClientConnection(c_void);
+pub struct GTlsClientConnection {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GTlsClientConnection {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GTlsClientConnection @ {:?}", self as *const _)
+        write!(f, "GTlsClientConnection @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GTlsFileDatabase(c_void);
+pub struct GTlsFileDatabase {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GTlsFileDatabase {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GTlsFileDatabase @ {:?}", self as *const _)
+        write!(f, "GTlsFileDatabase @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GTlsServerConnection(c_void);
+pub struct GTlsServerConnection {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GTlsServerConnection {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GTlsServerConnection @ {:?}", self as *const _)
+        write!(f, "GTlsServerConnection @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct GVolume(c_void);
+pub struct GVolume {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GVolume {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GVolume @ {:?}", self as *const _)
+        write!(f, "GVolume @ {:p}", self)
     }
 }
 
+#[link(name = "gio-2.0")]
 extern "C" {
 
     //=========================================================================
@@ -8830,6 +9376,13 @@ extern "C" {
     pub fn g_io_module_scope_flags_get_type() -> GType;
 
     //=========================================================================
+    // GMemoryMonitorWarningLevel
+    //=========================================================================
+    #[cfg(any(feature = "v2_64", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+    pub fn g_memory_monitor_warning_level_get_type() -> GType;
+
+    //=========================================================================
     // GMountOperationResult
     //=========================================================================
     pub fn g_mount_operation_result_get_type() -> GType;
@@ -8852,6 +9405,8 @@ extern "C" {
     //=========================================================================
     // GPollableReturn
     //=========================================================================
+    #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_pollable_return_get_type() -> GType;
 
     //=========================================================================
@@ -8907,6 +9462,23 @@ extern "C" {
     pub fn g_tls_certificate_request_flags_get_type() -> GType;
 
     //=========================================================================
+    // GTlsChannelBindingError
+    //=========================================================================
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_tls_channel_binding_error_get_type() -> GType;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_tls_channel_binding_error_quark() -> glib::GQuark;
+
+    //=========================================================================
+    // GTlsChannelBindingType
+    //=========================================================================
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_tls_channel_binding_type_get_type() -> GType;
+
+    //=========================================================================
     // GTlsDatabaseLookupFlags
     //=========================================================================
     pub fn g_tls_database_lookup_flags_get_type() -> GType;
@@ -8921,6 +9493,13 @@ extern "C" {
     // GTlsInteractionResult
     //=========================================================================
     pub fn g_tls_interaction_result_get_type() -> GType;
+
+    //=========================================================================
+    // GTlsProtocolVersion
+    //=========================================================================
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_tls_protocol_version_get_type() -> GType;
 
     //=========================================================================
     // GTlsRehandshakeMode
@@ -9085,6 +9664,8 @@ extern "C" {
     //=========================================================================
     // GResolverNameLookupFlags
     //=========================================================================
+    #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_resolver_name_lookup_flags_get_type() -> GType;
 
     //=========================================================================
@@ -9379,9 +9960,7 @@ extern "C" {
     pub fn g_settings_schema_get_path(schema: *mut GSettingsSchema) -> *const c_char;
     pub fn g_settings_schema_has_key(schema: *mut GSettingsSchema, name: *const c_char)
         -> gboolean;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_settings_schema_list_children(schema: *mut GSettingsSchema) -> *mut *mut c_char;
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
     pub fn g_settings_schema_list_keys(schema: *mut GSettingsSchema) -> *mut *mut c_char;
     pub fn g_settings_schema_ref(schema: *mut GSettingsSchema) -> *mut GSettingsSchema;
     pub fn g_settings_schema_unref(schema: *mut GSettingsSchema);
@@ -9394,7 +9973,6 @@ extern "C" {
         key: *mut GSettingsSchemaKey,
     ) -> *mut glib::GVariant;
     pub fn g_settings_schema_key_get_description(key: *mut GSettingsSchemaKey) -> *const c_char;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_settings_schema_key_get_name(key: *mut GSettingsSchemaKey) -> *const c_char;
     pub fn g_settings_schema_key_get_range(key: *mut GSettingsSchemaKey) -> *mut glib::GVariant;
     pub fn g_settings_schema_key_get_summary(key: *mut GSettingsSchemaKey) -> *const c_char;
@@ -9463,17 +10041,22 @@ extern "C" {
     //=========================================================================
     // GUnixMountEntry
     //=========================================================================
+    #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_54")))]
     pub fn g_unix_mount_entry_get_type() -> GType;
 
     //=========================================================================
     // GUnixMountPoint
     //=========================================================================
+    #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_54")))]
     pub fn g_unix_mount_point_get_type() -> GType;
     pub fn g_unix_mount_point_compare(
         mount1: *mut GUnixMountPoint,
         mount2: *mut GUnixMountPoint,
     ) -> c_int;
     #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_54")))]
     pub fn g_unix_mount_point_copy(mount_point: *mut GUnixMountPoint) -> *mut GUnixMountPoint;
     pub fn g_unix_mount_point_free(mount_point: *mut GUnixMountPoint);
     pub fn g_unix_mount_point_get_device_path(mount_point: *mut GUnixMountPoint) -> *const c_char;
@@ -9487,6 +10070,12 @@ extern "C" {
     pub fn g_unix_mount_point_is_loopback(mount_point: *mut GUnixMountPoint) -> gboolean;
     pub fn g_unix_mount_point_is_readonly(mount_point: *mut GUnixMountPoint) -> gboolean;
     pub fn g_unix_mount_point_is_user_mountable(mount_point: *mut GUnixMountPoint) -> gboolean;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_unix_mount_point_at(
+        mount_path: *const c_char,
+        time_read: *mut u64,
+    ) -> *mut GUnixMountPoint;
 
     //=========================================================================
     // GAppInfoMonitor
@@ -9551,7 +10140,6 @@ extern "C" {
         application: *mut GApplication,
         group: *mut glib::GOptionGroup,
     );
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_application_bind_busy_property(
         application: *mut GApplication,
         object: *mut gobject::GObject,
@@ -9564,7 +10152,6 @@ extern "C" {
     pub fn g_application_get_dbus_object_path(application: *mut GApplication) -> *const c_char;
     pub fn g_application_get_flags(application: *mut GApplication) -> GApplicationFlags;
     pub fn g_application_get_inactivity_timeout(application: *mut GApplication) -> c_uint;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_application_get_is_busy(application: *mut GApplication) -> gboolean;
     pub fn g_application_get_is_registered(application: *mut GApplication) -> gboolean;
     pub fn g_application_get_is_remote(application: *mut GApplication) -> gboolean;
@@ -9609,16 +10196,19 @@ extern "C" {
         inactivity_timeout: c_uint,
     );
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_application_set_option_context_description(
         application: *mut GApplication,
         description: *const c_char,
     );
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_application_set_option_context_parameter_string(
         application: *mut GApplication,
         parameter_string: *const c_char,
     );
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_application_set_option_context_summary(
         application: *mut GApplication,
         summary: *const c_char,
@@ -9627,7 +10217,6 @@ extern "C" {
         application: *mut GApplication,
         resource_path: *const c_char,
     );
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_application_unbind_busy_property(
         application: *mut GApplication,
         object: *mut gobject::GObject,
@@ -10067,6 +10656,7 @@ extern "C" {
     ) -> GDBusCapabilityFlags;
     pub fn g_dbus_connection_get_exit_on_close(connection: *mut GDBusConnection) -> gboolean;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_dbus_connection_get_flags(connection: *mut GDBusConnection) -> GDBusConnectionFlags;
     pub fn g_dbus_connection_get_guid(connection: *mut GDBusConnection) -> *const c_char;
     pub fn g_dbus_connection_get_last_serial(connection: *mut GDBusConnection) -> u32;
@@ -10085,7 +10675,6 @@ extern "C" {
         user_data_free_func: glib::GDestroyNotify,
         error: *mut *mut glib::GError,
     ) -> c_uint;
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
     pub fn g_dbus_connection_register_object_with_closures(
         connection: *mut GDBusConnection,
         object_path: *const c_char,
@@ -10879,6 +11468,23 @@ extern "C" {
     );
 
     //=========================================================================
+    // GDebugControllerDBus
+    //=========================================================================
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_debug_controller_dbus_get_type() -> GType;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_debug_controller_dbus_new(
+        connection: *mut GDBusConnection,
+        cancellable: *mut GCancellable,
+        error: *mut *mut glib::GError,
+    ) -> *mut GDebugControllerDBus;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_debug_controller_dbus_stop(self_: *mut GDebugControllerDBus);
+
+    //=========================================================================
     // GDesktopAppInfo
     //=========================================================================
     pub fn g_desktop_app_info_get_type() -> GType;
@@ -10904,6 +11510,7 @@ extern "C" {
     pub fn g_desktop_app_info_get_is_hidden(info: *mut GDesktopAppInfo) -> gboolean;
     pub fn g_desktop_app_info_get_keywords(info: *mut GDesktopAppInfo) -> *const *const c_char;
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_desktop_app_info_get_locale_string(
         info: *mut GDesktopAppInfo,
         key: *const c_char,
@@ -10919,6 +11526,7 @@ extern "C" {
         key: *const c_char,
     ) -> *mut c_char;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_desktop_app_info_get_string_list(
         info: *mut GDesktopAppInfo,
         key: *const c_char,
@@ -10942,6 +11550,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> gboolean;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_desktop_app_info_launch_uris_as_manager_with_fds(
         appinfo: *mut GDesktopAppInfo,
         uris: *mut glib::GList,
@@ -11005,7 +11614,6 @@ extern "C" {
     pub fn g_file_enumerator_get_container(enumerator: *mut GFileEnumerator) -> *mut GFile;
     pub fn g_file_enumerator_has_pending(enumerator: *mut GFileEnumerator) -> gboolean;
     pub fn g_file_enumerator_is_closed(enumerator: *mut GFileEnumerator) -> gboolean;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_file_enumerator_iterate(
         direnum: *mut GFileEnumerator,
         out_info: *mut *mut GFileInfo,
@@ -11073,6 +11681,9 @@ extern "C" {
     pub fn g_file_info_clear_status(info: *mut GFileInfo);
     pub fn g_file_info_copy_into(src_info: *mut GFileInfo, dest_info: *mut GFileInfo);
     pub fn g_file_info_dup(other: *mut GFileInfo) -> *mut GFileInfo;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_file_info_get_access_date_time(info: *mut GFileInfo) -> *mut glib::GDateTime;
     pub fn g_file_info_get_attribute_as_string(
         info: *mut GFileInfo,
         attribute: *const c_char,
@@ -11117,6 +11728,9 @@ extern "C" {
     pub fn g_file_info_get_attribute_uint32(info: *mut GFileInfo, attribute: *const c_char) -> u32;
     pub fn g_file_info_get_attribute_uint64(info: *mut GFileInfo, attribute: *const c_char) -> u64;
     pub fn g_file_info_get_content_type(info: *mut GFileInfo) -> *const c_char;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_file_info_get_creation_date_time(info: *mut GFileInfo) -> *mut glib::GDateTime;
     pub fn g_file_info_get_deletion_date(info: *mut GFileInfo) -> *mut glib::GDateTime;
     pub fn g_file_info_get_display_name(info: *mut GFileInfo) -> *const c_char;
     pub fn g_file_info_get_edit_name(info: *mut GFileInfo) -> *const c_char;
@@ -11127,6 +11741,7 @@ extern "C" {
     pub fn g_file_info_get_is_hidden(info: *mut GFileInfo) -> gboolean;
     pub fn g_file_info_get_is_symlink(info: *mut GFileInfo) -> gboolean;
     #[cfg(any(feature = "v2_62", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_62")))]
     pub fn g_file_info_get_modification_date_time(info: *mut GFileInfo) -> *mut glib::GDateTime;
     pub fn g_file_info_get_modification_time(info: *mut GFileInfo, result: *mut glib::GTimeVal);
     pub fn g_file_info_get_name(info: *mut GFileInfo) -> *const c_char;
@@ -11141,6 +11756,9 @@ extern "C" {
         name_space: *const c_char,
     ) -> *mut *mut c_char;
     pub fn g_file_info_remove_attribute(info: *mut GFileInfo, attribute: *const c_char);
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_file_info_set_access_date_time(info: *mut GFileInfo, atime: *mut glib::GDateTime);
     pub fn g_file_info_set_attribute(
         info: *mut GFileInfo,
         attribute: *const c_char,
@@ -11199,6 +11817,12 @@ extern "C" {
         attr_value: u64,
     );
     pub fn g_file_info_set_content_type(info: *mut GFileInfo, content_type: *const c_char);
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_file_info_set_creation_date_time(
+        info: *mut GFileInfo,
+        creation_time: *mut glib::GDateTime,
+    );
     pub fn g_file_info_set_display_name(info: *mut GFileInfo, display_name: *const c_char);
     pub fn g_file_info_set_edit_name(info: *mut GFileInfo, edit_name: *const c_char);
     pub fn g_file_info_set_file_type(info: *mut GFileInfo, type_: GFileType);
@@ -11206,6 +11830,7 @@ extern "C" {
     pub fn g_file_info_set_is_hidden(info: *mut GFileInfo, is_hidden: gboolean);
     pub fn g_file_info_set_is_symlink(info: *mut GFileInfo, is_symlink: gboolean);
     #[cfg(any(feature = "v2_62", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_62")))]
     pub fn g_file_info_set_modification_date_time(
         info: *mut GFileInfo,
         mtime: *mut glib::GDateTime,
@@ -11491,7 +12116,6 @@ extern "C" {
         cancellable: *mut GCancellable,
         error: *mut *mut glib::GError,
     ) -> gboolean;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_input_stream_read_all_async(
         stream: *mut GInputStream,
         buffer: *mut u8,
@@ -11501,7 +12125,6 @@ extern "C" {
         callback: GAsyncReadyCallback,
         user_data: gpointer,
     );
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_input_stream_read_all_finish(
         stream: *mut GInputStream,
         result: *mut GAsyncResult,
@@ -11569,34 +12192,41 @@ extern "C" {
     // GListStore
     //=========================================================================
     pub fn g_list_store_get_type() -> GType;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_list_store_new(item_type: GType) -> *mut GListStore;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_list_store_append(store: *mut GListStore, item: *mut gobject::GObject);
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
+    #[cfg(any(feature = "v2_64", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+    pub fn g_list_store_find(
+        store: *mut GListStore,
+        item: *mut gobject::GObject,
+        position: *mut c_uint,
+    ) -> gboolean;
+    #[cfg(any(feature = "v2_64", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+    pub fn g_list_store_find_with_equal_func(
+        store: *mut GListStore,
+        item: *mut gobject::GObject,
+        equal_func: glib::GEqualFunc,
+        position: *mut c_uint,
+    ) -> gboolean;
     pub fn g_list_store_insert(
         store: *mut GListStore,
         position: c_uint,
         item: *mut gobject::GObject,
     );
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_list_store_insert_sorted(
         store: *mut GListStore,
         item: *mut gobject::GObject,
         compare_func: glib::GCompareDataFunc,
         user_data: gpointer,
     ) -> c_uint;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_list_store_remove(store: *mut GListStore, position: c_uint);
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_list_store_remove_all(store: *mut GListStore);
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
     pub fn g_list_store_sort(
         store: *mut GListStore,
         compare_func: glib::GCompareDataFunc,
         user_data: gpointer,
     );
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_list_store_splice(
         store: *mut GListStore,
         position: c_uint,
@@ -11818,12 +12448,15 @@ extern "C" {
     pub fn g_mount_operation_get_choice(op: *mut GMountOperation) -> c_int;
     pub fn g_mount_operation_get_domain(op: *mut GMountOperation) -> *const c_char;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_mount_operation_get_is_tcrypt_hidden_volume(op: *mut GMountOperation) -> gboolean;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_mount_operation_get_is_tcrypt_system_volume(op: *mut GMountOperation) -> gboolean;
     pub fn g_mount_operation_get_password(op: *mut GMountOperation) -> *const c_char;
     pub fn g_mount_operation_get_password_save(op: *mut GMountOperation) -> GPasswordSave;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_mount_operation_get_pim(op: *mut GMountOperation) -> c_uint;
     pub fn g_mount_operation_get_username(op: *mut GMountOperation) -> *const c_char;
     pub fn g_mount_operation_reply(op: *mut GMountOperation, result: GMountOperationResult);
@@ -11831,11 +12464,13 @@ extern "C" {
     pub fn g_mount_operation_set_choice(op: *mut GMountOperation, choice: c_int);
     pub fn g_mount_operation_set_domain(op: *mut GMountOperation, domain: *const c_char);
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_mount_operation_set_is_tcrypt_hidden_volume(
         op: *mut GMountOperation,
         hidden_volume: gboolean,
     );
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_mount_operation_set_is_tcrypt_system_volume(
         op: *mut GMountOperation,
         system_volume: gboolean,
@@ -11843,6 +12478,7 @@ extern "C" {
     pub fn g_mount_operation_set_password(op: *mut GMountOperation, password: *const c_char);
     pub fn g_mount_operation_set_password_save(op: *mut GMountOperation, save: GPasswordSave);
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_mount_operation_set_pim(op: *mut GMountOperation, pim: c_uint);
     pub fn g_mount_operation_set_username(op: *mut GMountOperation, username: *const c_char);
 
@@ -11850,7 +12486,6 @@ extern "C" {
     // GNativeSocketAddress
     //=========================================================================
     pub fn g_native_socket_address_get_type() -> GType;
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
     pub fn g_native_socket_address_new(native: gpointer, len: size_t) -> *mut GSocketAddress;
 
     //=========================================================================
@@ -11863,7 +12498,6 @@ extern "C" {
     //=========================================================================
     pub fn g_network_address_get_type() -> GType;
     pub fn g_network_address_new(hostname: *const c_char, port: u16) -> *mut GNetworkAddress;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_network_address_new_loopback(port: u16) -> *mut GNetworkAddress;
     pub fn g_network_address_parse(
         host_and_port: *const c_char,
@@ -11918,6 +12552,9 @@ extern "C" {
         target: *mut glib::GVariant,
     );
     pub fn g_notification_set_body(notification: *mut GNotification, body: *const c_char);
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_notification_set_category(notification: *mut GNotification, category: *const c_char);
     pub fn g_notification_set_default_action(
         notification: *mut GNotification,
         detailed_action: *const c_char,
@@ -12032,7 +12669,6 @@ extern "C" {
         cancellable: *mut GCancellable,
         error: *mut *mut glib::GError,
     ) -> gboolean;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_output_stream_write_all_async(
         stream: *mut GOutputStream,
         buffer: *mut u8,
@@ -12042,7 +12678,6 @@ extern "C" {
         callback: GAsyncReadyCallback,
         user_data: gpointer,
     );
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_output_stream_write_all_finish(
         stream: *mut GOutputStream,
         result: *mut GAsyncResult,
@@ -12083,6 +12718,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> ssize_t;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_output_stream_writev(
         stream: *mut GOutputStream,
         vectors: *const GOutputVector,
@@ -12092,6 +12728,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> gboolean;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_output_stream_writev_all(
         stream: *mut GOutputStream,
         vectors: *mut GOutputVector,
@@ -12101,6 +12738,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> gboolean;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_output_stream_writev_all_async(
         stream: *mut GOutputStream,
         vectors: *mut GOutputVector,
@@ -12111,6 +12749,7 @@ extern "C" {
         user_data: gpointer,
     );
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_output_stream_writev_all_finish(
         stream: *mut GOutputStream,
         result: *mut GAsyncResult,
@@ -12118,6 +12757,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> gboolean;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_output_stream_writev_async(
         stream: *mut GOutputStream,
         vectors: *const GOutputVector,
@@ -12128,6 +12768,7 @@ extern "C" {
         user_data: gpointer,
     );
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_output_stream_writev_finish(
         stream: *mut GOutputStream,
         result: *mut GAsyncResult,
@@ -12261,6 +12902,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> *mut glib::GList;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_resolver_lookup_by_name_with_flags(
         resolver: *mut GResolver,
         hostname: *const c_char,
@@ -12269,6 +12911,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> *mut glib::GList;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_resolver_lookup_by_name_with_flags_async(
         resolver: *mut GResolver,
         hostname: *const c_char,
@@ -12278,6 +12921,7 @@ extern "C" {
         user_data: gpointer,
     );
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_resolver_lookup_by_name_with_flags_finish(
         resolver: *mut GResolver,
         result: *mut GAsyncResult,
@@ -12395,6 +13039,7 @@ extern "C" {
     pub fn g_settings_get_has_unapplied(settings: *mut GSettings) -> gboolean;
     pub fn g_settings_get_int(settings: *mut GSettings, key: *const c_char) -> c_int;
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_settings_get_int64(settings: *mut GSettings, key: *const c_char) -> i64;
     pub fn g_settings_get_mapped(
         settings: *mut GSettings,
@@ -12410,6 +13055,7 @@ extern "C" {
     pub fn g_settings_get_strv(settings: *mut GSettings, key: *const c_char) -> *mut *mut c_char;
     pub fn g_settings_get_uint(settings: *mut GSettings, key: *const c_char) -> c_uint;
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_settings_get_uint64(settings: *mut GSettings, key: *const c_char) -> u64;
     pub fn g_settings_get_user_value(
         settings: *mut GSettings,
@@ -12461,6 +13107,7 @@ extern "C" {
         value: c_int,
     ) -> gboolean;
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_settings_set_int64(
         settings: *mut GSettings,
         key: *const c_char,
@@ -12482,6 +13129,7 @@ extern "C" {
         value: c_uint,
     ) -> gboolean;
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_settings_set_uint64(
         settings: *mut GSettings,
         key: *const c_char,
@@ -12546,7 +13194,6 @@ extern "C" {
     ) -> *mut GSimpleAction;
     pub fn g_simple_action_set_enabled(simple: *mut GSimpleAction, enabled: gboolean);
     pub fn g_simple_action_set_state(simple: *mut GSimpleAction, value: *mut glib::GVariant);
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_simple_action_set_state_hint(
         simple: *mut GSimpleAction,
         state_hint: *mut glib::GVariant,
@@ -12667,7 +13314,6 @@ extern "C" {
     // GSimpleIOStream
     //=========================================================================
     pub fn g_simple_io_stream_get_type() -> GType;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_simple_io_stream_new(
         input_stream: *mut GInputStream,
         output_stream: *mut GOutputStream,
@@ -12801,6 +13447,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> gboolean;
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_socket_join_multicast_group_ssm(
         socket: *mut GSocket,
         group: *mut GInetAddress,
@@ -12816,6 +13463,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> gboolean;
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_socket_leave_multicast_group_ssm(
         socket: *mut GSocket,
         group: *mut GInetAddress,
@@ -12850,7 +13498,6 @@ extern "C" {
         cancellable: *mut GCancellable,
         error: *mut *mut glib::GError,
     ) -> ssize_t;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_socket_receive_messages(
         socket: *mut GSocket,
         messages: *mut GInputMessage,
@@ -12886,6 +13533,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> ssize_t;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_socket_send_message_with_timeout(
         socket: *mut GSocket,
         address: *mut GSocketAddress,
@@ -12899,7 +13547,6 @@ extern "C" {
         cancellable: *mut GCancellable,
         error: *mut *mut glib::GError,
     ) -> GPollableReturn;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_socket_send_messages(
         socket: *mut GSocket,
         messages: *mut GOutputMessage,
@@ -13346,6 +13993,9 @@ extern "C" {
     //=========================================================================
     pub fn g_subprocess_launcher_get_type() -> GType;
     pub fn g_subprocess_launcher_new(flags: GSubprocessFlags) -> *mut GSubprocessLauncher;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_subprocess_launcher_close(self_: *mut GSubprocessLauncher);
     pub fn g_subprocess_launcher_getenv(
         self_: *mut GSubprocessLauncher,
         variable: *const c_char,
@@ -13442,10 +14092,10 @@ extern "C" {
     );
     pub fn g_task_get_cancellable(task: *mut GTask) -> *mut GCancellable;
     pub fn g_task_get_check_cancellable(task: *mut GTask) -> gboolean;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_task_get_completed(task: *mut GTask) -> gboolean;
     pub fn g_task_get_context(task: *mut GTask) -> *mut glib::GMainContext;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_task_get_name(task: *mut GTask) -> *const c_char;
     pub fn g_task_get_priority(task: *mut GTask) -> c_int;
     pub fn g_task_get_return_on_cancel(task: *mut GTask) -> gboolean;
@@ -13456,6 +14106,13 @@ extern "C" {
     pub fn g_task_propagate_boolean(task: *mut GTask, error: *mut *mut glib::GError) -> gboolean;
     pub fn g_task_propagate_int(task: *mut GTask, error: *mut *mut glib::GError) -> ssize_t;
     pub fn g_task_propagate_pointer(task: *mut GTask, error: *mut *mut glib::GError) -> gpointer;
+    #[cfg(any(feature = "v2_64", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+    pub fn g_task_propagate_value(
+        task: *mut GTask,
+        value: *mut gobject::GValue,
+        error: *mut *mut glib::GError,
+    ) -> gboolean;
     pub fn g_task_return_boolean(task: *mut GTask, result: gboolean);
     pub fn g_task_return_error(task: *mut GTask, error: *mut glib::GError);
     pub fn g_task_return_error_if_cancelled(task: *mut GTask) -> gboolean;
@@ -13472,10 +14129,14 @@ extern "C" {
         result: gpointer,
         result_destroy: glib::GDestroyNotify,
     );
+    #[cfg(any(feature = "v2_64", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+    pub fn g_task_return_value(task: *mut GTask, result: *mut gobject::GValue);
     pub fn g_task_run_in_thread(task: *mut GTask, task_func: GTaskThreadFunc);
     pub fn g_task_run_in_thread_sync(task: *mut GTask, task_func: GTaskThreadFunc);
     pub fn g_task_set_check_cancellable(task: *mut GTask, check_cancellable: gboolean);
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_task_set_name(task: *mut GTask, name: *const c_char);
     pub fn g_task_set_priority(task: *mut GTask, priority: c_int);
     pub fn g_task_set_return_on_cancel(task: *mut GTask, return_on_cancel: gboolean) -> gboolean;
@@ -13549,6 +14210,13 @@ extern "C" {
         file: *const c_char,
         error: *mut *mut glib::GError,
     ) -> *mut GTlsCertificate;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_tls_certificate_new_from_file_with_password(
+        file: *const c_char,
+        password: *const c_char,
+        error: *mut *mut glib::GError,
+    ) -> *mut GTlsCertificate;
     pub fn g_tls_certificate_new_from_files(
         cert_file: *const c_char,
         key_file: *const c_char,
@@ -13559,11 +14227,48 @@ extern "C" {
         length: ssize_t,
         error: *mut *mut glib::GError,
     ) -> *mut GTlsCertificate;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_tls_certificate_new_from_pkcs11_uris(
+        pkcs11_uri: *const c_char,
+        private_key_pkcs11_uri: *const c_char,
+        error: *mut *mut glib::GError,
+    ) -> *mut GTlsCertificate;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_tls_certificate_new_from_pkcs12(
+        data: *const u8,
+        length: size_t,
+        password: *const c_char,
+        error: *mut *mut glib::GError,
+    ) -> *mut GTlsCertificate;
     pub fn g_tls_certificate_list_new_from_file(
         file: *const c_char,
         error: *mut *mut glib::GError,
     ) -> *mut glib::GList;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_tls_certificate_get_dns_names(cert: *mut GTlsCertificate) -> *mut glib::GPtrArray;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_tls_certificate_get_ip_addresses(cert: *mut GTlsCertificate) -> *mut glib::GPtrArray;
     pub fn g_tls_certificate_get_issuer(cert: *mut GTlsCertificate) -> *mut GTlsCertificate;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_tls_certificate_get_issuer_name(cert: *mut GTlsCertificate) -> *mut c_char;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_tls_certificate_get_not_valid_after(
+        cert: *mut GTlsCertificate,
+    ) -> *mut glib::GDateTime;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_tls_certificate_get_not_valid_before(
+        cert: *mut GTlsCertificate,
+    ) -> *mut glib::GDateTime;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_tls_certificate_get_subject_name(cert: *mut GTlsCertificate) -> *mut c_char;
     pub fn g_tls_certificate_is_same(
         cert_one: *mut GTlsCertificate,
         cert_two: *mut GTlsCertificate,
@@ -13584,15 +14289,30 @@ extern "C" {
         errors: GTlsCertificateFlags,
     ) -> gboolean;
     pub fn g_tls_connection_get_certificate(conn: *mut GTlsConnection) -> *mut GTlsCertificate;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_tls_connection_get_channel_binding_data(
+        conn: *mut GTlsConnection,
+        type_: GTlsChannelBindingType,
+        data: *mut glib::GByteArray,
+        error: *mut *mut glib::GError,
+    ) -> gboolean;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_tls_connection_get_ciphersuite_name(conn: *mut GTlsConnection) -> *mut c_char;
     pub fn g_tls_connection_get_database(conn: *mut GTlsConnection) -> *mut GTlsDatabase;
     pub fn g_tls_connection_get_interaction(conn: *mut GTlsConnection) -> *mut GTlsInteraction;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_tls_connection_get_negotiated_protocol(conn: *mut GTlsConnection) -> *const c_char;
     pub fn g_tls_connection_get_peer_certificate(conn: *mut GTlsConnection)
         -> *mut GTlsCertificate;
     pub fn g_tls_connection_get_peer_certificate_errors(
         conn: *mut GTlsConnection,
     ) -> GTlsCertificateFlags;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_tls_connection_get_protocol_version(conn: *mut GTlsConnection) -> GTlsProtocolVersion;
     pub fn g_tls_connection_get_rehandshake_mode(conn: *mut GTlsConnection) -> GTlsRehandshakeMode;
     pub fn g_tls_connection_get_require_close_notify(conn: *mut GTlsConnection) -> gboolean;
     pub fn g_tls_connection_get_use_system_certdb(conn: *mut GTlsConnection) -> gboolean;
@@ -13614,6 +14334,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> gboolean;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_tls_connection_set_advertised_protocols(
         conn: *mut GTlsConnection,
         protocols: *const *const c_char,
@@ -13934,7 +14655,6 @@ extern "C" {
     //=========================================================================
     pub fn g_unix_mount_monitor_get_type() -> GType;
     pub fn g_unix_mount_monitor_new() -> *mut GUnixMountMonitor;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_unix_mount_monitor_get() -> *mut GUnixMountMonitor;
     pub fn g_unix_mount_monitor_set_rate_limit(
         mount_monitor: *mut GUnixMountMonitor,
@@ -13984,6 +14704,7 @@ extern "C" {
     pub fn g_vfs_is_active(vfs: *mut GVfs) -> gboolean;
     pub fn g_vfs_parse_name(vfs: *mut GVfs, parse_name: *const c_char) -> *mut GFile;
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_vfs_register_uri_scheme(
         vfs: *mut GVfs,
         scheme: *const c_char,
@@ -13995,6 +14716,7 @@ extern "C" {
         parse_name_destroy: glib::GDestroyNotify,
     ) -> gboolean;
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_vfs_unregister_uri_scheme(vfs: *mut GVfs, scheme: *const c_char) -> gboolean;
 
     //=========================================================================
@@ -14170,6 +14892,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> gboolean;
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_app_info_launch_default_for_uri_async(
         uri: *const c_char,
         context: *mut GAppLaunchContext,
@@ -14178,6 +14901,7 @@ extern "C" {
         user_data: gpointer,
     );
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_app_info_launch_default_for_uri_finish(
         result: *mut GAsyncResult,
         error: *mut *mut glib::GError,
@@ -14214,6 +14938,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> gboolean;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_app_info_launch_uris_async(
         appinfo: *mut GAppInfo,
         uris: *mut glib::GList,
@@ -14223,6 +14948,7 @@ extern "C" {
         user_data: gpointer,
     );
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_app_info_launch_uris_finish(
         appinfo: *mut GAppInfo,
         result: *mut GAsyncResult,
@@ -14363,12 +15089,10 @@ extern "C" {
     // GDatagramBased
     //=========================================================================
     pub fn g_datagram_based_get_type() -> GType;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_datagram_based_condition_check(
         datagram_based: *mut GDatagramBased,
         condition: glib::GIOCondition,
     ) -> glib::GIOCondition;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_datagram_based_condition_wait(
         datagram_based: *mut GDatagramBased,
         condition: glib::GIOCondition,
@@ -14376,13 +15100,11 @@ extern "C" {
         cancellable: *mut GCancellable,
         error: *mut *mut glib::GError,
     ) -> gboolean;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_datagram_based_create_source(
         datagram_based: *mut GDatagramBased,
         condition: glib::GIOCondition,
         cancellable: *mut GCancellable,
     ) -> *mut glib::GSource;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_datagram_based_receive_messages(
         datagram_based: *mut GDatagramBased,
         messages: *mut GInputMessage,
@@ -14392,7 +15114,6 @@ extern "C" {
         cancellable: *mut GCancellable,
         error: *mut *mut glib::GError,
     ) -> c_int;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_datagram_based_send_messages(
         datagram_based: *mut GDatagramBased,
         messages: *mut GOutputMessage,
@@ -14402,6 +15123,22 @@ extern "C" {
         cancellable: *mut GCancellable,
         error: *mut *mut glib::GError,
     ) -> c_int;
+
+    //=========================================================================
+    // GDebugController
+    //=========================================================================
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_debug_controller_get_type() -> GType;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_debug_controller_get_debug_enabled(self_: *mut GDebugController) -> gboolean;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_debug_controller_set_debug_enabled(
+        self_: *mut GDebugController,
+        debug_enabled: gboolean,
+    );
 
     //=========================================================================
     // GDesktopAppInfoLookup
@@ -14459,6 +15196,7 @@ extern "C" {
     pub fn g_drive_is_media_check_automatic(drive: *mut GDrive) -> gboolean;
     pub fn g_drive_is_media_removable(drive: *mut GDrive) -> gboolean;
     #[cfg(any(feature = "v2_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_50")))]
     pub fn g_drive_is_removable(drive: *mut GDrive) -> gboolean;
     pub fn g_drive_poll_for_media(
         drive: *mut GDrive,
@@ -14502,30 +15240,24 @@ extern "C" {
     // GDtlsClientConnection
     //=========================================================================
     pub fn g_dtls_client_connection_get_type() -> GType;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_client_connection_new(
         base_socket: *mut GDatagramBased,
         server_identity: *mut GSocketConnectable,
         error: *mut *mut glib::GError,
     ) -> *mut GDtlsClientConnection;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_client_connection_get_accepted_cas(
         conn: *mut GDtlsClientConnection,
     ) -> *mut glib::GList;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_client_connection_get_server_identity(
         conn: *mut GDtlsClientConnection,
     ) -> *mut GSocketConnectable;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_client_connection_get_validation_flags(
         conn: *mut GDtlsClientConnection,
     ) -> GTlsCertificateFlags;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_client_connection_set_server_identity(
         conn: *mut GDtlsClientConnection,
         identity: *mut GSocketConnectable,
     );
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_client_connection_set_validation_flags(
         conn: *mut GDtlsClientConnection,
         flags: GTlsCertificateFlags,
@@ -14535,13 +15267,11 @@ extern "C" {
     // GDtlsConnection
     //=========================================================================
     pub fn g_dtls_connection_get_type() -> GType;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_close(
         conn: *mut GDtlsConnection,
         cancellable: *mut GCancellable,
         error: *mut *mut glib::GError,
     ) -> gboolean;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_close_async(
         conn: *mut GDtlsConnection,
         io_priority: c_int,
@@ -14549,47 +15279,53 @@ extern "C" {
         callback: GAsyncReadyCallback,
         user_data: gpointer,
     );
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_close_finish(
         conn: *mut GDtlsConnection,
         result: *mut GAsyncResult,
         error: *mut *mut glib::GError,
     ) -> gboolean;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_emit_accept_certificate(
         conn: *mut GDtlsConnection,
         peer_cert: *mut GTlsCertificate,
         errors: GTlsCertificateFlags,
     ) -> gboolean;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_get_certificate(conn: *mut GDtlsConnection) -> *mut GTlsCertificate;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_dtls_connection_get_channel_binding_data(
+        conn: *mut GDtlsConnection,
+        type_: GTlsChannelBindingType,
+        data: *mut glib::GByteArray,
+        error: *mut *mut glib::GError,
+    ) -> gboolean;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_dtls_connection_get_ciphersuite_name(conn: *mut GDtlsConnection) -> *mut c_char;
     pub fn g_dtls_connection_get_database(conn: *mut GDtlsConnection) -> *mut GTlsDatabase;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_get_interaction(conn: *mut GDtlsConnection) -> *mut GTlsInteraction;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_dtls_connection_get_negotiated_protocol(conn: *mut GDtlsConnection) -> *const c_char;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_get_peer_certificate(
         conn: *mut GDtlsConnection,
     ) -> *mut GTlsCertificate;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_get_peer_certificate_errors(
         conn: *mut GDtlsConnection,
     ) -> GTlsCertificateFlags;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_dtls_connection_get_protocol_version(
+        conn: *mut GDtlsConnection,
+    ) -> GTlsProtocolVersion;
     pub fn g_dtls_connection_get_rehandshake_mode(
         conn: *mut GDtlsConnection,
     ) -> GTlsRehandshakeMode;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_get_require_close_notify(conn: *mut GDtlsConnection) -> gboolean;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_handshake(
         conn: *mut GDtlsConnection,
         cancellable: *mut GCancellable,
         error: *mut *mut glib::GError,
     ) -> gboolean;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_handshake_async(
         conn: *mut GDtlsConnection,
         io_priority: c_int,
@@ -14597,40 +15333,34 @@ extern "C" {
         callback: GAsyncReadyCallback,
         user_data: gpointer,
     );
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_handshake_finish(
         conn: *mut GDtlsConnection,
         result: *mut GAsyncResult,
         error: *mut *mut glib::GError,
     ) -> gboolean;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_dtls_connection_set_advertised_protocols(
         conn: *mut GDtlsConnection,
         protocols: *const *const c_char,
     );
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_set_certificate(
         conn: *mut GDtlsConnection,
         certificate: *mut GTlsCertificate,
     );
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_set_database(conn: *mut GDtlsConnection, database: *mut GTlsDatabase);
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_set_interaction(
         conn: *mut GDtlsConnection,
         interaction: *mut GTlsInteraction,
     );
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_set_rehandshake_mode(
         conn: *mut GDtlsConnection,
         mode: GTlsRehandshakeMode,
     );
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_set_require_close_notify(
         conn: *mut GDtlsConnection,
         require_close_notify: gboolean,
     );
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_shutdown(
         conn: *mut GDtlsConnection,
         shutdown_read: gboolean,
@@ -14638,7 +15368,6 @@ extern "C" {
         cancellable: *mut GCancellable,
         error: *mut *mut glib::GError,
     ) -> gboolean;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_shutdown_async(
         conn: *mut GDtlsConnection,
         shutdown_read: gboolean,
@@ -14648,7 +15377,6 @@ extern "C" {
         callback: GAsyncReadyCallback,
         user_data: gpointer,
     );
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_connection_shutdown_finish(
         conn: *mut GDtlsConnection,
         result: *mut GAsyncResult,
@@ -14659,7 +15387,6 @@ extern "C" {
     // GDtlsServerConnection
     //=========================================================================
     pub fn g_dtls_server_connection_get_type() -> GType;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_dtls_server_connection_new(
         base_socket: *mut GDatagramBased,
         certificate: *mut GTlsCertificate,
@@ -14671,6 +15398,7 @@ extern "C" {
     //=========================================================================
     pub fn g_file_get_type() -> GType;
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_file_new_build_filename(first_element: *const c_char, ...) -> *mut GFile;
     pub fn g_file_new_for_commandline_arg(arg: *const c_char) -> *mut GFile;
     pub fn g_file_new_for_commandline_arg_and_cwd(
@@ -14704,6 +15432,14 @@ extern "C" {
         res: *mut GAsyncResult,
         error: *mut *mut glib::GError,
     ) -> *mut GFileOutputStream;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_file_build_attribute_list_for_copy(
+        file: *mut GFile,
+        flags: GFileCopyFlags,
+        cancellable: *mut GCancellable,
+        error: *mut *mut glib::GError,
+    ) -> *mut c_char;
     pub fn g_file_copy(
         source: *mut GFile,
         destination: *mut GFile,
@@ -14875,6 +15611,7 @@ extern "C" {
     pub fn g_file_hash(file: gconstpointer) -> c_uint;
     pub fn g_file_is_native(file: *mut GFile) -> gboolean;
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_file_load_bytes(
         file: *mut GFile,
         cancellable: *mut GCancellable,
@@ -14882,6 +15619,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> *mut glib::GBytes;
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_file_load_bytes_async(
         file: *mut GFile,
         cancellable: *mut GCancellable,
@@ -14889,6 +15627,7 @@ extern "C" {
         user_data: gpointer,
     );
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_file_load_bytes_finish(
         file: *mut GFile,
         result: *mut GAsyncResult,
@@ -15042,6 +15781,26 @@ extern "C" {
         progress_callback_data: gpointer,
         error: *mut *mut glib::GError,
     ) -> gboolean;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_file_move_async(
+        source: *mut GFile,
+        destination: *mut GFile,
+        flags: GFileCopyFlags,
+        io_priority: c_int,
+        cancellable: *mut GCancellable,
+        progress_callback: GFileProgressCallback,
+        progress_callback_data: gpointer,
+        callback: GAsyncReadyCallback,
+        user_data: gpointer,
+    );
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_file_move_finish(
+        file: *mut GFile,
+        result: *mut GAsyncResult,
+        error: *mut *mut glib::GError,
+    ) -> gboolean;
     pub fn g_file_open_readwrite(
         file: *mut GFile,
         cancellable: *mut GCancellable,
@@ -15060,6 +15819,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> *mut GFileIOStream;
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_file_peek_path(file: *mut GFile) -> *const c_char;
     pub fn g_file_poll_mountable(
         file: *mut GFile,
@@ -15078,6 +15838,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> *mut GAppInfo;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_file_query_default_handler_async(
         file: *mut GFile,
         io_priority: c_int,
@@ -15086,6 +15847,7 @@ extern "C" {
         user_data: gpointer,
     );
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_file_query_default_handler_finish(
         file: *mut GFile,
         result: *mut GAsyncResult,
@@ -15466,18 +16228,13 @@ extern "C" {
     // GListModel
     //=========================================================================
     pub fn g_list_model_get_type() -> GType;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_list_model_get_item(list: *mut GListModel, position: c_uint) -> gpointer;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_list_model_get_item_type(list: *mut GListModel) -> GType;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_list_model_get_n_items(list: *mut GListModel) -> c_uint;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_list_model_get_object(
         list: *mut GListModel,
         position: c_uint,
     ) -> *mut gobject::GObject;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_list_model_items_changed(
         list: *mut GListModel,
         position: c_uint,
@@ -15509,6 +16266,16 @@ extern "C" {
         type_: *mut *mut c_char,
         error: *mut *mut glib::GError,
     ) -> *mut GInputStream;
+
+    //=========================================================================
+    // GMemoryMonitor
+    //=========================================================================
+    #[cfg(any(feature = "v2_64", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+    pub fn g_memory_monitor_get_type() -> GType;
+    #[cfg(any(feature = "v2_64", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+    pub fn g_memory_monitor_dup_default() -> *mut GMemoryMonitor;
 
     //=========================================================================
     // GMount
@@ -15633,12 +16400,10 @@ extern "C" {
         result: *mut GAsyncResult,
         error: *mut *mut glib::GError,
     ) -> gboolean;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_network_monitor_get_connectivity(
         monitor: *mut GNetworkMonitor,
     ) -> GNetworkConnectivity;
     pub fn g_network_monitor_get_network_available(monitor: *mut GNetworkMonitor) -> gboolean;
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
     pub fn g_network_monitor_get_network_metered(monitor: *mut GNetworkMonitor) -> gboolean;
 
     //=========================================================================
@@ -15677,6 +16442,7 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> ssize_t;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_pollable_output_stream_writev_nonblocking(
         stream: *mut GPollableOutputStream,
         vectors: *const GOutputVector,
@@ -15685,6 +16451,21 @@ extern "C" {
         cancellable: *mut GCancellable,
         error: *mut *mut glib::GError,
     ) -> GPollableReturn;
+
+    //=========================================================================
+    // GPowerProfileMonitor
+    //=========================================================================
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_power_profile_monitor_get_type() -> GType;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_power_profile_monitor_dup_default() -> *mut GPowerProfileMonitor;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_power_profile_monitor_get_power_saver_enabled(
+        monitor: *mut GPowerProfileMonitor,
+    ) -> gboolean;
 
     //=========================================================================
     // GProxy
@@ -15786,7 +16567,6 @@ extern "C" {
     pub fn g_socket_connectable_proxy_enumerate(
         connectable: *mut GSocketConnectable,
     ) -> *mut GSocketAddressEnumerator;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_socket_connectable_to_string(connectable: *mut GSocketConnectable) -> *mut c_char;
 
     //=========================================================================
@@ -15797,18 +16577,16 @@ extern "C" {
     pub fn g_tls_backend_get_certificate_type(backend: *mut GTlsBackend) -> GType;
     pub fn g_tls_backend_get_client_connection_type(backend: *mut GTlsBackend) -> GType;
     pub fn g_tls_backend_get_default_database(backend: *mut GTlsBackend) -> *mut GTlsDatabase;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_tls_backend_get_dtls_client_connection_type(backend: *mut GTlsBackend) -> GType;
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_tls_backend_get_dtls_server_connection_type(backend: *mut GTlsBackend) -> GType;
     pub fn g_tls_backend_get_file_database_type(backend: *mut GTlsBackend) -> GType;
     pub fn g_tls_backend_get_server_connection_type(backend: *mut GTlsBackend) -> GType;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_tls_backend_set_default_database(
         backend: *mut GTlsBackend,
         database: *mut GTlsDatabase,
     );
-    #[cfg(any(feature = "v2_48", feature = "dox"))]
     pub fn g_tls_backend_supports_dtls(backend: *mut GTlsBackend) -> gboolean;
     pub fn g_tls_backend_supports_tls(backend: *mut GTlsBackend) -> gboolean;
 
@@ -15821,7 +16599,6 @@ extern "C" {
         server_identity: *mut GSocketConnectable,
         error: *mut *mut glib::GError,
     ) -> *mut GTlsClientConnection;
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
     pub fn g_tls_client_connection_copy_session_state(
         conn: *mut GTlsClientConnection,
         source: *mut GTlsClientConnection,
@@ -16017,6 +16794,7 @@ extern "C" {
     pub fn g_content_type_get_generic_icon_name(type_: *const c_char) -> *mut c_char;
     pub fn g_content_type_get_icon(type_: *const c_char) -> *mut GIcon;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_content_type_get_mime_dirs() -> *const *const c_char;
     pub fn g_content_type_get_mime_type(type_: *const c_char) -> *mut c_char;
     pub fn g_content_type_get_symbolic_icon(type_: *const c_char) -> *mut GIcon;
@@ -16029,9 +16807,11 @@ extern "C" {
     pub fn g_content_type_guess_for_tree(root: *mut GFile) -> *mut *mut c_char;
     pub fn g_content_type_is_a(type_: *const c_char, supertype: *const c_char) -> gboolean;
     #[cfg(any(feature = "v2_52", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_52")))]
     pub fn g_content_type_is_mime_type(type_: *const c_char, mime_type: *const c_char) -> gboolean;
     pub fn g_content_type_is_unknown(type_: *const c_char) -> gboolean;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_content_type_set_mime_dirs(dirs: *const *const c_char);
     pub fn g_content_types_get_registered() -> *mut glib::GList;
     pub fn g_dbus_address_escape_value(string: *const c_char) -> *mut c_char;
@@ -16057,6 +16837,12 @@ extern "C" {
         cancellable: *mut GCancellable,
         error: *mut *mut glib::GError,
     ) -> *mut GIOStream;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_dbus_escape_object_path(s: *const c_char) -> *mut c_char;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_dbus_escape_object_path_bytestring(bytes: *const u8) -> *mut c_char;
     pub fn g_dbus_generate_guid() -> *mut c_char;
     pub fn g_dbus_gvalue_to_gvariant(
         gvalue: *const gobject::GValue,
@@ -16064,6 +16850,9 @@ extern "C" {
     ) -> *mut glib::GVariant;
     pub fn g_dbus_gvariant_to_gvalue(value: *mut glib::GVariant, out_gvalue: *mut gobject::GValue);
     pub fn g_dbus_is_address(string: *const c_char) -> gboolean;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_dbus_is_error_name(string: *const c_char) -> gboolean;
     pub fn g_dbus_is_guid(string: *const c_char) -> gboolean;
     pub fn g_dbus_is_interface_name(string: *const c_char) -> gboolean;
     pub fn g_dbus_is_member_name(string: *const c_char) -> gboolean;
@@ -16073,6 +16862,9 @@ extern "C" {
         error: *mut *mut glib::GError,
     ) -> gboolean;
     pub fn g_dbus_is_unique_name(string: *const c_char) -> gboolean;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_dbus_unescape_object_path(s: *const c_char) -> *mut u8;
     pub fn g_io_error_from_errno(err_no: c_int) -> GIOErrorEnum;
     pub fn g_io_error_quark() -> glib::GQuark;
     pub fn g_io_modules_load_all_in_directory(dirname: *const c_char) -> *mut glib::GList;
@@ -16179,8 +16971,10 @@ extern "C" {
     );
     pub fn g_unix_is_mount_path_system_internal(mount_path: *const c_char) -> gboolean;
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_unix_is_system_device_path(device_path: *const c_char) -> gboolean;
     #[cfg(any(feature = "v2_56", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_56")))]
     pub fn g_unix_is_system_fs_type(fs_type: *const c_char) -> gboolean;
     pub fn g_unix_mount_at(mount_path: *const c_char, time_read: *mut u64) -> *mut GUnixMountEntry;
     pub fn g_unix_mount_compare(
@@ -16188,16 +16982,20 @@ extern "C" {
         mount2: *mut GUnixMountEntry,
     ) -> c_int;
     #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_54")))]
     pub fn g_unix_mount_copy(mount_entry: *mut GUnixMountEntry) -> *mut GUnixMountEntry;
     #[cfg(any(feature = "v2_52", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_52")))]
     pub fn g_unix_mount_for(file_path: *const c_char, time_read: *mut u64) -> *mut GUnixMountEntry;
     pub fn g_unix_mount_free(mount_entry: *mut GUnixMountEntry);
     pub fn g_unix_mount_get_device_path(mount_entry: *mut GUnixMountEntry) -> *const c_char;
     pub fn g_unix_mount_get_fs_type(mount_entry: *mut GUnixMountEntry) -> *const c_char;
     pub fn g_unix_mount_get_mount_path(mount_entry: *mut GUnixMountEntry) -> *const c_char;
     #[cfg(any(feature = "v2_58", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_58")))]
     pub fn g_unix_mount_get_options(mount_entry: *mut GUnixMountEntry) -> *const c_char;
     #[cfg(any(feature = "v2_60", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_60")))]
     pub fn g_unix_mount_get_root_path(mount_entry: *mut GUnixMountEntry) -> *const c_char;
     pub fn g_unix_mount_guess_can_eject(mount_entry: *mut GUnixMountEntry) -> gboolean;
     pub fn g_unix_mount_guess_icon(mount_entry: *mut GUnixMountEntry) -> *mut GIcon;

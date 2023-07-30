@@ -2,89 +2,97 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
-use glib;
+use crate::AsyncResult;
+use crate::Cancellable;
 use glib::object::IsA;
 use glib::translate::*;
-use glib_sys;
-use gobject_sys;
 use std::boxed::Box as Box_;
 use std::fmt;
+use std::mem;
 use std::pin::Pin;
 use std::ptr;
-use Cancellable;
 
-glib_wrapper! {
-    pub struct InputStream(Object<gio_sys::GInputStream, gio_sys::GInputStreamClass, InputStreamClass>);
+glib::wrapper! {
+    #[doc(alias = "GInputStream")]
+    pub struct InputStream(Object<ffi::GInputStream, ffi::GInputStreamClass>);
 
     match fn {
-        get_type => || gio_sys::g_input_stream_get_type(),
+        type_ => || ffi::g_input_stream_get_type(),
     }
 }
 
-pub const NONE_INPUT_STREAM: Option<&InputStream> = None;
+impl InputStream {
+    pub const NONE: Option<&'static InputStream> = None;
+}
 
 pub trait InputStreamExt: 'static {
+    #[doc(alias = "g_input_stream_clear_pending")]
     fn clear_pending(&self);
 
-    fn close<P: IsA<Cancellable>>(&self, cancellable: Option<&P>) -> Result<(), glib::Error>;
+    #[doc(alias = "g_input_stream_close")]
+    fn close(&self, cancellable: Option<&impl IsA<Cancellable>>) -> Result<(), glib::Error>;
 
-    fn close_async<P: IsA<Cancellable>, Q: FnOnce(Result<(), glib::Error>) + Send + 'static>(
+    #[doc(alias = "g_input_stream_close_async")]
+    fn close_async<P: FnOnce(Result<(), glib::Error>) + 'static>(
         &self,
         io_priority: glib::Priority,
-        cancellable: Option<&P>,
-        callback: Q,
+        cancellable: Option<&impl IsA<Cancellable>>,
+        callback: P,
     );
 
-    fn close_async_future(
+    fn close_future(
         &self,
         io_priority: glib::Priority,
     ) -> Pin<Box_<dyn std::future::Future<Output = Result<(), glib::Error>> + 'static>>;
 
+    #[doc(alias = "g_input_stream_has_pending")]
     fn has_pending(&self) -> bool;
 
+    #[doc(alias = "g_input_stream_is_closed")]
     fn is_closed(&self) -> bool;
 
-    fn read_bytes<P: IsA<Cancellable>>(
+    #[doc(alias = "g_input_stream_read_bytes")]
+    fn read_bytes(
         &self,
         count: usize,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<glib::Bytes, glib::Error>;
 
-    fn read_bytes_async<
-        P: IsA<Cancellable>,
-        Q: FnOnce(Result<glib::Bytes, glib::Error>) + Send + 'static,
-    >(
+    #[doc(alias = "g_input_stream_read_bytes_async")]
+    fn read_bytes_async<P: FnOnce(Result<glib::Bytes, glib::Error>) + 'static>(
         &self,
         count: usize,
         io_priority: glib::Priority,
-        cancellable: Option<&P>,
-        callback: Q,
+        cancellable: Option<&impl IsA<Cancellable>>,
+        callback: P,
     );
 
-    fn read_bytes_async_future(
+    fn read_bytes_future(
         &self,
         count: usize,
         io_priority: glib::Priority,
     ) -> Pin<Box_<dyn std::future::Future<Output = Result<glib::Bytes, glib::Error>> + 'static>>;
 
+    #[doc(alias = "g_input_stream_set_pending")]
     fn set_pending(&self) -> Result<(), glib::Error>;
 
-    fn skip<P: IsA<Cancellable>>(
+    #[doc(alias = "g_input_stream_skip")]
+    fn skip(
         &self,
         count: usize,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<isize, glib::Error>;
 
-    fn skip_async<P: IsA<Cancellable>, Q: FnOnce(Result<isize, glib::Error>) + Send + 'static>(
+    #[doc(alias = "g_input_stream_skip_async")]
+    fn skip_async<P: FnOnce(Result<isize, glib::Error>) + 'static>(
         &self,
         count: usize,
         io_priority: glib::Priority,
-        cancellable: Option<&P>,
-        callback: Q,
+        cancellable: Option<&impl IsA<Cancellable>>,
+        callback: P,
     );
 
-    fn skip_async_future(
+    fn skip_future(
         &self,
         count: usize,
         io_priority: glib::Priority,
@@ -94,18 +102,19 @@ pub trait InputStreamExt: 'static {
 impl<O: IsA<InputStream>> InputStreamExt for O {
     fn clear_pending(&self) {
         unsafe {
-            gio_sys::g_input_stream_clear_pending(self.as_ref().to_glib_none().0);
+            ffi::g_input_stream_clear_pending(self.as_ref().to_glib_none().0);
         }
     }
 
-    fn close<P: IsA<Cancellable>>(&self, cancellable: Option<&P>) -> Result<(), glib::Error> {
+    fn close(&self, cancellable: Option<&impl IsA<Cancellable>>) -> Result<(), glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_input_stream_close(
+            let is_ok = ffi::g_input_stream_close(
                 self.as_ref().to_glib_none().0,
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 &mut error,
             );
+            assert_eq!(is_ok == glib::ffi::GFALSE, !error.is_null());
             if error.is_null() {
                 Ok(())
             } else {
@@ -114,35 +123,48 @@ impl<O: IsA<InputStream>> InputStreamExt for O {
         }
     }
 
-    fn close_async<P: IsA<Cancellable>, Q: FnOnce(Result<(), glib::Error>) + Send + 'static>(
+    fn close_async<P: FnOnce(Result<(), glib::Error>) + 'static>(
         &self,
         io_priority: glib::Priority,
-        cancellable: Option<&P>,
-        callback: Q,
+        cancellable: Option<&impl IsA<Cancellable>>,
+        callback: P,
     ) {
-        let user_data: Box_<Q> = Box_::new(callback);
+        let main_context = glib::MainContext::ref_thread_default();
+        let is_main_context_owner = main_context.is_owner();
+        let has_acquired_main_context = (!is_main_context_owner)
+            .then(|| main_context.acquire().ok())
+            .flatten();
+        assert!(
+            is_main_context_owner || has_acquired_main_context.is_some(),
+            "Async operations only allowed if the thread is owning the MainContext"
+        );
+
+        let user_data: Box_<glib::thread_guard::ThreadGuard<P>> =
+            Box_::new(glib::thread_guard::ThreadGuard::new(callback));
         unsafe extern "C" fn close_async_trampoline<
-            Q: FnOnce(Result<(), glib::Error>) + Send + 'static,
+            P: FnOnce(Result<(), glib::Error>) + 'static,
         >(
-            _source_object: *mut gobject_sys::GObject,
-            res: *mut gio_sys::GAsyncResult,
-            user_data: glib_sys::gpointer,
+            _source_object: *mut glib::gobject_ffi::GObject,
+            res: *mut crate::ffi::GAsyncResult,
+            user_data: glib::ffi::gpointer,
         ) {
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_input_stream_close_finish(_source_object as *mut _, res, &mut error);
+            let _ = ffi::g_input_stream_close_finish(_source_object as *mut _, res, &mut error);
             let result = if error.is_null() {
                 Ok(())
             } else {
                 Err(from_glib_full(error))
             };
-            let callback: Box_<Q> = Box_::from_raw(user_data as *mut _);
+            let callback: Box_<glib::thread_guard::ThreadGuard<P>> =
+                Box_::from_raw(user_data as *mut _);
+            let callback: P = callback.into_inner();
             callback(result);
         }
-        let callback = close_async_trampoline::<Q>;
+        let callback = close_async_trampoline::<P>;
         unsafe {
-            gio_sys::g_input_stream_close_async(
+            ffi::g_input_stream_close_async(
                 self.as_ref().to_glib_none().0,
-                io_priority.to_glib(),
+                io_priority.into_glib(),
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 Some(callback),
                 Box_::into_raw(user_data) as *mut _,
@@ -150,23 +172,23 @@ impl<O: IsA<InputStream>> InputStreamExt for O {
         }
     }
 
-    fn close_async_future(
+    fn close_future(
         &self,
         io_priority: glib::Priority,
     ) -> Pin<Box_<dyn std::future::Future<Output = Result<(), glib::Error>> + 'static>> {
-        Box_::pin(crate::GioFuture::new(self, move |obj, send| {
-            let cancellable = Cancellable::new();
-            obj.close_async(io_priority, Some(&cancellable), move |res| {
-                send.resolve(res);
-            });
-
-            cancellable
-        }))
+        Box_::pin(crate::GioFuture::new(
+            self,
+            move |obj, cancellable, send| {
+                obj.close_async(io_priority, Some(cancellable), move |res| {
+                    send.resolve(res);
+                });
+            },
+        ))
     }
 
     fn has_pending(&self) -> bool {
         unsafe {
-            from_glib(gio_sys::g_input_stream_has_pending(
+            from_glib(ffi::g_input_stream_has_pending(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -174,20 +196,20 @@ impl<O: IsA<InputStream>> InputStreamExt for O {
 
     fn is_closed(&self) -> bool {
         unsafe {
-            from_glib(gio_sys::g_input_stream_is_closed(
+            from_glib(ffi::g_input_stream_is_closed(
                 self.as_ref().to_glib_none().0,
             ))
         }
     }
 
-    fn read_bytes<P: IsA<Cancellable>>(
+    fn read_bytes(
         &self,
         count: usize,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<glib::Bytes, glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let ret = gio_sys::g_input_stream_read_bytes(
+            let ret = ffi::g_input_stream_read_bytes(
                 self.as_ref().to_glib_none().0,
                 count,
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
@@ -201,44 +223,51 @@ impl<O: IsA<InputStream>> InputStreamExt for O {
         }
     }
 
-    fn read_bytes_async<
-        P: IsA<Cancellable>,
-        Q: FnOnce(Result<glib::Bytes, glib::Error>) + Send + 'static,
-    >(
+    fn read_bytes_async<P: FnOnce(Result<glib::Bytes, glib::Error>) + 'static>(
         &self,
         count: usize,
         io_priority: glib::Priority,
-        cancellable: Option<&P>,
-        callback: Q,
+        cancellable: Option<&impl IsA<Cancellable>>,
+        callback: P,
     ) {
-        let user_data: Box_<Q> = Box_::new(callback);
+        let main_context = glib::MainContext::ref_thread_default();
+        let is_main_context_owner = main_context.is_owner();
+        let has_acquired_main_context = (!is_main_context_owner)
+            .then(|| main_context.acquire().ok())
+            .flatten();
+        assert!(
+            is_main_context_owner || has_acquired_main_context.is_some(),
+            "Async operations only allowed if the thread is owning the MainContext"
+        );
+
+        let user_data: Box_<glib::thread_guard::ThreadGuard<P>> =
+            Box_::new(glib::thread_guard::ThreadGuard::new(callback));
         unsafe extern "C" fn read_bytes_async_trampoline<
-            Q: FnOnce(Result<glib::Bytes, glib::Error>) + Send + 'static,
+            P: FnOnce(Result<glib::Bytes, glib::Error>) + 'static,
         >(
-            _source_object: *mut gobject_sys::GObject,
-            res: *mut gio_sys::GAsyncResult,
-            user_data: glib_sys::gpointer,
+            _source_object: *mut glib::gobject_ffi::GObject,
+            res: *mut crate::ffi::GAsyncResult,
+            user_data: glib::ffi::gpointer,
         ) {
             let mut error = ptr::null_mut();
-            let ret = gio_sys::g_input_stream_read_bytes_finish(
-                _source_object as *mut _,
-                res,
-                &mut error,
-            );
+            let ret =
+                ffi::g_input_stream_read_bytes_finish(_source_object as *mut _, res, &mut error);
             let result = if error.is_null() {
                 Ok(from_glib_full(ret))
             } else {
                 Err(from_glib_full(error))
             };
-            let callback: Box_<Q> = Box_::from_raw(user_data as *mut _);
+            let callback: Box_<glib::thread_guard::ThreadGuard<P>> =
+                Box_::from_raw(user_data as *mut _);
+            let callback: P = callback.into_inner();
             callback(result);
         }
-        let callback = read_bytes_async_trampoline::<Q>;
+        let callback = read_bytes_async_trampoline::<P>;
         unsafe {
-            gio_sys::g_input_stream_read_bytes_async(
+            ffi::g_input_stream_read_bytes_async(
                 self.as_ref().to_glib_none().0,
                 count,
-                io_priority.to_glib(),
+                io_priority.into_glib(),
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 Some(callback),
                 Box_::into_raw(user_data) as *mut _,
@@ -246,26 +275,27 @@ impl<O: IsA<InputStream>> InputStreamExt for O {
         }
     }
 
-    fn read_bytes_async_future(
+    fn read_bytes_future(
         &self,
         count: usize,
         io_priority: glib::Priority,
     ) -> Pin<Box_<dyn std::future::Future<Output = Result<glib::Bytes, glib::Error>> + 'static>>
     {
-        Box_::pin(crate::GioFuture::new(self, move |obj, send| {
-            let cancellable = Cancellable::new();
-            obj.read_bytes_async(count, io_priority, Some(&cancellable), move |res| {
-                send.resolve(res);
-            });
-
-            cancellable
-        }))
+        Box_::pin(crate::GioFuture::new(
+            self,
+            move |obj, cancellable, send| {
+                obj.read_bytes_async(count, io_priority, Some(cancellable), move |res| {
+                    send.resolve(res);
+                });
+            },
+        ))
     }
 
     fn set_pending(&self) -> Result<(), glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_input_stream_set_pending(self.as_ref().to_glib_none().0, &mut error);
+            let is_ok = ffi::g_input_stream_set_pending(self.as_ref().to_glib_none().0, &mut error);
+            assert_eq!(is_ok == glib::ffi::GFALSE, !error.is_null());
             if error.is_null() {
                 Ok(())
             } else {
@@ -274,14 +304,14 @@ impl<O: IsA<InputStream>> InputStreamExt for O {
         }
     }
 
-    fn skip<P: IsA<Cancellable>>(
+    fn skip(
         &self,
         count: usize,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<isize, glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let ret = gio_sys::g_input_stream_skip(
+            let ret = ffi::g_input_stream_skip(
                 self.as_ref().to_glib_none().0,
                 count,
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
@@ -295,38 +325,50 @@ impl<O: IsA<InputStream>> InputStreamExt for O {
         }
     }
 
-    fn skip_async<P: IsA<Cancellable>, Q: FnOnce(Result<isize, glib::Error>) + Send + 'static>(
+    fn skip_async<P: FnOnce(Result<isize, glib::Error>) + 'static>(
         &self,
         count: usize,
         io_priority: glib::Priority,
-        cancellable: Option<&P>,
-        callback: Q,
+        cancellable: Option<&impl IsA<Cancellable>>,
+        callback: P,
     ) {
-        let user_data: Box_<Q> = Box_::new(callback);
+        let main_context = glib::MainContext::ref_thread_default();
+        let is_main_context_owner = main_context.is_owner();
+        let has_acquired_main_context = (!is_main_context_owner)
+            .then(|| main_context.acquire().ok())
+            .flatten();
+        assert!(
+            is_main_context_owner || has_acquired_main_context.is_some(),
+            "Async operations only allowed if the thread is owning the MainContext"
+        );
+
+        let user_data: Box_<glib::thread_guard::ThreadGuard<P>> =
+            Box_::new(glib::thread_guard::ThreadGuard::new(callback));
         unsafe extern "C" fn skip_async_trampoline<
-            Q: FnOnce(Result<isize, glib::Error>) + Send + 'static,
+            P: FnOnce(Result<isize, glib::Error>) + 'static,
         >(
-            _source_object: *mut gobject_sys::GObject,
-            res: *mut gio_sys::GAsyncResult,
-            user_data: glib_sys::gpointer,
+            _source_object: *mut glib::gobject_ffi::GObject,
+            res: *mut crate::ffi::GAsyncResult,
+            user_data: glib::ffi::gpointer,
         ) {
             let mut error = ptr::null_mut();
-            let ret =
-                gio_sys::g_input_stream_skip_finish(_source_object as *mut _, res, &mut error);
+            let ret = ffi::g_input_stream_skip_finish(_source_object as *mut _, res, &mut error);
             let result = if error.is_null() {
                 Ok(ret)
             } else {
                 Err(from_glib_full(error))
             };
-            let callback: Box_<Q> = Box_::from_raw(user_data as *mut _);
+            let callback: Box_<glib::thread_guard::ThreadGuard<P>> =
+                Box_::from_raw(user_data as *mut _);
+            let callback: P = callback.into_inner();
             callback(result);
         }
-        let callback = skip_async_trampoline::<Q>;
+        let callback = skip_async_trampoline::<P>;
         unsafe {
-            gio_sys::g_input_stream_skip_async(
+            ffi::g_input_stream_skip_async(
                 self.as_ref().to_glib_none().0,
                 count,
-                io_priority.to_glib(),
+                io_priority.into_glib(),
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 Some(callback),
                 Box_::into_raw(user_data) as *mut _,
@@ -334,24 +376,24 @@ impl<O: IsA<InputStream>> InputStreamExt for O {
         }
     }
 
-    fn skip_async_future(
+    fn skip_future(
         &self,
         count: usize,
         io_priority: glib::Priority,
     ) -> Pin<Box_<dyn std::future::Future<Output = Result<isize, glib::Error>> + 'static>> {
-        Box_::pin(crate::GioFuture::new(self, move |obj, send| {
-            let cancellable = Cancellable::new();
-            obj.skip_async(count, io_priority, Some(&cancellable), move |res| {
-                send.resolve(res);
-            });
-
-            cancellable
-        }))
+        Box_::pin(crate::GioFuture::new(
+            self,
+            move |obj, cancellable, send| {
+                obj.skip_async(count, io_priority, Some(cancellable), move |res| {
+                    send.resolve(res);
+                });
+            },
+        ))
     }
 }
 
 impl fmt::Display for InputStream {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "InputStream")
+        f.write_str("InputStream")
     }
 }

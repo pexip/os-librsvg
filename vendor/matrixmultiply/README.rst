@@ -9,20 +9,17 @@ Please read the `API documentation here`__
 __ https://docs.rs/matrixmultiply/
 
 
-This crate uses the same macro/microkernel approach to matrix multiplication as
-the BLIS_ project.
-
 We presently provide a few good microkernels portable and for x86-64, and
 only one operation: the general matrix-matrix multiplication (“gemm”).
 
+This crate was inspired by the tmacro/microkernel approach to matrix
+multiplication that is used by the BLIS_ project.
+
 .. _BLIS: https://github.com/flame/blis
 
-|build_status|_ |crates|_
+|crates|_
 
-.. |build_status| image:: https://travis-ci.org/bluss/matrixmultiply.svg?branch=master
-.. _build_status: https://travis-ci.org/bluss/matrixmultiply
-
-.. |crates| image:: https://meritbadge.herokuapp.com/matrixmultiply
+.. |crates| image:: https://img.shields.io/crates/v/matrixmultiply.svg
 .. _crates: https://crates.io/crates/matrixmultiply
 
 Development Goals
@@ -35,6 +32,14 @@ Development Goals
 - Small code footprint and fast compilation
 - We are not reimplementing BLAS.
 
+Benchmarks
+----------
+
+- ``cargo bench`` is useful for special cases and small matrices
+- The best gemm and threading benchmark is is ``examples/benchmarks.rs`` which supports custom sizes,
+  some configuration, and csv output.
+  Use the script ``benches/benchloop.py`` to run benchmarks over parameter ranges.
+
 Blog Posts About This Crate
 ---------------------------
 
@@ -44,6 +49,50 @@ __ https://bluss.github.io/rust/2016/03/28/a-gemmed-rabbit-hole/
 
 Recent Changes
 --------------
+
+- 0.3.2
+
+  - Add optional feature ``cgemm`` for complex matmult functions ``cgemm`` and
+    ``zgemm``
+
+  - Add optional feature ``constconf`` for compile-time configuration of matrix
+    kernel parameters for chunking. Improved scripts for benchmarking over ranges
+    of different settings. With thanks to @DutchGhost for the const-time
+    parsing functions.
+
+  - Improved benchmarking and testing.
+
+  - Threading is now slightly more eager to threads (depending on matrix element count).
+
+- 0.3.1
+
+  - Attempt to fix bug #55 were the mask buffer in TLS did not seem to
+    get its requested alignment on macos. The mask buffer pointer is now
+    aligned manually (again, like it was in 0.2.x).
+
+  - Fix a minor issue where we were passing a buffer pointer as ``&T``
+    when it should have been ``&[T]``.
+
+- 0.3.0
+
+  - Implement initial support for threading using a bespoke thread pool with
+    little contention.
+    To use, enable feature ``threading`` (and configure number of threads with the
+    variable ``MATMUL_NUM_THREADS``).
+
+    Initial support is for up to 4 threads - will be updated with more
+    experience in coming versions.
+
+  - Added a better benchmarking program for arbitrary size and layout, see
+    ``examples/benchmark.rs`` for this; it supports csv output for better
+    recording of measurements
+
+  - Minimum supported rust version is 1.41.1 and the version update policy
+    has been updated.
+
+  - Updated to Rust 2018 edition
+
+  - Moved CI to github actions (so long travis and thanks for all the fish).
 
 - 0.2.4
 
@@ -98,7 +147,7 @@ Recent Changes
     Benchmark improvement: execution time for 64×64 problem where inputs are either
     both row major or both column major changed by -5% sgemm and -1% for dgemm.
     (#26)
-  
+
   - In the sgemm avx kernel, handle column major output arrays just like
     it does row major arrays.
 

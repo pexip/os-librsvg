@@ -13,6 +13,7 @@ fn find_minimal_repr(n: f64, eps: f64) -> (f64, usize) {
     }
 }
 
+#[allow(clippy::never_loop)]
 fn float_to_string(n: f64, max_precision: usize, min_decimal: usize) -> String {
     let (mut result, mut count) = loop {
         let (sign, n) = if n < 0.0 { ("-", -n) } else { ("", n) };
@@ -56,16 +57,21 @@ fn float_to_string(n: f64, max_precision: usize, min_decimal: usize) -> String {
     result
 }
 
+/// Handles printing of floating point numbers
 pub struct FloatPrettyPrinter {
+    /// Whether scientific notation is allowed
     pub allow_scientific: bool,
+    /// Minimum allowed number of decimal digits
     pub min_decimal: i32,
+    /// Maximum allowed number of decimal digits
     pub max_decimal: i32,
 }
 
 impl FloatPrettyPrinter {
+    /// Handles printing of floating point numbers
     pub fn print(&self, n: f64) -> String {
-        let (n, p) = find_minimal_repr(n, (10f64).powi(-self.max_decimal));
-        let d_repr = float_to_string(n, p, self.min_decimal as usize);
+        let (tn, p) = find_minimal_repr(n, (10f64).powi(-self.max_decimal));
+        let d_repr = float_to_string(tn, p, self.min_decimal as usize);
         if !self.allow_scientific {
             d_repr
         } else {
@@ -91,7 +97,7 @@ impl FloatPrettyPrinter {
                 float_to_string(sn, sp, self.min_decimal as usize),
                 float_to_string(idx, 0, 0)
             );
-            if s_repr.len() + 1 < d_repr.len() {
+            if s_repr.len() + 1 < d_repr.len() || (tn == 0.0 && n != 0.0) {
                 s_repr
             } else {
                 d_repr
@@ -102,7 +108,7 @@ impl FloatPrettyPrinter {
 
 /// The function that pretty prints the floating number
 /// Since rust doesn't have anything that can format a float with out appearance, so we just
-/// implemnet a float pretty printing function, which finds the shortest representation of a
+/// implement a float pretty printing function, which finds the shortest representation of a
 /// floating point number within the allowed error range.
 ///
 /// - `n`: The float number to pretty-print

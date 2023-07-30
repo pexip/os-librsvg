@@ -2,123 +2,128 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gobject_sys;
-use translate::*;
-use value::FromValue;
-use value::FromValueOptional;
-use value::SetValue;
-use value::Value;
-use StaticType;
-use Type;
+use crate::translate::*;
+use crate::value::FromValue;
+use crate::value::ToValue;
+use crate::StaticType;
+use crate::Type;
+use bitflags::bitflags;
+use std::fmt;
 
 bitflags! {
+    #[doc(alias = "GBindingFlags")]
     pub struct BindingFlags: u32 {
-        const DEFAULT = 0;
-        const BIDIRECTIONAL = 1;
-        const SYNC_CREATE = 2;
-        const INVERT_BOOLEAN = 4;
+        #[doc(alias = "G_BINDING_DEFAULT")]
+        const DEFAULT = gobject_ffi::G_BINDING_DEFAULT as u32;
+        #[doc(alias = "G_BINDING_BIDIRECTIONAL")]
+        const BIDIRECTIONAL = gobject_ffi::G_BINDING_BIDIRECTIONAL as u32;
+        #[doc(alias = "G_BINDING_SYNC_CREATE")]
+        const SYNC_CREATE = gobject_ffi::G_BINDING_SYNC_CREATE as u32;
+        #[doc(alias = "G_BINDING_INVERT_BOOLEAN")]
+        const INVERT_BOOLEAN = gobject_ffi::G_BINDING_INVERT_BOOLEAN as u32;
+    }
+}
+
+impl fmt::Display for BindingFlags {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        <Self as fmt::Debug>::fmt(self, f)
     }
 }
 
 #[doc(hidden)]
-impl ToGlib for BindingFlags {
-    type GlibType = gobject_sys::GBindingFlags;
+impl IntoGlib for BindingFlags {
+    type GlibType = gobject_ffi::GBindingFlags;
 
-    fn to_glib(&self) -> gobject_sys::GBindingFlags {
+    fn into_glib(self) -> gobject_ffi::GBindingFlags {
         self.bits()
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<gobject_sys::GBindingFlags> for BindingFlags {
-    fn from_glib(value: gobject_sys::GBindingFlags) -> BindingFlags {
-        BindingFlags::from_bits_truncate(value)
+impl FromGlib<gobject_ffi::GBindingFlags> for BindingFlags {
+    unsafe fn from_glib(value: gobject_ffi::GBindingFlags) -> Self {
+        Self::from_bits_truncate(value)
     }
 }
 
 impl StaticType for BindingFlags {
     fn static_type() -> Type {
-        unsafe { from_glib(gobject_sys::g_binding_flags_get_type()) }
+        unsafe { from_glib(gobject_ffi::g_binding_flags_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for BindingFlags {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl crate::value::ValueType for BindingFlags {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for BindingFlags {
+    type Checker = crate::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a crate::Value) -> Self {
+        from_glib(crate::gobject_ffi::g_value_get_flags(
+            value.to_glib_none().0,
+        ))
     }
 }
 
-impl<'a> FromValue<'a> for BindingFlags {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_flags(value.to_glib_none().0))
+impl ToValue for BindingFlags {
+    fn to_value(&self) -> crate::Value {
+        let mut value = crate::Value::for_value_type::<Self>();
+        unsafe {
+            crate::gobject_ffi::g_value_set_flags(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for BindingFlags {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_flags(value.to_glib_none_mut().0, this.to_glib())
-    }
-}
-
-bitflags! {
-    pub struct ParamFlags: u32 {
-        const READABLE = 1;
-        const WRITABLE = 2;
-        const READWRITE = 3;
-        const CONSTRUCT = 4;
-        const CONSTRUCT_ONLY = 8;
-        const LAX_VALIDATION = 16;
-        const STATIC_NAME = 32;
-        const PRIVATE = 32;
-        const STATIC_NICK = 64;
-        const STATIC_BLURB = 128;
-        const EXPLICIT_NOTIFY = 1073741824;
-        const DEPRECATED = 2147483648;
-    }
-}
-
-#[doc(hidden)]
-impl ToGlib for ParamFlags {
-    type GlibType = gobject_sys::GParamFlags;
-
-    fn to_glib(&self) -> gobject_sys::GParamFlags {
-        self.bits()
-    }
-}
-
-#[doc(hidden)]
-impl FromGlib<gobject_sys::GParamFlags> for ParamFlags {
-    fn from_glib(value: gobject_sys::GParamFlags) -> ParamFlags {
-        ParamFlags::from_bits_truncate(value)
+    fn value_type(&self) -> crate::Type {
+        Self::static_type()
     }
 }
 
 bitflags! {
+    #[doc(alias = "GSignalFlags")]
     pub struct SignalFlags: u32 {
-        const RUN_FIRST = 1;
-        const RUN_LAST = 2;
-        const RUN_CLEANUP = 4;
-        const NO_RECURSE = 8;
-        const DETAILED = 16;
-        const ACTION = 32;
-        const NO_HOOKS = 64;
-        const MUST_COLLECT = 128;
-        const DEPRECATED = 256;
+        #[doc(alias = "G_SIGNAL_RUN_FIRST")]
+        const RUN_FIRST = gobject_ffi::G_SIGNAL_RUN_FIRST as u32;
+        #[doc(alias = "G_SIGNAL_RUN_LAST")]
+        const RUN_LAST = gobject_ffi::G_SIGNAL_RUN_LAST as u32;
+        #[doc(alias = "G_SIGNAL_RUN_CLEANUP")]
+        const RUN_CLEANUP = gobject_ffi::G_SIGNAL_RUN_CLEANUP as u32;
+        #[doc(alias = "G_SIGNAL_NO_RECURSE")]
+        const NO_RECURSE = gobject_ffi::G_SIGNAL_NO_RECURSE as u32;
+        #[doc(alias = "G_SIGNAL_DETAILED")]
+        const DETAILED = gobject_ffi::G_SIGNAL_DETAILED as u32;
+        #[doc(alias = "G_SIGNAL_ACTION")]
+        const ACTION = gobject_ffi::G_SIGNAL_ACTION as u32;
+        #[doc(alias = "G_SIGNAL_NO_HOOKS")]
+        const NO_HOOKS = gobject_ffi::G_SIGNAL_NO_HOOKS as u32;
+        #[doc(alias = "G_SIGNAL_MUST_COLLECT")]
+        const MUST_COLLECT = gobject_ffi::G_SIGNAL_MUST_COLLECT as u32;
+        #[doc(alias = "G_SIGNAL_DEPRECATED")]
+        const DEPRECATED = gobject_ffi::G_SIGNAL_DEPRECATED as u32;
+        #[doc(alias = "G_SIGNAL_ACCUMULATOR_FIRST_RUN")]
+        const ACCUMULATOR_FIRST_RUN = gobject_ffi::G_SIGNAL_ACCUMULATOR_FIRST_RUN as u32;
+    }
+}
+
+impl fmt::Display for SignalFlags {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        <Self as fmt::Debug>::fmt(self, f)
     }
 }
 
 #[doc(hidden)]
-impl ToGlib for SignalFlags {
-    type GlibType = gobject_sys::GSignalFlags;
+impl IntoGlib for SignalFlags {
+    type GlibType = gobject_ffi::GSignalFlags;
 
-    fn to_glib(&self) -> gobject_sys::GSignalFlags {
+    fn into_glib(self) -> gobject_ffi::GSignalFlags {
         self.bits()
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<gobject_sys::GSignalFlags> for SignalFlags {
-    fn from_glib(value: gobject_sys::GSignalFlags) -> SignalFlags {
-        SignalFlags::from_bits_truncate(value)
+impl FromGlib<gobject_ffi::GSignalFlags> for SignalFlags {
+    unsafe fn from_glib(value: gobject_ffi::GSignalFlags) -> Self {
+        Self::from_bits_truncate(value)
     }
 }

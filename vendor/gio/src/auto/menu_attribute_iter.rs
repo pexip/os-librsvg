@@ -2,48 +2,36 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
-use glib;
 use glib::object::IsA;
 use glib::translate::*;
-use glib::GString;
 use std::fmt;
 use std::ptr;
 
-glib_wrapper! {
-    pub struct MenuAttributeIter(Object<gio_sys::GMenuAttributeIter, gio_sys::GMenuAttributeIterClass, MenuAttributeIterClass>);
+glib::wrapper! {
+    #[doc(alias = "GMenuAttributeIter")]
+    pub struct MenuAttributeIter(Object<ffi::GMenuAttributeIter, ffi::GMenuAttributeIterClass>);
 
     match fn {
-        get_type => || gio_sys::g_menu_attribute_iter_get_type(),
+        type_ => || ffi::g_menu_attribute_iter_get_type(),
     }
 }
 
-pub const NONE_MENU_ATTRIBUTE_ITER: Option<&MenuAttributeIter> = None;
+impl MenuAttributeIter {
+    pub const NONE: Option<&'static MenuAttributeIter> = None;
+}
 
 pub trait MenuAttributeIterExt: 'static {
-    fn get_name(&self) -> Option<GString>;
-
-    fn get_next(&self) -> Option<(GString, glib::Variant)>;
-
-    fn get_value(&self) -> Option<glib::Variant>;
-
-    fn next(&self) -> bool;
+    #[doc(alias = "g_menu_attribute_iter_get_next")]
+    #[doc(alias = "get_next")]
+    fn next(&self) -> Option<(glib::GString, glib::Variant)>;
 }
 
 impl<O: IsA<MenuAttributeIter>> MenuAttributeIterExt for O {
-    fn get_name(&self) -> Option<GString> {
-        unsafe {
-            from_glib_none(gio_sys::g_menu_attribute_iter_get_name(
-                self.as_ref().to_glib_none().0,
-            ))
-        }
-    }
-
-    fn get_next(&self) -> Option<(GString, glib::Variant)> {
+    fn next(&self) -> Option<(glib::GString, glib::Variant)> {
         unsafe {
             let mut out_name = ptr::null();
             let mut value = ptr::null_mut();
-            let ret = from_glib(gio_sys::g_menu_attribute_iter_get_next(
+            let ret = from_glib(ffi::g_menu_attribute_iter_get_next(
                 self.as_ref().to_glib_none().0,
                 &mut out_name,
                 &mut value,
@@ -55,26 +43,10 @@ impl<O: IsA<MenuAttributeIter>> MenuAttributeIterExt for O {
             }
         }
     }
-
-    fn get_value(&self) -> Option<glib::Variant> {
-        unsafe {
-            from_glib_full(gio_sys::g_menu_attribute_iter_get_value(
-                self.as_ref().to_glib_none().0,
-            ))
-        }
-    }
-
-    fn next(&self) -> bool {
-        unsafe {
-            from_glib(gio_sys::g_menu_attribute_iter_next(
-                self.as_ref().to_glib_none().0,
-            ))
-        }
-    }
 }
 
 impl fmt::Display for MenuAttributeIter {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "MenuAttributeIter")
+        f.write_str("MenuAttributeIter")
     }
 }

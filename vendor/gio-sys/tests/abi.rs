@@ -2,12 +2,10 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-extern crate gio_sys;
-extern crate shell_words;
-extern crate tempfile;
 use gio_sys::*;
 use std::env;
 use std::error::Error;
+use std::ffi::OsString;
 use std::mem::{align_of, size_of};
 use std::path::Path;
 use std::process::Command;
@@ -22,23 +20,17 @@ struct Compiler {
 }
 
 impl Compiler {
-    pub fn new() -> Result<Compiler, Box<dyn Error>> {
+    pub fn new() -> Result<Self, Box<dyn Error>> {
         let mut args = get_var("CC", "cc")?;
         args.push("-Wno-deprecated-declarations".to_owned());
+        // For _Generic
+        args.push("-std=c11".to_owned());
         // For %z support in printf when using MinGW.
         args.push("-D__USE_MINGW_ANSI_STDIO".to_owned());
         args.extend(get_var("CFLAGS", "")?);
         args.extend(get_var("CPPFLAGS", "")?);
         args.extend(pkg_config_cflags(PACKAGES)?);
-        Ok(Compiler { args })
-    }
-
-    pub fn define<'a, V: Into<Option<&'a str>>>(&mut self, var: &str, val: V) {
-        let arg = match val.into() {
-            None => format!("-D{}", var),
-            Some(val) => format!("-D{}={}", var, val),
-        };
-        self.args.push(arg);
+        Ok(Self { args })
     }
 
     pub fn compile(&self, src: &Path, out: &Path) -> Result<(), Box<dyn Error>> {
@@ -72,7 +64,8 @@ fn pkg_config_cflags(packages: &[&str]) -> Result<Vec<String>, Box<dyn Error>> {
     if packages.is_empty() {
         return Ok(Vec::new());
     }
-    let mut cmd = Command::new("pkg-config");
+    let pkg_config = env::var_os("PKG_CONFIG").unwrap_or_else(|| OsString::from("pkg-config"));
+    let mut cmd = Command::new(pkg_config);
     cmd.arg("--cflags");
     cmd.args(packages);
     let out = cmd.output()?;
@@ -95,8 +88,6 @@ struct Results {
     passed: usize,
     /// Total number of failed tests (including those that failed to compile).
     failed: usize,
-    /// Number of tests that failed to compile.
-    failed_to_compile: usize,
 }
 
 impl Results {
@@ -106,15 +97,8 @@ impl Results {
     fn record_failed(&mut self) {
         self.failed += 1;
     }
-    fn record_failed_to_compile(&mut self) {
-        self.failed += 1;
-        self.failed_to_compile += 1;
-    }
     fn summary(&self) -> String {
-        format!(
-            "{} passed; {} failed (compilation errors: {})",
-            self.passed, self.failed, self.failed_to_compile
-        )
+        format!("{} passed; {} failed", self.passed, self.failed)
     }
     fn expect_total_success(&self) {
         if self.failed == 0 {
@@ -126,93 +110,97 @@ impl Results {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn cross_validate_constants_with_c() {
-    let tmpdir = Builder::new()
-        .prefix("abi")
-        .tempdir()
-        .expect("temporary directory");
-    let cc = Compiler::new().expect("configured compiler");
+    let mut c_constants: Vec<(String, String)> = Vec::new();
 
-    assert_eq!(
-        "1",
-        get_c_value(tmpdir.path(), &cc, "1").expect("C constant"),
-        "failed to obtain correct constant value for 1"
-    );
-
-    let mut results: Results = Default::default();
-    for (i, &(name, rust_value)) in RUST_CONSTANTS.iter().enumerate() {
-        match get_c_value(tmpdir.path(), &cc, name) {
-            Err(e) => {
-                results.record_failed_to_compile();
-                eprintln!("{}", e);
-            }
-            Ok(ref c_value) => {
-                if rust_value == c_value {
-                    results.record_passed();
-                } else {
-                    results.record_failed();
-                    eprintln!(
-                        "Constant value mismatch for {}\nRust: {:?}\nC:    {:?}",
-                        name, rust_value, c_value
-                    );
-                }
-            }
-        };
-        if (i + 1) % 25 == 0 {
-            println!("constants ... {}", results.summary());
-        }
+    for l in get_c_output("constant").unwrap().lines() {
+        let mut words = l.trim().split(';');
+        let name = words.next().expect("Failed to parse name").to_owned();
+        let value = words
+            .next()
+            .and_then(|s| s.parse().ok())
+            .expect("Failed to parse value");
+        c_constants.push((name, value));
     }
+
+    let mut results = Results::default();
+
+    for ((rust_name, rust_value), (c_name, c_value)) in
+        RUST_CONSTANTS.iter().zip(c_constants.iter())
+    {
+        if rust_name != c_name {
+            results.record_failed();
+            eprintln!("Name mismatch:\nRust: {:?}\nC:    {:?}", rust_name, c_name,);
+            continue;
+        }
+
+        if rust_value != c_value {
+            results.record_failed();
+            eprintln!(
+                "Constant value mismatch for {}\nRust: {:?}\nC:    {:?}",
+                rust_name, rust_value, &c_value
+            );
+            continue;
+        }
+
+        results.record_passed();
+    }
+
     results.expect_total_success();
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn cross_validate_layout_with_c() {
-    let tmpdir = Builder::new()
-        .prefix("abi")
-        .tempdir()
-        .expect("temporary directory");
-    let cc = Compiler::new().expect("configured compiler");
+    let mut c_layouts = Vec::new();
 
-    assert_eq!(
-        Layout {
-            size: 1,
-            alignment: 1
-        },
-        get_c_layout(tmpdir.path(), &cc, "char").expect("C layout"),
-        "failed to obtain correct layout for char type"
-    );
-
-    let mut results: Results = Default::default();
-    for (i, &(name, rust_layout)) in RUST_LAYOUTS.iter().enumerate() {
-        match get_c_layout(tmpdir.path(), &cc, name) {
-            Err(e) => {
-                results.record_failed_to_compile();
-                eprintln!("{}", e);
-            }
-            Ok(c_layout) => {
-                if rust_layout == c_layout {
-                    results.record_passed();
-                } else {
-                    results.record_failed();
-                    eprintln!(
-                        "Layout mismatch for {}\nRust: {:?}\nC:    {:?}",
-                        name, rust_layout, &c_layout
-                    );
-                }
-            }
-        };
-        if (i + 1) % 25 == 0 {
-            println!("layout    ... {}", results.summary());
-        }
+    for l in get_c_output("layout").unwrap().lines() {
+        let mut words = l.trim().split(';');
+        let name = words.next().expect("Failed to parse name").to_owned();
+        let size = words
+            .next()
+            .and_then(|s| s.parse().ok())
+            .expect("Failed to parse size");
+        let alignment = words
+            .next()
+            .and_then(|s| s.parse().ok())
+            .expect("Failed to parse alignment");
+        c_layouts.push((name, Layout { size, alignment }));
     }
+
+    let mut results = Results::default();
+
+    for ((rust_name, rust_layout), (c_name, c_layout)) in RUST_LAYOUTS.iter().zip(c_layouts.iter())
+    {
+        if rust_name != c_name {
+            results.record_failed();
+            eprintln!("Name mismatch:\nRust: {:?}\nC:    {:?}", rust_name, c_name,);
+            continue;
+        }
+
+        if rust_layout != c_layout {
+            results.record_failed();
+            eprintln!(
+                "Layout mismatch for {}\nRust: {:?}\nC:    {:?}",
+                rust_name, rust_layout, &c_layout
+            );
+            continue;
+        }
+
+        results.record_passed();
+    }
+
     results.expect_total_success();
 }
 
-fn get_c_layout(dir: &Path, cc: &Compiler, name: &str) -> Result<Layout, Box<dyn Error>> {
-    let exe = dir.join("layout");
-    let mut cc = cc.clone();
-    cc.define("ABI_TYPE_NAME", name);
-    cc.compile(Path::new("tests/layout.c"), &exe)?;
+fn get_c_output(name: &str) -> Result<String, Box<dyn Error>> {
+    let tmpdir = Builder::new().prefix("abi").tempdir()?;
+    let exe = tmpdir.path().join(name);
+    let c_file = Path::new("tests").join(name).with_extension("c");
+
+    let cc = Compiler::new().expect("configured compiler");
+    cc.compile(&c_file, &exe)?;
 
     let mut abi_cmd = Command::new(exe);
     let output = abi_cmd.output()?;
@@ -220,35 +208,7 @@ fn get_c_layout(dir: &Path, cc: &Compiler, name: &str) -> Result<Layout, Box<dyn
         return Err(format!("command {:?} failed, {:?}", &abi_cmd, &output).into());
     }
 
-    let stdout = str::from_utf8(&output.stdout)?;
-    let mut words = stdout.trim().split_whitespace();
-    let size = words.next().unwrap().parse().unwrap();
-    let alignment = words.next().unwrap().parse().unwrap();
-    Ok(Layout { size, alignment })
-}
-
-fn get_c_value(dir: &Path, cc: &Compiler, name: &str) -> Result<String, Box<dyn Error>> {
-    let exe = dir.join("constant");
-    let mut cc = cc.clone();
-    cc.define("ABI_CONSTANT_NAME", name);
-    cc.compile(Path::new("tests/constant.c"), &exe)?;
-
-    let mut abi_cmd = Command::new(exe);
-    let output = abi_cmd.output()?;
-    if !output.status.success() {
-        return Err(format!("command {:?} failed, {:?}", &abi_cmd, &output).into());
-    }
-
-    let output = str::from_utf8(&output.stdout)?.trim();
-    if !output.starts_with("###gir test###") || !output.ends_with("###gir test###") {
-        return Err(format!(
-            "command {:?} return invalid output, {:?}",
-            &abi_cmd, &output
-        )
-        .into());
-    }
-
-    Ok(String::from(&output[14..(output.len() - 14)]))
+    Ok(String::from_utf8(output.stdout)?)
 }
 
 const RUST_LAYOUTS: &[(&str, Layout)] = &[
@@ -827,6 +787,27 @@ const RUST_LAYOUTS: &[(&str, Layout)] = &[
         },
     ),
     (
+        "GDebugControllerDBus",
+        Layout {
+            size: size_of::<GDebugControllerDBus>(),
+            alignment: align_of::<GDebugControllerDBus>(),
+        },
+    ),
+    (
+        "GDebugControllerDBusClass",
+        Layout {
+            size: size_of::<GDebugControllerDBusClass>(),
+            alignment: align_of::<GDebugControllerDBusClass>(),
+        },
+    ),
+    (
+        "GDebugControllerInterface",
+        Layout {
+            size: size_of::<GDebugControllerInterface>(),
+            alignment: align_of::<GDebugControllerInterface>(),
+        },
+    ),
+    (
         "GDesktopAppInfoClass",
         Layout {
             size: size_of::<GDesktopAppInfoClass>(),
@@ -1268,6 +1249,20 @@ const RUST_LAYOUTS: &[(&str, Layout)] = &[
         },
     ),
     (
+        "GMemoryMonitorInterface",
+        Layout {
+            size: size_of::<GMemoryMonitorInterface>(),
+            alignment: align_of::<GMemoryMonitorInterface>(),
+        },
+    ),
+    (
+        "GMemoryMonitorWarningLevel",
+        Layout {
+            size: size_of::<GMemoryMonitorWarningLevel>(),
+            alignment: align_of::<GMemoryMonitorWarningLevel>(),
+        },
+    ),
+    (
         "GMemoryOutputStream",
         Layout {
             size: size_of::<GMemoryOutputStream>(),
@@ -1517,6 +1512,13 @@ const RUST_LAYOUTS: &[(&str, Layout)] = &[
         Layout {
             size: size_of::<GPollableReturn>(),
             alignment: align_of::<GPollableReturn>(),
+        },
+    ),
+    (
+        "GPowerProfileMonitorInterface",
+        Layout {
+            size: size_of::<GPowerProfileMonitorInterface>(),
+            alignment: align_of::<GPowerProfileMonitorInterface>(),
         },
     ),
     (
@@ -1961,6 +1963,20 @@ const RUST_LAYOUTS: &[(&str, Layout)] = &[
         },
     ),
     (
+        "GTlsChannelBindingError",
+        Layout {
+            size: size_of::<GTlsChannelBindingError>(),
+            alignment: align_of::<GTlsChannelBindingError>(),
+        },
+    ),
+    (
+        "GTlsChannelBindingType",
+        Layout {
+            size: size_of::<GTlsChannelBindingType>(),
+            alignment: align_of::<GTlsChannelBindingType>(),
+        },
+    ),
+    (
         "GTlsClientConnectionInterface",
         Layout {
             size: size_of::<GTlsClientConnectionInterface>(),
@@ -2063,6 +2079,13 @@ const RUST_LAYOUTS: &[(&str, Layout)] = &[
         Layout {
             size: size_of::<GTlsPasswordFlags>(),
             alignment: align_of::<GTlsPasswordFlags>(),
+        },
+    ),
+    (
+        "GTlsProtocolVersion",
+        Layout {
+            size: size_of::<GTlsProtocolVersion>(),
+            alignment: align_of::<GTlsProtocolVersion>(),
         },
     ),
     (
@@ -2283,12 +2306,14 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) G_CONVERTER_FLUSHED", "3"),
     ("(guint) G_CONVERTER_INPUT_AT_END", "1"),
     ("(guint) G_CONVERTER_NO_FLAGS", "0"),
+    ("(gint) G_CREDENTIALS_TYPE_APPLE_XUCRED", "6"),
     ("(gint) G_CREDENTIALS_TYPE_FREEBSD_CMSGCRED", "2"),
     ("(gint) G_CREDENTIALS_TYPE_INVALID", "0"),
     ("(gint) G_CREDENTIALS_TYPE_LINUX_UCRED", "1"),
     ("(gint) G_CREDENTIALS_TYPE_NETBSD_UNPCBID", "5"),
     ("(gint) G_CREDENTIALS_TYPE_OPENBSD_SOCKPEERCRED", "3"),
     ("(gint) G_CREDENTIALS_TYPE_SOLARIS_UCRED", "4"),
+    ("(gint) G_CREDENTIALS_TYPE_WIN32_PID", "7"),
     ("(gint) G_DATA_STREAM_BYTE_ORDER_BIG_ENDIAN", "0"),
     ("(gint) G_DATA_STREAM_BYTE_ORDER_HOST_ENDIAN", "2"),
     ("(gint) G_DATA_STREAM_BYTE_ORDER_LITTLE_ENDIAN", "1"),
@@ -2309,6 +2334,10 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
         "4",
     ),
     ("(guint) G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT", "1"),
+    (
+        "(guint) G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_REQUIRE_SAME_USER",
+        "32",
+    ),
     ("(guint) G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_SERVER", "2"),
     (
         "(guint) G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING",
@@ -2393,6 +2422,8 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) G_DBUS_MESSAGE_TYPE_METHOD_CALL", "1"),
     ("(gint) G_DBUS_MESSAGE_TYPE_METHOD_RETURN", "2"),
     ("(gint) G_DBUS_MESSAGE_TYPE_SIGNAL", "4"),
+    ("G_DBUS_METHOD_INVOCATION_HANDLED", "1"),
+    ("G_DBUS_METHOD_INVOCATION_UNHANDLED", "0"),
     (
         "(guint) G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_DO_NOT_AUTO_START",
         "1",
@@ -2410,11 +2441,16 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(guint) G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES", "1"),
     ("(guint) G_DBUS_PROXY_FLAGS_GET_INVALIDATED_PROPERTIES", "8"),
     ("(guint) G_DBUS_PROXY_FLAGS_NONE", "0"),
+    ("(guint) G_DBUS_PROXY_FLAGS_NO_MATCH_RULE", "32"),
     ("(guint) G_DBUS_SEND_MESSAGE_FLAGS_NONE", "0"),
     ("(guint) G_DBUS_SEND_MESSAGE_FLAGS_PRESERVE_SERIAL", "1"),
     (
         "(guint) G_DBUS_SERVER_FLAGS_AUTHENTICATION_ALLOW_ANONYMOUS",
         "2",
+    ),
+    (
+        "(guint) G_DBUS_SERVER_FLAGS_AUTHENTICATION_REQUIRE_SAME_USER",
+        "4",
     ),
     ("(guint) G_DBUS_SERVER_FLAGS_NONE", "0"),
     ("(guint) G_DBUS_SERVER_FLAGS_RUN_IN_THREAD", "1"),
@@ -2427,6 +2463,10 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
         "1",
     ),
     ("(guint) G_DBUS_SUBTREE_FLAGS_NONE", "0"),
+    (
+        "G_DEBUG_CONTROLLER_EXTENSION_POINT_NAME",
+        "gio-debug-controller",
+    ),
     (
         "G_DESKTOP_APP_INFO_LOOKUP_EXTENSION_POINT_NAME",
         "gio-desktop-app-info-lookup",
@@ -2712,6 +2752,13 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(guint) G_IO_STREAM_SPLICE_CLOSE_STREAM2", "2"),
     ("(guint) G_IO_STREAM_SPLICE_NONE", "0"),
     ("(guint) G_IO_STREAM_SPLICE_WAIT_FOR_BOTH", "4"),
+    (
+        "G_MEMORY_MONITOR_EXTENSION_POINT_NAME",
+        "gio-memory-monitor",
+    ),
+    ("(gint) G_MEMORY_MONITOR_WARNING_LEVEL_CRITICAL", "255"),
+    ("(gint) G_MEMORY_MONITOR_WARNING_LEVEL_LOW", "50"),
+    ("(gint) G_MEMORY_MONITOR_WARNING_LEVEL_MEDIUM", "100"),
     ("G_MENU_ATTRIBUTE_ACTION", "action"),
     ("G_MENU_ATTRIBUTE_ACTION_NAMESPACE", "action-namespace"),
     ("G_MENU_ATTRIBUTE_ICON", "icon"),
@@ -2750,6 +2797,10 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) G_POLLABLE_RETURN_FAILED", "0"),
     ("(gint) G_POLLABLE_RETURN_OK", "1"),
     ("(gint) G_POLLABLE_RETURN_WOULD_BLOCK", "-27"),
+    (
+        "G_POWER_PROFILE_MONITOR_EXTENSION_POINT_NAME",
+        "gio-power-profile-monitor",
+    ),
     ("G_PROXY_EXTENSION_POINT_NAME", "gio-proxy"),
     (
         "G_PROXY_RESOLVER_EXTENSION_POINT_NAME",
@@ -2813,6 +2864,7 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(gint) G_SOCKET_TYPE_STREAM", "1"),
     ("(guint) G_SUBPROCESS_FLAGS_INHERIT_FDS", "128"),
     ("(guint) G_SUBPROCESS_FLAGS_NONE", "0"),
+    ("(guint) G_SUBPROCESS_FLAGS_SEARCH_PATH_FROM_ENVP", "256"),
     ("(guint) G_SUBPROCESS_FLAGS_STDERR_MERGE", "64"),
     ("(guint) G_SUBPROCESS_FLAGS_STDERR_PIPE", "16"),
     ("(guint) G_SUBPROCESS_FLAGS_STDERR_SILENCE", "32"),
@@ -2834,6 +2886,13 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(guint) G_TLS_CERTIFICATE_REVOKED", "16"),
     ("(guint) G_TLS_CERTIFICATE_UNKNOWN_CA", "1"),
     ("(guint) G_TLS_CERTIFICATE_VALIDATE_ALL", "127"),
+    ("(gint) G_TLS_CHANNEL_BINDING_ERROR_GENERAL_ERROR", "4"),
+    ("(gint) G_TLS_CHANNEL_BINDING_ERROR_INVALID_STATE", "1"),
+    ("(gint) G_TLS_CHANNEL_BINDING_ERROR_NOT_AVAILABLE", "2"),
+    ("(gint) G_TLS_CHANNEL_BINDING_ERROR_NOT_IMPLEMENTED", "0"),
+    ("(gint) G_TLS_CHANNEL_BINDING_ERROR_NOT_SUPPORTED", "3"),
+    ("(gint) G_TLS_CHANNEL_BINDING_TLS_SERVER_END_POINT", "1"),
+    ("(gint) G_TLS_CHANNEL_BINDING_TLS_UNIQUE", "0"),
     ("(gint) G_TLS_DATABASE_LOOKUP_KEYPAIR", "1"),
     ("(gint) G_TLS_DATABASE_LOOKUP_NONE", "0"),
     (
@@ -2846,6 +2905,7 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ),
     ("(guint) G_TLS_DATABASE_VERIFY_NONE", "0"),
     ("(gint) G_TLS_ERROR_BAD_CERTIFICATE", "2"),
+    ("(gint) G_TLS_ERROR_BAD_CERTIFICATE_PASSWORD", "8"),
     ("(gint) G_TLS_ERROR_CERTIFICATE_REQUIRED", "5"),
     ("(gint) G_TLS_ERROR_EOF", "6"),
     ("(gint) G_TLS_ERROR_HANDSHAKE", "4"),
@@ -2859,7 +2919,18 @@ const RUST_CONSTANTS: &[(&str, &str)] = &[
     ("(guint) G_TLS_PASSWORD_FINAL_TRY", "8"),
     ("(guint) G_TLS_PASSWORD_MANY_TRIES", "4"),
     ("(guint) G_TLS_PASSWORD_NONE", "0"),
+    ("(guint) G_TLS_PASSWORD_PKCS11_CONTEXT_SPECIFIC", "64"),
+    ("(guint) G_TLS_PASSWORD_PKCS11_SECURITY_OFFICER", "32"),
+    ("(guint) G_TLS_PASSWORD_PKCS11_USER", "16"),
     ("(guint) G_TLS_PASSWORD_RETRY", "2"),
+    ("(gint) G_TLS_PROTOCOL_VERSION_DTLS_1_0", "201"),
+    ("(gint) G_TLS_PROTOCOL_VERSION_DTLS_1_2", "202"),
+    ("(gint) G_TLS_PROTOCOL_VERSION_SSL_3_0", "1"),
+    ("(gint) G_TLS_PROTOCOL_VERSION_TLS_1_0", "2"),
+    ("(gint) G_TLS_PROTOCOL_VERSION_TLS_1_1", "3"),
+    ("(gint) G_TLS_PROTOCOL_VERSION_TLS_1_2", "4"),
+    ("(gint) G_TLS_PROTOCOL_VERSION_TLS_1_3", "5"),
+    ("(gint) G_TLS_PROTOCOL_VERSION_UNKNOWN", "0"),
     ("(gint) G_TLS_REHANDSHAKE_NEVER", "0"),
     ("(gint) G_TLS_REHANDSHAKE_SAFELY", "1"),
     ("(gint) G_TLS_REHANDSHAKE_UNSAFELY", "2"),

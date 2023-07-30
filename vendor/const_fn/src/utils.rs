@@ -1,24 +1,16 @@
-use proc_macro::{Delimiter, Group, Ident, Punct, Spacing, Span, TokenStream, TokenTree};
 use std::iter::FromIterator;
 
-use crate::Result;
+use proc_macro::{Delimiter, Group, Ident, Punct, Spacing, Span, TokenStream, TokenTree};
 
-macro_rules! error {
-    ($span:expr, $msg:expr) => {{
-        crate::error::Error::new($span, $msg)
-    }};
-    ($span:expr, $($tt:tt)*) => {
-        error!($span, format!($($tt)*))
-    };
-}
+use crate::{iter::TokenIter, Result};
 
 pub(crate) fn tt_span(tt: Option<&TokenTree>) -> Span {
     tt.map_or_else(Span::call_site, TokenTree::span)
 }
 
-pub(crate) fn parse_as_empty(mut tokens: impl Iterator<Item = TokenTree>) -> Result<()> {
+pub(crate) fn parse_as_empty(tokens: &mut TokenIter) -> Result<()> {
     match tokens.next() {
-        Some(tt) => Err(error!(tt.span(), "unexpected token: {}", tt)),
+        Some(tt) => bail!(tt.span(), "unexpected token: `{}`", tt),
         None => Ok(()),
     }
 }

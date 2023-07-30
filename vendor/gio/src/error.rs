@@ -1,26 +1,24 @@
-// Copyright 2018, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
+use crate::IOErrorEnum;
 use std::io;
-use IOErrorEnum;
 
 impl From<IOErrorEnum> for io::ErrorKind {
     fn from(kind: IOErrorEnum) -> Self {
         match kind {
-            IOErrorEnum::NotFound => io::ErrorKind::NotFound,
-            IOErrorEnum::Exists => io::ErrorKind::AlreadyExists,
-            IOErrorEnum::InvalidFilename => io::ErrorKind::InvalidInput,
-            IOErrorEnum::InvalidArgument => io::ErrorKind::InvalidInput,
-            IOErrorEnum::PermissionDenied => io::ErrorKind::PermissionDenied,
-            IOErrorEnum::AddressInUse => io::ErrorKind::AddrInUse,
-            IOErrorEnum::TimedOut => io::ErrorKind::TimedOut,
-            IOErrorEnum::WouldBlock => io::ErrorKind::WouldBlock,
-            IOErrorEnum::InvalidData => io::ErrorKind::InvalidData,
-            IOErrorEnum::ConnectionRefused => io::ErrorKind::ConnectionRefused,
-            IOErrorEnum::BrokenPipe => io::ErrorKind::BrokenPipe,
-            IOErrorEnum::NotConnected => io::ErrorKind::NotConnected,
-            _ => io::ErrorKind::Other,
+            IOErrorEnum::NotFound => Self::NotFound,
+            IOErrorEnum::Exists => Self::AlreadyExists,
+            IOErrorEnum::InvalidFilename => Self::InvalidInput,
+            IOErrorEnum::InvalidArgument => Self::InvalidInput,
+            IOErrorEnum::PermissionDenied => Self::PermissionDenied,
+            IOErrorEnum::AddressInUse => Self::AddrInUse,
+            IOErrorEnum::TimedOut => Self::TimedOut,
+            IOErrorEnum::WouldBlock => Self::WouldBlock,
+            IOErrorEnum::InvalidData => Self::InvalidData,
+            IOErrorEnum::ConnectionRefused => Self::ConnectionRefused,
+            IOErrorEnum::BrokenPipe => Self::BrokenPipe,
+            IOErrorEnum::NotConnected => Self::NotConnected,
+            _ => Self::Other,
         }
     }
 }

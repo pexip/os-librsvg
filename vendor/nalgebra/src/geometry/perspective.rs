@@ -1,51 +1,69 @@
 #[cfg(feature = "arbitrary")]
 use quickcheck::{Arbitrary, Gen};
-use rand::distributions::{Distribution, Standard};
-use rand::Rng;
+#[cfg(feature = "rand-no-std")]
+use rand::{
+    distributions::{Distribution, Standard},
+    Rng,
+};
 
-#[cfg(feature = "serde-serialize")]
+#[cfg(feature = "serde-serialize-no-std")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
-use std::mem;
 
 use simba::scalar::RealField;
 
 use crate::base::dimension::U3;
-use crate::base::helper;
 use crate::base::storage::Storage;
-use crate::base::{Matrix4, Scalar, Vector, Vector3};
+use crate::base::{Matrix4, Vector, Vector3};
 
 use crate::geometry::{Point3, Projective3};
 
 /// A 3D perspective projection stored as a homogeneous 4x4 matrix.
-pub struct Perspective3<N: Scalar> {
-    matrix: Matrix4<N>,
+#[repr(C)]
+pub struct Perspective3<T> {
+    matrix: Matrix4<T>,
 }
 
-impl<N: RealField> Copy for Perspective3<N> {}
+impl<T: RealField + Copy> Copy for Perspective3<T> {}
 
-impl<N: RealField> Clone for Perspective3<N> {
+impl<T: RealField> Clone for Perspective3<T> {
     #[inline]
     fn clone(&self) -> Self {
         Self::from_matrix_unchecked(self.matrix.clone())
     }
 }
 
-impl<N: RealField> fmt::Debug for Perspective3<N> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+impl<T: RealField> fmt::Debug for Perspective3<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         self.matrix.fmt(f)
     }
 }
 
-impl<N: RealField> PartialEq for Perspective3<N> {
+impl<T: RealField> PartialEq for Perspective3<T> {
     #[inline]
     fn eq(&self, right: &Self) -> bool {
         self.matrix == right.matrix
     }
 }
 
-#[cfg(feature = "serde-serialize")]
-impl<N: RealField + Serialize> Serialize for Perspective3<N> {
+#[cfg(feature = "bytemuck")]
+unsafe impl<T> bytemuck::Zeroable for Perspective3<T>
+where
+    T: RealField + bytemuck::Zeroable,
+    Matrix4<T>: bytemuck::Zeroable,
+{
+}
+
+#[cfg(feature = "bytemuck")]
+unsafe impl<T> bytemuck::Pod for Perspective3<T>
+where
+    T: RealField + bytemuck::Pod,
+    Matrix4<T>: bytemuck::Pod,
+{
+}
+
+#[cfg(feature = "serde-serialize-no-std")]
+impl<T: RealField + Serialize> Serialize for Perspective3<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -54,28 +72,39 @@ impl<N: RealField + Serialize> Serialize for Perspective3<N> {
     }
 }
 
-#[cfg(feature = "serde-serialize")]
-impl<'a, N: RealField + Deserialize<'a>> Deserialize<'a> for Perspective3<N> {
+#[cfg(feature = "serde-serialize-no-std")]
+impl<'a, T: RealField + Deserialize<'a>> Deserialize<'a> for Perspective3<T> {
     fn deserialize<Des>(deserializer: Des) -> Result<Self, Des::Error>
     where
         Des: Deserializer<'a>,
     {
-        let matrix = Matrix4::<N>::deserialize(deserializer)?;
+        let matrix = Matrix4::<T>::deserialize(deserializer)?;
 
         Ok(Self::from_matrix_unchecked(matrix))
     }
 }
 
-impl<N: RealField> Perspective3<N> {
+impl<T> Perspective3<T> {
+    /// Wraps the given matrix to interpret it as a 3D perspective matrix.
+    ///
+    /// It is not checked whether or not the given matrix actually represents a perspective
+    /// projection.
+    #[inline]
+    pub const fn from_matrix_unchecked(matrix: Matrix4<T>) -> Self {
+        Self { matrix }
+    }
+}
+
+impl<T: RealField> Perspective3<T> {
     /// Creates a new perspective matrix from the aspect ratio, y field of view, and near/far planes.
-    pub fn new(aspect: N, fovy: N, znear: N, zfar: N) -> Self {
+    pub fn new(aspect: T, fovy: T, znear: T, zfar: T) -> Self {
         assert!(
-            !relative_eq!(zfar - znear, N::zero()),
+            relative_ne!(zfar, znear),
             "The near-plane and far-plane must not be superimposed."
         );
         assert!(
-            !relative_eq!(aspect, N::zero()),
-            "The apsect ratio must not be zero."
+            !relative_eq!(aspect, T::zero()),
+            "The aspect ratio must not be zero."
         );
 
         let matrix = Matrix4::identity();
@@ -85,216 +114,228 @@ impl<N: RealField> Perspective3<N> {
         res.set_aspect(aspect);
         res.set_znear_and_zfar(znear, zfar);
 
-        res.matrix[(3, 3)] = N::zero();
-        res.matrix[(3, 2)] = -N::one();
+        res.matrix[(3, 3)] = T::zero();
+        res.matrix[(3, 2)] = -T::one();
 
         res
     }
 
-    /// Wraps the given matrix to interpret it as a 3D perspective matrix.
-    ///
-    /// It is not checked whether or not the given matrix actually represents a perspective
-    /// projection.
-    #[inline]
-    pub fn from_matrix_unchecked(matrix: Matrix4<N>) -> Self {
-        Self { matrix: matrix }
-    }
-
     /// Retrieves the inverse of the underlying homogeneous matrix.
     #[inline]
-    pub fn inverse(&self) -> Matrix4<N> {
-        let mut res = self.to_homogeneous();
+    #[must_use]
+    pub fn inverse(&self) -> Matrix4<T> {
+        let mut res = self.clone().to_homogeneous();
 
-        res[(0, 0)] = N::one() / self.matrix[(0, 0)];
-        res[(1, 1)] = N::one() / self.matrix[(1, 1)];
-        res[(2, 2)] = N::zero();
+        res[(0, 0)] = T::one() / self.matrix[(0, 0)].clone();
+        res[(1, 1)] = T::one() / self.matrix[(1, 1)].clone();
+        res[(2, 2)] = T::zero();
 
-        let m23 = self.matrix[(2, 3)];
-        let m32 = self.matrix[(3, 2)];
+        let m23 = self.matrix[(2, 3)].clone();
+        let m32 = self.matrix[(3, 2)].clone();
 
-        res[(2, 3)] = N::one() / m32;
-        res[(3, 2)] = N::one() / m23;
-        res[(3, 3)] = -self.matrix[(2, 2)] / (m23 * m32);
+        res[(2, 3)] = T::one() / m32.clone();
+        res[(3, 2)] = T::one() / m23.clone();
+        res[(3, 3)] = -self.matrix[(2, 2)].clone() / (m23 * m32);
 
         res
     }
 
     /// Computes the corresponding homogeneous matrix.
     #[inline]
-    pub fn to_homogeneous(&self) -> Matrix4<N> {
+    #[must_use]
+    pub fn to_homogeneous(self) -> Matrix4<T> {
         self.matrix.clone_owned()
     }
 
     /// A reference to the underlying homogeneous transformation matrix.
     #[inline]
-    pub fn as_matrix(&self) -> &Matrix4<N> {
+    #[must_use]
+    pub fn as_matrix(&self) -> &Matrix4<T> {
         &self.matrix
     }
 
     /// A reference to this transformation seen as a `Projective3`.
     #[inline]
-    pub fn as_projective(&self) -> &Projective3<N> {
-        unsafe { mem::transmute(self) }
+    #[must_use]
+    pub fn as_projective(&self) -> &Projective3<T> {
+        unsafe { &*(self as *const Perspective3<T> as *const Projective3<T>) }
     }
 
     /// This transformation seen as a `Projective3`.
     #[inline]
-    pub fn to_projective(&self) -> Projective3<N> {
+    #[must_use]
+    pub fn to_projective(self) -> Projective3<T> {
         Projective3::from_matrix_unchecked(self.matrix)
     }
 
     /// Retrieves the underlying homogeneous matrix.
     #[inline]
-    pub fn into_inner(self) -> Matrix4<N> {
+    pub fn into_inner(self) -> Matrix4<T> {
         self.matrix
     }
 
     /// Retrieves the underlying homogeneous matrix.
-    /// Deprecated: Use [Perspective3::into_inner] instead.
+    /// Deprecated: Use [`Perspective3::into_inner`] instead.
     #[deprecated(note = "use `.into_inner()` instead")]
     #[inline]
-    pub fn unwrap(self) -> Matrix4<N> {
+    pub fn unwrap(self) -> Matrix4<T> {
         self.matrix
     }
 
     /// Gets the `width / height` aspect ratio of the view frustum.
     #[inline]
-    pub fn aspect(&self) -> N {
-        self.matrix[(1, 1)] / self.matrix[(0, 0)]
+    #[must_use]
+    pub fn aspect(&self) -> T {
+        self.matrix[(1, 1)].clone() / self.matrix[(0, 0)].clone()
     }
 
     /// Gets the y field of view of the view frustum.
     #[inline]
-    pub fn fovy(&self) -> N {
-        (N::one() / self.matrix[(1, 1)]).atan() * crate::convert(2.0)
+    #[must_use]
+    pub fn fovy(&self) -> T {
+        (T::one() / self.matrix[(1, 1)].clone()).atan() * crate::convert(2.0)
     }
 
     /// Gets the near plane offset of the view frustum.
     #[inline]
-    pub fn znear(&self) -> N {
-        let ratio = (-self.matrix[(2, 2)] + N::one()) / (-self.matrix[(2, 2)] - N::one());
+    #[must_use]
+    pub fn znear(&self) -> T {
+        let ratio =
+            (-self.matrix[(2, 2)].clone() + T::one()) / (-self.matrix[(2, 2)].clone() - T::one());
 
-        self.matrix[(2, 3)] / (ratio * crate::convert(2.0))
-            - self.matrix[(2, 3)] / crate::convert(2.0)
+        self.matrix[(2, 3)].clone() / (ratio * crate::convert(2.0))
+            - self.matrix[(2, 3)].clone() / crate::convert(2.0)
     }
 
     /// Gets the far plane offset of the view frustum.
     #[inline]
-    pub fn zfar(&self) -> N {
-        let ratio = (-self.matrix[(2, 2)] + N::one()) / (-self.matrix[(2, 2)] - N::one());
+    #[must_use]
+    pub fn zfar(&self) -> T {
+        let ratio =
+            (-self.matrix[(2, 2)].clone() + T::one()) / (-self.matrix[(2, 2)].clone() - T::one());
 
-        (self.matrix[(2, 3)] - ratio * self.matrix[(2, 3)]) / crate::convert(2.0)
+        (self.matrix[(2, 3)].clone() - ratio * self.matrix[(2, 3)].clone()) / crate::convert(2.0)
     }
 
-    // FIXME: add a method to retrieve znear and zfar simultaneously?
+    // TODO: add a method to retrieve znear and zfar simultaneously?
 
-    // FIXME: when we get specialization, specialize the Mul impl instead.
+    // TODO: when we get specialization, specialize the Mul impl instead.
     /// Projects a point. Faster than matrix multiplication.
     #[inline]
-    pub fn project_point(&self, p: &Point3<N>) -> Point3<N> {
-        let inverse_denom = -N::one() / p[2];
+    #[must_use]
+    pub fn project_point(&self, p: &Point3<T>) -> Point3<T> {
+        let inverse_denom = -T::one() / p[2].clone();
         Point3::new(
-            self.matrix[(0, 0)] * p[0] * inverse_denom,
-            self.matrix[(1, 1)] * p[1] * inverse_denom,
-            (self.matrix[(2, 2)] * p[2] + self.matrix[(2, 3)]) * inverse_denom,
+            self.matrix[(0, 0)].clone() * p[0].clone() * inverse_denom.clone(),
+            self.matrix[(1, 1)].clone() * p[1].clone() * inverse_denom.clone(),
+            (self.matrix[(2, 2)].clone() * p[2].clone() + self.matrix[(2, 3)].clone())
+                * inverse_denom,
         )
     }
 
     /// Un-projects a point. Faster than multiplication by the matrix inverse.
     #[inline]
-    pub fn unproject_point(&self, p: &Point3<N>) -> Point3<N> {
-        let inverse_denom = self.matrix[(2, 3)] / (p[2] + self.matrix[(2, 2)]);
+    #[must_use]
+    pub fn unproject_point(&self, p: &Point3<T>) -> Point3<T> {
+        let inverse_denom =
+            self.matrix[(2, 3)].clone() / (p[2].clone() + self.matrix[(2, 2)].clone());
 
         Point3::new(
-            p[0] * inverse_denom / self.matrix[(0, 0)],
-            p[1] * inverse_denom / self.matrix[(1, 1)],
+            p[0].clone() * inverse_denom.clone() / self.matrix[(0, 0)].clone(),
+            p[1].clone() * inverse_denom.clone() / self.matrix[(1, 1)].clone(),
             -inverse_denom,
         )
     }
 
-    // FIXME: when we get specialization, specialize the Mul impl instead.
+    // TODO: when we get specialization, specialize the Mul impl instead.
     /// Projects a vector. Faster than matrix multiplication.
     #[inline]
-    pub fn project_vector<SB>(&self, p: &Vector<N, U3, SB>) -> Vector3<N>
+    #[must_use]
+    pub fn project_vector<SB>(&self, p: &Vector<T, U3, SB>) -> Vector3<T>
     where
-        SB: Storage<N, U3>,
+        SB: Storage<T, U3>,
     {
-        let inverse_denom = -N::one() / p[2];
+        let inverse_denom = -T::one() / p[2].clone();
         Vector3::new(
-            self.matrix[(0, 0)] * p[0] * inverse_denom,
-            self.matrix[(1, 1)] * p[1] * inverse_denom,
-            self.matrix[(2, 2)],
+            self.matrix[(0, 0)].clone() * p[0].clone() * inverse_denom.clone(),
+            self.matrix[(1, 1)].clone() * p[1].clone() * inverse_denom,
+            self.matrix[(2, 2)].clone(),
         )
     }
 
     /// Updates this perspective matrix with a new `width / height` aspect ratio of the view
     /// frustum.
     #[inline]
-    pub fn set_aspect(&mut self, aspect: N) {
+    pub fn set_aspect(&mut self, aspect: T) {
         assert!(
-            !relative_eq!(aspect, N::zero()),
+            !relative_eq!(aspect, T::zero()),
             "The aspect ratio must not be zero."
         );
-        self.matrix[(0, 0)] = self.matrix[(1, 1)] / aspect;
+        self.matrix[(0, 0)] = self.matrix[(1, 1)].clone() / aspect;
     }
 
     /// Updates this perspective with a new y field of view of the view frustum.
     #[inline]
-    pub fn set_fovy(&mut self, fovy: N) {
-        let old_m22 = self.matrix[(1, 1)];
-        self.matrix[(1, 1)] = N::one() / (fovy / crate::convert(2.0)).tan();
-        self.matrix[(0, 0)] = self.matrix[(0, 0)] * (self.matrix[(1, 1)] / old_m22);
+    pub fn set_fovy(&mut self, fovy: T) {
+        let old_m22 = self.matrix[(1, 1)].clone();
+        let new_m22 = T::one() / (fovy / crate::convert(2.0)).tan();
+        self.matrix[(1, 1)] = new_m22.clone();
+        self.matrix[(0, 0)] *= new_m22 / old_m22;
     }
 
     /// Updates this perspective matrix with a new near plane offset of the view frustum.
     #[inline]
-    pub fn set_znear(&mut self, znear: N) {
+    pub fn set_znear(&mut self, znear: T) {
         let zfar = self.zfar();
         self.set_znear_and_zfar(znear, zfar);
     }
 
     /// Updates this perspective matrix with a new far plane offset of the view frustum.
     #[inline]
-    pub fn set_zfar(&mut self, zfar: N) {
+    pub fn set_zfar(&mut self, zfar: T) {
         let znear = self.znear();
         self.set_znear_and_zfar(znear, zfar);
     }
 
     /// Updates this perspective matrix with new near and far plane offsets of the view frustum.
     #[inline]
-    pub fn set_znear_and_zfar(&mut self, znear: N, zfar: N) {
-        self.matrix[(2, 2)] = (zfar + znear) / (znear - zfar);
-        self.matrix[(2, 3)] = zfar * znear * crate::convert(2.0) / (znear - zfar);
+    pub fn set_znear_and_zfar(&mut self, znear: T, zfar: T) {
+        self.matrix[(2, 2)] = (zfar.clone() + znear.clone()) / (znear.clone() - zfar.clone());
+        self.matrix[(2, 3)] = zfar.clone() * znear.clone() * crate::convert(2.0) / (znear - zfar);
     }
 }
 
-impl<N: RealField> Distribution<Perspective3<N>> for Standard
+#[cfg(feature = "rand-no-std")]
+impl<T: RealField> Distribution<Perspective3<T>> for Standard
 where
-    Standard: Distribution<N>,
+    Standard: Distribution<T>,
 {
-    fn sample<'a, R: Rng + ?Sized>(&self, r: &'a mut R) -> Perspective3<N> {
+    /// Generate an arbitrary random variate for testing purposes.
+    fn sample<R: Rng + ?Sized>(&self, r: &mut R) -> Perspective3<T> {
+        use crate::base::helper;
         let znear = r.gen();
-        let zfar = helper::reject_rand(r, |&x: &N| !(x - znear).is_zero());
-        let aspect = helper::reject_rand(r, |&x: &N| !x.is_zero());
+        let zfar = helper::reject_rand(r, |x: &T| !(x.clone() - znear.clone()).is_zero());
+        let aspect = helper::reject_rand(r, |x: &T| !x.is_zero());
 
         Perspective3::new(aspect, r.gen(), znear, zfar)
     }
 }
 
 #[cfg(feature = "arbitrary")]
-impl<N: RealField + Arbitrary> Arbitrary for Perspective3<N> {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
-        let znear = Arbitrary::arbitrary(g);
-        let zfar = helper::reject(g, |&x: &N| !(x - znear).is_zero());
-        let aspect = helper::reject(g, |&x: &N| !x.is_zero());
+impl<T: RealField + Arbitrary> Arbitrary for Perspective3<T> {
+    fn arbitrary(g: &mut Gen) -> Self {
+        use crate::base::helper;
+        let znear: T = Arbitrary::arbitrary(g);
+        let zfar = helper::reject(g, |x: &T| !(x.clone() - znear.clone()).is_zero());
+        let aspect = helper::reject(g, |x: &T| !x.is_zero());
 
         Self::new(aspect, Arbitrary::arbitrary(g), znear, zfar)
     }
 }
 
-impl<N: RealField> From<Perspective3<N>> for Matrix4<N> {
+impl<T: RealField> From<Perspective3<T>> for Matrix4<T> {
     #[inline]
-    fn from(orth: Perspective3<N>) -> Self {
-        orth.into_inner()
+    fn from(pers: Perspective3<T>) -> Self {
+        pers.into_inner()
     }
 }

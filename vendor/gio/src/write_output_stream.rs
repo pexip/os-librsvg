@@ -1,13 +1,8 @@
-// Copyright 2019, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 use crate::prelude::*;
 use crate::subclass::prelude::*;
 use crate::OutputStream;
-use glib;
-use glib::subclass;
-use glib::translate::*;
 
 use std::any::Any;
 use std::io::{Seek, Write};
@@ -23,37 +18,25 @@ mod imp {
         WriteSeek(AnyWriter),
     }
 
+    #[derive(Default)]
     pub struct WriteOutputStream {
         pub(super) write: RefCell<Option<Writer>>,
     }
 
+    #[glib::object_subclass]
     impl ObjectSubclass for WriteOutputStream {
         const NAME: &'static str = "WriteOutputStream";
+        type Type = super::WriteOutputStream;
         type ParentType = OutputStream;
-        type Instance = subclass::simple::InstanceStruct<Self>;
-        type Class = subclass::simple::ClassStruct<Self>;
-
-        glib_object_subclass!();
-
-        fn new() -> Self {
-            Self {
-                write: RefCell::new(None),
-            }
-        }
-
-        fn type_init(type_: &mut subclass::InitializingType<Self>) {
-            type_.add_interface::<crate::Seekable>();
-        }
+        type Interfaces = (crate::Seekable,);
     }
 
-    impl ObjectImpl for WriteOutputStream {
-        glib_object_impl!();
-    }
+    impl ObjectImpl for WriteOutputStream {}
 
     impl OutputStreamImpl for WriteOutputStream {
         fn write(
             &self,
-            _stream: &OutputStream,
+            _stream: &Self::Type,
             buffer: &[u8],
             _cancellable: Option<&crate::Cancellable>,
         ) -> Result<usize, glib::Error> {
@@ -77,9 +60,18 @@ mod imp {
             }
         }
 
+        fn close(
+            &self,
+            _stream: &Self::Type,
+            _cancellable: Option<&crate::Cancellable>,
+        ) -> Result<(), glib::Error> {
+            let _ = self.write.take();
+            Ok(())
+        }
+
         fn flush(
             &self,
-            _stream: &OutputStream,
+            _stream: &Self::Type,
             _cancellable: Option<&crate::Cancellable>,
         ) -> Result<(), glib::Error> {
             let mut write = self.write.borrow_mut();
@@ -101,19 +93,10 @@ mod imp {
                 }
             }
         }
-
-        fn close(
-            &self,
-            _stream: &OutputStream,
-            _cancellable: Option<&crate::Cancellable>,
-        ) -> Result<(), glib::Error> {
-            let _ = self.write.borrow_mut().take();
-            Ok(())
-        }
     }
 
     impl SeekableImpl for WriteOutputStream {
-        fn tell(&self, _seekable: &crate::Seekable) -> i64 {
+        fn tell(&self, _seekable: &Self::Type) -> i64 {
             // XXX: stream_position is not stable yet
             // let mut write = self.write.borrow_mut();
             // match *write {
@@ -125,17 +108,14 @@ mod imp {
             -1
         }
 
-        fn can_seek(&self, _seekable: &crate::Seekable) -> bool {
+        fn can_seek(&self, _seekable: &Self::Type) -> bool {
             let write = self.write.borrow();
-            match *write {
-                Some(Writer::WriteSeek(_)) => true,
-                _ => false,
-            }
+            matches!(*write, Some(Writer::WriteSeek(_)))
         }
 
         fn seek(
             &self,
-            _seekable: &crate::Seekable,
+            _seekable: &Self::Type,
             offset: i64,
             type_: glib::SeekType,
             _cancellable: Option<&crate::Cancellable>,
@@ -175,13 +155,13 @@ mod imp {
             }
         }
 
-        fn can_truncate(&self, _seekable: &crate::Seekable) -> bool {
+        fn can_truncate(&self, _seekable: &Self::Type) -> bool {
             false
         }
 
         fn truncate(
             &self,
-            _seekable: &crate::Seekable,
+            _seekable: &Self::Type,
             _offset: i64,
             _cancellable: Option<&crate::Cancellable>,
         ) -> Result<(), glib::Error> {
@@ -193,40 +173,28 @@ mod imp {
     }
 }
 
-glib_wrapper! {
-    pub struct WriteOutputStream(Object<subclass::simple::InstanceStruct<imp::WriteOutputStream>, subclass::simple::ClassStruct<imp::WriteOutputStream>, WriteOutputStreamClass>) @extends crate::OutputStream, @implements crate::Seekable;
-
-    match fn {
-        get_type => || imp::WriteOutputStream::get_type().to_glib(),
-    }
+glib::wrapper! {
+    pub struct WriteOutputStream(ObjectSubclass<imp::WriteOutputStream>) @extends crate::OutputStream, @implements crate::Seekable;
 }
 
 impl WriteOutputStream {
     pub fn new<W: Write + Send + Any + 'static>(write: W) -> WriteOutputStream {
-        let obj = glib::Object::new(Self::static_type(), &[])
-            .expect("Failed to create write input stream")
-            .downcast()
-            .expect("Created write input stream is of wrong type");
+        let obj: Self = glib::Object::new(&[]).expect("Failed to create write input stream");
 
-        let imp = imp::WriteOutputStream::from_instance(&obj);
-        *imp.write.borrow_mut() = Some(imp::Writer::Write(AnyWriter::new(write)));
+        *obj.imp().write.borrow_mut() = Some(imp::Writer::Write(AnyWriter::new(write)));
         obj
     }
 
     pub fn new_seekable<W: Write + Seek + Send + Any + 'static>(write: W) -> WriteOutputStream {
-        let obj = glib::Object::new(Self::static_type(), &[])
-            .expect("Failed to create write input stream")
-            .downcast()
-            .expect("Created write input stream is of wrong type");
+        let obj: Self = glib::Object::new(&[]).expect("Failed to create write input stream");
 
-        let imp = imp::WriteOutputStream::from_instance(&obj);
-        *imp.write.borrow_mut() = Some(imp::Writer::WriteSeek(AnyWriter::new_seekable(write)));
+        *obj.imp().write.borrow_mut() =
+            Some(imp::Writer::WriteSeek(AnyWriter::new_seekable(write)));
         obj
     }
 
     pub fn close_and_take(&self) -> Box<dyn Any + Send + 'static> {
-        let imp = imp::WriteOutputStream::from_instance(self);
-        let inner = imp.write.borrow_mut().take();
+        let inner = self.imp().write.take();
 
         let ret = match inner {
             None => {
@@ -236,7 +204,7 @@ impl WriteOutputStream {
             Some(imp::Writer::WriteSeek(write)) => write.writer,
         };
 
-        let _ = self.close(crate::NONE_CANCELLABLE);
+        let _ = self.close(crate::Cancellable::NONE);
 
         match ret {
             AnyOrPanic::Any(w) => w,
@@ -261,7 +229,7 @@ struct AnyWriter {
 
 impl AnyWriter {
     fn new<W: Write + Any + Send + 'static>(w: W) -> Self {
-        AnyWriter {
+        Self {
             writer: AnyOrPanic::Any(Box::new(w)),
             write_fn: Self::write_fn::<W>,
             flush_fn: Self::flush_fn::<W>,
@@ -270,7 +238,7 @@ impl AnyWriter {
     }
 
     fn new_seekable<W: Write + Seek + Any + Send + 'static>(w: W) -> Self {
-        AnyWriter {
+        Self {
             writer: AnyOrPanic::Any(Box::new(w)),
             write_fn: Self::write_fn::<W>,
             flush_fn: Self::flush_fn::<W>,
@@ -343,7 +311,7 @@ mod tests {
         let stream = WriteOutputStream::new(cursor);
 
         assert_eq!(
-            stream.write(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], crate::NONE_CANCELLABLE),
+            stream.write(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], crate::Cancellable::NONE),
             Ok(10)
         );
 
@@ -359,20 +327,20 @@ mod tests {
         let stream = WriteOutputStream::new_seekable(cursor);
 
         assert_eq!(
-            stream.write(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], crate::NONE_CANCELLABLE),
+            stream.write(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], crate::Cancellable::NONE),
             Ok(10)
         );
 
         assert!(stream.can_seek());
         assert_eq!(
-            stream.seek(0, glib::SeekType::Set, crate::NONE_CANCELLABLE),
+            stream.seek(0, glib::SeekType::Set, crate::Cancellable::NONE),
             Ok(())
         );
 
         assert_eq!(
             stream.write(
                 &[11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
-                crate::NONE_CANCELLABLE
+                crate::Cancellable::NONE
             ),
             Ok(10)
         );

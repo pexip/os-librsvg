@@ -1,7 +1,7 @@
-// Copyright 2017-2018, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
+#![allow(clippy::needless_doctest_main)]
+// rustdoc-stripper-ignore-next
 //! Module containing infrastructure for subclassing `GObject`s and registering boxed types.
 //!
 //! # Example for registering a `glib::Object` subclass
@@ -10,122 +10,213 @@
 //! string-typed "name" property.
 //!
 //! ```rust
-//! #[macro_use]
-//! extern crate glib;
 //! use glib::prelude::*;
 //! use glib::subclass;
 //! use glib::subclass::prelude::*;
+//! use glib::{Variant, VariantType};
 //!
-//! use std::cell::RefCell;
+//! use std::cell::{Cell, RefCell};
 //!
-//! // Static array for defining the properties of the new type.
-//! static PROPERTIES: [subclass::Property; 1] = [subclass::Property("name", |name| {
-//!     glib::ParamSpec::string(
-//!         name,
-//!         "Name",
-//!         "Name of this object",
-//!         None,
-//!         glib::ParamFlags::READWRITE,
-//!     )
-//! })];
-//!
-//! // This is the struct containing all state carried with
-//! // the new type. Generally this has to make use of
-//! // interior mutability.
-//! pub struct SimpleObject {
-//!     name: RefCell<Option<String>>,
+//! #[derive(Debug, Eq, PartialEq, Clone, Copy, glib::Enum)]
+//! #[repr(u32)]
+//! // type_name: GType name of the enum (mandatory)
+//! #[enum_type(name = "SimpleObjectAnimal")]
+//! enum Animal {
+//!     Goat = 0,
+//!     #[enum_value(name = "The Dog")]
+//!     Dog = 1,
+//!     // name: the name of the GEnumValue (optional), default to the enum name in CamelCase
+//!     // nick: the nick of the GEnumValue (optional), default to the enum name in kebab-case
+//!     #[enum_value(name = "The Cat", nick = "chat")]
+//!     Cat = 2,
 //! }
 //!
-//! // ObjectSubclass is the trait that defines the new type and
-//! // contains all information needed by the GObject type system,
-//! // including the new type's name, parent type, etc.
-//! impl ObjectSubclass for SimpleObject {
-//!     // This type name must be unique per process.
-//!     const NAME: &'static str = "SimpleObject";
+//! impl Default for Animal {
+//!     fn default() -> Self {
+//!         Animal::Goat
+//!     }
+//! }
 //!
-//!     // The parent type this one is inheriting from.
-//!     type ParentType = glib::Object;
+//! #[glib::flags(name = "MyFlags")]
+//! enum MyFlags {
+//!     #[flags_value(name = "Flag A", nick = "nick-a")]
+//!     A = 0b00000001,
+//!     #[flags_value(name = "Flag B")]
+//!     B = 0b00000010,
+//!     #[flags_value(skip)]
+//!     AB = Self::A.bits() | Self::B.bits(),
+//!     C = 0b00000100,
+//! }
 //!
-//!     // The C/FFI instance and class structs. The simple ones
-//!     // are enough in most cases and more is only needed to
-//!     // expose public instance fields to C APIs or to provide
-//!     // new virtual methods for subclasses of this type.
-//!     type Instance = subclass::simple::InstanceStruct<Self>;
-//!     type Class = subclass::simple::ClassStruct<Self>;
+//! impl Default for MyFlags {
+//!     fn default() -> Self {
+//!         MyFlags::A
+//!     }
+//! }
 //!
-//!     // This macro defines some boilerplate.
-//!     glib_object_subclass!();
+//! mod imp {
+//!     use super::*;
 //!
-//!     // Called right before the first time an instance of the new
-//!     // type is created. Here class specific settings can be performed,
-//!     // including installation of properties and registration of signals
-//!     // for the new type.
-//!     fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
-//!         klass.install_properties(&PROPERTIES);
+//!     // This is the struct containing all state carried with
+//!     // the new type. Generally this has to make use of
+//!     // interior mutability.
+//!     // If it implements the `Default` trait, then `Self::default()`
+//!     // will be called every time a new instance is created.
+//!     #[derive(Default)]
+//!     pub struct SimpleObject {
+//!         name: RefCell<Option<String>>,
+//!         animal: Cell<Animal>,
+//!         flags: Cell<MyFlags>,
+//!         variant: RefCell<Option<Variant>>,
 //!     }
 //!
-//!     // Called every time a new instance is created. This should return
-//!     // a new instance of our type with its basic values.
-//!     fn new() -> Self {
-//!         Self {
-//!             name: RefCell::new(None),
+//!     // ObjectSubclass is the trait that defines the new type and
+//!     // contains all information needed by the GObject type system,
+//!     // including the new type's name, parent type, etc.
+//!     // If you do not want to implement `Default`, you can provide
+//!     // a `new()` method.
+//!     #[glib::object_subclass]
+//!     impl ObjectSubclass for SimpleObject {
+//!         // This type name must be unique per process.
+//!         const NAME: &'static str = "SimpleObject";
+//!
+//!         type Type = super::SimpleObject;
+//!
+//!         // The parent type this one is inheriting from.
+//!         // Optional, if not specified it defaults to `glib::Object`
+//!         type ParentType = glib::Object;
+//!
+//!         // Interfaces this type implements.
+//!         // Optional, if not specified it defaults to `()`
+//!         type Interfaces = ();
+//!     }
+//!
+//!     // Trait that is used to override virtual methods of glib::Object.
+//!     impl ObjectImpl for SimpleObject {
+//!         // Called once in the very beginning to list all properties of this class.
+//!         fn properties() -> &'static [glib::ParamSpec] {
+//!             use once_cell::sync::Lazy;
+//!             static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+//!                 vec![
+//!                     glib::ParamSpecString::new(
+//!                         "name",
+//!                         "Name",
+//!                         "Name of this object",
+//!                         None,
+//!                         glib::ParamFlags::READWRITE,
+//!                     ),
+//!                     glib::ParamSpecEnum::new(
+//!                         "animal",
+//!                         "Animal",
+//!                         "Animal",
+//!                         Animal::static_type(),
+//!                         Animal::default() as i32,
+//!                         glib::ParamFlags::READWRITE,
+//!                     ),
+//!                     glib::ParamSpecFlags::new(
+//!                         "flags",
+//!                         "Flags",
+//!                         "Flags",
+//!                         MyFlags::static_type(),
+//!                         MyFlags::default().bits(),
+//!                         glib::ParamFlags::READWRITE,
+//!                     ),
+//!                     glib::ParamSpecVariant::new(
+//!                         "variant",
+//!                         "Variant",
+//!                         "Variant",
+//!                         glib::VariantTy::ANY,
+//!                         None,
+//!                         glib::ParamFlags::READWRITE,
+//!                    ),
+//!                 ]
+//!             });
+//!
+//!             PROPERTIES.as_ref()
 //!         }
-//!     }
-//! }
 //!
-//! // Trait that is used to override virtual methods of glib::Object.
-//! impl ObjectImpl for SimpleObject {
-//!     // This macro defines some boilerplate.
-//!     glib_object_impl!();
-//!
-//!     // Called whenever a property is set on this instance. The id
-//!     // is the same as the index of the property in the PROPERTIES array.
-//!     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
-//!         let prop = &PROPERTIES[id];
-//!
-//!         match *prop {
-//!             subclass::Property("name", ..) => {
-//!                 let name = value
-//!                     .get()
-//!                     .expect("type conformity checked by `Object::set_property`");
-//!                 self.name.replace(name);
+//!         // Called whenever a property is set on this instance. The id
+//!         // is the same as the index of the property in the PROPERTIES array.
+//!         fn set_property(&self, _obj: &Self::Type, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+//!             match pspec.name() {
+//!                 "name" => {
+//!                     let name = value
+//!                         .get()
+//!                         .expect("type conformity checked by `Object::set_property`");
+//!                     self.name.replace(name);
+//!                 },
+//!                 "animal" => {
+//!                     let animal = value
+//!                         .get()
+//!                         .expect("type conformity checked by `Object::set_property`");
+//!                     self.animal.replace(animal);
+//!                 },
+//!                 "flags" => {
+//!                     let flags = value
+//!                         .get()
+//!                         .expect("type conformity checked by `Object::set_property`");
+//!                     self.flags.replace(flags);
+//!                 },
+//!                 "variant" => {
+//!                     let variant = value
+//!                         .get()
+//!                         .expect("type conformity checked by `Object::set_property`");
+//!                     self.variant.replace(variant);
+//!                 },
+//!                 _ => unimplemented!(),
 //!             }
-//!             _ => unimplemented!(),
+//!         }
+//!
+//!         // Called whenever a property is retrieved from this instance. The id
+//!         // is the same as the index of the property in the PROPERTIES array.
+//!         fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+//!             match pspec.name() {
+//!                 "name" => self.name.borrow().to_value(),
+//!                 "animal" => self.animal.get().to_value(),
+//!                 "flags" => self.flags.get().to_value(),
+//!                 "variant" => self.variant.borrow().to_value(),
+//!                 _ => unimplemented!(),
+//!             }
+//!         }
+//!
+//!         // Called right after construction of the instance.
+//!         fn constructed(&self, obj: &Self::Type) {
+//!             // Chain up to the parent type's implementation of this virtual
+//!             // method.
+//!             self.parent_constructed(obj);
+//!
+//!             // And here we could do our own initialization.
 //!         }
 //!     }
+//! }
 //!
-//!     // Called whenever a property is retrieved from this instance. The id
-//!     // is the same as the index of the property in the PROPERTIES array.
-//!     fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
-//!         let prop = &PROPERTIES[id];
+//! // Optionally, define a wrapper type to make it more ergonomic to use from Rust
+//! glib::wrapper! {
+//!     pub struct SimpleObject(ObjectSubclass<imp::SimpleObject>);
+//! }
 //!
-//!         match *prop {
-//!             subclass::Property("name", ..) => Ok(self.name.borrow().to_value()),
-//!             _ => unimplemented!(),
-//!         }
-//!     }
-//!
-//!     // Called right after construction of the instance.
-//!     fn constructed(&self, obj: &glib::Object) {
-//!         // Chain up to the parent type's implementation of this virtual
-//!         // method.
-//!         self.parent_constructed(obj);
-//!
-//!         // And here we could do our own initialization.
+//! impl SimpleObject {
+//!     // Create an object instance of the new type.
+//!     pub fn new() -> Self {
+//!         glib::Object::new(&[]).unwrap()
 //!     }
 //! }
 //!
 //! pub fn main() {
-//!     // Create an object instance of the new type.
-//!     let obj = glib::Object::new(SimpleObject::get_type(), &[]).unwrap();
+//!     let obj = SimpleObject::new();
 //!
 //!     // Get the name property and change its value.
-//!     assert_eq!(obj.get_property("name").unwrap().get::<&str>(), Ok(None));
-//!     obj.set_property("name", &"test").unwrap();
-//!     assert_eq!(
-//!         obj.get_property("name").unwrap().get::<&str>(),
-//!         Ok(Some("test"))
-//!     );
+//!     assert_eq!(obj.property::<Option<String>>("name"), None);
+//!     obj.set_property("name", "test");
+//!     assert_eq!(&obj.property::<String>("name"), "test");
+//!
+//!     assert_eq!(obj.property::<Animal>("animal"), Animal::Goat);
+//!     obj.set_property("animal", Animal::Cat);
+//!     assert_eq!(obj.property::<Animal>("animal"), Animal::Cat);
+//!
+//!     assert_eq!(obj.property::<MyFlags>("flags"), MyFlags::A);
+//!     obj.set_property("flags", MyFlags::B);
+//!     assert_eq!(obj.property::<MyFlags>("flags"), MyFlags::B);
 //! }
 //! ```
 //!
@@ -135,39 +226,25 @@
 //! with `glib::Value`.
 //!
 //! ```rust
-//! #[macro_use]
-//! extern crate glib;
 //! use glib::prelude::*;
 //! use glib::subclass;
 //! use glib::subclass::prelude::*;
 //!
-//! #[derive(Clone, Debug, PartialEq, Eq)]
+//! #[derive(Clone, Debug, PartialEq, Eq, glib::Boxed)]
+//! #[boxed_type(name = "MyBoxed")]
 //! struct MyBoxed(String);
 //!
-//! impl BoxedType for MyBoxed {
-//!     // This type name must be unique per process.
-//!     const NAME: &'static str = "MyBoxed";
-//!
-//!     // This macro defines a
-//!     //   fn get_type() -> glib::Type
-//!     // function
-//!     glib_boxed_type!();
-//! }
-//!
-//! // This macro derives some traits on the struct
-//! glib_boxed_derive_traits!(MyBoxed);
-//!
 //! pub fn main() {
-//!     assert_ne!(glib::Type::Invalid, MyBoxed::get_type());
+//!     assert!(MyBoxed::static_type().is_valid());
 //!
 //!     let b = MyBoxed(String::from("abc"));
 //!     let v = b.to_value();
-//!     let b2 = v.get::<&MyBoxed>().unwrap().unwrap();
+//!     let b2 = v.get::<&MyBoxed>().unwrap();
 //!     assert_eq!(&b, b2);
 //! }
 //! ```
 
-pub mod simple;
+pub mod basic;
 #[macro_use]
 pub mod types;
 
@@ -180,19 +257,29 @@ pub mod object;
 #[macro_use]
 pub mod boxed;
 
+pub mod shared;
+
+pub mod signal;
+
+mod object_impl_ref;
+pub use object_impl_ref::{ObjectImplRef, ObjectImplWeakRef};
+
 pub mod prelude {
+    // rustdoc-stripper-ignore-next
     //! Prelude that re-exports all important traits from this crate.
     pub use super::boxed::BoxedType;
-    pub use super::interface::{ObjectInterface, ObjectInterfaceExt};
+    pub use super::interface::{ObjectInterface, ObjectInterfaceExt, ObjectInterfaceType};
     pub use super::object::{ObjectClassSubclassExt, ObjectImpl, ObjectImplExt};
+    pub use super::shared::{RefCounted, SharedType};
     pub use super::types::{
-        ClassStruct, InstanceStruct, IsImplementable, IsSubclassable, ObjectSubclass,
+        ClassStruct, InstanceStruct, IsImplementable, IsSubclassable, IsSubclassableExt,
+        ObjectSubclass, ObjectSubclassExt, ObjectSubclassIsExt, ObjectSubclassType,
     };
 }
 
 pub use self::boxed::register_boxed_type;
 pub use self::interface::register_interface;
-pub use self::object::Property;
-pub use self::types::{
-    register_type, InitializingType, SignalClassHandlerToken, SignalInvocationHint, TypeData,
+pub use self::signal::{
+    Signal, SignalClassHandlerToken, SignalId, SignalInvocationHint, SignalQuery, SignalType,
 };
+pub use self::types::{register_type, InitializingObject, InitializingType, TypeData};

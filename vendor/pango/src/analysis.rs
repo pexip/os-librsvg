@@ -1,89 +1,53 @@
-// Copyright 2018, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
+use crate::{Attribute, Font, Gravity, Language, Script};
 use glib::translate::*;
-use pango_sys;
-use EngineLang;
-use EngineShape;
-use Font;
-use Gravity;
-use Language;
-use Script;
+use std::fmt;
 
-#[repr(C)]
-pub struct Analysis(pango_sys::PangoAnalysis);
+glib::wrapper! {
+    #[doc(alias = "PangoAnalysis")]
+    pub struct Analysis(BoxedInline<ffi::PangoAnalysis>);
+}
 
 impl Analysis {
-    pub fn shape_engine(&self) -> EngineShape {
-        unsafe { from_glib_none(self.0.shape_engine) }
-    }
-
-    pub fn lang_engine(&self) -> EngineLang {
-        unsafe { from_glib_none(self.0.lang_engine) }
-    }
-
     pub fn font(&self) -> Font {
-        unsafe { from_glib_none(self.0.font) }
+        unsafe { from_glib_none(self.inner.font) }
     }
 
     pub fn level(&self) -> u8 {
-        self.0.level
+        self.inner.level
     }
 
     pub fn gravity(&self) -> Gravity {
-        from_glib(self.0.gravity as i32)
+        unsafe { from_glib(self.inner.gravity as i32) }
     }
 
     pub fn flags(&self) -> u8 {
-        self.0.flags
+        self.inner.flags
     }
 
     pub fn script(&self) -> Script {
-        from_glib(self.0.script as i32)
+        unsafe { from_glib(self.inner.script as i32) }
     }
 
     pub fn language(&self) -> Language {
-        unsafe { from_glib_none(self.0.language) }
+        unsafe { from_glib_none(self.inner.language) }
     }
 
-    /*pub fn extra_attrs(&self) -> Vec<LogAttr> {
-        unsafe { from_glib_none_num_as_vec(self.0.extra_attrs) }
-    }*/
-}
-
-#[doc(hidden)]
-impl<'a> ToGlibPtr<'a, *const pango_sys::PangoAnalysis> for Analysis {
-    type Storage = &'a Self;
-
-    #[inline]
-    fn to_glib_none(&'a self) -> Stash<'a, *const pango_sys::PangoAnalysis, Self> {
-        let ptr: *const pango_sys::PangoAnalysis = &self.0;
-        Stash(ptr, self)
+    pub fn extra_attrs(&self) -> Vec<Attribute> {
+        unsafe { FromGlibPtrContainer::from_glib_none(self.inner.extra_attrs) }
     }
 }
 
-#[doc(hidden)]
-impl<'a> ToGlibPtrMut<'a, *mut pango_sys::PangoAnalysis> for Analysis {
-    type Storage = &'a mut Self;
-
-    #[inline]
-    fn to_glib_none_mut(&'a mut self) -> StashMut<'a, *mut pango_sys::PangoAnalysis, Self> {
-        let ptr: *mut pango_sys::PangoAnalysis = &mut self.0;
-        StashMut(ptr, self)
-    }
-}
-
-#[doc(hidden)]
-impl FromGlibPtrNone<*const pango_sys::PangoAnalysis> for Analysis {
-    unsafe fn from_glib_none(ptr: *const pango_sys::PangoAnalysis) -> Self {
-        Analysis(*ptr)
-    }
-}
-
-#[doc(hidden)]
-impl FromGlibPtrNone<*mut pango_sys::PangoAnalysis> for Analysis {
-    unsafe fn from_glib_none(ptr: *mut pango_sys::PangoAnalysis) -> Self {
-        Analysis(*ptr)
+impl fmt::Debug for Analysis {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Analysis")
+            .field("font", &self.font())
+            .field("level", &self.level())
+            .field("gravity", &self.gravity())
+            .field("flags", &self.flags())
+            .field("script", &self.script())
+            .field("extra_attrs", &self.extra_attrs())
+            .finish()
     }
 }

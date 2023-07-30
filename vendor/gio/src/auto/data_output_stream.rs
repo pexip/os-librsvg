@@ -2,8 +2,11 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
-use glib;
+use crate::Cancellable;
+use crate::DataStreamByteOrder;
+use crate::FilterOutputStream;
+use crate::OutputStream;
+use crate::Seekable;
 use glib::object::Cast;
 use glib::object::IsA;
 use glib::signal::connect_raw;
@@ -11,36 +14,54 @@ use glib::signal::SignalHandlerId;
 use glib::translate::*;
 use glib::StaticType;
 use glib::ToValue;
-use glib_sys;
 use std::boxed::Box as Box_;
 use std::fmt;
 use std::mem::transmute;
 use std::ptr;
-use Cancellable;
-use DataStreamByteOrder;
-use FilterOutputStream;
-use OutputStream;
-use Seekable;
 
-glib_wrapper! {
-    pub struct DataOutputStream(Object<gio_sys::GDataOutputStream, gio_sys::GDataOutputStreamClass, DataOutputStreamClass>) @extends FilterOutputStream, OutputStream, @implements Seekable;
+glib::wrapper! {
+    #[doc(alias = "GDataOutputStream")]
+    pub struct DataOutputStream(Object<ffi::GDataOutputStream, ffi::GDataOutputStreamClass>) @extends FilterOutputStream, OutputStream, @implements Seekable;
 
     match fn {
-        get_type => || gio_sys::g_data_output_stream_get_type(),
+        type_ => || ffi::g_data_output_stream_get_type(),
     }
 }
 
 impl DataOutputStream {
-    pub fn new<P: IsA<OutputStream>>(base_stream: &P) -> DataOutputStream {
+    pub const NONE: Option<&'static DataOutputStream> = None;
+
+    #[doc(alias = "g_data_output_stream_new")]
+    pub fn new(base_stream: &impl IsA<OutputStream>) -> DataOutputStream {
         unsafe {
-            from_glib_full(gio_sys::g_data_output_stream_new(
+            from_glib_full(ffi::g_data_output_stream_new(
                 base_stream.as_ref().to_glib_none().0,
             ))
         }
     }
+
+    // rustdoc-stripper-ignore-next
+    /// Creates a new builder-pattern struct instance to construct [`DataOutputStream`] objects.
+    ///
+    /// This method returns an instance of [`DataOutputStreamBuilder`](crate::builders::DataOutputStreamBuilder) which can be used to create [`DataOutputStream`] objects.
+    pub fn builder() -> DataOutputStreamBuilder {
+        DataOutputStreamBuilder::default()
+    }
+}
+
+impl Default for DataOutputStream {
+    fn default() -> Self {
+        glib::object::Object::new::<Self>(&[])
+            .expect("Can't construct DataOutputStream object with default parameters")
+    }
 }
 
 #[derive(Clone, Default)]
+// rustdoc-stripper-ignore-next
+/// A [builder-pattern] type to construct [`DataOutputStream`] objects.
+///
+/// [builder-pattern]: https://doc.rust-lang.org/1.0.0/style/ownership/builders.html
+#[must_use = "The builder must be built to be used"]
 pub struct DataOutputStreamBuilder {
     byte_order: Option<DataStreamByteOrder>,
     base_stream: Option<OutputStream>,
@@ -48,10 +69,15 @@ pub struct DataOutputStreamBuilder {
 }
 
 impl DataOutputStreamBuilder {
+    // rustdoc-stripper-ignore-next
+    /// Create a new [`DataOutputStreamBuilder`].
     pub fn new() -> Self {
         Self::default()
     }
 
+    // rustdoc-stripper-ignore-next
+    /// Build the [`DataOutputStream`].
+    #[must_use = "Building the object from the builder is usually expensive and is not expected to have side effects"]
     pub fn build(self) -> DataOutputStream {
         let mut properties: Vec<(&str, &dyn ToValue)> = vec![];
         if let Some(ref byte_order) = self.byte_order {
@@ -63,10 +89,8 @@ impl DataOutputStreamBuilder {
         if let Some(ref close_base_stream) = self.close_base_stream {
             properties.push(("close-base-stream", close_base_stream));
         }
-        glib::Object::new(DataOutputStream::static_type(), &properties)
-            .expect("object new")
-            .downcast()
-            .expect("downcast")
+        glib::Object::new::<DataOutputStream>(&properties)
+            .expect("Failed to create an instance of DataOutputStream")
     }
 
     pub fn byte_order(mut self, byte_order: DataStreamByteOrder) -> Self {
@@ -74,7 +98,7 @@ impl DataOutputStreamBuilder {
         self
     }
 
-    pub fn base_stream<P: IsA<OutputStream>>(mut self, base_stream: &P) -> Self {
+    pub fn base_stream(mut self, base_stream: &impl IsA<OutputStream>) -> Self {
         self.base_stream = Some(base_stream.clone().upcast());
         self
     }
@@ -85,86 +109,97 @@ impl DataOutputStreamBuilder {
     }
 }
 
-pub const NONE_DATA_OUTPUT_STREAM: Option<&DataOutputStream> = None;
-
 pub trait DataOutputStreamExt: 'static {
-    fn get_byte_order(&self) -> DataStreamByteOrder;
+    #[doc(alias = "g_data_output_stream_get_byte_order")]
+    #[doc(alias = "get_byte_order")]
+    fn byte_order(&self) -> DataStreamByteOrder;
 
-    fn put_byte<P: IsA<Cancellable>>(
+    #[doc(alias = "g_data_output_stream_put_byte")]
+    fn put_byte(
         &self,
         data: u8,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error>;
 
-    fn put_int16<P: IsA<Cancellable>>(
+    #[doc(alias = "g_data_output_stream_put_int16")]
+    fn put_int16(
         &self,
         data: i16,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error>;
 
-    fn put_int32<P: IsA<Cancellable>>(
+    #[doc(alias = "g_data_output_stream_put_int32")]
+    fn put_int32(
         &self,
         data: i32,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error>;
 
-    fn put_int64<P: IsA<Cancellable>>(
+    #[doc(alias = "g_data_output_stream_put_int64")]
+    fn put_int64(
         &self,
         data: i64,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error>;
 
-    fn put_string<P: IsA<Cancellable>>(
+    #[doc(alias = "g_data_output_stream_put_string")]
+    fn put_string(
         &self,
         str: &str,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error>;
 
-    fn put_uint16<P: IsA<Cancellable>>(
+    #[doc(alias = "g_data_output_stream_put_uint16")]
+    fn put_uint16(
         &self,
         data: u16,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error>;
 
-    fn put_uint32<P: IsA<Cancellable>>(
+    #[doc(alias = "g_data_output_stream_put_uint32")]
+    fn put_uint32(
         &self,
         data: u32,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error>;
 
-    fn put_uint64<P: IsA<Cancellable>>(
+    #[doc(alias = "g_data_output_stream_put_uint64")]
+    fn put_uint64(
         &self,
         data: u64,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error>;
 
+    #[doc(alias = "g_data_output_stream_set_byte_order")]
     fn set_byte_order(&self, order: DataStreamByteOrder);
 
-    fn connect_property_byte_order_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
+    #[doc(alias = "byte-order")]
+    fn connect_byte_order_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
 }
 
 impl<O: IsA<DataOutputStream>> DataOutputStreamExt for O {
-    fn get_byte_order(&self) -> DataStreamByteOrder {
+    fn byte_order(&self) -> DataStreamByteOrder {
         unsafe {
-            from_glib(gio_sys::g_data_output_stream_get_byte_order(
+            from_glib(ffi::g_data_output_stream_get_byte_order(
                 self.as_ref().to_glib_none().0,
             ))
         }
     }
 
-    fn put_byte<P: IsA<Cancellable>>(
+    fn put_byte(
         &self,
         data: u8,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_data_output_stream_put_byte(
+            let is_ok = ffi::g_data_output_stream_put_byte(
                 self.as_ref().to_glib_none().0,
                 data,
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 &mut error,
             );
+            assert_eq!(is_ok == glib::ffi::GFALSE, !error.is_null());
             if error.is_null() {
                 Ok(())
             } else {
@@ -173,19 +208,20 @@ impl<O: IsA<DataOutputStream>> DataOutputStreamExt for O {
         }
     }
 
-    fn put_int16<P: IsA<Cancellable>>(
+    fn put_int16(
         &self,
         data: i16,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_data_output_stream_put_int16(
+            let is_ok = ffi::g_data_output_stream_put_int16(
                 self.as_ref().to_glib_none().0,
                 data,
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 &mut error,
             );
+            assert_eq!(is_ok == glib::ffi::GFALSE, !error.is_null());
             if error.is_null() {
                 Ok(())
             } else {
@@ -194,19 +230,20 @@ impl<O: IsA<DataOutputStream>> DataOutputStreamExt for O {
         }
     }
 
-    fn put_int32<P: IsA<Cancellable>>(
+    fn put_int32(
         &self,
         data: i32,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_data_output_stream_put_int32(
+            let is_ok = ffi::g_data_output_stream_put_int32(
                 self.as_ref().to_glib_none().0,
                 data,
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 &mut error,
             );
+            assert_eq!(is_ok == glib::ffi::GFALSE, !error.is_null());
             if error.is_null() {
                 Ok(())
             } else {
@@ -215,19 +252,20 @@ impl<O: IsA<DataOutputStream>> DataOutputStreamExt for O {
         }
     }
 
-    fn put_int64<P: IsA<Cancellable>>(
+    fn put_int64(
         &self,
         data: i64,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_data_output_stream_put_int64(
+            let is_ok = ffi::g_data_output_stream_put_int64(
                 self.as_ref().to_glib_none().0,
                 data,
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 &mut error,
             );
+            assert_eq!(is_ok == glib::ffi::GFALSE, !error.is_null());
             if error.is_null() {
                 Ok(())
             } else {
@@ -236,19 +274,20 @@ impl<O: IsA<DataOutputStream>> DataOutputStreamExt for O {
         }
     }
 
-    fn put_string<P: IsA<Cancellable>>(
+    fn put_string(
         &self,
         str: &str,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_data_output_stream_put_string(
+            let is_ok = ffi::g_data_output_stream_put_string(
                 self.as_ref().to_glib_none().0,
                 str.to_glib_none().0,
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 &mut error,
             );
+            assert_eq!(is_ok == glib::ffi::GFALSE, !error.is_null());
             if error.is_null() {
                 Ok(())
             } else {
@@ -257,19 +296,20 @@ impl<O: IsA<DataOutputStream>> DataOutputStreamExt for O {
         }
     }
 
-    fn put_uint16<P: IsA<Cancellable>>(
+    fn put_uint16(
         &self,
         data: u16,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_data_output_stream_put_uint16(
+            let is_ok = ffi::g_data_output_stream_put_uint16(
                 self.as_ref().to_glib_none().0,
                 data,
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 &mut error,
             );
+            assert_eq!(is_ok == glib::ffi::GFALSE, !error.is_null());
             if error.is_null() {
                 Ok(())
             } else {
@@ -278,19 +318,20 @@ impl<O: IsA<DataOutputStream>> DataOutputStreamExt for O {
         }
     }
 
-    fn put_uint32<P: IsA<Cancellable>>(
+    fn put_uint32(
         &self,
         data: u32,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_data_output_stream_put_uint32(
+            let is_ok = ffi::g_data_output_stream_put_uint32(
                 self.as_ref().to_glib_none().0,
                 data,
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 &mut error,
             );
+            assert_eq!(is_ok == glib::ffi::GFALSE, !error.is_null());
             if error.is_null() {
                 Ok(())
             } else {
@@ -299,19 +340,20 @@ impl<O: IsA<DataOutputStream>> DataOutputStreamExt for O {
         }
     }
 
-    fn put_uint64<P: IsA<Cancellable>>(
+    fn put_uint64(
         &self,
         data: u64,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_data_output_stream_put_uint64(
+            let is_ok = ffi::g_data_output_stream_put_uint64(
                 self.as_ref().to_glib_none().0,
                 data,
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 &mut error,
             );
+            assert_eq!(is_ok == glib::ffi::GFALSE, !error.is_null());
             if error.is_null() {
                 Ok(())
             } else {
@@ -322,30 +364,33 @@ impl<O: IsA<DataOutputStream>> DataOutputStreamExt for O {
 
     fn set_byte_order(&self, order: DataStreamByteOrder) {
         unsafe {
-            gio_sys::g_data_output_stream_set_byte_order(
+            ffi::g_data_output_stream_set_byte_order(
                 self.as_ref().to_glib_none().0,
-                order.to_glib(),
+                order.into_glib(),
             );
         }
     }
 
-    fn connect_property_byte_order_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
-        unsafe extern "C" fn notify_byte_order_trampoline<P, F: Fn(&P) + 'static>(
-            this: *mut gio_sys::GDataOutputStream,
-            _param_spec: glib_sys::gpointer,
-            f: glib_sys::gpointer,
-        ) where
+    fn connect_byte_order_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
+        unsafe extern "C" fn notify_byte_order_trampoline<
             P: IsA<DataOutputStream>,
-        {
+            F: Fn(&P) + 'static,
+        >(
+            this: *mut ffi::GDataOutputStream,
+            _param_spec: glib::ffi::gpointer,
+            f: glib::ffi::gpointer,
+        ) {
             let f: &F = &*(f as *const F);
-            f(&DataOutputStream::from_glib_borrow(this).unsafe_cast())
+            f(DataOutputStream::from_glib_borrow(this).unsafe_cast_ref())
         }
         unsafe {
             let f: Box_<F> = Box_::new(f);
             connect_raw(
                 self.as_ptr() as *mut _,
                 b"notify::byte-order\0".as_ptr() as *const _,
-                Some(transmute(notify_byte_order_trampoline::<Self, F> as usize)),
+                Some(transmute::<_, unsafe extern "C" fn()>(
+                    notify_byte_order_trampoline::<Self, F> as *const (),
+                )),
                 Box_::into_raw(f),
             )
         }
@@ -354,6 +399,6 @@ impl<O: IsA<DataOutputStream>> DataOutputStreamExt for O {
 
 impl fmt::Display for DataOutputStream {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "DataOutputStream")
+        f.write_str("DataOutputStream")
     }
 }

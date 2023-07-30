@@ -2,44 +2,46 @@ use simba::scalar::{RealField, SubsetOf, SupersetOf};
 use simba::simd::{PrimitiveSimdValue, SimdRealField, SimdValue};
 
 use crate::base::allocator::Allocator;
-use crate::base::dimension::{DimMin, DimName, DimNameAdd, DimNameSum, U1};
-use crate::base::{DefaultAllocator, MatrixN, Scalar};
+use crate::base::dimension::{DimMin, DimNameAdd, DimNameSum, U1};
+use crate::base::{Const, DefaultAllocator, OMatrix, Scalar};
 
 use crate::geometry::{
-    AbstractRotation, Isometry, Similarity, SuperTCategoryOf, TAffine, Transform, Translation,
+    AbstractRotation, Isometry, Isometry3, Similarity, SuperTCategoryOf, TAffine, Transform,
+    Translation, UnitDualQuaternion, UnitQuaternion,
 };
+use crate::{Point, SVector};
 
 /*
  * This file provides the following conversions:
  * =============================================
  *
  * Isometry -> Isometry
+ * Isometry3 -> UnitDualQuaternion
  * Isometry -> Similarity
  * Isometry -> Transform
  * Isometry -> Matrix (homogeneous)
  */
 
-impl<N1, N2, D: DimName, R1, R2> SubsetOf<Isometry<N2, D, R2>> for Isometry<N1, D, R1>
+impl<T1, T2, R1, R2, const D: usize> SubsetOf<Isometry<T2, R2, D>> for Isometry<T1, R1, D>
 where
-    N1: RealField,
-    N2: RealField + SupersetOf<N1>,
-    R1: AbstractRotation<N1, D> + SubsetOf<R2>,
-    R2: AbstractRotation<N2, D>,
-    DefaultAllocator: Allocator<N1, D> + Allocator<N2, D>,
+    T1: RealField,
+    T2: RealField + SupersetOf<T1>,
+    R1: AbstractRotation<T1, D> + SubsetOf<R2>,
+    R2: AbstractRotation<T2, D>,
 {
     #[inline]
-    fn to_superset(&self) -> Isometry<N2, D, R2> {
+    fn to_superset(&self) -> Isometry<T2, R2, D> {
         Isometry::from_parts(self.translation.to_superset(), self.rotation.to_superset())
     }
 
     #[inline]
-    fn is_in_subset(iso: &Isometry<N2, D, R2>) -> bool {
-        crate::is_convertible::<_, Translation<N1, D>>(&iso.translation)
+    fn is_in_subset(iso: &Isometry<T2, R2, D>) -> bool {
+        crate::is_convertible::<_, Translation<T1, D>>(&iso.translation)
             && crate::is_convertible::<_, R1>(&iso.rotation)
     }
 
     #[inline]
-    fn from_superset_unchecked(iso: &Isometry<N2, D, R2>) -> Self {
+    fn from_superset_unchecked(iso: &Isometry<T2, R2, D>) -> Self {
         Isometry::from_parts(
             iso.translation.to_subset_unchecked(),
             iso.rotation.to_subset_unchecked(),
@@ -47,102 +49,126 @@ where
     }
 }
 
-impl<N1, N2, D: DimName, R1, R2> SubsetOf<Similarity<N2, D, R2>> for Isometry<N1, D, R1>
+impl<T1, T2> SubsetOf<UnitDualQuaternion<T2>> for Isometry3<T1>
 where
-    N1: RealField,
-    N2: RealField + SupersetOf<N1>,
-    R1: AbstractRotation<N1, D> + SubsetOf<R2>,
-    R2: AbstractRotation<N2, D>,
-    DefaultAllocator: Allocator<N1, D> + Allocator<N2, D>,
+    T1: RealField,
+    T2: RealField + SupersetOf<T1>,
 {
     #[inline]
-    fn to_superset(&self) -> Similarity<N2, D, R2> {
-        Similarity::from_isometry(self.to_superset(), N2::one())
+    fn to_superset(&self) -> UnitDualQuaternion<T2> {
+        let dq = UnitDualQuaternion::<T1>::from_isometry(self);
+        dq.to_superset()
     }
 
     #[inline]
-    fn is_in_subset(sim: &Similarity<N2, D, R2>) -> bool {
-        crate::is_convertible::<_, Isometry<N1, D, R1>>(&sim.isometry) && sim.scaling() == N2::one()
+    fn is_in_subset(dq: &UnitDualQuaternion<T2>) -> bool {
+        crate::is_convertible::<_, UnitQuaternion<T1>>(&dq.rotation())
+            && crate::is_convertible::<_, Translation<T1, 3>>(&dq.translation())
     }
 
     #[inline]
-    fn from_superset_unchecked(sim: &Similarity<N2, D, R2>) -> Self {
+    fn from_superset_unchecked(dq: &UnitDualQuaternion<T2>) -> Self {
+        let dq: UnitDualQuaternion<T1> = crate::convert_ref_unchecked(dq);
+        dq.to_isometry()
+    }
+}
+
+impl<T1, T2, R1, R2, const D: usize> SubsetOf<Similarity<T2, R2, D>> for Isometry<T1, R1, D>
+where
+    T1: RealField,
+    T2: RealField + SupersetOf<T1>,
+    R1: AbstractRotation<T1, D> + SubsetOf<R2>,
+    R2: AbstractRotation<T2, D>,
+{
+    #[inline]
+    fn to_superset(&self) -> Similarity<T2, R2, D> {
+        Similarity::from_isometry(self.to_superset(), T2::one())
+    }
+
+    #[inline]
+    fn is_in_subset(sim: &Similarity<T2, R2, D>) -> bool {
+        crate::is_convertible::<_, Isometry<T1, R1, D>>(&sim.isometry) && sim.scaling() == T2::one()
+    }
+
+    #[inline]
+    fn from_superset_unchecked(sim: &Similarity<T2, R2, D>) -> Self {
         crate::convert_ref_unchecked(&sim.isometry)
     }
 }
 
-impl<N1, N2, D, R, C> SubsetOf<Transform<N2, D, C>> for Isometry<N1, D, R>
+impl<T1, T2, R, C, const D: usize> SubsetOf<Transform<T2, C, D>> for Isometry<T1, R, D>
 where
-    N1: RealField,
-    N2: RealField + SupersetOf<N1>,
+    T1: RealField,
+    T2: RealField + SupersetOf<T1>,
     C: SuperTCategoryOf<TAffine>,
-    R: AbstractRotation<N1, D>
-        + SubsetOf<MatrixN<N1, DimNameSum<D, U1>>>
-        + SubsetOf<MatrixN<N2, DimNameSum<D, U1>>>,
-    D: DimNameAdd<U1> + DimMin<D, Output = D>, // needed by .is_special_orthogonal()
-    DefaultAllocator: Allocator<N1, D>
-        + Allocator<N1, D, D>
-        + Allocator<N1, DimNameSum<D, U1>, DimNameSum<D, U1>>
-        + Allocator<N2, DimNameSum<D, U1>, DimNameSum<D, U1>>
-        + Allocator<N2, DimNameSum<D, U1>, DimNameSum<D, U1>>
-        + Allocator<(usize, usize), D>
-        + Allocator<N2, D, D>
-        + Allocator<N2, D>,
+    R: AbstractRotation<T1, D>
+        + SubsetOf<OMatrix<T1, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>>
+        + SubsetOf<OMatrix<T2, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>>,
+    Const<D>: DimNameAdd<U1> + DimMin<Const<D>, Output = Const<D>>, // needed by .is_special_orthogonal()
+    DefaultAllocator: Allocator<T1, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>
+        + Allocator<T2, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>
+        + Allocator<T2, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>,
+    // + Allocator<T1, D>
+    // + Allocator<(usize, usize), D>
+    // + Allocator<T2, D, D>
+    // + Allocator<T2, D>
 {
     #[inline]
-    fn to_superset(&self) -> Transform<N2, D, C> {
+    fn to_superset(&self) -> Transform<T2, C, D> {
         Transform::from_matrix_unchecked(self.to_homogeneous().to_superset())
     }
 
     #[inline]
-    fn is_in_subset(t: &Transform<N2, D, C>) -> bool {
+    fn is_in_subset(t: &Transform<T2, C, D>) -> bool {
         <Self as SubsetOf<_>>::is_in_subset(t.matrix())
     }
 
     #[inline]
-    fn from_superset_unchecked(t: &Transform<N2, D, C>) -> Self {
+    fn from_superset_unchecked(t: &Transform<T2, C, D>) -> Self {
         Self::from_superset_unchecked(t.matrix())
     }
 }
 
-impl<N1, N2, D, R> SubsetOf<MatrixN<N2, DimNameSum<D, U1>>> for Isometry<N1, D, R>
+impl<T1, T2, R, const D: usize>
+    SubsetOf<OMatrix<T2, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>> for Isometry<T1, R, D>
 where
-    N1: RealField,
-    N2: RealField + SupersetOf<N1>,
-    R: AbstractRotation<N1, D>
-        + SubsetOf<MatrixN<N1, DimNameSum<D, U1>>>
-        + SubsetOf<MatrixN<N2, DimNameSum<D, U1>>>,
-    D: DimNameAdd<U1> + DimMin<D, Output = D>, // needed by .is_special_orthogonal()
-    DefaultAllocator: Allocator<N1, D>
-        + Allocator<N1, D, D>
-        + Allocator<N1, DimNameSum<D, U1>, DimNameSum<D, U1>>
-        + Allocator<N2, DimNameSum<D, U1>, DimNameSum<D, U1>>
-        + Allocator<N2, DimNameSum<D, U1>, DimNameSum<D, U1>>
-        + Allocator<(usize, usize), D>
-        + Allocator<N2, D, D>
-        + Allocator<N2, D>,
+    T1: RealField,
+    T2: RealField + SupersetOf<T1>,
+    R: AbstractRotation<T1, D>
+        + SubsetOf<OMatrix<T1, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>>
+        + SubsetOf<OMatrix<T2, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>>,
+    Const<D>: DimNameAdd<U1> + DimMin<Const<D>, Output = Const<D>>, // needed by .is_special_orthogonal()
+    DefaultAllocator: Allocator<T1, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>
+        + Allocator<T2, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>
+        + Allocator<T2, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>, // + Allocator<(usize, usize), D>
+                                                                             // + Allocator<T2, D, D>
+                                                                             // + Allocator<T2, D>
+                                                                             // + Allocator<T1, D>
+                                                                             // + Allocator<T1, D, D>
 {
     #[inline]
-    fn to_superset(&self) -> MatrixN<N2, DimNameSum<D, U1>> {
+    fn to_superset(&self) -> OMatrix<T2, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>> {
         self.to_homogeneous().to_superset()
     }
 
     #[inline]
-    fn is_in_subset(m: &MatrixN<N2, DimNameSum<D, U1>>) -> bool {
+    fn is_in_subset(m: &OMatrix<T2, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>) -> bool {
         let rot = m.fixed_slice::<D, D>(0, 0);
-        let bottom = m.fixed_slice::<U1, D>(D::dim(), 0);
+        let bottom = m.fixed_slice::<1, D>(D, 0);
 
         // Scalar types agree.
-        m.iter().all(|e| SupersetOf::<N1>::is_in_subset(e)) &&
+        m.iter().all(|e| SupersetOf::<T1>::is_in_subset(e)) &&
         // The block part is a rotation.
-        rot.is_special_orthogonal(N2::default_epsilon() * crate::convert(100.0)) &&
+        rot.is_special_orthogonal(T2::default_epsilon() * crate::convert(100.0)) &&
         // The bottom row is (0, 0, ..., 1)
-        bottom.iter().all(|e| e.is_zero()) && m[(D::dim(), D::dim())] == N2::one()
+        bottom.iter().all(|e| e.is_zero()) && m[(D, D)] == T2::one()
     }
 
     #[inline]
-    fn from_superset_unchecked(m: &MatrixN<N2, DimNameSum<D, U1>>) -> Self {
-        let t = m.fixed_slice::<D, U1>(0, D::dim()).into_owned();
+    fn from_superset_unchecked(
+        m: &OMatrix<T2, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>,
+    ) -> Self {
+        let t = m.fixed_slice::<D, 1>(0, D).into_owned();
         let t = Translation {
             vector: crate::convert_unchecked(t),
         };
@@ -151,150 +177,185 @@ where
     }
 }
 
-impl<N: SimdRealField, D: DimName, R> From<Isometry<N, D, R>> for MatrixN<N, DimNameSum<D, U1>>
-where
-    D: DimNameAdd<U1>,
-    R: SubsetOf<MatrixN<N, DimNameSum<D, U1>>>,
-    DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>> + Allocator<N, D>,
+impl<T: SimdRealField, R: AbstractRotation<T, D>, const D: usize> From<Translation<T, D>>
+    for Isometry<T, R, D>
 {
     #[inline]
-    fn from(iso: Isometry<N, D, R>) -> Self {
+    fn from(tra: Translation<T, D>) -> Self {
+        Self::from_parts(tra, R::identity())
+    }
+}
+
+impl<T: SimdRealField, R, const D: usize> From<Isometry<T, R, D>>
+    for OMatrix<T, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>
+where
+    Const<D>: DimNameAdd<U1>,
+    R: SubsetOf<OMatrix<T, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>>,
+    DefaultAllocator: Allocator<T, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>, // + Allocator<T, D>,
+{
+    #[inline]
+    fn from(iso: Isometry<T, R, D>) -> Self {
         iso.to_homogeneous()
     }
 }
 
-impl<N: Scalar + PrimitiveSimdValue, D: DimName, R> From<[Isometry<N::Element, D, R::Element>; 2]>
-    for Isometry<N, D, R>
+impl<T: SimdRealField, R, const D: usize> From<[T; D]> for Isometry<T, R, D>
 where
-    N: From<[<N as SimdValue>::Element; 2]>,
-    R: SimdValue + AbstractRotation<N, D> + From<[<R as SimdValue>::Element; 2]>,
-    R::Element: AbstractRotation<N::Element, D>,
-    N::Element: Scalar + Copy,
-    R::Element: Scalar + Copy,
-    DefaultAllocator: Allocator<N, D> + Allocator<N::Element, D>,
+    R: AbstractRotation<T, D>,
 {
     #[inline]
-    fn from(arr: [Isometry<N::Element, D, R::Element>; 2]) -> Self {
-        let tra = Translation::from([arr[0].translation.clone(), arr[1].translation.clone()]);
-        let rot = R::from([arr[0].rotation.clone(), arr[0].rotation.clone()]);
+    fn from(coords: [T; D]) -> Self {
+        Self::from_parts(coords.into(), R::identity())
+    }
+}
+
+impl<T: SimdRealField, R, const D: usize> From<SVector<T, D>> for Isometry<T, R, D>
+where
+    R: AbstractRotation<T, D>,
+{
+    #[inline]
+    fn from(coords: SVector<T, D>) -> Self {
+        Self::from_parts(coords.into(), R::identity())
+    }
+}
+impl<T: SimdRealField, R, const D: usize> From<Point<T, D>> for Isometry<T, R, D>
+where
+    R: AbstractRotation<T, D>,
+{
+    #[inline]
+    fn from(coords: Point<T, D>) -> Self {
+        Self::from_parts(coords.into(), R::identity())
+    }
+}
+
+impl<T: Scalar + PrimitiveSimdValue, R, const D: usize>
+    From<[Isometry<T::Element, R::Element, D>; 2]> for Isometry<T, R, D>
+where
+    T: From<[<T as SimdValue>::Element; 2]>,
+    R: SimdValue + AbstractRotation<T, D> + From<[<R as SimdValue>::Element; 2]>,
+    R::Element: AbstractRotation<T::Element, D>,
+    T::Element: Scalar + Copy,
+    R::Element: Scalar + Copy,
+{
+    #[inline]
+    fn from(arr: [Isometry<T::Element, R::Element, D>; 2]) -> Self {
+        let tra = Translation::from([arr[0].translation, arr[1].translation]);
+        let rot = R::from([arr[0].rotation, arr[0].rotation]);
 
         Self::from_parts(tra, rot)
     }
 }
 
-impl<N: Scalar + PrimitiveSimdValue, D: DimName, R> From<[Isometry<N::Element, D, R::Element>; 4]>
-    for Isometry<N, D, R>
+impl<T: Scalar + PrimitiveSimdValue, R, const D: usize>
+    From<[Isometry<T::Element, R::Element, D>; 4]> for Isometry<T, R, D>
 where
-    N: From<[<N as SimdValue>::Element; 4]>,
-    R: SimdValue + AbstractRotation<N, D> + From<[<R as SimdValue>::Element; 4]>,
-    R::Element: AbstractRotation<N::Element, D>,
-    N::Element: Scalar + Copy,
+    T: From<[<T as SimdValue>::Element; 4]>,
+    R: SimdValue + AbstractRotation<T, D> + From<[<R as SimdValue>::Element; 4]>,
+    R::Element: AbstractRotation<T::Element, D>,
+    T::Element: Scalar + Copy,
     R::Element: Scalar + Copy,
-    DefaultAllocator: Allocator<N, D> + Allocator<N::Element, D>,
 {
     #[inline]
-    fn from(arr: [Isometry<N::Element, D, R::Element>; 4]) -> Self {
+    fn from(arr: [Isometry<T::Element, R::Element, D>; 4]) -> Self {
         let tra = Translation::from([
-            arr[0].translation.clone(),
-            arr[1].translation.clone(),
-            arr[2].translation.clone(),
-            arr[3].translation.clone(),
+            arr[0].translation,
+            arr[1].translation,
+            arr[2].translation,
+            arr[3].translation,
         ]);
         let rot = R::from([
-            arr[0].rotation.clone(),
-            arr[1].rotation.clone(),
-            arr[2].rotation.clone(),
-            arr[3].rotation.clone(),
-        ]);
-
-        Self::from_parts(tra, rot)
-    }
-}
-
-impl<N: Scalar + PrimitiveSimdValue, D: DimName, R> From<[Isometry<N::Element, D, R::Element>; 8]>
-    for Isometry<N, D, R>
-where
-    N: From<[<N as SimdValue>::Element; 8]>,
-    R: SimdValue + AbstractRotation<N, D> + From<[<R as SimdValue>::Element; 8]>,
-    R::Element: AbstractRotation<N::Element, D>,
-    N::Element: Scalar + Copy,
-    R::Element: Scalar + Copy,
-    DefaultAllocator: Allocator<N, D> + Allocator<N::Element, D>,
-{
-    #[inline]
-    fn from(arr: [Isometry<N::Element, D, R::Element>; 8]) -> Self {
-        let tra = Translation::from([
-            arr[0].translation.clone(),
-            arr[1].translation.clone(),
-            arr[2].translation.clone(),
-            arr[3].translation.clone(),
-            arr[4].translation.clone(),
-            arr[5].translation.clone(),
-            arr[6].translation.clone(),
-            arr[7].translation.clone(),
-        ]);
-        let rot = R::from([
-            arr[0].rotation.clone(),
-            arr[1].rotation.clone(),
-            arr[2].rotation.clone(),
-            arr[3].rotation.clone(),
-            arr[4].rotation.clone(),
-            arr[5].rotation.clone(),
-            arr[6].rotation.clone(),
-            arr[7].rotation.clone(),
+            arr[0].rotation,
+            arr[1].rotation,
+            arr[2].rotation,
+            arr[3].rotation,
         ]);
 
         Self::from_parts(tra, rot)
     }
 }
 
-impl<N: Scalar + PrimitiveSimdValue, D: DimName, R> From<[Isometry<N::Element, D, R::Element>; 16]>
-    for Isometry<N, D, R>
+impl<T: Scalar + PrimitiveSimdValue, R, const D: usize>
+    From<[Isometry<T::Element, R::Element, D>; 8]> for Isometry<T, R, D>
 where
-    N: From<[<N as SimdValue>::Element; 16]>,
-    R: SimdValue + AbstractRotation<N, D> + From<[<R as SimdValue>::Element; 16]>,
-    R::Element: AbstractRotation<N::Element, D>,
-    N::Element: Scalar + Copy,
+    T: From<[<T as SimdValue>::Element; 8]>,
+    R: SimdValue + AbstractRotation<T, D> + From<[<R as SimdValue>::Element; 8]>,
+    R::Element: AbstractRotation<T::Element, D>,
+    T::Element: Scalar + Copy,
     R::Element: Scalar + Copy,
-    DefaultAllocator: Allocator<N, D> + Allocator<N::Element, D>,
 {
     #[inline]
-    fn from(arr: [Isometry<N::Element, D, R::Element>; 16]) -> Self {
+    fn from(arr: [Isometry<T::Element, R::Element, D>; 8]) -> Self {
         let tra = Translation::from([
-            arr[0].translation.clone(),
-            arr[1].translation.clone(),
-            arr[2].translation.clone(),
-            arr[3].translation.clone(),
-            arr[4].translation.clone(),
-            arr[5].translation.clone(),
-            arr[6].translation.clone(),
-            arr[7].translation.clone(),
-            arr[8].translation.clone(),
-            arr[9].translation.clone(),
-            arr[10].translation.clone(),
-            arr[11].translation.clone(),
-            arr[12].translation.clone(),
-            arr[13].translation.clone(),
-            arr[14].translation.clone(),
-            arr[15].translation.clone(),
+            arr[0].translation,
+            arr[1].translation,
+            arr[2].translation,
+            arr[3].translation,
+            arr[4].translation,
+            arr[5].translation,
+            arr[6].translation,
+            arr[7].translation,
         ]);
         let rot = R::from([
-            arr[0].rotation.clone(),
-            arr[1].rotation.clone(),
-            arr[2].rotation.clone(),
-            arr[3].rotation.clone(),
-            arr[4].rotation.clone(),
-            arr[5].rotation.clone(),
-            arr[6].rotation.clone(),
-            arr[7].rotation.clone(),
-            arr[8].rotation.clone(),
-            arr[9].rotation.clone(),
-            arr[10].rotation.clone(),
-            arr[11].rotation.clone(),
-            arr[12].rotation.clone(),
-            arr[13].rotation.clone(),
-            arr[14].rotation.clone(),
-            arr[15].rotation.clone(),
+            arr[0].rotation,
+            arr[1].rotation,
+            arr[2].rotation,
+            arr[3].rotation,
+            arr[4].rotation,
+            arr[5].rotation,
+            arr[6].rotation,
+            arr[7].rotation,
+        ]);
+
+        Self::from_parts(tra, rot)
+    }
+}
+
+impl<T: Scalar + PrimitiveSimdValue, R, const D: usize>
+    From<[Isometry<T::Element, R::Element, D>; 16]> for Isometry<T, R, D>
+where
+    T: From<[<T as SimdValue>::Element; 16]>,
+    R: SimdValue + AbstractRotation<T, D> + From<[<R as SimdValue>::Element; 16]>,
+    R::Element: AbstractRotation<T::Element, D>,
+    T::Element: Scalar + Copy,
+    R::Element: Scalar + Copy,
+{
+    #[inline]
+    fn from(arr: [Isometry<T::Element, R::Element, D>; 16]) -> Self {
+        let tra = Translation::from([
+            arr[0].translation,
+            arr[1].translation,
+            arr[2].translation,
+            arr[3].translation,
+            arr[4].translation,
+            arr[5].translation,
+            arr[6].translation,
+            arr[7].translation,
+            arr[8].translation,
+            arr[9].translation,
+            arr[10].translation,
+            arr[11].translation,
+            arr[12].translation,
+            arr[13].translation,
+            arr[14].translation,
+            arr[15].translation,
+        ]);
+        let rot = R::from([
+            arr[0].rotation,
+            arr[1].rotation,
+            arr[2].rotation,
+            arr[3].rotation,
+            arr[4].rotation,
+            arr[5].rotation,
+            arr[6].rotation,
+            arr[7].rotation,
+            arr[8].rotation,
+            arr[9].rotation,
+            arr[10].rotation,
+            arr[11].rotation,
+            arr[12].rotation,
+            arr[13].rotation,
+            arr[14].rotation,
+            arr[15].rotation,
         ]);
 
         Self::from_parts(tra, rot)

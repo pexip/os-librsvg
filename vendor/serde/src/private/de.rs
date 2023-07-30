@@ -206,6 +206,7 @@ mod content {
     use lib::*;
 
     use __private::size_hint;
+    use actually_private;
     use de::{
         self, Deserialize, DeserializeSeed, Deserializer, EnumAccess, Expected, IgnoredAny,
         MapAccess, SeqAccess, Unexpected, Visitor,
@@ -215,7 +216,7 @@ mod content {
     /// deserializing untagged enums and internally tagged enums.
     ///
     /// Not public API. Use serde-value instead.
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub enum Content<'de> {
         Bool(bool),
 
@@ -294,7 +295,7 @@ mod content {
             // Untagged and internally tagged enums are only supported in
             // self-describing formats.
             let visitor = ContentVisitor { value: PhantomData };
-            deserializer.deserialize_any(visitor)
+            deserializer.__deserialize_content(actually_private::T, visitor)
         }
     }
 
@@ -1287,8 +1288,9 @@ mod content {
                 //     }
                 //
                 // We want {"topic":"Info"} to deserialize even though
-                // ordinarily unit structs do not deserialize from empty map.
+                // ordinarily unit structs do not deserialize from empty map/seq.
                 Content::Map(ref v) if v.is_empty() => visitor.visit_unit(),
+                Content::Seq(ref v) if v.is_empty() => visitor.visit_unit(),
                 _ => self.deserialize_any(visitor),
             }
         }
@@ -1425,6 +1427,18 @@ mod content {
         {
             drop(self);
             visitor.visit_unit()
+        }
+
+        fn __deserialize_content<V>(
+            self,
+            _: actually_private::T,
+            visitor: V,
+        ) -> Result<Content<'de>, Self::Error>
+        where
+            V: Visitor<'de, Value = Content<'de>>,
+        {
+            let _ = visitor;
+            Ok(self.content)
         }
     }
 
@@ -1741,6 +1755,25 @@ mod content {
                 _ => Err(self.invalid_type(&visitor)),
             }
         }
+
+        fn deserialize_float<V>(self, visitor: V) -> Result<V::Value, E>
+        where
+            V: Visitor<'de>,
+        {
+            match *self.content {
+                Content::F32(v) => visitor.visit_f32(v),
+                Content::F64(v) => visitor.visit_f64(v),
+                Content::U8(v) => visitor.visit_u8(v),
+                Content::U16(v) => visitor.visit_u16(v),
+                Content::U32(v) => visitor.visit_u32(v),
+                Content::U64(v) => visitor.visit_u64(v),
+                Content::I8(v) => visitor.visit_i8(v),
+                Content::I16(v) => visitor.visit_i16(v),
+                Content::I32(v) => visitor.visit_i32(v),
+                Content::I64(v) => visitor.visit_i64(v),
+                _ => Err(self.invalid_type(&visitor)),
+            }
+        }
     }
 
     fn visit_content_seq_ref<'a, 'de, V, E>(
@@ -1888,25 +1921,14 @@ mod content {
         where
             V: Visitor<'de>,
         {
-            match *self.content {
-                Content::F32(v) => visitor.visit_f32(v),
-                Content::F64(v) => visitor.visit_f64(v),
-                Content::U64(v) => visitor.visit_u64(v),
-                Content::I64(v) => visitor.visit_i64(v),
-                _ => Err(self.invalid_type(&visitor)),
-            }
+            self.deserialize_float(visitor)
         }
 
         fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
         where
             V: Visitor<'de>,
         {
-            match *self.content {
-                Content::F64(v) => visitor.visit_f64(v),
-                Content::U64(v) => visitor.visit_u64(v),
-                Content::I64(v) => visitor.visit_i64(v),
-                _ => Err(self.invalid_type(&visitor)),
-            }
+            self.deserialize_float(visitor)
         }
 
         fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -2128,6 +2150,18 @@ mod content {
             V: Visitor<'de>,
         {
             visitor.visit_unit()
+        }
+
+        fn __deserialize_content<V>(
+            self,
+            _: actually_private::T,
+            visitor: V,
+        ) -> Result<Content<'de>, Self::Error>
+        where
+            V: Visitor<'de, Value = Content<'de>>,
+        {
+            let _ = visitor;
+            Ok(self.content.clone())
         }
     }
 
@@ -2823,7 +2857,7 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        while let Some(item) = self.iter.next() {
+        for item in &mut self.iter {
             // Items in the vector are nulled out when used by a struct.
             if let Some((ref key, ref content)) = *item {
                 self.pending_content = Some(content);
@@ -2925,7 +2959,7 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        while let Some(item) = self.iter.next() {
+        for item in &mut self.iter {
             if let Some((ref key, ref content)) = *item {
                 // Do not take(), instead borrow this entry. The internally tagged
                 // enum does its own buffering so we can't tell whether this entry

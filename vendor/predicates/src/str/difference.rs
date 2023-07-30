@@ -9,100 +9,48 @@
 use std::borrow;
 use std::fmt;
 
-use difference;
-
 use crate::reflection;
 use crate::Predicate;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum DistanceOp {
-    Similar,
-    Different,
-}
-
-impl DistanceOp {
-    fn eval(self, limit: i32, distance: i32) -> bool {
-        match self {
-            DistanceOp::Similar => distance <= limit,
-            DistanceOp::Different => limit < distance,
-        }
-    }
-}
-
 /// Predicate that diffs two strings.
 ///
-/// This is created by the `predicate::str::similar`.
+/// This is created by the `predicate::str::diff`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DifferencePredicate {
     orig: borrow::Cow<'static, str>,
-    split: borrow::Cow<'static, str>,
-    distance: i32,
-    op: DistanceOp,
-}
-
-impl DifferencePredicate {
-    /// The split used when identifying changes.
-    ///
-    /// Common splits include:
-    /// - `""` for char-level.
-    /// - `" "` for word-level.
-    /// - `"\n"` for line-level.
-    ///
-    /// Default: `"\n"`
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use predicates::prelude::*;
-    ///
-    /// let predicate_fn = predicate::str::similar("Hello World").split(" ");
-    /// assert_eq!(true, predicate_fn.eval("Hello World"));
-    /// ```
-    pub fn split<S>(mut self, split: S) -> Self
-    where
-        S: Into<borrow::Cow<'static, str>>,
-    {
-        self.split = split.into();
-        self
-    }
-
-    /// The maximum allowed edit distance.
-    ///
-    /// Default: `0`
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use predicates::prelude::*;
-    ///
-    /// let predicate_fn = predicate::str::similar("Hello World!").split("").distance(1);
-    /// assert_eq!(true, predicate_fn.eval("Hello World!"));
-    /// assert_eq!(true, predicate_fn.eval("Hello World"));
-    /// assert_eq!(false, predicate_fn.eval("Hello World?"));
-    /// ```
-    pub fn distance(mut self, distance: i32) -> Self {
-        self.distance = distance;
-        self
-    }
 }
 
 impl Predicate<str> for DifferencePredicate {
     fn eval(&self, edit: &str) -> bool {
-        let change = difference::Changeset::new(&self.orig, edit, &self.split);
-        self.op.eval(self.distance, change.distance)
+        edit == self.orig
     }
 
     fn find_case<'a>(&'a self, expected: bool, variable: &str) -> Option<reflection::Case<'a>> {
-        let change = difference::Changeset::new(&self.orig, variable, &self.split);
-        let result = self.op.eval(self.distance, change.distance);
+        let result = variable != self.orig;
         if result == expected {
-            Some(
-                reflection::Case::new(Some(self), result)
-                    .add_product(reflection::Product::new("actual distance", change.distance))
-                    .add_product(reflection::Product::new("diff", change)),
-            )
-        } else {
             None
+        } else {
+            let palette = crate::Palette::current();
+            let orig: Vec<_> = self.orig.lines().map(|l| format!("{}\n", l)).collect();
+            let variable: Vec<_> = variable.lines().map(|l| format!("{}\n", l)).collect();
+            let diff = difflib::unified_diff(
+                &orig,
+                &variable,
+                "",
+                "",
+                &palette.expected.paint("orig").to_string(),
+                &palette.var.paint("var").to_string(),
+                0,
+            );
+            let mut diff = colorize_diff(diff, palette);
+            diff.insert(0, "\n".to_owned());
+
+            Some(
+                reflection::Case::new(Some(self), result).add_product(reflection::Product::new(
+                    "diff",
+                    itertools::join(diff.iter(), ""),
+                )),
+            )
         }
     }
 }
@@ -116,10 +64,14 @@ impl reflection::PredicateReflection for DifferencePredicate {
 
 impl fmt::Display for DifferencePredicate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.op {
-            DistanceOp::Similar => write!(f, "var - original <= {}", self.distance),
-            DistanceOp::Different => write!(f, "{} < var - original", self.distance),
-        }
+        let palette = crate::Palette::current();
+        write!(
+            f,
+            "{} {} {}",
+            palette.description.paint("diff"),
+            palette.expected.paint("original"),
+            palette.var.paint("var"),
+        )
     }
 }
 
@@ -131,40 +83,50 @@ impl fmt::Display for DifferencePredicate {
 /// use predicates::prelude::*;
 ///
 /// let predicate_fn = predicate::str::diff("Hello World");
-/// assert_eq!(false, predicate_fn.eval("Hello World"));
-/// assert_eq!(true, predicate_fn.eval("Goodbye World"));
+/// assert_eq!(true, predicate_fn.eval("Hello World"));
+/// assert!(predicate_fn.find_case(false, "Hello World").is_none());
+/// assert_eq!(false, predicate_fn.eval("Goodbye World"));
+/// assert!(predicate_fn.find_case(false, "Goodbye World").is_some());
 /// ```
 pub fn diff<S>(orig: S) -> DifferencePredicate
 where
     S: Into<borrow::Cow<'static, str>>,
 {
-    DifferencePredicate {
-        orig: orig.into(),
-        split: "\n".into(),
-        distance: 0,
-        op: DistanceOp::Different,
-    }
+    DifferencePredicate { orig: orig.into() }
 }
 
-/// Creates a new `Predicate` that checks strings for how similar they are.
-///
-/// # Examples
-///
-/// ```
-/// use predicates::prelude::*;
-///
-/// let predicate_fn = predicate::str::similar("Hello World");
-/// assert_eq!(true, predicate_fn.eval("Hello World"));
-/// assert_eq!(false, predicate_fn.eval("Goodbye World"));
-/// ```
-pub fn similar<S>(orig: S) -> DifferencePredicate
-where
-    S: Into<borrow::Cow<'static, str>>,
-{
-    DifferencePredicate {
-        orig: orig.into(),
-        split: "\n".into(),
-        distance: 0,
-        op: DistanceOp::Similar,
+#[cfg(feature = "color")]
+fn colorize_diff(mut lines: Vec<String>, palette: crate::Palette) -> Vec<String> {
+    for (i, line) in lines.iter_mut().enumerate() {
+        match (i, line.as_bytes().get(0)) {
+            (0, _) => {
+                if let Some((prefix, body)) = line.split_once(' ') {
+                    *line = format!("{} {}", palette.expected.paint(prefix), body);
+                }
+            }
+            (1, _) => {
+                if let Some((prefix, body)) = line.split_once(' ') {
+                    *line = format!("{} {}", palette.var.paint(prefix), body);
+                }
+            }
+            (_, Some(b'-')) => {
+                let (prefix, body) = line.split_at(1);
+                *line = format!("{}{}", palette.expected.paint(prefix), body);
+            }
+            (_, Some(b'+')) => {
+                let (prefix, body) = line.split_at(1);
+                *line = format!("{}{}", palette.var.paint(prefix), body);
+            }
+            (_, Some(b'@')) => {
+                *line = format!("{}", palette.description.paint(&line));
+            }
+            _ => (),
+        }
     }
+    lines
+}
+
+#[cfg(not(feature = "color"))]
+fn colorize_diff(lines: Vec<String>, _palette: crate::Palette) -> Vec<String> {
+    lines
 }

@@ -10,18 +10,18 @@ use crate::base::{Matrix, Vector};
 
 /// A Givens rotation.
 #[derive(Debug, Clone, Copy)]
-pub struct GivensRotation<N: ComplexField> {
-    c: N::RealField,
-    s: N,
+pub struct GivensRotation<T: ComplexField> {
+    c: T::RealField,
+    s: T,
 }
 
 // Matrix = UnitComplex * Matrix
-impl<N: ComplexField> GivensRotation<N> {
+impl<T: ComplexField> GivensRotation<T> {
     /// The Givents rotation that does nothing.
     pub fn identity() -> Self {
         Self {
-            c: N::RealField::one(),
-            s: N::zero(),
+            c: T::RealField::one(),
+            s: T::zero(),
         }
     }
 
@@ -29,25 +29,25 @@ impl<N: ComplexField> GivensRotation<N> {
     ///
     /// The components are copies as-is. It is not checked whether they describe
     /// an actually valid Givens rotation.
-    pub fn new_unchecked(c: N::RealField, s: N) -> Self {
+    pub fn new_unchecked(c: T::RealField, s: T) -> Self {
         Self { c, s }
     }
 
     /// Initializes a Givens rotation from its non-normalized cosine an sine components.
-    pub fn new(c: N, s: N) -> (Self, N) {
-        Self::try_new(c, s, N::RealField::zero())
-            .unwrap_or_else(|| (GivensRotation::identity(), N::zero()))
+    pub fn new(c: T, s: T) -> (Self, T) {
+        Self::try_new(c, s, T::RealField::zero())
+            .unwrap_or_else(|| (GivensRotation::identity(), T::zero()))
     }
 
     /// Initializes a Givens rotation form its non-normalized cosine an sine components.
-    pub fn try_new(c: N, s: N, eps: N::RealField) -> Option<(Self, N)> {
+    pub fn try_new(c: T, s: T, eps: T::RealField) -> Option<(Self, T)> {
         let (mod0, sign0) = c.to_exp();
-        let denom = (mod0 * mod0 + s.modulus_squared()).sqrt();
+        let denom = (mod0.clone() * mod0.clone() + s.clone().modulus_squared()).sqrt();
 
         if denom > eps {
-            let norm = sign0.scale(denom);
+            let norm = sign0.scale(denom.clone());
             let c = mod0 / denom;
-            let s = s / norm;
+            let s = s.clone() / norm.clone();
             Some((Self { c, s }, norm))
         } else {
             None
@@ -58,12 +58,12 @@ impl<N: ComplexField> GivensRotation<N> {
     ///
     /// Returns `None` if no rotation is needed (i.e. if `v.y == 0`). Otherwise, this returns the norm
     /// of `v` and the rotation `r` such that `R * v = [ |v|, 0.0 ]^t` where `|v|` is the norm of `v`.
-    pub fn cancel_y<S: Storage<N, U2>>(v: &Vector<N, U2, S>) -> Option<(Self, N)> {
+    pub fn cancel_y<S: Storage<T, U2>>(v: &Vector<T, U2, S>) -> Option<(Self, T)> {
         if !v[1].is_zero() {
-            let (mod0, sign0) = v[0].to_exp();
-            let denom = (mod0 * mod0 + v[1].modulus_squared()).sqrt();
-            let c = mod0 / denom;
-            let s = -v[1] / sign0.scale(denom);
+            let (mod0, sign0) = v[0].clone().to_exp();
+            let denom = (mod0.clone() * mod0.clone() + v[1].clone().modulus_squared()).sqrt();
+            let c = mod0 / denom.clone();
+            let s = -v[1].clone() / sign0.clone().scale(denom.clone());
             let r = sign0.scale(denom);
             Some((Self { c, s }, r))
         } else {
@@ -75,12 +75,12 @@ impl<N: ComplexField> GivensRotation<N> {
     ///
     /// Returns `None` if no rotation is needed (i.e. if `v.x == 0`). Otherwise, this returns the norm
     /// of `v` and the rotation `r` such that `R * v = [ 0.0, |v| ]^t` where `|v|` is the norm of `v`.
-    pub fn cancel_x<S: Storage<N, U2>>(v: &Vector<N, U2, S>) -> Option<(Self, N)> {
+    pub fn cancel_x<S: Storage<T, U2>>(v: &Vector<T, U2, S>) -> Option<(Self, T)> {
         if !v[0].is_zero() {
-            let (mod1, sign1) = v[1].to_exp();
-            let denom = (mod1 * mod1 + v[0].modulus_squared()).sqrt();
-            let c = mod1 / denom;
-            let s = (v[0].conjugate() * sign1).unscale(denom);
+            let (mod1, sign1) = v[1].clone().to_exp();
+            let denom = (mod1.clone() * mod1.clone() + v[0].clone().modulus_squared()).sqrt();
+            let c = mod1 / denom.clone();
+            let s = (v[0].clone().conjugate() * sign1.clone()).unscale(denom.clone());
             let r = sign1.scale(denom);
             Some((Self { c, s }, r))
         } else {
@@ -89,27 +89,30 @@ impl<N: ComplexField> GivensRotation<N> {
     }
 
     /// The cos part of this roration.
-    pub fn c(&self) -> N::RealField {
-        self.c
+    #[must_use]
+    pub fn c(&self) -> T::RealField {
+        self.c.clone()
     }
 
     /// The sin part of this roration.
-    pub fn s(&self) -> N {
-        self.s
+    #[must_use]
+    pub fn s(&self) -> T {
+        self.s.clone()
     }
 
     /// The inverse of this givens rotation.
+    #[must_use = "This function does not mutate self."]
     pub fn inverse(&self) -> Self {
         Self {
-            c: self.c,
-            s: -self.s,
+            c: self.c.clone(),
+            s: -self.s.clone(),
         }
     }
 
     /// Performs the multiplication `rhs = self * rhs` in-place.
-    pub fn rotate<R2: Dim, C2: Dim, S2: StorageMut<N, R2, C2>>(
+    pub fn rotate<R2: Dim, C2: Dim, S2: StorageMut<T, R2, C2>>(
         &self,
-        rhs: &mut Matrix<N, R2, C2, S2>,
+        rhs: &mut Matrix<T, R2, C2, S2>,
     ) where
         ShapeConstraint: DimEq<R2, U2>,
     {
@@ -118,24 +121,25 @@ impl<N: ComplexField> GivensRotation<N> {
             2,
             "Unit complex rotation: the input matrix must have exactly two rows."
         );
-        let s = self.s;
-        let c = self.c;
+        let s = self.s.clone();
+        let c = self.c.clone();
 
         for j in 0..rhs.ncols() {
             unsafe {
-                let a = *rhs.get_unchecked((0, j));
-                let b = *rhs.get_unchecked((1, j));
+                let a = rhs.get_unchecked((0, j)).clone();
+                let b = rhs.get_unchecked((1, j)).clone();
 
-                *rhs.get_unchecked_mut((0, j)) = a.scale(c) - s.conjugate() * b;
-                *rhs.get_unchecked_mut((1, j)) = s * a + b.scale(c);
+                *rhs.get_unchecked_mut((0, j)) =
+                    a.clone().scale(c.clone()) - s.clone().conjugate() * b.clone();
+                *rhs.get_unchecked_mut((1, j)) = s.clone() * a + b.scale(c.clone());
             }
         }
     }
 
     /// Performs the multiplication `lhs = lhs * self` in-place.
-    pub fn rotate_rows<R2: Dim, C2: Dim, S2: StorageMut<N, R2, C2>>(
+    pub fn rotate_rows<R2: Dim, C2: Dim, S2: StorageMut<T, R2, C2>>(
         &self,
-        lhs: &mut Matrix<N, R2, C2, S2>,
+        lhs: &mut Matrix<T, R2, C2, S2>,
     ) where
         ShapeConstraint: DimEq<C2, U2>,
     {
@@ -144,17 +148,17 @@ impl<N: ComplexField> GivensRotation<N> {
             2,
             "Unit complex rotation: the input matrix must have exactly two columns."
         );
-        let s = self.s;
-        let c = self.c;
+        let s = self.s.clone();
+        let c = self.c.clone();
 
-        // FIXME: can we optimize that to iterate on one column at a time ?
+        // TODO: can we optimize that to iterate on one column at a time ?
         for j in 0..lhs.nrows() {
             unsafe {
-                let a = *lhs.get_unchecked((j, 0));
-                let b = *lhs.get_unchecked((j, 1));
+                let a = lhs.get_unchecked((j, 0)).clone();
+                let b = lhs.get_unchecked((j, 1)).clone();
 
-                *lhs.get_unchecked_mut((j, 0)) = a.scale(c) + s * b;
-                *lhs.get_unchecked_mut((j, 1)) = -s.conjugate() * a + b.scale(c);
+                *lhs.get_unchecked_mut((j, 0)) = a.clone().scale(c.clone()) + s.clone() * b.clone();
+                *lhs.get_unchecked_mut((j, 1)) = -s.clone().conjugate() * a + b.scale(c.clone());
             }
         }
     }

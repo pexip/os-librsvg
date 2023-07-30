@@ -1,15 +1,15 @@
-// Copyright 2019, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
-use ffi::{self, cairo_status_t};
-use {Status, Surface, UserDataKey};
+use crate::error::Error;
+use crate::{Surface, UserDataKey};
+use ffi::cairo_status_t;
 
 use libc::{c_double, c_uchar, c_uint, c_void};
 use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::io;
 use std::panic::AssertUnwindSafe;
+use std::ptr;
 use std::rc::Rc;
 
 macro_rules! for_stream_constructors {
@@ -24,7 +24,7 @@ macro_rules! for_stream_constructors {
             width: f64,
             height: f64,
             stream: W,
-        ) -> Result<Self, crate::enums::Status> {
+        ) -> Result<Self, crate::error::Error> {
             Ok(Self(Surface::_for_stream(
                 ffi::$constructor_ffi,
                 width,
@@ -39,17 +39,17 @@ macro_rules! for_stream_constructors {
         ///
         /// The value that `stream` points to must live at least until the underlying `cairo_surface_t`
         /// (which maybe be longer then the Rust `PdfSurface` wrapper, because of reference-counting),
-        /// or until the output stream is removed from the surface with [`Surface::take_output_stream`].
+        /// or until the output stream is removed from the surface with [`Surface::finish_output_stream`].
         ///
         /// Since the former is hard to track for sure, the latter is strongly recommended.
-        /// The concrete type behind the `Box<dyn Any>` value returned by `take_output_stream`
+        /// The concrete type behind the `Box<dyn Any>` value returned by `finish_output_stream`
         /// is private, so you won’t be able to downcast it.
-        /// But removing it anyway ensures that later writes do no go through a dangling pointer.
+        /// But removing it anyway ensures that later writes do not go through a dangling pointer.
         pub unsafe fn for_raw_stream<W: io::Write + 'static>(
             width: f64,
             height: f64,
             stream: *mut W,
-        ) -> Result<Self, crate::enums::Status> {
+        ) -> Result<Self, crate::error::Error> {
             Ok(Self(Surface::_for_raw_stream(
                 ffi::$constructor_ffi,
                 width,
@@ -66,7 +66,7 @@ impl Surface {
         width: f64,
         height: f64,
         stream: W,
-    ) -> Result<Self, Status> {
+    ) -> Result<Self, Error> {
         let env_rc = Rc::new(CallbackEnvironment {
             mutable: RefCell::new(MutableCallbackEnvironment {
                 stream: Some((Box::new(stream), None)),
@@ -78,7 +78,7 @@ impl Surface {
         unsafe {
             let ptr = constructor(Some(write_callback::<W>), env as *mut c_void, width, height);
             let surface = Surface::from_raw_full(ptr)?;
-            surface.set_user_data(&STREAM_CALLBACK_ENVIRONMENT, env_rc);
+            surface.set_user_data(&STREAM_CALLBACK_ENVIRONMENT, env_rc)?;
             Ok(surface)
         }
     }
@@ -88,8 +88,13 @@ impl Surface {
         width: f64,
         height: f64,
         stream: *mut W,
-    ) -> Result<Self, Status> {
-        Self::_for_stream(constructor, width, height, RawStream(stream))
+    ) -> Result<Self, Error> {
+        Self::_for_stream(
+            constructor,
+            width,
+            height,
+            RawStream(ptr::NonNull::new(stream).expect("NULL stream passed")),
+        )
     }
 
     /// Finish the surface, then remove and return the output stream if any.
@@ -116,7 +121,7 @@ impl Surface {
         self.finish();
 
         let env = self
-            .get_user_data_ptr(&STREAM_CALLBACK_ENVIRONMENT)
+            .user_data_ptr(&STREAM_CALLBACK_ENVIRONMENT)
             .expect("surface without an output stream");
 
         // Safety: since `STREAM_CALLBACK_ENVIRONMENT` is private and we never
@@ -209,22 +214,28 @@ extern "C" fn write_callback<W: io::Write + 'static>(
             stream:
                 Some((
                     stream,
-                    // Don’t attempt another write if a previous one errored or panicked:
+                    // Don’t attempt another write, if a previous one errored or panicked:
                     io_error @ None,
                 )),
             unwind_payload: unwind_payload @ None,
         } = &mut *mutable
         {
-            // Safety: `write_callback<W>` was instanciated in `Surface::_for_stream`
+            // Safety: `write_callback<W>` was instantiated in `Surface::_for_stream`
             // with a W parameter consistent with the box that was unsized to `Box<dyn Any>`.
             let stream = unsafe { stream.downcast_mut_unchecked::<W>() };
             // Safety: this is the callback contract from cairo’s API
-            let data = unsafe { std::slice::from_raw_parts(data, length as usize) };
+            let data = unsafe {
+                if data.is_null() || length == 0 {
+                    &[]
+                } else {
+                    std::slice::from_raw_parts(data, length as usize)
+                }
+            };
             // Because `<W as Write>::write_all` is a generic,
             // we must conservatively assume that it can panic.
             let result = std::panic::catch_unwind(AssertUnwindSafe(|| stream.write_all(data)));
             match result {
-                Ok(Ok(())) => return Status::Success.into(),
+                Ok(Ok(())) => return ffi::STATUS_SUCCESS,
                 Ok(Err(error)) => {
                     *io_error = Some(error);
                 }
@@ -236,20 +247,20 @@ extern "C" fn write_callback<W: io::Write + 'static>(
     } else {
         env.saw_already_borrowed.set(true)
     }
-    Status::WriteError.into()
+    Error::WriteError.into()
 }
 
-struct RawStream<W>(*mut W);
+struct RawStream<W>(ptr::NonNull<W>);
 
 impl<W: io::Write> io::Write for RawStream<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        unsafe { (*self.0).write(buf) }
-    }
-    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
-        unsafe { (*self.0).write_all(buf) }
+        unsafe { (*self.0.as_ptr()).write(buf) }
     }
     fn flush(&mut self) -> io::Result<()> {
-        unsafe { (*self.0).flush() }
+        unsafe { (*self.0.as_ptr()).flush() }
+    }
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        unsafe { (*self.0.as_ptr()).write_all(buf) }
     }
 }
 

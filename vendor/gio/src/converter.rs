@@ -1,13 +1,15 @@
-use gio_sys;
+// Take a look at the license at the top of the repository in the LICENSE file.
+
+use crate::Converter;
+use crate::ConverterFlags;
+use crate::ConverterResult;
 use glib::object::IsA;
 use glib::translate::*;
 use std::mem;
 use std::ptr;
-use Converter;
-use ConverterFlags;
-use ConverterResult;
 
 pub trait ConverterExtManual {
+    #[doc(alias = "g_converter_convert")]
     fn convert<IN: AsRef<[u8]>, OUT: AsMut<[u8]>>(
         &self,
         inbuf: IN,
@@ -17,6 +19,7 @@ pub trait ConverterExtManual {
 }
 
 impl<O: IsA<Converter>> ConverterExtManual for O {
+    #[doc(alias = "g_converter_convert")]
     fn convert<IN: AsRef<[u8]>, OUT: AsMut<[u8]>>(
         &self,
         inbuf: IN,
@@ -37,13 +40,13 @@ impl<O: IsA<Converter>> ConverterExtManual for O {
             let mut bytes_read = mem::MaybeUninit::uninit();
             let mut bytes_written = mem::MaybeUninit::uninit();
             let mut error = ptr::null_mut();
-            let ret = gio_sys::g_converter_convert(
+            let ret = ffi::g_converter_convert(
                 self.as_ref().to_glib_none().0,
                 mut_override(inbuf),
                 inbuf_size,
                 outbuf,
                 outbuf_size,
-                flags.to_glib(),
+                flags.into_glib(),
                 bytes_read.as_mut_ptr(),
                 bytes_written.as_mut_ptr(),
                 &mut error,

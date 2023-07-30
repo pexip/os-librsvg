@@ -58,7 +58,7 @@ pub enum ValueType {
     Value,
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BenchmarkId {
     pub group_id: String,
     pub function_id: Option<String>,
@@ -609,7 +609,7 @@ impl Report for CliReport {
             if !different_mean {
                 explanation_str = "No change in performance detected.".to_owned();
             } else {
-                let comparison = compare_to_threshold(&mean_est, comp.noise_threshold);
+                let comparison = compare_to_threshold(mean_est, comp.noise_threshold);
                 match comparison {
                     ComparisonResult::Improved => {
                         point_estimate_str = self.green(self.bold(point_estimate_str));
@@ -828,7 +828,7 @@ mod test {
         assert_eq!("group/function/value_2", new_id.as_directory_name());
         directories.insert(new_id.as_directory_name().to_owned());
 
-        new_id = existing_id.clone();
+        new_id = existing_id;
         new_id.ensure_directory_name_unique(&directories);
         assert_eq!("group/function/value_3", new_id.as_directory_name());
         directories.insert(new_id.as_directory_name().to_owned());

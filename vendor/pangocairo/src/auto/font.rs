@@ -2,31 +2,33 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use cairo;
 use glib::object::IsA;
 use glib::translate::*;
-use pango;
-use pango_cairo_sys;
 use std::fmt;
 
-glib_wrapper! {
-    pub struct Font(Interface<pango_cairo_sys::PangoCairoFont>) @requires pango::Font;
+glib::wrapper! {
+    #[doc(alias = "PangoCairoFont")]
+    pub struct Font(Interface<ffi::PangoCairoFont>) @requires pango::Font;
 
     match fn {
-        get_type => || pango_cairo_sys::pango_cairo_font_get_type(),
+        type_ => || ffi::pango_cairo_font_get_type(),
     }
 }
 
-pub const NONE_FONT: Option<&Font> = None;
+impl Font {
+    pub const NONE: Option<&'static Font> = None;
+}
 
 pub trait FontExt: 'static {
-    fn get_scaled_font(&self) -> Option<cairo::ScaledFont>;
+    #[doc(alias = "pango_cairo_font_get_scaled_font")]
+    #[doc(alias = "get_scaled_font")]
+    fn scaled_font(&self) -> Option<cairo::ScaledFont>;
 }
 
 impl<O: IsA<Font>> FontExt for O {
-    fn get_scaled_font(&self) -> Option<cairo::ScaledFont> {
+    fn scaled_font(&self) -> Option<cairo::ScaledFont> {
         unsafe {
-            from_glib_full(pango_cairo_sys::pango_cairo_font_get_scaled_font(
+            from_glib_none(ffi::pango_cairo_font_get_scaled_font(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -35,6 +37,6 @@ impl<O: IsA<Font>> FontExt for O {
 
 impl fmt::Display for Font {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Font")
+        f.write_str("Font")
     }
 }

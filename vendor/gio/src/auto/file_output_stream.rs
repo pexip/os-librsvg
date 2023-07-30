@@ -2,53 +2,53 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
-use glib;
+use crate::AsyncResult;
+use crate::Cancellable;
+use crate::FileInfo;
+use crate::OutputStream;
+use crate::Seekable;
 use glib::object::IsA;
 use glib::translate::*;
-use glib::GString;
-use glib_sys;
-use gobject_sys;
 use std::boxed::Box as Box_;
 use std::fmt;
 use std::pin::Pin;
 use std::ptr;
-use Cancellable;
-use FileInfo;
-use OutputStream;
-use Seekable;
 
-glib_wrapper! {
-    pub struct FileOutputStream(Object<gio_sys::GFileOutputStream, gio_sys::GFileOutputStreamClass, FileOutputStreamClass>) @extends OutputStream, @implements Seekable;
+glib::wrapper! {
+    #[doc(alias = "GFileOutputStream")]
+    pub struct FileOutputStream(Object<ffi::GFileOutputStream, ffi::GFileOutputStreamClass>) @extends OutputStream, @implements Seekable;
 
     match fn {
-        get_type => || gio_sys::g_file_output_stream_get_type(),
+        type_ => || ffi::g_file_output_stream_get_type(),
     }
 }
 
-pub const NONE_FILE_OUTPUT_STREAM: Option<&FileOutputStream> = None;
+impl FileOutputStream {
+    pub const NONE: Option<&'static FileOutputStream> = None;
+}
 
 pub trait FileOutputStreamExt: 'static {
-    fn get_etag(&self) -> Option<GString>;
+    #[doc(alias = "g_file_output_stream_get_etag")]
+    #[doc(alias = "get_etag")]
+    fn etag(&self) -> Option<glib::GString>;
 
-    fn query_info<P: IsA<Cancellable>>(
+    #[doc(alias = "g_file_output_stream_query_info")]
+    fn query_info(
         &self,
         attributes: &str,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<FileInfo, glib::Error>;
 
-    fn query_info_async<
-        P: IsA<Cancellable>,
-        Q: FnOnce(Result<FileInfo, glib::Error>) + Send + 'static,
-    >(
+    #[doc(alias = "g_file_output_stream_query_info_async")]
+    fn query_info_async<P: FnOnce(Result<FileInfo, glib::Error>) + 'static>(
         &self,
         attributes: &str,
         io_priority: glib::Priority,
-        cancellable: Option<&P>,
-        callback: Q,
+        cancellable: Option<&impl IsA<Cancellable>>,
+        callback: P,
     );
 
-    fn query_info_async_future(
+    fn query_info_future(
         &self,
         attributes: &str,
         io_priority: glib::Priority,
@@ -56,22 +56,22 @@ pub trait FileOutputStreamExt: 'static {
 }
 
 impl<O: IsA<FileOutputStream>> FileOutputStreamExt for O {
-    fn get_etag(&self) -> Option<GString> {
+    fn etag(&self) -> Option<glib::GString> {
         unsafe {
-            from_glib_full(gio_sys::g_file_output_stream_get_etag(
+            from_glib_full(ffi::g_file_output_stream_get_etag(
                 self.as_ref().to_glib_none().0,
             ))
         }
     }
 
-    fn query_info<P: IsA<Cancellable>>(
+    fn query_info(
         &self,
         attributes: &str,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<FileInfo, glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let ret = gio_sys::g_file_output_stream_query_info(
+            let ret = ffi::g_file_output_stream_query_info(
                 self.as_ref().to_glib_none().0,
                 attributes.to_glib_none().0,
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
@@ -85,26 +85,34 @@ impl<O: IsA<FileOutputStream>> FileOutputStreamExt for O {
         }
     }
 
-    fn query_info_async<
-        P: IsA<Cancellable>,
-        Q: FnOnce(Result<FileInfo, glib::Error>) + Send + 'static,
-    >(
+    fn query_info_async<P: FnOnce(Result<FileInfo, glib::Error>) + 'static>(
         &self,
         attributes: &str,
         io_priority: glib::Priority,
-        cancellable: Option<&P>,
-        callback: Q,
+        cancellable: Option<&impl IsA<Cancellable>>,
+        callback: P,
     ) {
-        let user_data: Box_<Q> = Box_::new(callback);
+        let main_context = glib::MainContext::ref_thread_default();
+        let is_main_context_owner = main_context.is_owner();
+        let has_acquired_main_context = (!is_main_context_owner)
+            .then(|| main_context.acquire().ok())
+            .flatten();
+        assert!(
+            is_main_context_owner || has_acquired_main_context.is_some(),
+            "Async operations only allowed if the thread is owning the MainContext"
+        );
+
+        let user_data: Box_<glib::thread_guard::ThreadGuard<P>> =
+            Box_::new(glib::thread_guard::ThreadGuard::new(callback));
         unsafe extern "C" fn query_info_async_trampoline<
-            Q: FnOnce(Result<FileInfo, glib::Error>) + Send + 'static,
+            P: FnOnce(Result<FileInfo, glib::Error>) + 'static,
         >(
-            _source_object: *mut gobject_sys::GObject,
-            res: *mut gio_sys::GAsyncResult,
-            user_data: glib_sys::gpointer,
+            _source_object: *mut glib::gobject_ffi::GObject,
+            res: *mut crate::ffi::GAsyncResult,
+            user_data: glib::ffi::gpointer,
         ) {
             let mut error = ptr::null_mut();
-            let ret = gio_sys::g_file_output_stream_query_info_finish(
+            let ret = ffi::g_file_output_stream_query_info_finish(
                 _source_object as *mut _,
                 res,
                 &mut error,
@@ -114,15 +122,17 @@ impl<O: IsA<FileOutputStream>> FileOutputStreamExt for O {
             } else {
                 Err(from_glib_full(error))
             };
-            let callback: Box_<Q> = Box_::from_raw(user_data as *mut _);
+            let callback: Box_<glib::thread_guard::ThreadGuard<P>> =
+                Box_::from_raw(user_data as *mut _);
+            let callback: P = callback.into_inner();
             callback(result);
         }
-        let callback = query_info_async_trampoline::<Q>;
+        let callback = query_info_async_trampoline::<P>;
         unsafe {
-            gio_sys::g_file_output_stream_query_info_async(
+            ffi::g_file_output_stream_query_info_async(
                 self.as_ref().to_glib_none().0,
                 attributes.to_glib_none().0,
-                io_priority.to_glib(),
+                io_priority.into_glib(),
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 Some(callback),
                 Box_::into_raw(user_data) as *mut _,
@@ -130,25 +140,25 @@ impl<O: IsA<FileOutputStream>> FileOutputStreamExt for O {
         }
     }
 
-    fn query_info_async_future(
+    fn query_info_future(
         &self,
         attributes: &str,
         io_priority: glib::Priority,
     ) -> Pin<Box_<dyn std::future::Future<Output = Result<FileInfo, glib::Error>> + 'static>> {
         let attributes = String::from(attributes);
-        Box_::pin(crate::GioFuture::new(self, move |obj, send| {
-            let cancellable = Cancellable::new();
-            obj.query_info_async(&attributes, io_priority, Some(&cancellable), move |res| {
-                send.resolve(res);
-            });
-
-            cancellable
-        }))
+        Box_::pin(crate::GioFuture::new(
+            self,
+            move |obj, cancellable, send| {
+                obj.query_info_async(&attributes, io_priority, Some(cancellable), move |res| {
+                    send.resolve(res);
+                });
+            },
+        ))
     }
 }
 
 impl fmt::Display for FileOutputStream {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "FileOutputStream")
+        f.write_str("FileOutputStream")
     }
 }

@@ -18,7 +18,11 @@ fn parse_args() -> Matches {
     let mut opts = Options::new();
     opts.optflag("c", "", "colorize output (for ANSI terminals)")
         .optflag("q", "", "test quietly (output only errors)")
-        //.optflag("t", "", "print contents of tEXt chunks (can be used with -q)");
+        .optflag(
+            "t",
+            "",
+            "print contents of tEXt/zTXt/iTXt chunks (can be used with -q)",
+        )
         .optflag("v", "", "test verbosely (print most chunk data)")
         .parsing_style(ParsingStyle::StopAtFirstFree);
     if args.len() > 1 {
@@ -39,6 +43,7 @@ struct Config {
     quiet: bool,
     verbose: bool,
     color: bool,
+    text: bool,
 }
 
 fn display_interlaced(i: bool) -> &'static str {
@@ -56,10 +61,10 @@ fn display_image_type(bits: u8, color: png::ColorType) -> String {
         bits,
         match color {
             Grayscale => "grayscale",
-            RGB => "RGB",
+            Rgb => "RGB",
             Indexed => "palette",
             GrayscaleAlpha => "grayscale+alpha",
-            RGBA => "RGB+alpha",
+            Rgba => "RGB+alpha",
         }
     )
 }
@@ -68,10 +73,10 @@ fn final_channels(c: png::ColorType, trns: bool) -> u8 {
     use png::ColorType::*;
     match c {
         Grayscale => 1 + if trns { 1 } else { 0 },
-        RGB => 3,
+        Rgb => 3,
         Indexed => 3 + if trns { 1 } else { 0 },
         GrayscaleAlpha => 2,
-        RGBA => 4,
+        Rgba => 4,
     }
 }
 fn check_image<P: AsRef<Path>>(c: Config, fname: P) -> io::Result<()> {
@@ -179,7 +184,11 @@ fn check_image<P: AsRef<Path>>(c: Config, fname: P) -> io::Result<()> {
         match decoder.update(buf, &mut Vec::new()) {
             Ok((_, ImageEnd)) => {
                 if !have_idat {
-                    display_error(png::DecodingError::Format("IDAT chunk missing".into()))?;
+                    // This isn't beautiful. But it works.
+                    display_error(png::DecodingError::IoError(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "IDAT chunk missing",
+                    )))?;
                     break;
                 }
                 if !c.verbose && !c.quiet {
@@ -218,7 +227,7 @@ fn check_image<P: AsRef<Path>>(c: Config, fname: P) -> io::Result<()> {
                         "in {} ({} chunks, {:.1}% compression)",
                         fname,
                         n_chunks,
-                        100.0 * (1.0 - c_ratio!())
+                        100.0 * (1.0 - c_ratio!()),
                     )
                 }
                 break;
@@ -238,15 +247,15 @@ fn check_image<P: AsRef<Path>>(c: Config, fname: P) -> io::Result<()> {
                         use png::chunk;
                         n_chunks += 1;
                         if c.verbose {
-                            let chunk = String::from_utf8_lossy(&type_str);
+                            let chunk = type_str;
                             println!("");
                             print!("  chunk ");
                             if c.color {
                                 t.fg(color::YELLOW)?;
-                                write!(t, "{}", chunk)?;
+                                write!(t, "{:?}", chunk)?;
                                 t.reset()?;
                             } else {
-                                print!("{}", chunk)
+                                print!("{:?}", chunk)
                             }
                             print!(
                                 " at offset {:#07x}, length {}",
@@ -325,6 +334,27 @@ fn check_image<P: AsRef<Path>>(c: Config, fname: P) -> io::Result<()> {
             }
         }
     }
+    if c.text {
+        println!("Parsed tEXt chunks:");
+        for text_chunk in &decoder.info().unwrap().uncompressed_latin1_text {
+            println!("{:#?}", text_chunk);
+        }
+
+        println!("Parsed zTXt chunks:");
+        for text_chunk in &decoder.info().unwrap().compressed_latin1_text {
+            let mut cloned_text_chunk = text_chunk.clone();
+            cloned_text_chunk.decompress_text()?;
+            println!("{:#?}", cloned_text_chunk);
+        }
+
+        println!("Parsed iTXt chunks:");
+        for text_chunk in &decoder.info().unwrap().utf8_text {
+            let mut cloned_text_chunk = text_chunk.clone();
+            cloned_text_chunk.decompress_text()?;
+            println!("{:#?}", cloned_text_chunk);
+        }
+    }
+
     Ok(())
 }
 
@@ -335,6 +365,7 @@ fn main() {
         quiet: m.opt_present("q"),
         verbose: m.opt_present("v"),
         color: m.opt_present("c"),
+        text: m.opt_present("t"),
     };
 
     for file in m.free {

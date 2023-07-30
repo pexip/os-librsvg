@@ -28,6 +28,20 @@ where
     _phantom: PhantomData<Item>,
 }
 
+unsafe impl<M, Item> Send for NamePredicate<M, Item>
+where
+    M: Predicate<Item> + Send,
+    Item: ?Sized,
+{
+}
+
+unsafe impl<M, Item> Sync for NamePredicate<M, Item>
+where
+    M: Predicate<Item> + Sync,
+    Item: ?Sized,
+{
+}
+
 impl<M, Item> Predicate<Item> for NamePredicate<M, Item>
 where
     M: Predicate<Item>,
@@ -61,7 +75,8 @@ where
     Item: ?Sized,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.name)
+        let palette = crate::Palette::current();
+        write!(f, "{}", palette.description.paint(self.name))
     }
 }
 

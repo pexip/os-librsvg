@@ -3,28 +3,26 @@ Section: libs
 Priority: optional
 Maintainer: Debian GNOME Maintainers <pkg-gnome-maintainers@lists.alioth.debian.org>
 Uploaders: @GNOME_TEAM@
-Build-Depends: debhelper-compat (= 12),
-               dh-cargo,
-               gnome-pkg-tools (>= 0.10),
-               gobject-introspection (>= 0.10.8),
-               gtk-doc-tools (>= 1.13),
+Build-Depends: debhelper-compat (= 13),
+               cargo,
+               dh-sequence-gir,
+               dh-sequence-gnome,
                jq,
                libcairo2-dev (>= 1.2.0),
                libfreetype6-dev (>= 2.8.0),
-               libgdk-pixbuf-2.0-dev (>= 2.23.5-2) | libgdk-pixbuf2.0-dev (>= 2.23.5-2),
+               libgdk-pixbuf-2.0-dev (>= 2.23.5-2),
                libgirepository1.0-dev (>= 0.10.8),
                libglib2.0-dev (>= 2.50.0),
                libharfbuzz-dev,
-               libpango1.0-dev (>= 1.38.0),
+               libpango1.0-dev (>= 1.48.11),
                libxml2-dev (>= 2.9.0),
                locales,
-               rustc (>= 1.40),
+               python3-docutils <!nodoc>,
+               rustc (>= 1.56),
                valac (>= 0.17.5)
-Build-Depends-Indep: libcairo2-doc (>= 1.15.4) <!nodoc>,
-                     libgdk-pixbuf2.0-doc (>= 2.23.5-2) <!nodoc>,
-                     libglib2.0-doc (>= 2.52.0) <!nodoc>
+Build-Depends-Indep: gi-docgen <!nodoc>,
 Rules-Requires-Root: no
-Standards-Version: 4.5.1
+Standards-Version: 4.6.0
 Vcs-Browser: https://salsa.debian.org/gnome-team/librsvg
 Vcs-Git: https://salsa.debian.org/gnome-team/librsvg.git
 Homepage: https://wiki.gnome.org/Projects/LibRsvg
@@ -34,7 +32,7 @@ Section: libdevel
 Architecture: any
 Depends: gir1.2-rsvg-2.0 (= ${binary:Version}),
          libcairo2-dev (>= 1.2.0),
-         libgdk-pixbuf-2.0-dev (>= 2.23.5-2) | libgdk-pixbuf2.0-dev (>= 2.23.5-2),
+         libgdk-pixbuf-2.0-dev (>= 2.23.5-2),
          libglib2.0-dev (>= 2.50.0),
          librsvg2-2 (= ${binary:Version}),
          librsvg2-common (= ${binary:Version}),
@@ -96,6 +94,18 @@ Description: command-line utility to convert SVG files
  .
  This package includes a command-line utility to convert the SVG files
  to the PNG format.
+
+Package: librsvg2-tests
+Section: misc
+Architecture: any
+Depends: ${misc:Depends},
+         ${shlibs:Depends}
+Description: automated tests for RSVG library
+ The rsvg library is an efficient renderer for Scalable Vector Graphics
+ (SVG) pictures.
+ .
+ This package contains automated tests, which can be run with
+ gnome-desktop-testing or autopkgtest.
 
 Package: gir1.2-rsvg-2.0
 Section: introspection

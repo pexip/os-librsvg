@@ -1,16 +1,15 @@
-use num::{FromPrimitive, One, Signed, Zero};
+use num::{One, Signed, Zero};
 use std::any::Any;
 use std::fmt::{Debug, Display};
 use std::ops::Neg;
 use std::{f32, f64};
 
 use crate::scalar::{Field, RealField, SubsetOf, SupersetOf};
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), not(feature = "libm_force"), feature = "libm"))]
 use num::Float;
 //#[cfg(feature = "decimal")]
 //use decimal::d128;
 
-#[macro_use]
 macro_rules! complex_trait_methods(
     ($RealField: ident $(, $prefix: ident)*) => {
         paste::item! {
@@ -43,15 +42,15 @@ macro_rules! complex_trait_methods(
 
             /// The polar form of this complex number: (modulus, arg)
             fn [<$($prefix)* to_polar>](self) -> (Self::$RealField, Self::$RealField) {
-                (self.[<$($prefix)* modulus>](), self.[<$($prefix)* argument>]())
+                (self.clone().[<$($prefix)* modulus>](), self.[<$($prefix)* argument>]())
             }
 
             /// The exponential form of this complex number: (modulus, e^{i arg})
             fn [<$($prefix)* to_exp>](self) -> (Self::$RealField, Self) {
-                let m = self.[<$($prefix)* modulus>]();
+                let m = self.clone().[<$($prefix)* modulus>]();
 
                 if !m.is_zero() {
-                    (m, self.[<$($prefix)* unscale>](m))
+                    (m.clone(), self.[<$($prefix)* unscale>](m))
                 } else {
                     (Self::$RealField::zero(), Self::one())
                 }
@@ -84,7 +83,7 @@ macro_rules! complex_trait_methods(
             fn [<$($prefix)* sin_cos>](self) -> (Self, Self);
             #[inline]
             fn [<$($prefix)* sinh_cosh>](self) -> (Self, Self) {
-                (self.[<$($prefix)* sinh>](), self.[<$($prefix)* cosh>]())
+                (self.clone().[<$($prefix)* sinh>](), self.[<$($prefix)* cosh>]())
             }
             fn [<$($prefix)* tan>](self) -> Self;
             fn [<$($prefix)* asin>](self) -> Self;
@@ -103,7 +102,7 @@ macro_rules! complex_trait_methods(
                 if self.is_zero() {
                     Self::one()
                 } else {
-                    self.[<$($prefix)* sin>]() / self
+                    self.clone().[<$($prefix)* sin>]() / self
                 }
             }
 
@@ -112,7 +111,7 @@ macro_rules! complex_trait_methods(
                 if self.is_zero() {
                     Self::one()
                 } else {
-                    self.[<$($prefix)* sinh>]() / self
+                    self.clone().[<$($prefix)* sinh>]() / self
                 }
             }
 
@@ -122,7 +121,7 @@ macro_rules! complex_trait_methods(
                 if self.is_zero() {
                     Self::one()
                 } else {
-                    self.[<$($prefix)* cos>]() / self
+                    self.clone().[<$($prefix)* cos>]() / self
                 }
             }
 
@@ -131,7 +130,7 @@ macro_rules! complex_trait_methods(
                 if self.is_zero() {
                     Self::one()
                 } else {
-                    self.[<$($prefix)* cosh>]() / self
+                    self.clone().[<$($prefix)* cosh>]() / self
                 }
             }
 
@@ -163,8 +162,8 @@ pub trait ComplexField:
     SubsetOf<Self>
     + SupersetOf<f64>
     + Field<Element = Self, SimdBool = bool>
-    + Copy
     + Neg<Output = Self>
+    + Clone
 //    + MeetSemilattice
 //    + JoinSemilattice
     + Send
@@ -172,7 +171,6 @@ pub trait ComplexField:
     + Any
     + 'static
     + Debug
-    + FromPrimitive
     + Display
 {
     type RealField: RealField;
@@ -182,6 +180,7 @@ pub trait ComplexField:
     fn try_sqrt(self) -> Option<Self>;
 }
 
+#[cfg(not(feature = "libm_force"))]
 macro_rules! impl_complex(
     ($($T:ty, $M:ident, $libm: ident);*) => ($(
         impl ComplexField for $T {
@@ -467,17 +466,565 @@ macro_rules! impl_complex(
     )*)
 );
 
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), not(feature = "libm_force"), feature = "libm"))]
 impl_complex!(
     f32, f32, Float;
     f64, f64, Float
 );
 
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", not(feature = "libm_force")))]
 impl_complex!(
     f32,f32,f32;
     f64,f64,f64
 );
+
+#[cfg(feature = "libm_force")]
+impl ComplexField for f32 {
+    type RealField = f32;
+
+    #[inline]
+    fn from_real(re: Self::RealField) -> Self {
+        re
+    }
+
+    #[inline]
+    fn real(self) -> Self::RealField {
+        self
+    }
+
+    #[inline]
+    fn imaginary(self) -> Self::RealField {
+        Self::zero()
+    }
+
+    #[inline]
+    fn norm1(self) -> Self::RealField {
+        libm_force::fabsf(self)
+    }
+
+    #[inline]
+    fn modulus(self) -> Self::RealField {
+        libm_force::fabsf(self)
+    }
+
+    #[inline]
+    fn modulus_squared(self) -> Self::RealField {
+        self * self
+    }
+
+    #[inline]
+    fn argument(self) -> Self::RealField {
+        if self >= Self::zero() {
+            Self::zero()
+        } else {
+            Self::pi()
+        }
+    }
+
+    #[inline]
+    fn to_exp(self) -> (Self, Self) {
+        if self >= Self::zero() {
+            (self, Self::one())
+        } else {
+            (-self, -Self::one())
+        }
+    }
+
+    #[inline]
+    fn recip(self) -> Self {
+        f32::recip(self)
+    }
+
+    #[inline]
+    fn conjugate(self) -> Self {
+        self
+    }
+
+    #[inline]
+    fn scale(self, factor: Self::RealField) -> Self {
+        self * factor
+    }
+
+    #[inline]
+    fn unscale(self, factor: Self::RealField) -> Self {
+        self / factor
+    }
+
+    #[inline]
+    fn floor(self) -> Self {
+        libm_force::floorf(self)
+    }
+
+    #[inline]
+    fn ceil(self) -> Self {
+        libm_force::ceilf(self)
+    }
+
+    #[inline]
+    fn round(self) -> Self {
+        libm_force::roundf(self)
+    }
+
+    #[inline]
+    fn trunc(self) -> Self {
+        libm_force::truncf(self)
+    }
+
+    #[inline]
+    fn fract(self) -> Self {
+        self - libm_force::truncf(self)
+    }
+
+    #[inline]
+    fn abs(self) -> Self {
+        libm_force::fabsf(self)
+    }
+
+    #[inline]
+    fn signum(self) -> Self {
+        Signed::signum(&self)
+    }
+
+    #[inline]
+    fn mul_add(self, a: Self, b: Self) -> Self {
+        libm_force::fmaf(self, a, b)
+    }
+
+    #[inline]
+    fn powi(self, n: i32) -> Self {
+        // TODO: implement a more accurate/efficient solution?
+        libm_force::powf(self, n as f32)
+    }
+
+    #[inline]
+    fn powf(self, n: Self) -> Self {
+        libm_force::powf(self, n)
+    }
+
+    #[inline]
+    fn powc(self, n: Self) -> Self {
+        // Same as powf.
+        libm_force::powf(self, n)
+    }
+
+    #[inline]
+    fn sqrt(self) -> Self {
+        libm_force::sqrtf(self)
+    }
+
+    #[inline]
+    fn try_sqrt(self) -> Option<Self> {
+        if self >= Self::zero() {
+            Some(libm_force::sqrtf(self))
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn exp(self) -> Self {
+        libm_force::expf(self)
+    }
+
+    #[inline]
+    fn exp2(self) -> Self {
+        libm_force::exp2f(self)
+    }
+
+    #[inline]
+    fn exp_m1(self) -> Self {
+        libm_force::expm1f(self)
+    }
+
+    #[inline]
+    fn ln_1p(self) -> Self {
+        libm_force::log1pf(self)
+    }
+
+    #[inline]
+    fn ln(self) -> Self {
+        libm_force::logf(self)
+    }
+
+    #[inline]
+    fn log(self, base: Self) -> Self {
+        libm_force::logf(self) / libm_force::logf(base)
+    }
+
+    #[inline]
+    fn log2(self) -> Self {
+        libm_force::log2f(self)
+    }
+
+    #[inline]
+    fn log10(self) -> Self {
+        libm_force::log10f(self)
+    }
+
+    #[inline]
+    fn cbrt(self) -> Self {
+        libm_force::cbrtf(self)
+    }
+
+    #[inline]
+    fn hypot(self, other: Self) -> Self::RealField {
+        libm_force::hypotf(self, other)
+    }
+
+    #[inline]
+    fn sin(self) -> Self {
+        libm_force::sinf(self)
+    }
+
+    #[inline]
+    fn cos(self) -> Self {
+        libm_force::cosf(self)
+    }
+
+    #[inline]
+    fn tan(self) -> Self {
+        libm_force::tanf(self)
+    }
+
+    #[inline]
+    fn asin(self) -> Self {
+        libm_force::asinf(self)
+    }
+
+    #[inline]
+    fn acos(self) -> Self {
+        libm_force::acosf(self)
+    }
+
+    #[inline]
+    fn atan(self) -> Self {
+        libm_force::atanf(self)
+    }
+
+    #[inline]
+    fn sin_cos(self) -> (Self, Self) {
+        libm_force::sincosf(self)
+    }
+
+    //            #[inline]
+    //            fn exp_m1(self) -> Self {
+    //                libm_force::exp_m1(self)
+    //            }
+    //
+    //            #[inline]
+    //            fn ln_1p(self) -> Self {
+    //                libm_force::ln_1p(self)
+    //            }
+    //
+    #[inline]
+    fn sinh(self) -> Self {
+        libm_force::sinhf(self)
+    }
+
+    #[inline]
+    fn cosh(self) -> Self {
+        libm_force::coshf(self)
+    }
+
+    #[inline]
+    fn tanh(self) -> Self {
+        libm_force::tanhf(self)
+    }
+
+    #[inline]
+    fn asinh(self) -> Self {
+        libm_force::asinhf(self)
+    }
+
+    #[inline]
+    fn acosh(self) -> Self {
+        libm_force::acoshf(self)
+    }
+
+    #[inline]
+    fn atanh(self) -> Self {
+        libm_force::atanhf(self)
+    }
+
+    #[inline]
+    fn is_finite(&self) -> bool {
+        f32::is_finite(*self)
+    }
+}
+
+#[cfg(feature = "libm_force")]
+impl ComplexField for f64 {
+    type RealField = f64;
+
+    #[inline]
+    fn from_real(re: Self::RealField) -> Self {
+        re
+    }
+
+    #[inline]
+    fn real(self) -> Self::RealField {
+        self
+    }
+
+    #[inline]
+    fn imaginary(self) -> Self::RealField {
+        Self::zero()
+    }
+
+    #[inline]
+    fn norm1(self) -> Self::RealField {
+        libm_force::fabs(self)
+    }
+
+    #[inline]
+    fn modulus(self) -> Self::RealField {
+        libm_force::fabs(self)
+    }
+
+    #[inline]
+    fn modulus_squared(self) -> Self::RealField {
+        self * self
+    }
+
+    #[inline]
+    fn argument(self) -> Self::RealField {
+        if self >= Self::zero() {
+            Self::zero()
+        } else {
+            Self::pi()
+        }
+    }
+
+    #[inline]
+    fn to_exp(self) -> (Self, Self) {
+        if self >= Self::zero() {
+            (self, Self::one())
+        } else {
+            (-self, -Self::one())
+        }
+    }
+
+    #[inline]
+    fn recip(self) -> Self {
+        f64::recip(self)
+    }
+
+    #[inline]
+    fn conjugate(self) -> Self {
+        self
+    }
+
+    #[inline]
+    fn scale(self, factor: Self::RealField) -> Self {
+        self * factor
+    }
+
+    #[inline]
+    fn unscale(self, factor: Self::RealField) -> Self {
+        self / factor
+    }
+
+    #[inline]
+    fn floor(self) -> Self {
+        libm_force::floor(self)
+    }
+
+    #[inline]
+    fn ceil(self) -> Self {
+        libm_force::ceil(self)
+    }
+
+    #[inline]
+    fn round(self) -> Self {
+        libm_force::round(self)
+    }
+
+    #[inline]
+    fn trunc(self) -> Self {
+        libm_force::trunc(self)
+    }
+
+    #[inline]
+    fn fract(self) -> Self {
+        self - libm_force::trunc(self)
+    }
+
+    #[inline]
+    fn abs(self) -> Self {
+        libm_force::fabs(self)
+    }
+
+    #[inline]
+    fn signum(self) -> Self {
+        Signed::signum(&self)
+    }
+
+    #[inline]
+    fn mul_add(self, a: Self, b: Self) -> Self {
+        libm_force::fma(self, a, b)
+    }
+
+    #[inline]
+    fn powi(self, n: i32) -> Self {
+        // TODO: implement a more accurate solution?
+        libm_force::pow(self, n as f64)
+    }
+
+    #[inline]
+    fn powf(self, n: Self) -> Self {
+        libm_force::pow(self, n)
+    }
+
+    #[inline]
+    fn powc(self, n: Self) -> Self {
+        // Same as powf.
+        libm_force::pow(self, n)
+    }
+
+    #[inline]
+    fn sqrt(self) -> Self {
+        libm_force::sqrt(self)
+    }
+
+    #[inline]
+    fn try_sqrt(self) -> Option<Self> {
+        if self >= Self::zero() {
+            Some(libm_force::sqrt(self))
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn exp(self) -> Self {
+        libm_force::exp(self)
+    }
+
+    #[inline]
+    fn exp2(self) -> Self {
+        libm_force::exp2(self)
+    }
+
+    #[inline]
+    fn exp_m1(self) -> Self {
+        libm_force::expm1(self)
+    }
+
+    #[inline]
+    fn ln_1p(self) -> Self {
+        libm_force::log1p(self)
+    }
+
+    #[inline]
+    fn ln(self) -> Self {
+        libm_force::log(self)
+    }
+
+    #[inline]
+    fn log(self, base: Self) -> Self {
+        libm_force::log(self) / libm_force::log(base)
+    }
+
+    #[inline]
+    fn log2(self) -> Self {
+        libm_force::log2(self)
+    }
+
+    #[inline]
+    fn log10(self) -> Self {
+        libm_force::log10(self)
+    }
+
+    #[inline]
+    fn cbrt(self) -> Self {
+        libm_force::cbrt(self)
+    }
+
+    #[inline]
+    fn hypot(self, other: Self) -> Self::RealField {
+        libm_force::hypot(self, other)
+    }
+
+    #[inline]
+    fn sin(self) -> Self {
+        libm_force::sin(self)
+    }
+
+    #[inline]
+    fn cos(self) -> Self {
+        libm_force::cos(self)
+    }
+
+    #[inline]
+    fn tan(self) -> Self {
+        libm_force::tan(self)
+    }
+
+    #[inline]
+    fn asin(self) -> Self {
+        libm_force::asin(self)
+    }
+
+    #[inline]
+    fn acos(self) -> Self {
+        libm_force::acos(self)
+    }
+
+    #[inline]
+    fn atan(self) -> Self {
+        libm_force::atan(self)
+    }
+
+    #[inline]
+    fn sin_cos(self) -> (Self, Self) {
+        libm_force::sincos(self)
+    }
+
+    //            #[inline]
+    //            fn exp_m1(self) -> Self {
+    //                libm_force::exp_m1(self)
+    //            }
+    //
+    //            #[inline]
+    //            fn ln_1p(self) -> Self {
+    //                libm_force::ln_1p(self)
+    //            }
+    //
+    #[inline]
+    fn sinh(self) -> Self {
+        libm_force::sinh(self)
+    }
+
+    #[inline]
+    fn cosh(self) -> Self {
+        libm_force::cosh(self)
+    }
+
+    #[inline]
+    fn tanh(self) -> Self {
+        libm_force::tanh(self)
+    }
+
+    #[inline]
+    fn asinh(self) -> Self {
+        libm_force::asinh(self)
+    }
+
+    #[inline]
+    fn acosh(self) -> Self {
+        libm_force::acosh(self)
+    }
+
+    #[inline]
+    fn atanh(self) -> Self {
+        libm_force::atanh(self)
+    }
+
+    #[inline]
+    fn is_finite(&self) -> bool {
+        f64::is_finite(*self)
+    }
+}
 
 //#[cfg(feature = "decimal")]
 //impl_real!(d128, d128, d128);
@@ -514,7 +1061,7 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
 
     #[inline]
     fn modulus_squared(self) -> Self::RealField {
-        self.re * self.re + self.im * self.im
+        self.re.clone() * self.re + self.im.clone() * self.im
     }
 
     #[inline]
@@ -685,7 +1232,7 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
         // formula: x^y = (ρ e^(i θ))^y = ρ^y e^(i θ y)
         // = from_polar(ρ^y, θ y)
         let (r, theta) = self.to_polar();
-        complex_from_polar(r.powf(exp), theta * exp)
+        complex_from_polar(r.powf(exp.clone()), theta * exp)
     }
 
     /// Returns the logarithm of `self` with respect to an arbitrary base.
@@ -695,7 +1242,7 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
         // = log_y(ρ) + log_y(e^(i θ)) = log_y(ρ) + ln(e^(i θ)) / ln(y)
         // = log_y(ρ) + i θ / ln(y)
         let (r, theta) = self.to_polar();
-        Self::new(r.log(base), theta / base.ln())
+        Self::new(r.log(base.clone()), theta / base.ln())
     }
 
     /// Raises `self` to a complex power.
@@ -714,7 +1261,7 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
         // = from_polar(p^c e^(−d θ), c θ + d ln(ρ))
         let (r, theta) = self.to_polar();
         complex_from_polar(
-            r.powf(exp.re) * (-exp.im * theta).exp(),
+            r.clone().powf(exp.re.clone()) * (-exp.im.clone() * theta.clone()).exp(),
             exp.re * theta + exp.im * r.ln(),
         )
     }
@@ -734,7 +1281,7 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
     fn sin(self) -> Self {
         // formula: sin(a + bi) = sin(a)cosh(b) + i*cos(a)sinh(b)
         Self::new(
-            self.re.sin() * self.im.cosh(),
+            self.re.clone().sin() * self.im.clone().cosh(),
             self.re.cos() * self.im.sinh(),
         )
     }
@@ -744,7 +1291,7 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
     fn cos(self) -> Self {
         // formula: cos(a + bi) = cos(a)cosh(b) - i*sin(a)sinh(b)
         Self::new(
-            self.re.cos() * self.im.cosh(),
+            self.re.clone().cos() * self.im.clone().cosh(),
             -self.re.sin() * self.im.sinh(),
         )
     }
@@ -753,7 +1300,7 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
     fn sin_cos(self) -> (Self, Self) {
         let (rsin, rcos) = self.re.sin_cos();
         let (isinh, icosh) = self.im.sinh_cosh();
-        let sin = Self::new(rsin * icosh, rcos * isinh);
+        let sin = Self::new(rsin.clone() * icosh.clone(), rcos.clone() * isinh.clone());
         let cos = Self::new(rcos * icosh, -rsin * isinh);
 
         (sin, cos)
@@ -763,8 +1310,8 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
     #[inline]
     fn tan(self) -> Self {
         // formula: tan(a + bi) = (sin(2a) + i*sinh(2b))/(cos(2a) + cosh(2b))
-        let (two_re, two_im) = (self.re + self.re, self.im + self.im);
-        Self::new(two_re.sin(), two_im.sinh()).unscale(two_re.cos() + two_im.cosh())
+        let (two_re, two_im) = (self.re.clone() + self.re, self.im.clone() + self.im);
+        Self::new(two_re.clone().sin(), two_im.clone().sinh()).unscale(two_re.cos() + two_im.cosh())
     }
 
     /// Computes the principal value of the inverse sine of `self`.
@@ -779,7 +1326,7 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
     fn asin(self) -> Self {
         // formula: arcsin(z) = -i ln(sqrt(1-z^2) + iz)
         let i = Self::i();
-        -i * ((Self::one() - self * self).sqrt() + i * self).ln()
+        -i.clone() * ((Self::one() - self.clone() * self.clone()).sqrt() + i * self).ln()
     }
 
     /// Computes the principal value of the inverse cosine of `self`.
@@ -794,7 +1341,7 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
     fn acos(self) -> Self {
         // formula: arccos(z) = -i ln(i sqrt(1-z^2) + z)
         let i = Self::i();
-        -i * (i * (Self::one() - self * self).sqrt() + self).ln()
+        -i.clone() * (i * (Self::one() - self.clone() * self.clone()).sqrt() + self).ln()
     }
 
     /// Computes the principal value of the inverse tangent of `self`.
@@ -810,15 +1357,15 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
         // formula: arctan(z) = (ln(1+iz) - ln(1-iz))/(2i)
         let i = Self::i();
         let one = Self::one();
-        let two = one + one;
+        let two = one.clone() + one.clone();
 
         if self == i {
             return Self::new(N::zero(), N::one() / N::zero());
-        } else if self == -i {
+        } else if self == -i.clone() {
             return Self::new(N::zero(), -N::one() / N::zero());
         }
 
-        ((one + i * self).ln() - (one - i * self).ln()) / (two * i)
+        ((one.clone() + i.clone() * self.clone()).ln() - (one - i.clone() * self).ln()) / (two * i)
     }
 
     /// Computes the hyperbolic sine of `self`.
@@ -826,7 +1373,7 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
     fn sinh(self) -> Self {
         // formula: sinh(a + bi) = sinh(a)cos(b) + i*cosh(a)sin(b)
         Self::new(
-            self.re.sinh() * self.im.cos(),
+            self.re.clone().sinh() * self.im.clone().cos(),
             self.re.cosh() * self.im.sin(),
         )
     }
@@ -836,7 +1383,7 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
     fn cosh(self) -> Self {
         // formula: cosh(a + bi) = cosh(a)cos(b) + i*sinh(a)sin(b)
         Self::new(
-            self.re.cosh() * self.im.cos(),
+            self.re.clone().cosh() * self.im.clone().cos(),
             self.re.sinh() * self.im.sin(),
         )
     }
@@ -845,7 +1392,7 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
     fn sinh_cosh(self) -> (Self, Self) {
         let (rsinh, rcosh) = self.re.sinh_cosh();
         let (isin, icos) = self.im.sin_cos();
-        let sin = Self::new(rsinh * icos, rcosh * isin);
+        let sin = Self::new(rsinh.clone() * icos.clone(), rcosh.clone() * isin.clone());
         let cos = Self::new(rcosh * icos, rsinh * isin);
 
         (sin, cos)
@@ -855,8 +1402,8 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
     #[inline]
     fn tanh(self) -> Self {
         // formula: tanh(a + bi) = (sinh(2a) + i*sin(2b))/(cosh(2a) + cos(2b))
-        let (two_re, two_im) = (self.re + self.re, self.im + self.im);
-        Self::new(two_re.sinh(), two_im.sin()).unscale(two_re.cosh() + two_im.cos())
+        let (two_re, two_im) = (self.re.clone() + self.re, self.im.clone() + self.im);
+        Self::new(two_re.clone().sinh(), two_im.clone().sin()).unscale(two_re.cosh() + two_im.cos())
     }
 
     /// Computes the principal value of inverse hyperbolic sine of `self`.
@@ -871,7 +1418,7 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
     fn asinh(self) -> Self {
         // formula: arcsinh(z) = ln(z + sqrt(1+z^2))
         let one = Self::one();
-        (self + (one + self * self).sqrt()).ln()
+        (self.clone() + (one + self.clone() * self).sqrt()).ln()
     }
 
     /// Computes the principal value of inverse hyperbolic cosine of `self`.
@@ -885,8 +1432,10 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
     fn acosh(self) -> Self {
         // formula: arccosh(z) = 2 ln(sqrt((z+1)/2) + sqrt((z-1)/2))
         let one = Self::one();
-        let two = one + one;
-        two * (((self + one) / two).sqrt() + ((self - one) / two).sqrt()).ln()
+        let two = one.clone() + one.clone();
+        two.clone()
+            * (((self.clone() + one.clone()) / two.clone()).sqrt() + ((self - one) / two).sqrt())
+                .ln()
     }
 
     /// Computes the principal value of inverse hyperbolic tangent of `self`.
@@ -901,17 +1450,17 @@ impl<N: RealField + PartialOrd> ComplexField for num_complex::Complex<N> {
     fn atanh(self) -> Self {
         // formula: arctanh(z) = (ln(1+z) - ln(1-z))/2
         let one = Self::one();
-        let two = one + one;
+        let two = one.clone() + one.clone();
         if self == one {
             return Self::new(N::one() / N::zero(), N::zero());
-        } else if self == -one {
+        } else if self == -one.clone() {
             return Self::new(-N::one() / N::zero(), N::zero());
         }
-        ((one + self).ln() - (one - self).ln()) / two
+        ((one.clone() + self.clone()).ln() - (one - self).ln()) / two
     }
 }
 
 #[inline]
 fn complex_from_polar<N: RealField>(r: N, theta: N) -> num_complex::Complex<N> {
-    num_complex::Complex::new(r * theta.cos(), r * theta.sin())
+    num_complex::Complex::new(r.clone() * theta.clone().cos(), r * theta.sin())
 }

@@ -1,9 +1,8 @@
 #[cfg(feature = "abomonation-serialize")]
 use std::io::{Result as IOResult, Write};
-use std::mem;
 use std::ops::Deref;
 
-#[cfg(feature = "serde-serialize")]
+#[cfg(feature = "serde-serialize-no-std")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[cfg(feature = "abomonation-serialize")]
@@ -11,18 +10,32 @@ use abomonation::Abomonation;
 
 use crate::allocator::Allocator;
 use crate::base::DefaultAllocator;
-use crate::{Dim, MatrixMN, RealField, Scalar, SimdComplexField, SimdRealField};
+use crate::storage::RawStorage;
+use crate::{Dim, Matrix, OMatrix, RealField, Scalar, SimdComplexField, SimdRealField};
 
 /// A wrapper that ensures the underlying algebraic entity has a unit norm.
 ///
-/// Use `.as_ref()` or `.into_inner()` to obtain the underlying value by-reference or by-move.
+/// **It is likely that the only piece of documentation that you need in this page are:**
+/// - **[The construction with normalization](#construction-with-normalization)**
+/// - **[Data extraction and construction without normalization](#data-extraction-and-construction-without-normalization)**
+/// - **[Interpolation between two unit vectors](#interpolation-between-two-unit-vectors)**
+///
+/// All the other impl blocks you will see in this page are about [`UnitComplex`](crate::UnitComplex)
+/// and [`UnitQuaternion`](crate::UnitQuaternion); both built on top of `Unit`.  If you are interested
+/// in their documentation, read their dedicated pages directly.
 #[repr(transparent)]
-#[derive(Eq, PartialEq, Clone, Hash, Debug, Copy)]
+#[derive(Clone, Hash, Debug, Copy)]
 pub struct Unit<T> {
     pub(crate) value: T,
 }
 
-#[cfg(feature = "serde-serialize")]
+#[cfg(feature = "bytemuck")]
+unsafe impl<T> bytemuck::Zeroable for Unit<T> where T: bytemuck::Zeroable {}
+
+#[cfg(feature = "bytemuck")]
+unsafe impl<T> bytemuck::Pod for Unit<T> where T: bytemuck::Pod {}
+
+#[cfg(feature = "serde-serialize-no-std")]
 impl<T: Serialize> Serialize for Unit<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -32,7 +45,7 @@ impl<T: Serialize> Serialize for Unit<T> {
     }
 }
 
-#[cfg(feature = "serde-serialize")]
+#[cfg(feature = "serde-serialize-no-std")]
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for Unit<T> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -57,6 +70,69 @@ impl<T: Abomonation> Abomonation for Unit<T> {
     }
 }
 
+#[cfg(feature = "rkyv-serialize-no-std")]
+mod rkyv_impl {
+    use super::Unit;
+    use rkyv::{offset_of, project_struct, Archive, Deserialize, Fallible, Serialize};
+
+    impl<T: Archive> Archive for Unit<T> {
+        type Archived = Unit<T::Archived>;
+        type Resolver = T::Resolver;
+
+        fn resolve(
+            &self,
+            pos: usize,
+            resolver: Self::Resolver,
+            out: &mut ::core::mem::MaybeUninit<Self::Archived>,
+        ) {
+            self.value.resolve(
+                pos + offset_of!(Self::Archived, value),
+                resolver,
+                project_struct!(out: Self::Archived => value),
+            );
+        }
+    }
+
+    impl<T: Serialize<S>, S: Fallible + ?Sized> Serialize<S> for Unit<T> {
+        fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
+            self.value.serialize(serializer)
+        }
+    }
+
+    impl<T: Archive, D: Fallible + ?Sized> Deserialize<Unit<T>, D> for Unit<T::Archived>
+    where
+        T::Archived: Deserialize<T, D>,
+    {
+        fn deserialize(&self, deserializer: &mut D) -> Result<Unit<T>, D::Error> {
+            Ok(Unit {
+                value: self.value.deserialize(deserializer)?,
+            })
+        }
+    }
+}
+
+impl<T, R, C, S> PartialEq for Unit<Matrix<T, R, C, S>>
+where
+    T: Scalar + PartialEq,
+    R: Dim,
+    C: Dim,
+    S: RawStorage<T, R, C>,
+{
+    #[inline]
+    fn eq(&self, rhs: &Self) -> bool {
+        self.value.eq(&rhs.value)
+    }
+}
+
+impl<T, R, C, S> Eq for Unit<Matrix<T, R, C, S>>
+where
+    T: Scalar + Eq,
+    R: Dim,
+    C: Dim,
+    S: RawStorage<T, R, C>,
+{
+}
+
 /// Trait implemented by entities scan be be normalized and put in an `Unit` struct.
 pub trait Normed {
     /// The type of the norm.
@@ -71,6 +147,7 @@ pub trait Normed {
     fn unscale_mut(&mut self, n: Self::Norm);
 }
 
+/// # Construction with normalization
 impl<T: Normed> Unit<T> {
     /// Normalize the given vector and return it wrapped on a `Unit` structure.
     #[inline]
@@ -93,7 +170,7 @@ impl<T: Normed> Unit<T> {
     #[inline]
     pub fn new_and_get(mut value: T) -> (Self, T::Norm) {
         let n = value.norm();
-        value.unscale_mut(n);
+        value.unscale_mut(n.clone());
         (Unit { value }, n)
     }
 
@@ -107,9 +184,9 @@ impl<T: Normed> Unit<T> {
     {
         let sq_norm = value.norm_squared();
 
-        if sq_norm > min_norm * min_norm {
+        if sq_norm > min_norm.clone() * min_norm {
             let n = sq_norm.simd_sqrt();
-            value.unscale_mut(n);
+            value.unscale_mut(n.clone());
             Some((Unit { value }, n))
         } else {
             None
@@ -124,7 +201,7 @@ impl<T: Normed> Unit<T> {
     #[inline]
     pub fn renormalize(&mut self) -> T::Norm {
         let n = self.norm();
-        self.value.unscale_mut(n);
+        self.value.unscale_mut(n.clone());
         n
     }
 
@@ -134,23 +211,24 @@ impl<T: Normed> Unit<T> {
     #[inline]
     pub fn renormalize_fast(&mut self) {
         let sq_norm = self.value.norm_squared();
-        let _3: T::Norm = crate::convert(3.0);
-        let _0_5: T::Norm = crate::convert(0.5);
-        self.value.scale_mut(_0_5 * (_3 - sq_norm));
+        let three: T::Norm = crate::convert(3.0);
+        let half: T::Norm = crate::convert(0.5);
+        self.value.scale_mut(half * (three - sq_norm));
     }
 }
 
+/// # Data extraction and construction without normalization
 impl<T> Unit<T> {
     /// Wraps the given value, assuming it is already normalized.
     #[inline]
-    pub fn new_unchecked(value: T) -> Self {
+    pub const fn new_unchecked(value: T) -> Self {
         Unit { value }
     }
 
     /// Wraps the given reference, assuming it is already normalized.
     #[inline]
-    pub fn from_ref_unchecked<'a>(value: &'a T) -> &'a Self {
-        unsafe { mem::transmute(value) }
+    pub fn from_ref_unchecked(value: &T) -> &Self {
+        unsafe { &*(value as *const T as *const Self) }
     }
 
     /// Retrieves the underlying value.
@@ -160,7 +238,7 @@ impl<T> Unit<T> {
     }
 
     /// Retrieves the underlying value.
-    /// Deprecated: use [Unit::into_inner] instead.
+    /// Deprecated: use [`Unit::into_inner`] instead.
     #[deprecated(note = "use `.into_inner()` instead")]
     #[inline]
     pub fn unwrap(self) -> T {
@@ -237,7 +315,7 @@ where T::RealField: RelativeEq
 //     }
 // }
 */
-// FIXME:re-enable this impl when specialization is possible.
+// TODO:re-enable this impl when specialization is possible.
 // Currently, it is disabled so that we can have a nice output for the `UnitQuaternion` display.
 /*
 impl<T: fmt::Display> fmt::Display for Unit<T> {
@@ -253,39 +331,39 @@ impl<T> Deref for Unit<T> {
 
     #[inline]
     fn deref(&self) -> &T {
-        unsafe { mem::transmute(self) }
+        unsafe { &*(self as *const Self as *const T) }
     }
 }
 
 // NOTE: we can't use a generic implementation for `Unit<T>` because
 // num_complex::Complex does not implement `From[Complex<...>...]` (and can't
 // because of the orphan rules).
-impl<N: Scalar + simba::simd::PrimitiveSimdValue, R: Dim, C: Dim>
-    From<[Unit<MatrixMN<N::Element, R, C>>; 2]> for Unit<MatrixMN<N, R, C>>
+impl<T: Scalar + simba::simd::PrimitiveSimdValue, R: Dim, C: Dim>
+    From<[Unit<OMatrix<T::Element, R, C>>; 2]> for Unit<OMatrix<T, R, C>>
 where
-    N: From<[<N as simba::simd::SimdValue>::Element; 2]>,
-    N::Element: Scalar,
-    DefaultAllocator: Allocator<N, R, C> + Allocator<N::Element, R, C>,
+    T: From<[<T as simba::simd::SimdValue>::Element; 2]>,
+    T::Element: Scalar,
+    DefaultAllocator: Allocator<T, R, C> + Allocator<T::Element, R, C>,
 {
     #[inline]
-    fn from(arr: [Unit<MatrixMN<N::Element, R, C>>; 2]) -> Self {
-        Self::new_unchecked(MatrixMN::from([
+    fn from(arr: [Unit<OMatrix<T::Element, R, C>>; 2]) -> Self {
+        Self::new_unchecked(OMatrix::from([
             arr[0].clone().into_inner(),
             arr[1].clone().into_inner(),
         ]))
     }
 }
 
-impl<N: Scalar + simba::simd::PrimitiveSimdValue, R: Dim, C: Dim>
-    From<[Unit<MatrixMN<N::Element, R, C>>; 4]> for Unit<MatrixMN<N, R, C>>
+impl<T: Scalar + simba::simd::PrimitiveSimdValue, R: Dim, C: Dim>
+    From<[Unit<OMatrix<T::Element, R, C>>; 4]> for Unit<OMatrix<T, R, C>>
 where
-    N: From<[<N as simba::simd::SimdValue>::Element; 4]>,
-    N::Element: Scalar,
-    DefaultAllocator: Allocator<N, R, C> + Allocator<N::Element, R, C>,
+    T: From<[<T as simba::simd::SimdValue>::Element; 4]>,
+    T::Element: Scalar,
+    DefaultAllocator: Allocator<T, R, C> + Allocator<T::Element, R, C>,
 {
     #[inline]
-    fn from(arr: [Unit<MatrixMN<N::Element, R, C>>; 4]) -> Self {
-        Self::new_unchecked(MatrixMN::from([
+    fn from(arr: [Unit<OMatrix<T::Element, R, C>>; 4]) -> Self {
+        Self::new_unchecked(OMatrix::from([
             arr[0].clone().into_inner(),
             arr[1].clone().into_inner(),
             arr[2].clone().into_inner(),
@@ -294,16 +372,16 @@ where
     }
 }
 
-impl<N: Scalar + simba::simd::PrimitiveSimdValue, R: Dim, C: Dim>
-    From<[Unit<MatrixMN<N::Element, R, C>>; 8]> for Unit<MatrixMN<N, R, C>>
+impl<T: Scalar + simba::simd::PrimitiveSimdValue, R: Dim, C: Dim>
+    From<[Unit<OMatrix<T::Element, R, C>>; 8]> for Unit<OMatrix<T, R, C>>
 where
-    N: From<[<N as simba::simd::SimdValue>::Element; 8]>,
-    N::Element: Scalar,
-    DefaultAllocator: Allocator<N, R, C> + Allocator<N::Element, R, C>,
+    T: From<[<T as simba::simd::SimdValue>::Element; 8]>,
+    T::Element: Scalar,
+    DefaultAllocator: Allocator<T, R, C> + Allocator<T::Element, R, C>,
 {
     #[inline]
-    fn from(arr: [Unit<MatrixMN<N::Element, R, C>>; 8]) -> Self {
-        Self::new_unchecked(MatrixMN::from([
+    fn from(arr: [Unit<OMatrix<T::Element, R, C>>; 8]) -> Self {
+        Self::new_unchecked(OMatrix::from([
             arr[0].clone().into_inner(),
             arr[1].clone().into_inner(),
             arr[2].clone().into_inner(),
@@ -316,16 +394,16 @@ where
     }
 }
 
-impl<N: Scalar + simba::simd::PrimitiveSimdValue, R: Dim, C: Dim>
-    From<[Unit<MatrixMN<N::Element, R, C>>; 16]> for Unit<MatrixMN<N, R, C>>
+impl<T: Scalar + simba::simd::PrimitiveSimdValue, R: Dim, C: Dim>
+    From<[Unit<OMatrix<T::Element, R, C>>; 16]> for Unit<OMatrix<T, R, C>>
 where
-    N: From<[<N as simba::simd::SimdValue>::Element; 16]>,
-    N::Element: Scalar,
-    DefaultAllocator: Allocator<N, R, C> + Allocator<N::Element, R, C>,
+    T: From<[<T as simba::simd::SimdValue>::Element; 16]>,
+    T::Element: Scalar,
+    DefaultAllocator: Allocator<T, R, C> + Allocator<T::Element, R, C>,
 {
     #[inline]
-    fn from(arr: [Unit<MatrixMN<N::Element, R, C>>; 16]) -> Self {
-        Self::new_unchecked(MatrixMN::from([
+    fn from(arr: [Unit<OMatrix<T::Element, R, C>>; 16]) -> Self {
+        Self::new_unchecked(OMatrix::from([
             arr[0].clone().into_inner(),
             arr[1].clone().into_inner(),
             arr[2].clone().into_inner(),

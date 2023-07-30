@@ -21,7 +21,7 @@ use plotters_backend::DrawingBackend;
 ///    let chart = ChartBuilder::on(&area[0])
 ///        .caption("Incremental Example", ("sans-serif", 20))
 ///        .set_all_label_area_size(30)
-///        .build_ranged(0..10, 0..10)
+///        .build_cartesian_2d(0..10, 0..10)
 ///        .expect("Unable to build ChartContext");
 ///    // Draw the first frame at this point
 ///    area[0].present().expect("Present");
@@ -68,7 +68,7 @@ impl<'a, DB: DrawingBackend, CT: CoordTranslate> ChartContext<'a, DB, CT> {
     }
 }
 
-impl<'a, 'b, DB, CT> From<&ChartContext<'a, DB, CT>> for ChartState<CT>
+impl<'a, DB, CT> From<&ChartContext<'a, DB, CT>> for ChartState<CT>
 where
     DB: DrawingBackend,
     CT: CoordTranslate + Clone,

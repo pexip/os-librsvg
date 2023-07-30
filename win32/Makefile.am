@@ -11,8 +11,9 @@ EXTRA_DIST = \
 	info-msvc.mak		\
 	install-msvc.mak	\
 	introspection-msvc.mak	\
+	librsvg.symbols	\
 	Makefile.vc		\
-	README.txt		\
+	MSVC-Builds.md		\
 	rsvg-rust.mak		\
 	pc_base.py		\
 	replace.py		\

@@ -2,49 +2,55 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
+use crate::Action;
 use glib::object::IsA;
 use glib::translate::*;
 use std::fmt;
-use Action;
 
-glib_wrapper! {
-    pub struct ActionMap(Interface<gio_sys::GActionMap>);
+glib::wrapper! {
+    #[doc(alias = "GActionMap")]
+    pub struct ActionMap(Interface<ffi::GActionMap, ffi::GActionMapInterface>);
 
     match fn {
-        get_type => || gio_sys::g_action_map_get_type(),
+        type_ => || ffi::g_action_map_get_type(),
     }
 }
 
-pub const NONE_ACTION_MAP: Option<&ActionMap> = None;
+impl ActionMap {
+    pub const NONE: Option<&'static ActionMap> = None;
+}
 
 pub trait ActionMapExt: 'static {
-    fn add_action<P: IsA<Action>>(&self, action: &P);
+    #[doc(alias = "g_action_map_add_action")]
+    fn add_action(&self, action: &impl IsA<Action>);
 
-    //fn add_action_entries(&self, entries: /*Ignored*/&[&ActionEntry], user_data: /*Unimplemented*/Option<Fundamental: Pointer>);
+    //#[doc(alias = "g_action_map_add_action_entries")]
+    //fn add_action_entries(&self, entries: /*Ignored*/&[ActionEntry], user_data: /*Unimplemented*/Option<Fundamental: Pointer>);
 
+    #[doc(alias = "g_action_map_lookup_action")]
     fn lookup_action(&self, action_name: &str) -> Option<Action>;
 
+    #[doc(alias = "g_action_map_remove_action")]
     fn remove_action(&self, action_name: &str);
 }
 
 impl<O: IsA<ActionMap>> ActionMapExt for O {
-    fn add_action<P: IsA<Action>>(&self, action: &P) {
+    fn add_action(&self, action: &impl IsA<Action>) {
         unsafe {
-            gio_sys::g_action_map_add_action(
+            ffi::g_action_map_add_action(
                 self.as_ref().to_glib_none().0,
                 action.as_ref().to_glib_none().0,
             );
         }
     }
 
-    //fn add_action_entries(&self, entries: /*Ignored*/&[&ActionEntry], user_data: /*Unimplemented*/Option<Fundamental: Pointer>) {
-    //    unsafe { TODO: call gio_sys:g_action_map_add_action_entries() }
+    //fn add_action_entries(&self, entries: /*Ignored*/&[ActionEntry], user_data: /*Unimplemented*/Option<Fundamental: Pointer>) {
+    //    unsafe { TODO: call ffi:g_action_map_add_action_entries() }
     //}
 
     fn lookup_action(&self, action_name: &str) -> Option<Action> {
         unsafe {
-            from_glib_none(gio_sys::g_action_map_lookup_action(
+            from_glib_none(ffi::g_action_map_lookup_action(
                 self.as_ref().to_glib_none().0,
                 action_name.to_glib_none().0,
             ))
@@ -53,7 +59,7 @@ impl<O: IsA<ActionMap>> ActionMapExt for O {
 
     fn remove_action(&self, action_name: &str) {
         unsafe {
-            gio_sys::g_action_map_remove_action(
+            ffi::g_action_map_remove_action(
                 self.as_ref().to_glib_none().0,
                 action_name.to_glib_none().0,
             );
@@ -63,6 +69,6 @@ impl<O: IsA<ActionMap>> ActionMapExt for O {
 
 impl fmt::Display for ActionMap {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ActionMap")
+        f.write_str("ActionMap")
     }
 }
