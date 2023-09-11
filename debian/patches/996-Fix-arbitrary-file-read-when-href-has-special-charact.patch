@@ -1,0 +1,412 @@
+From: Federico Mena Quintero <federico@gnome.org>
+Date: Thu, 20 Jul 2023 11:12:53 -0600
+Subject: (#996): Fix arbitrary file read when href has special characters
+
+In UrlResolver::resolve_href() we now explicitly disallow URLs that
+have a query string ("?") or a fragment identifier ("#").
+
+We also explicitly check for a base URL and not resolving to a path,
+for example, "file:///base/foo.svg" + "." would resolve to
+"file:///base/" - this is technically correct, but we don't want to
+resolve to directories.
+
+Also, we pass a canonicalized path name as a URL upstream, so that
+g_file_new_from_url() will consume it later, instead of passing the
+original and potentially malicious URL.
+
+Origin: upstream, 2.50.8, commit:d1f066bf2198bd46c5ba80cb5123b768ec16e37d
+Bug: https://gitlab.gnome.org/GNOME/librsvg/-/issues/996
+Bug-CVE: CVE-2023-38633
+Bug-Debian: https://bugs.debian.org/1041810
+---
+ librsvg/rsvg-handle.c                            |   6 +-
+ rsvg_internals/src/allowed_url.rs                | 229 +++++++++++++++++------
+ rsvg_internals/src/filters/component_transfer.rs |   2 +-
+ tests/Makefile.am                                |   1 +
+ tests/fixtures/loading/bar.svg                   |   1 +
+ tests/fixtures/loading/foo.svg                   |   1 +
+ tests/fixtures/loading/subdir/baz.svg            |   1 +
+ 7 files changed, 180 insertions(+), 61 deletions(-)
+ create mode 100644 tests/fixtures/loading/bar.svg
+ create mode 100644 tests/fixtures/loading/foo.svg
+ create mode 100644 tests/fixtures/loading/subdir/baz.svg
+
+diff --git a/librsvg/rsvg-handle.c b/librsvg/rsvg-handle.c
+index 3226c89..eeb5ea8 100644
+--- a/librsvg/rsvg-handle.c
++++ b/librsvg/rsvg-handle.c
+@@ -78,7 +78,11 @@
+  *   </listitem>
+  *
+  *   <listitem>
+- *     All other URL schemes in references require a base URL.  For
++ *     URLs with queries ("?") or fragment identifiers ("#") are not allowed.
++ *   </listitem>
++ *
++ *   <listitem>
++ *     All other URL schemes other than data: in references require a base URL.  For
+  *     example, this means that if you load an SVG with
+  *     rsvg_handle_new_from_data() without calling rsvg_handle_set_base_uri(),
+  *     then any referenced files will not be allowed (e.g. raster images to be
+diff --git a/rsvg_internals/src/allowed_url.rs b/rsvg_internals/src/allowed_url.rs
+index 3a99e00..ffa9a23 100644
+--- a/rsvg_internals/src/allowed_url.rs
++++ b/rsvg_internals/src/allowed_url.rs
+@@ -2,9 +2,7 @@
+ 
+ use std::error;
+ use std::fmt;
+-use std::io;
+ use std::ops::Deref;
+-use std::path::{Path, PathBuf};
+ use url::Url;
+ 
+ use crate::error::HrefError;
+@@ -37,6 +35,12 @@ pub enum AllowedUrlError {
+     /// or in one directory below the base file.
+     NotSiblingOrChildOfBaseFile,
+ 
++    /// Loaded file:// URLs cannot have a query part, e.g. `file:///foo?blah`
++    NoQueriesAllowed,
++
++    /// URLs may not have fragment identifiers at this stage
++    NoFragmentIdentifierAllowed,
++
+     /// Error when obtaining the file path or the base file path
+     InvalidPath,
+ 
+@@ -59,6 +63,17 @@ impl AllowedUrl {
+             return Ok(AllowedUrl(url));
+         }
+ 
++        // Queries are not allowed.
++        if url.query().is_some() {
++            return Err(AllowedUrlError::NoQueriesAllowed);
++        }
++
++        // Fragment identifiers are not allowed.  They should have been stripped
++        // upstream, by NodeId.
++        if url.fragment().is_some() {
++            return Err(AllowedUrlError::NoFragmentIdentifierAllowed);
++        }
++
+         // All other sources require a base url
+         if base_url.is_none() {
+             return Err(AllowedUrlError::BaseRequired);
+@@ -81,6 +96,26 @@ impl AllowedUrl {
+             return Err(AllowedUrlError::DisallowedScheme);
+         }
+ 
++        // The rest of this function assumes file: URLs; guard against
++        // incorrect refactoring.
++        assert!(url.scheme() == "file");
++
++        // If we have a base_uri of "file:///foo/bar.svg", and resolve an href of ".",
++        // Url.parse() will give us "file:///foo/".  We don't want that, so check
++        // if the last path segment is empty - it will not be empty for a normal file.
++
++        if let Some(segments) = url.path_segments() {
++          if segments
++                .last()
++                .expect("URL path segments always contain at last 1 element")
++                .is_empty()
++            {
++                return Err(AllowedUrlError::NotSiblingOrChildOfBaseFile);
++            }
++        } else {
++            unreachable!("the file: URL cannot have an empty path");
++        }
++
+         // We have two file: URIs.  Now canonicalize them (remove .. and symlinks, etc.)
+         // and see if the directories match
+ 
+@@ -98,13 +133,17 @@ impl AllowedUrl {
+ 
+         let base_parent = base_parent.unwrap();
+ 
+-        let url_canon =
+-            canonicalize(&url_path).map_err(|_| AllowedUrlError::CanonicalizationError)?;
+-        let parent_canon =
+-            canonicalize(&base_parent).map_err(|_| AllowedUrlError::CanonicalizationError)?;
+-
+-        if url_canon.starts_with(parent_canon) {
+-            Ok(AllowedUrl(url))
++        let path_canon = url_path
++            .canonicalize()
++            .map_err(|_| AllowedUrlError::CanonicalizationError)?;
++        let parent_canon = base_parent
++            .canonicalize()
++            .map_err(|_| AllowedUrlError::CanonicalizationError)?;
++
++        if path_canon.starts_with(parent_canon) {
++            // Finally, convert the canonicalized path back to a URL.
++            let path_to_url = Url::from_file_path(path_canon).unwrap();
++            Ok(AllowedUrl(path_to_url))
+         } else {
+             Err(AllowedUrlError::NotSiblingOrChildOfBaseFile)
+         }
+@@ -129,32 +168,22 @@ impl error::Error for AllowedUrlError {}
+ 
+ impl fmt::Display for AllowedUrlError {
+     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+-        match *self {
+-            AllowedUrlError::HrefParseError(e) => write!(f, "href parse error: {}", e),
+-            AllowedUrlError::BaseRequired => write!(f, "base required"),
+-            AllowedUrlError::DifferentURISchemes => write!(f, "different URI schemes"),
+-            AllowedUrlError::DisallowedScheme => write!(f, "disallowed scheme"),
+-            AllowedUrlError::NotSiblingOrChildOfBaseFile => {
+-                write!(f, "not sibling or child of base file")
+-            }
+-            AllowedUrlError::InvalidPath => write!(f, "invalid path"),
+-            AllowedUrlError::BaseIsRoot => write!(f, "base is root"),
+-            AllowedUrlError::CanonicalizationError => write!(f, "canonicalization error"),
++        use AllowedUrlError::*;
++        match self {
++            HrefParseError(e) => write!(f, "URL parse error: {e}"),
++            BaseRequired => write!(f, "base required"),
++            DifferentUriSchemes => write!(f, "different URI schemes"),
++            DisallowedScheme => write!(f, "disallowed scheme"),
++            NotSiblingOrChildOfBaseFile => write!(f, "not sibling or child of base file"),
++            NoQueriesAllowed => write!(f, "no queries allowed"),
++            NoFragmentIdentifierAllowed => write!(f, "no fragment identifier allowed"),
++            InvalidPath => write!(f, "invalid path"),
++            BaseIsRoot => write!(f, "base is root"),
++            CanonicalizationError => write!(f, "canonicalization error"),
+         }
+     }
+ }
+ 
+-// For tests, we don't want to touch the filesystem.  In that case,
+-// assume that we are being passed canonical file names.
+-#[cfg(not(test))]
+-fn canonicalize<P: AsRef<Path>>(path: P) -> Result<PathBuf, io::Error> {
+-    path.as_ref().canonicalize()
+-}
+-#[cfg(test)]
+-fn canonicalize<P: AsRef<Path>>(path: P) -> Result<PathBuf, io::Error> {
+-    Ok(path.as_ref().to_path_buf())
+-}
+-
+ /// Parsed result of an href from an SVG or CSS file
+ ///
+ /// Sometimes in SVG element references (e.g. the `href` in the `<feImage>` element) we
+@@ -234,6 +263,8 @@ impl Href {
+ mod tests {
+     use super::*;
+ 
++    use std::path::PathBuf;
++
+     #[test]
+     fn disallows_relative_file_with_no_base_file() {
+         assert_eq!(
+@@ -284,56 +315,136 @@ mod tests {
+         );
+     }
+ 
++    fn url_from_test_fixtures(filename_relative_to_librsvg_srcdir: &str) -> Url {
++        let path = PathBuf::from(filename_relative_to_librsvg_srcdir);
++        let absolute = path
++            .canonicalize()
++            .expect("files from test fixtures are supposed to canonicalize");
++        Url::from_file_path(absolute).unwrap()
++    }
++
+     #[test]
+     fn allows_relative() {
+-        assert_eq!(
+-            AllowedUrl::from_href(
+-                "foo.svg",
+-                Some(Url::parse("file:///example/bar.svg").unwrap()).as_ref()
+-            )
+-            .unwrap()
+-            .as_ref(),
+-            "file:///example/foo.svg",
+-        );
++        let resolved = AllowedUrl::from_href(
++            "foo.svg",
++            Some(url_from_test_fixtures("../tests/fixtures/loading/bar.svg")).as_ref()
++        ).unwrap();
++
++        let resolved_str = resolved.as_str();
++        assert!(resolved_str.ends_with("/loading/foo.svg"));
+     }
+ 
+     #[test]
+     fn allows_sibling() {
+-        assert_eq!(
+-            AllowedUrl::from_href(
+-                "file:///example/foo.svg",
+-                Some(Url::parse("file:///example/bar.svg").unwrap()).as_ref()
+-            )
+-            .unwrap()
+-            .as_ref(),
+-            "file:///example/foo.svg",
+-        );
++        let sibling = url_from_test_fixtures("../tests/fixtures/loading/foo.svg");
++        let resolved = AllowedUrl::from_href(
++            sibling.as_str(),
++            Some(url_from_test_fixtures("../tests/fixtures/loading/bar.svg")).as_ref()
++        ).unwrap();
++        
++        let resolved_str = resolved.as_str();
++        assert!(resolved_str.ends_with("/loading/foo.svg"));
+     }
+ 
+     #[test]
+     fn allows_child_of_sibling() {
+-        assert_eq!(
+-            AllowedUrl::from_href(
+-                "file:///example/subdir/foo.svg",
+-                Some(Url::parse("file:///example/bar.svg").unwrap()).as_ref()
+-            )
+-            .unwrap()
+-            .as_ref(),
+-            "file:///example/subdir/foo.svg",
+-        );
++        let child_of_sibling = url_from_test_fixtures("../tests/fixtures/loading/subdir/baz.svg");
++        let resolved = AllowedUrl::from_href(
++            child_of_sibling.as_str(),
++            Some(url_from_test_fixtures("../tests/fixtures/loading/bar.svg")).as_ref()
++        ).unwrap();
++        
++        let resolved_str = resolved.as_str();
++        assert!(resolved_str.ends_with("/loading/subdir/baz.svg"));
+     }
+ 
++    // Ignore on Windows since we test for /etc/passwd
++    #[cfg(unix)]
+     #[test]
+     fn disallows_non_sibling() {
+         assert_eq!(
+             AllowedUrl::from_href(
+                 "file:///etc/passwd",
+-                Some(Url::parse("file:///example/bar.svg").unwrap()).as_ref()
++                Some(url_from_test_fixtures("../tests/fixtures/loading/bar.svg")).as_ref()
+             ),
+             Err(AllowedUrlError::NotSiblingOrChildOfBaseFile)
+         );
+     }
+ 
++    #[test]
++    fn disallows_queries() {
++        assert!(matches!(
++            AllowedUrl::from_href(
++                ".?../../../../../../../../../../etc/passwd",
++                Some(url_from_test_fixtures("../tests/fixtures/loading/bar.svg")).as_ref(),
++            ),
++            Err(AllowedUrlError::NoQueriesAllowed)
++        ));
++    }
++
++    #[test]
++    fn disallows_weird_relative_uris() {
++        let base_url = url_from_test_fixtures("../tests/fixtures/loading/bar.svg");
++
++        assert!(
++            AllowedUrl::from_href(
++                ".@../../../../../../../../../../etc/passwd",
++                Some(&base_url),
++            ).is_err()
++        );
++        assert!(
++            AllowedUrl::from_href(
++                ".$../../../../../../../../../../etc/passwd",
++                Some(&base_url),
++            ).is_err()
++        );
++        assert!(
++            AllowedUrl::from_href(
++                ".%../../../../../../../../../../etc/passwd",
++                Some(&base_url),
++            ).is_err()
++        );
++        assert!(
++            AllowedUrl::from_href(
++                ".*../../../../../../../../../../etc/passwd",
++                Some(&base_url),
++            ).is_err()
++        );
++        assert!(
++            AllowedUrl::from_href(
++                "~/../../../../../../../../../../etc/passwd",
++                Some(&base_url),
++            ).is_err()
++        );
++    }
++
++    #[test]
++    fn disallows_dot_sibling() {
++        println!("cwd: {:?}", std::env::current_dir());
++        let base_url = url_from_test_fixtures("../tests/fixtures/loading/bar.svg");
++
++        assert!(matches!(
++            AllowedUrl::from_href(".", Some(&base_url)),
++            Err(AllowedUrlError::NotSiblingOrChildOfBaseFile)
++        ));
++        assert!(matches!(
++            AllowedUrl::from_href(".#../../../../../../../../../../etc/passwd", Some(&base_url)),
++            Err(AllowedUrlError::NoFragmentIdentifierAllowed)
++        ));
++    }
++
++    #[test]
++    fn disallows_fragment() {
++        // AllowedUrl::from_href() explicitly disallows fragment identifiers.
++        // This is because they should have been stripped before calling that function,
++        // by the Iri machinery.
++
++        assert!(matches!(
++            AllowedUrl::from_href("bar.svg#fragment", Some(Url::parse("https://example.com/foo.svg").unwrap()).as_ref()),
++            Err(AllowedUrlError::NoFragmentIdentifierAllowed)
++        ));
++     }
++
+     #[test]
+     fn parses_href() {
+         assert_eq!(
+diff --git a/rsvg_internals/src/filters/component_transfer.rs b/rsvg_internals/src/filters/component_transfer.rs
+index aab6a0e..6de07b8 100644
+--- a/rsvg_internals/src/filters/component_transfer.rs
++++ b/rsvg_internals/src/filters/component_transfer.rs
+@@ -260,7 +260,7 @@ macro_rules! func_or_default {
+                 }
+             }
+             _ => &$func_default,
+-        };
++        }
+     };
+ }
+ 
+diff --git a/tests/Makefile.am b/tests/Makefile.am
+index 13c2d51..b3faf2d 100644
+--- a/tests/Makefile.am
++++ b/tests/Makefile.am
+@@ -82,6 +82,7 @@ dist_installed_test_data =						\
+ 	$(wildcard $(srcdir)/fixtures/errors/*)				\
+ 	$(wildcard $(srcdir)/fixtures/infinite-loop/*)			\
+ 	$(wildcard $(srcdir)/fixtures/loading/*)			\
++	$(wildcard $(srcdir)/fixtures/loading/subdir/*)			\
+ 	$(wildcard $(srcdir)/fixtures/reftests/*.css)			\
+ 	$(wildcard $(srcdir)/fixtures/reftests/*.svg)			\
+ 	$(wildcard $(srcdir)/fixtures/reftests/*.png)			\
+diff --git a/tests/fixtures/loading/bar.svg b/tests/fixtures/loading/bar.svg
+new file mode 100644
+index 0000000..3046700
+--- /dev/null
++++ b/tests/fixtures/loading/bar.svg
+@@ -0,0 +1 @@
++<!-- Empty file, used just to test URL validation -->
+diff --git a/tests/fixtures/loading/foo.svg b/tests/fixtures/loading/foo.svg
+new file mode 100644
+index 0000000..3046700
+--- /dev/null
++++ b/tests/fixtures/loading/foo.svg
+@@ -0,0 +1 @@
++<!-- Empty file, used just to test URL validation -->
+diff --git a/tests/fixtures/loading/subdir/baz.svg b/tests/fixtures/loading/subdir/baz.svg
+new file mode 100644
+index 0000000..3046700
+--- /dev/null
++++ b/tests/fixtures/loading/subdir/baz.svg
+@@ -0,0 +1 @@
++<!-- Empty file, used just to test URL validation -->
