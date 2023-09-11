@@ -5,3 +5,4 @@ Skip-invalid_viewbox-test-on-32-bit-x86.patch
 996-Fix-arbitrary-file-read-when-href-has-special-charact.patch
 Fix-compilation-on-rustc-1.40.0.patch
 tests-Fix-build-with-older-Autotools.patch
+pexip-fix-doctest.patch

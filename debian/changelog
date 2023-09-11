@@ -1,6 +1,7 @@
 librsvg (2.50.3+dfsg-1+deb11u1pexip1) pexip; urgency=medium
 
   * New upstream release
+  * FIx doc tests
 
  -- Huw Jones <huw@pexip.com>  Mon, 11 Sep 2023 10:31:47 +0100
 
