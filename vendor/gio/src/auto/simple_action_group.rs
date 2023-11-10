@@ -2,23 +2,26 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
+use crate::ActionGroup;
+use crate::ActionMap;
 use glib::translate::*;
 use std::fmt;
-use ActionGroup;
-use ActionMap;
 
-glib_wrapper! {
-    pub struct SimpleActionGroup(Object<gio_sys::GSimpleActionGroup, gio_sys::GSimpleActionGroupClass, SimpleActionGroupClass>) @implements ActionGroup, ActionMap;
+glib::wrapper! {
+    #[doc(alias = "GSimpleActionGroup")]
+    pub struct SimpleActionGroup(Object<ffi::GSimpleActionGroup, ffi::GSimpleActionGroupClass>) @implements ActionGroup, ActionMap;
 
     match fn {
-        get_type => || gio_sys::g_simple_action_group_get_type(),
+        type_ => || ffi::g_simple_action_group_get_type(),
     }
 }
 
 impl SimpleActionGroup {
+    pub const NONE: Option<&'static SimpleActionGroup> = None;
+
+    #[doc(alias = "g_simple_action_group_new")]
     pub fn new() -> SimpleActionGroup {
-        unsafe { from_glib_full(gio_sys::g_simple_action_group_new()) }
+        unsafe { from_glib_full(ffi::g_simple_action_group_new()) }
     }
 }
 
@@ -28,10 +31,8 @@ impl Default for SimpleActionGroup {
     }
 }
 
-pub const NONE_SIMPLE_ACTION_GROUP: Option<&SimpleActionGroup> = None;
-
 impl fmt::Display for SimpleActionGroup {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SimpleActionGroup")
+        f.write_str("SimpleActionGroup")
     }
 }

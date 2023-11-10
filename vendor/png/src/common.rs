@@ -1,22 +1,28 @@
 //! Common types shared between the encoder and decoder
-use crate::filter;
+use crate::text_metadata::{EncodableTextChunk, ITXtChunk, TEXtChunk, ZTXtChunk};
+use crate::{chunk, encoder};
+use io::Write;
+use std::{borrow::Cow, convert::TryFrom, fmt, io};
 
-use std::{convert::TryFrom, fmt};
-
-/// Describes the layout of samples in a pixel
+/// Describes how a pixel is encoded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ColorType {
+    /// 1 grayscale sample.
     Grayscale = 0,
-    RGB = 2,
+    /// 1 red sample, 1 green sample, 1 blue sample.
+    Rgb = 2,
+    /// 1 sample for the palette index.
     Indexed = 3,
+    /// 1 grayscale sample, then 1 alpha sample.
     GrayscaleAlpha = 4,
-    RGBA = 6,
+    /// 1 red sample, 1 green sample, 1 blue sample, and finally, 1 alpha sample.
+    Rgba = 6,
 }
 
 impl ColorType {
-    /// Returns the number of samples used per pixel of `ColorType`
-    pub fn samples(&self) -> usize {
+    /// Returns the number of samples used per pixel encoded in this way.
+    pub fn samples(self) -> usize {
         self.samples_u8().into()
     }
 
@@ -24,9 +30,9 @@ impl ColorType {
         use self::ColorType::*;
         match self {
             Grayscale | Indexed => 1,
-            RGB => 3,
+            Rgb => 3,
             GrayscaleAlpha => 2,
-            RGBA => 4,
+            Rgba => 4,
         }
     }
 
@@ -34,21 +40,21 @@ impl ColorType {
     pub fn from_u8(n: u8) -> Option<ColorType> {
         match n {
             0 => Some(ColorType::Grayscale),
-            2 => Some(ColorType::RGB),
+            2 => Some(ColorType::Rgb),
             3 => Some(ColorType::Indexed),
             4 => Some(ColorType::GrayscaleAlpha),
-            6 => Some(ColorType::RGBA),
+            6 => Some(ColorType::Rgba),
             _ => None,
         }
     }
 
-    pub(crate) fn checked_raw_row_length(&self, depth: BitDepth, width: u32) -> Option<usize> {
+    pub(crate) fn checked_raw_row_length(self, depth: BitDepth, width: u32) -> Option<usize> {
         // No overflow can occur in 64 bits, we multiply 32-bit with 5 more bits.
         let bits = u64::from(width) * u64::from(self.samples_u8()) * u64::from(depth.into_u8());
         TryFrom::try_from(1 + (bits + 7) / 8).ok()
     }
 
-    pub(crate) fn raw_row_length_from_width(&self, depth: BitDepth, width: u32) -> usize {
+    pub(crate) fn raw_row_length_from_width(self, depth: BitDepth, width: u32) -> usize {
         let samples = width as usize * self.samples();
         1 + match depth {
             BitDepth::Sixteen => samples * 2,
@@ -66,14 +72,15 @@ impl ColorType {
         // Section 11.2.2 of the PNG standard disallows several combinations
         // of bit depth and color type
         ((bit_depth == BitDepth::One || bit_depth == BitDepth::Two || bit_depth == BitDepth::Four)
-            && (self == ColorType::RGB
+            && (self == ColorType::Rgb
                 || self == ColorType::GrayscaleAlpha
-                || self == ColorType::RGBA))
+                || self == ColorType::Rgba))
             || (bit_depth == BitDepth::Sixteen && self == ColorType::Indexed)
     }
 }
 
-/// Bit depth of the png file
+/// Bit depth of the PNG file.
+/// Specifies the number of bits per sample.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum BitDepth {
@@ -260,6 +267,21 @@ impl FrameControl {
     pub fn inc_seq_num(&mut self, i: u32) {
         self.sequence_number += i;
     }
+
+    pub fn encode<W: Write>(self, w: &mut W) -> encoder::Result<()> {
+        let mut data = [0u8; 26];
+        data[..4].copy_from_slice(&self.sequence_number.to_be_bytes());
+        data[4..8].copy_from_slice(&self.width.to_be_bytes());
+        data[8..12].copy_from_slice(&self.height.to_be_bytes());
+        data[12..16].copy_from_slice(&self.x_offset.to_be_bytes());
+        data[16..20].copy_from_slice(&self.y_offset.to_be_bytes());
+        data[20..22].copy_from_slice(&self.delay_num.to_be_bytes());
+        data[22..24].copy_from_slice(&self.delay_den.to_be_bytes());
+        data[24] = self.dispose_op as u8;
+        data[25] = self.blend_op as u8;
+
+        encoder::write_chunk(w, chunk::fcTL, &data)
+    }
 }
 
 /// Animation control information
@@ -271,14 +293,23 @@ pub struct AnimationControl {
     pub num_plays: u32,
 }
 
+impl AnimationControl {
+    pub fn encode<W: Write>(self, w: &mut W) -> encoder::Result<()> {
+        let mut data = [0; 8];
+        data[..4].copy_from_slice(&self.num_frames.to_be_bytes());
+        data[4..].copy_from_slice(&self.num_plays.to_be_bytes());
+        encoder::write_chunk(w, chunk::acTL, &data)
+    }
+}
+
 /// The type and strength of applied compression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Compression {
-    /// Default level  
+    /// Default level
     Default,
     /// Fast minimal compression
     Fast,
-    /// Higher compression level  
+    /// Higher compression level
     ///
     /// Best in this context isn't actually the highest possible level
     /// the encoder can do, but is meant to emulate the `Best` setting in the `Flate2`
@@ -288,25 +319,192 @@ pub enum Compression {
     Rle,
 }
 
+/// An unsigned integer scaled version of a floating point value,
+/// equivalent to an integer quotient with fixed denominator (100_000)).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ScaledFloat(u32);
+
+impl ScaledFloat {
+    const SCALING: f32 = 100_000.0;
+
+    /// Gets whether the value is within the clamped range of this type.
+    pub fn in_range(value: f32) -> bool {
+        value >= 0.0 && (value * Self::SCALING).floor() <= std::u32::MAX as f32
+    }
+
+    /// Gets whether the value can be exactly converted in round-trip.
+    #[allow(clippy::float_cmp)] // Stupid tool, the exact float compare is _the entire point_.
+    pub fn exact(value: f32) -> bool {
+        let there = Self::forward(value);
+        let back = Self::reverse(there);
+        value == back
+    }
+
+    fn forward(value: f32) -> u32 {
+        (value.max(0.0) * Self::SCALING).floor() as u32
+    }
+
+    fn reverse(encoded: u32) -> f32 {
+        encoded as f32 / Self::SCALING
+    }
+
+    /// Slightly inaccurate scaling and quantization.
+    /// Clamps the value into the representable range if it is negative or too large.
+    pub fn new(value: f32) -> Self {
+        Self {
+            0: Self::forward(value),
+        }
+    }
+
+    /// Fully accurate construction from a value scaled as per specification.
+    pub fn from_scaled(val: u32) -> Self {
+        Self { 0: val }
+    }
+
+    /// Get the accurate encoded value.
+    pub fn into_scaled(self) -> u32 {
+        self.0
+    }
+
+    /// Get the unscaled value as a floating point.
+    pub fn into_value(self) -> f32 {
+        Self::reverse(self.0) as f32
+    }
+
+    pub(crate) fn encode_gama<W: Write>(self, w: &mut W) -> encoder::Result<()> {
+        encoder::write_chunk(w, chunk::gAMA, &self.into_scaled().to_be_bytes())
+    }
+}
+
+/// Chromaticities of the color space primaries
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SourceChromaticities {
+    pub white: (ScaledFloat, ScaledFloat),
+    pub red: (ScaledFloat, ScaledFloat),
+    pub green: (ScaledFloat, ScaledFloat),
+    pub blue: (ScaledFloat, ScaledFloat),
+}
+
+impl SourceChromaticities {
+    pub fn new(white: (f32, f32), red: (f32, f32), green: (f32, f32), blue: (f32, f32)) -> Self {
+        SourceChromaticities {
+            white: (ScaledFloat::new(white.0), ScaledFloat::new(white.1)),
+            red: (ScaledFloat::new(red.0), ScaledFloat::new(red.1)),
+            green: (ScaledFloat::new(green.0), ScaledFloat::new(green.1)),
+            blue: (ScaledFloat::new(blue.0), ScaledFloat::new(blue.1)),
+        }
+    }
+
+    #[rustfmt::skip]
+    pub fn to_be_bytes(self) -> [u8; 32] {
+        let white_x = self.white.0.into_scaled().to_be_bytes();
+        let white_y = self.white.1.into_scaled().to_be_bytes();
+        let red_x   = self.red.0.into_scaled().to_be_bytes();
+        let red_y   = self.red.1.into_scaled().to_be_bytes();
+        let green_x = self.green.0.into_scaled().to_be_bytes();
+        let green_y = self.green.1.into_scaled().to_be_bytes();
+        let blue_x  = self.blue.0.into_scaled().to_be_bytes();
+        let blue_y  = self.blue.1.into_scaled().to_be_bytes();
+        [
+            white_x[0], white_x[1], white_x[2], white_x[3],
+            white_y[0], white_y[1], white_y[2], white_y[3],
+            red_x[0],   red_x[1],   red_x[2],   red_x[3],
+            red_y[0],   red_y[1],   red_y[2],   red_y[3],
+            green_x[0], green_x[1], green_x[2], green_x[3],
+            green_y[0], green_y[1], green_y[2], green_y[3],
+            blue_x[0],  blue_x[1],  blue_x[2],  blue_x[3],
+            blue_y[0],  blue_y[1],  blue_y[2],  blue_y[3],
+        ]
+    }
+
+    pub fn encode<W: Write>(self, w: &mut W) -> encoder::Result<()> {
+        encoder::write_chunk(w, chunk::cHRM, &self.to_be_bytes())
+    }
+}
+
+/// The rendering intent for an sRGB image.
+///
+/// Presence of this data also indicates that the image conforms to the sRGB color space.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SrgbRenderingIntent {
+    /// For images preferring good adaptation to the output device gamut at the expense of colorimetric accuracy, such as photographs.
+    Perceptual = 0,
+    /// For images requiring colour appearance matching (relative to the output device white point), such as logos.
+    RelativeColorimetric = 1,
+    /// For images preferring preservation of saturation at the expense of hue and lightness, such as charts and graphs.
+    Saturation = 2,
+    /// For images requiring preservation of absolute colorimetry, such as previews of images destined for a different output device (proofs).
+    AbsoluteColorimetric = 3,
+}
+
+impl SrgbRenderingIntent {
+    pub(crate) fn into_raw(self) -> u8 {
+        self as u8
+    }
+
+    pub(crate) fn from_raw(raw: u8) -> Option<Self> {
+        match raw {
+            0 => Some(SrgbRenderingIntent::Perceptual),
+            1 => Some(SrgbRenderingIntent::RelativeColorimetric),
+            2 => Some(SrgbRenderingIntent::Saturation),
+            3 => Some(SrgbRenderingIntent::AbsoluteColorimetric),
+            _ => None,
+        }
+    }
+
+    pub fn encode<W: Write>(self, w: &mut W) -> encoder::Result<()> {
+        encoder::write_chunk(w, chunk::sRGB, &[self.into_raw()])
+    }
+}
+
 /// PNG info struct
 #[derive(Clone, Debug)]
-pub struct Info {
+#[non_exhaustive]
+pub struct Info<'a> {
     pub width: u32,
     pub height: u32,
     pub bit_depth: BitDepth,
+    /// How colors are stored in the image.
     pub color_type: ColorType,
     pub interlaced: bool,
-    pub trns: Option<Vec<u8>>,
+    /// The image's `tRNS` chunk, if present; contains the alpha channel of the image's palette, 1 byte per entry.
+    pub trns: Option<Cow<'a, [u8]>>,
     pub pixel_dims: Option<PixelDimensions>,
-    pub palette: Option<Vec<u8>>,
+    /// The image's `PLTE` chunk, if present; contains the RGB channels (in that order) of the image's palettes, 3 bytes per entry (1 per channel).
+    pub palette: Option<Cow<'a, [u8]>>,
+    /// The contents of the image's gAMA chunk, if present.
+    /// Prefer `source_gamma` to also get the derived replacement gamma from sRGB chunks.
+    pub gama_chunk: Option<ScaledFloat>,
+    /// The contents of the image's `cHRM` chunk, if present.
+    /// Prefer `source_chromaticities` to also get the derived replacements from sRGB chunks.
+    pub chrm_chunk: Option<SourceChromaticities>,
+
     pub frame_control: Option<FrameControl>,
     pub animation_control: Option<AnimationControl>,
     pub compression: Compression,
-    pub filter: filter::FilterType,
+    /// Gamma of the source system.
+    /// Set by both `gAMA` as well as to a replacement by `sRGB` chunk.
+    pub source_gamma: Option<ScaledFloat>,
+    /// Chromaticities of the source system.
+    /// Set by both `cHRM` as well as to a replacement by `sRGB` chunk.
+    pub source_chromaticities: Option<SourceChromaticities>,
+    /// The rendering intent of an SRGB image.
+    ///
+    /// Presence of this value also indicates that the image conforms to the SRGB color space.
+    pub srgb: Option<SrgbRenderingIntent>,
+    /// The ICC profile for the image.
+    pub icc_profile: Option<Cow<'a, [u8]>>,
+    /// tEXt field
+    pub uncompressed_latin1_text: Vec<TEXtChunk>,
+    /// zTXt field
+    pub compressed_latin1_text: Vec<ZTXtChunk>,
+    /// iTXt field
+    pub utf8_text: Vec<ITXtChunk>,
 }
 
-impl Default for Info {
-    fn default() -> Info {
+impl Default for Info<'_> {
+    fn default() -> Info<'static> {
         Info {
             width: 0,
             height: 0,
@@ -315,19 +513,36 @@ impl Default for Info {
             interlaced: false,
             palette: None,
             trns: None,
+            gama_chunk: None,
+            chrm_chunk: None,
             pixel_dims: None,
             frame_control: None,
             animation_control: None,
-            // Default to `deflate::Compresion::Fast` and `filter::FilterType::Sub`
+            // Default to `deflate::Compression::Fast` and `filter::FilterType::Sub`
             // to maintain backward compatible output.
             compression: Compression::Fast,
-            filter: filter::FilterType::Sub,
+            source_gamma: None,
+            source_chromaticities: None,
+            srgb: None,
+            icc_profile: None,
+            uncompressed_latin1_text: Vec::new(),
+            compressed_latin1_text: Vec::new(),
+            utf8_text: Vec::new(),
         }
     }
 }
 
-impl Info {
-    /// Size of the image
+impl Info<'_> {
+    /// A utility constructor for a default info with width and height.
+    pub fn with_size(width: u32, height: u32) -> Self {
+        Info {
+            width,
+            height,
+            ..Default::default()
+        }
+    }
+
+    /// Size of the image, width then height.
     pub fn size(&self) -> (u32, u32) {
         (self.width, self.height)
     }
@@ -337,7 +552,7 @@ impl Info {
         self.frame_control.is_some() && self.animation_control.is_some()
     }
 
-    /// Returns the frame control information of the image
+    /// Returns the frame control information of the image.
     pub fn animation_control(&self) -> Option<&AnimationControl> {
         self.animation_control.as_ref()
     }
@@ -347,12 +562,12 @@ impl Info {
         self.frame_control.as_ref()
     }
 
-    /// Returns the bits per pixel
+    /// Returns the number of bits per pixel.
     pub fn bits_per_pixel(&self) -> usize {
         self.color_type.samples() * self.bit_depth as usize
     }
 
-    /// Returns the bytes per pixel
+    /// Returns the number of bytes per pixel.
     pub fn bytes_per_pixel(&self) -> usize {
         // If adjusting this for expansion or other transformation passes, remember to keep the old
         // implementation for bpp_in_prediction, which is internal to the png specification.
@@ -378,12 +593,12 @@ impl Info {
         }
     }
 
-    /// Returns the number of bytes needed for one deinterlaced image
+    /// Returns the number of bytes needed for one deinterlaced image.
     pub fn raw_bytes(&self) -> usize {
         self.height as usize * self.raw_row_length()
     }
 
-    /// Returns the number of bytes needed for one deinterlaced row
+    /// Returns the number of bytes needed for one deinterlaced row.
     pub fn raw_row_length(&self) -> usize {
         self.raw_row_length_from_width(self.width)
     }
@@ -393,10 +608,66 @@ impl Info {
             .checked_raw_row_length(self.bit_depth, self.width)
     }
 
-    /// Returns the number of bytes needed for one deinterlaced row of width `width`
+    /// Returns the number of bytes needed for one deinterlaced row of width `width`.
     pub fn raw_row_length_from_width(&self, width: u32) -> usize {
         self.color_type
             .raw_row_length_from_width(self.bit_depth, width)
+    }
+
+    /// Encode this header to the writer.
+    ///
+    /// Note that this does _not_ include the PNG signature, it starts with the IHDR chunk and then
+    /// includes other chunks that were added to the header.
+    pub fn encode<W: Write>(&self, mut w: W) -> encoder::Result<()> {
+        // Encode the IHDR chunk
+        let mut data = [0; 13];
+        data[..4].copy_from_slice(&self.width.to_be_bytes());
+        data[4..8].copy_from_slice(&self.height.to_be_bytes());
+        data[8] = self.bit_depth as u8;
+        data[9] = self.color_type as u8;
+        data[12] = self.interlaced as u8;
+        encoder::write_chunk(&mut w, chunk::IHDR, &data)?;
+
+        if let Some(p) = &self.palette {
+            encoder::write_chunk(&mut w, chunk::PLTE, p)?;
+        };
+
+        if let Some(t) = &self.trns {
+            encoder::write_chunk(&mut w, chunk::tRNS, t)?;
+        }
+
+        // If specified, the sRGB information overrides the source gamma and chromaticities.
+        if let Some(srgb) = &self.srgb {
+            let gamma = crate::srgb::substitute_gamma();
+            let chromaticities = crate::srgb::substitute_chromaticities();
+            srgb.encode(&mut w)?;
+            gamma.encode_gama(&mut w)?;
+            chromaticities.encode(&mut w)?;
+        } else {
+            if let Some(gma) = self.source_gamma {
+                gma.encode_gama(&mut w)?
+            }
+            if let Some(chrms) = self.source_chromaticities {
+                chrms.encode(&mut w)?;
+            }
+        }
+        if let Some(actl) = self.animation_control {
+            actl.encode(&mut w)?;
+        }
+
+        for text_chunk in &self.uncompressed_latin1_text {
+            text_chunk.encode(&mut w)?;
+        }
+
+        for text_chunk in &self.compressed_latin1_text {
+            text_chunk.encode(&mut w)?;
+        }
+
+        for text_chunk in &self.utf8_text {
+            text_chunk.encode(&mut w)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -407,73 +678,106 @@ impl BytesPerPixel {
 }
 
 bitflags! {
-    /// # Output transformations
+    /// Output transformations
     ///
-    /// Only `IDENTITY` and `TRANSFORM_EXPAND | TRANSFORM_STRIP_ALPHA` can be used at the moment.
+    /// Many flags from libpng are not yet supported. A PR discussing/adding them would be nice.
+    ///
+    #[doc = "
+    ```c
+    /// Discard the alpha channel
+    const STRIP_ALPHA         = 0x0002; // read only
+    /// Expand 1; 2 and 4-bit samples to bytes
+    const PACKING             = 0x0004; // read and write
+    /// Change order of packed pixels to LSB first
+    const PACKSWAP            = 0x0008; // read and write
+    /// Invert monochrome images
+    const INVERT_MONO         = 0x0020; // read and write
+    /// Normalize pixels to the sBIT depth
+    const SHIFT               = 0x0040; // read and write
+    /// Flip RGB to BGR; RGBA to BGRA
+    const BGR                 = 0x0080; // read and write
+    /// Flip RGBA to ARGB or GA to AG
+    const SWAP_ALPHA          = 0x0100; // read and write
+    /// Byte-swap 16-bit samples
+    const SWAP_ENDIAN         = 0x0200; // read and write
+    /// Change alpha from opacity to transparency
+    const INVERT_ALPHA        = 0x0400; // read and write
+    const STRIP_FILLER        = 0x0800; // write only
+    const STRIP_FILLER_BEFORE = 0x0800; // write only
+    const STRIP_FILLER_AFTER  = 0x1000; // write only
+    const GRAY_TO_RGB         = 0x2000; // read only
+    const EXPAND_16           = 0x4000; // read only
+    /// Similar to STRIP_16 but in libpng considering gamma?
+    /// Not entirely sure the documentation says it is more
+    /// accurate but doesn't say precisely how.
+    const SCALE_16            = 0x8000; // read only
+    ```
+    "]
     pub struct Transformations: u32 {
         /// No transformation
         const IDENTITY            = 0x0000; // read and write */
         /// Strip 16-bit samples to 8 bits
         const STRIP_16            = 0x0001; // read only */
-        /// Discard the alpha channel
-        const STRIP_ALPHA         = 0x0002; // read only */
-        /// Expand 1; 2 and 4-bit samples to bytes
-        const PACKING             = 0x0004; // read and write */
-        /// Change order of packed pixels to LSB first
-        const PACKSWAP            = 0x0008; // read and write */
         /// Expand paletted images to RGB; expand grayscale images of
         /// less than 8-bit depth to 8-bit depth; and expand tRNS chunks
         /// to alpha channels.
         const EXPAND              = 0x0010; // read only */
-        /// Invert monochrome images
-        const INVERT_MONO         = 0x0020; // read and write */
-        /// Normalize pixels to the sBIT depth
-        const SHIFT               = 0x0040; // read and write */
-        /// Flip RGB to BGR; RGBA to BGRA
-        const BGR                 = 0x0080; // read and write */
-        /// Flip RGBA to ARGB or GA to AG
-        const SWAP_ALPHA          = 0x0100; // read and write */
-        /// Byte-swap 16-bit samples
-        const SWAP_ENDIAN         = 0x0200; // read and write */
-        /// Change alpha from opacity to transparency
-        const INVERT_ALPHA        = 0x0400; // read and write */
-        const STRIP_FILLER        = 0x0800; // write only */
-        const STRIP_FILLER_BEFORE = 0x0800; // write only
-        const STRIP_FILLER_AFTER  = 0x1000; // write only */
-        const GRAY_TO_RGB         = 0x2000; // read only */
-        const EXPAND_16           = 0x4000; // read only */
-        const SCALE_16            = 0x8000; // read only */
     }
 }
 
-/// Mod to encapsulate the converters depending on the `deflate` crate.
-///
-/// Since this only contains trait impls, there is no need to make this public, they are simply
-/// available when the mod is compiled as well.
-#[cfg(feature = "png-encoding")]
-mod deflate_convert {
-    extern crate deflate;
-    use super::Compression;
-
-    impl From<deflate::Compression> for Compression {
-        fn from(c: deflate::Compression) -> Self {
-            match c {
-                deflate::Compression::Default => Compression::Default,
-                deflate::Compression::Fast => Compression::Fast,
-                deflate::Compression::Best => Compression::Best,
-            }
-        }
+impl Transformations {
+    /// Transform every input to 8bit grayscale or color.
+    ///
+    /// This sets `EXPAND` and `STRIP_16` which is similar to the default transformation used by
+    /// this library prior to `0.17`.
+    pub fn normalize_to_color8() -> Transformations {
+        Transformations::EXPAND | Transformations::STRIP_16
     }
+}
 
-    impl From<Compression> for deflate::CompressionOptions {
-        fn from(c: Compression) -> Self {
-            match c {
-                Compression::Default => deflate::CompressionOptions::default(),
-                Compression::Fast => deflate::CompressionOptions::fast(),
-                Compression::Best => deflate::CompressionOptions::high(),
-                Compression::Huffman => deflate::CompressionOptions::huffman_only(),
-                Compression::Rle => deflate::CompressionOptions::rle(),
+/// Instantiate the default transformations, the identity transform.
+impl Default for Transformations {
+    fn default() -> Transformations {
+        Transformations::IDENTITY
+    }
+}
+
+#[derive(Debug)]
+pub struct ParameterError {
+    inner: ParameterErrorKind,
+}
+
+#[derive(Debug)]
+pub(crate) enum ParameterErrorKind {
+    /// A provided buffer must be have the exact size to hold the image data. Where the buffer can
+    /// be allocated by the caller, they must ensure that it has a minimum size as hinted previously.
+    /// Even though the size is calculated from image data, this does counts as a parameter error
+    /// because they must react to a value produced by this library, which can have been subjected
+    /// to limits.
+    ImageBufferSize { expected: usize, actual: usize },
+    /// A bit like return `None` from an iterator.
+    /// We use it to differentiate between failing to seek to the next image in a sequence and the
+    /// absence of a next image. This is an error of the caller because they should have checked
+    /// the number of images by inspecting the header data returned when opening the image. This
+    /// library will perform the checks necessary to ensure that data was accurate or error with a
+    /// format error otherwise.
+    PolledAfterEndOfImage,
+}
+
+impl From<ParameterErrorKind> for ParameterError {
+    fn from(inner: ParameterErrorKind) -> Self {
+        ParameterError { inner }
+    }
+}
+
+impl fmt::Display for ParameterError {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        use ParameterErrorKind::*;
+        match self.inner {
+            ImageBufferSize { expected, actual } => {
+                write!(fmt, "wrong data size, expected {} got {}", expected, actual)
             }
+            PolledAfterEndOfImage => write!(fmt, "End of image has been reached"),
         }
     }
 }

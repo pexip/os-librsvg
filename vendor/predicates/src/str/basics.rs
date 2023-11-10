@@ -25,6 +25,7 @@ impl Predicate<str> for IsEmptyPredicate {
 
     fn find_case<'a>(&'a self, expected: bool, variable: &str) -> Option<reflection::Case<'a>> {
         utils::default_find_case(self, expected, variable)
+            .map(|case| case.add_product(reflection::Product::new("var", variable.to_owned())))
     }
 }
 
@@ -32,7 +33,13 @@ impl reflection::PredicateReflection for IsEmptyPredicate {}
 
 impl fmt::Display for IsEmptyPredicate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "var.is_empty()")
+        let palette = crate::Palette::current();
+        write!(
+            f,
+            "{}.{}()",
+            palette.var.paint("var"),
+            palette.description.paint("is_empty"),
+        )
     }
 }
 
@@ -66,6 +73,7 @@ impl Predicate<str> for StartsWithPredicate {
 
     fn find_case<'a>(&'a self, expected: bool, variable: &str) -> Option<reflection::Case<'a>> {
         utils::default_find_case(self, expected, variable)
+            .map(|case| case.add_product(reflection::Product::new("var", variable.to_owned())))
     }
 }
 
@@ -73,7 +81,14 @@ impl reflection::PredicateReflection for StartsWithPredicate {}
 
 impl fmt::Display for StartsWithPredicate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "var.starts_with({:?})", self.pattern)
+        let palette = crate::Palette::current();
+        write!(
+            f,
+            "{}.{}({:?})",
+            palette.var.paint("var"),
+            palette.description.paint("starts_with"),
+            self.pattern
+        )
     }
 }
 
@@ -112,6 +127,7 @@ impl Predicate<str> for EndsWithPredicate {
 
     fn find_case<'a>(&'a self, expected: bool, variable: &str) -> Option<reflection::Case<'a>> {
         utils::default_find_case(self, expected, variable)
+            .map(|case| case.add_product(reflection::Product::new("var", variable.to_owned())))
     }
 }
 
@@ -119,7 +135,14 @@ impl reflection::PredicateReflection for EndsWithPredicate {}
 
 impl fmt::Display for EndsWithPredicate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "var.ends_with({:?})", self.pattern)
+        let palette = crate::Palette::current();
+        write!(
+            f,
+            "{}.{}({:?})",
+            palette.var.paint("var"),
+            palette.description.paint("ends_with"),
+            self.pattern
+        )
     }
 }
 
@@ -178,6 +201,7 @@ impl Predicate<str> for ContainsPredicate {
 
     fn find_case<'a>(&'a self, expected: bool, variable: &str) -> Option<reflection::Case<'a>> {
         utils::default_find_case(self, expected, variable)
+            .map(|case| case.add_product(reflection::Product::new("var", variable.to_owned())))
     }
 }
 
@@ -185,7 +209,14 @@ impl reflection::PredicateReflection for ContainsPredicate {}
 
 impl fmt::Display for ContainsPredicate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "var.contains({:?})", self.pattern)
+        let palette = crate::Palette::current();
+        write!(
+            f,
+            "{}.{}({})",
+            palette.var.paint("var"),
+            palette.description.paint("contains"),
+            palette.expected.paint(&self.pattern),
+        )
     }
 }
 
@@ -209,6 +240,7 @@ impl Predicate<str> for MatchesPredicate {
         if result == expected {
             Some(
                 reflection::Case::new(Some(self), result)
+                    .add_product(reflection::Product::new("var", variable.to_owned()))
                     .add_product(reflection::Product::new("actual count", actual_count)),
             )
         } else {
@@ -226,7 +258,14 @@ impl reflection::PredicateReflection for MatchesPredicate {
 
 impl fmt::Display for MatchesPredicate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "var.contains({})", self.pattern)
+        let palette = crate::Palette::current();
+        write!(
+            f,
+            "{}.{}({})",
+            palette.var.paint("var"),
+            palette.description.paint("contains"),
+            palette.expected.paint(&self.pattern),
+        )
     }
 }
 

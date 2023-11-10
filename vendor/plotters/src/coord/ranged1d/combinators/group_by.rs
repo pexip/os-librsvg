@@ -18,7 +18,7 @@ use std::ops::Range;
 ///let mut buf = vec![0;1024*768*3];
 ///let area = BitMapBackend::with_buffer(buf.as_mut(), (1024, 768)).into_drawing_area();
 ///let chart = ChartBuilder::on(&area)
-///    .build_ranged((0..100).group_by(7), 0..100)
+///    .build_cartesian_2d((0..100).group_by(7), 0..100)
 ///    .unwrap();
 ///```
 ///
@@ -92,8 +92,7 @@ impl<T: DiscreteRanged> Ranged for GroupBy<T> {
                 .collect();
             let size = self.0.size();
             return outter_ticks
-                .map(|base| inner_ticks.iter().map(move |&ofs| base * self.1 + ofs))
-                .flatten()
+                .flat_map(|base| inner_ticks.iter().map(move |&ofs| base * self.1 + ofs))
                 .take_while(|&idx| idx < size)
                 .map(|x| self.0.from_index(x).unwrap())
                 .collect();

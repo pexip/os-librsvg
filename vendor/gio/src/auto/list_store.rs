@@ -2,140 +2,137 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
-#[cfg(any(feature = "v2_44", feature = "dox"))]
-use glib;
-#[cfg(any(feature = "v2_44", feature = "dox"))]
+use crate::ListModel;
 use glib::object::Cast;
-#[cfg(any(feature = "v2_44", feature = "dox"))]
 use glib::object::IsA;
 use glib::translate::*;
-#[cfg(any(feature = "v2_44", feature = "dox"))]
 use glib::StaticType;
-#[cfg(any(feature = "v2_44", feature = "dox"))]
 use glib::ToValue;
 use std::fmt;
-use ListModel;
+#[cfg(any(feature = "v2_64", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+use std::mem;
 
-glib_wrapper! {
-    pub struct ListStore(Object<gio_sys::GListStore, gio_sys::GListStoreClass, ListStoreClass>) @implements ListModel;
+glib::wrapper! {
+    #[doc(alias = "GListStore")]
+    pub struct ListStore(Object<ffi::GListStore, ffi::GListStoreClass>) @implements ListModel;
 
     match fn {
-        get_type => || gio_sys::g_list_store_get_type(),
+        type_ => || ffi::g_list_store_get_type(),
     }
 }
 
 impl ListStore {
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
+    #[doc(alias = "g_list_store_new")]
     pub fn new(item_type: glib::types::Type) -> ListStore {
-        unsafe { from_glib_full(gio_sys::g_list_store_new(item_type.to_glib())) }
+        unsafe { from_glib_full(ffi::g_list_store_new(item_type.into_glib())) }
+    }
+
+    // rustdoc-stripper-ignore-next
+    /// Creates a new builder-pattern struct instance to construct [`ListStore`] objects.
+    ///
+    /// This method returns an instance of [`ListStoreBuilder`](crate::builders::ListStoreBuilder) which can be used to create [`ListStore`] objects.
+    pub fn builder() -> ListStoreBuilder {
+        ListStoreBuilder::default()
+    }
+
+    #[doc(alias = "g_list_store_append")]
+    pub fn append(&self, item: &impl IsA<glib::Object>) {
+        unsafe {
+            ffi::g_list_store_append(self.to_glib_none().0, item.as_ref().to_glib_none().0);
+        }
+    }
+
+    #[cfg(any(feature = "v2_64", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_64")))]
+    #[doc(alias = "g_list_store_find")]
+    pub fn find(&self, item: &impl IsA<glib::Object>) -> Option<u32> {
+        unsafe {
+            let mut position = mem::MaybeUninit::uninit();
+            let ret = from_glib(ffi::g_list_store_find(
+                self.to_glib_none().0,
+                item.as_ref().to_glib_none().0,
+                position.as_mut_ptr(),
+            ));
+            let position = position.assume_init();
+            if ret {
+                Some(position)
+            } else {
+                None
+            }
+        }
+    }
+
+    #[doc(alias = "g_list_store_insert")]
+    pub fn insert(&self, position: u32, item: &impl IsA<glib::Object>) {
+        unsafe {
+            ffi::g_list_store_insert(
+                self.to_glib_none().0,
+                position,
+                item.as_ref().to_glib_none().0,
+            );
+        }
+    }
+
+    #[doc(alias = "g_list_store_remove")]
+    pub fn remove(&self, position: u32) {
+        unsafe {
+            ffi::g_list_store_remove(self.to_glib_none().0, position);
+        }
+    }
+
+    #[doc(alias = "g_list_store_remove_all")]
+    pub fn remove_all(&self) {
+        unsafe {
+            ffi::g_list_store_remove_all(self.to_glib_none().0);
+        }
+    }
+}
+
+impl Default for ListStore {
+    fn default() -> Self {
+        glib::object::Object::new::<Self>(&[])
+            .expect("Can't construct ListStore object with default parameters")
     }
 }
 
 #[derive(Clone, Default)]
+// rustdoc-stripper-ignore-next
+/// A [builder-pattern] type to construct [`ListStore`] objects.
+///
+/// [builder-pattern]: https://doc.rust-lang.org/1.0.0/style/ownership/builders.html
+#[must_use = "The builder must be built to be used"]
 pub struct ListStoreBuilder {
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     item_type: Option<glib::types::Type>,
 }
 
 impl ListStoreBuilder {
+    // rustdoc-stripper-ignore-next
+    /// Create a new [`ListStoreBuilder`].
     pub fn new() -> Self {
         Self::default()
     }
 
+    // rustdoc-stripper-ignore-next
+    /// Build the [`ListStore`].
+    #[must_use = "Building the object from the builder is usually expensive and is not expected to have side effects"]
     pub fn build(self) -> ListStore {
         let mut properties: Vec<(&str, &dyn ToValue)> = vec![];
-        #[cfg(any(feature = "v2_44", feature = "dox"))]
-        {
-            if let Some(ref item_type) = self.item_type {
-                properties.push(("item-type", item_type));
-            }
+        if let Some(ref item_type) = self.item_type {
+            properties.push(("item-type", item_type));
         }
-        glib::Object::new(ListStore::static_type(), &properties)
-            .expect("object new")
-            .downcast()
-            .expect("downcast")
+        glib::Object::new::<ListStore>(&properties)
+            .expect("Failed to create an instance of ListStore")
     }
 
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn item_type(mut self, item_type: glib::types::Type) -> Self {
         self.item_type = Some(item_type);
         self
     }
 }
 
-pub const NONE_LIST_STORE: Option<&ListStore> = None;
-
-pub trait ListStoreExt: 'static {
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
-    fn append<P: IsA<glib::Object>>(&self, item: &P);
-
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
-    fn insert<P: IsA<glib::Object>>(&self, position: u32, item: &P);
-
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
-    fn remove(&self, position: u32);
-
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
-    fn remove_all(&self);
-
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
-    fn splice(&self, position: u32, n_removals: u32, additions: &[glib::Object]);
-}
-
-impl<O: IsA<ListStore>> ListStoreExt for O {
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
-    fn append<P: IsA<glib::Object>>(&self, item: &P) {
-        unsafe {
-            gio_sys::g_list_store_append(
-                self.as_ref().to_glib_none().0,
-                item.as_ref().to_glib_none().0,
-            );
-        }
-    }
-
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
-    fn insert<P: IsA<glib::Object>>(&self, position: u32, item: &P) {
-        unsafe {
-            gio_sys::g_list_store_insert(
-                self.as_ref().to_glib_none().0,
-                position,
-                item.as_ref().to_glib_none().0,
-            );
-        }
-    }
-
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
-    fn remove(&self, position: u32) {
-        unsafe {
-            gio_sys::g_list_store_remove(self.as_ref().to_glib_none().0, position);
-        }
-    }
-
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
-    fn remove_all(&self) {
-        unsafe {
-            gio_sys::g_list_store_remove_all(self.as_ref().to_glib_none().0);
-        }
-    }
-
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
-    fn splice(&self, position: u32, n_removals: u32, additions: &[glib::Object]) {
-        let n_additions = additions.len() as u32;
-        unsafe {
-            gio_sys::g_list_store_splice(
-                self.as_ref().to_glib_none().0,
-                position,
-                n_removals,
-                additions.to_glib_none().0,
-                n_additions,
-            );
-        }
-    }
-}
-
 impl fmt::Display for ListStore {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ListStore")
+        f.write_str("ListStore")
     }
 }

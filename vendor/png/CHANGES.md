@@ -1,6 +1,64 @@
-## 0.16.8
+## Unreleased
 
-* Fixed a bug that led to data corruption when encoding with Average filter.
+## 0.17.5
+
+* Fixed a regression, introduced by chunk validation, that made the decoder
+  sensitive to the order of `gAMA`, `cHRM`, and `sRGB` chunks.
+
+## 0.17.4
+
+* Added `{Decoder,StreamDecoder}::set_ignore_text_chunk` to disable decoding of
+  ancillary text chunks during the decoding process (chunks decoded by default).
+* Added duplicate chunk checks. The decoder now enforces that standard chunks
+  such as palette, gamma, … occur at most once as specified.
+* Added `#[forbid(unsafe_code)]` again. This may come at a minor performance
+  cost when decoding ASCII text for now.
+* Fixed a bug where decoding of large chunks (>32kB) failed to produce the
+  correct result, or fail the image decoding. As new chunk types are decoded
+  this introduced regressions relative to previous versions.
+
+## 0.17.3
+
+* Fixed a bug where `Writer::finish` would not drop the underlying writer. This
+  would fail to flush and leak memory when using a buffered file writers.
+* Calling `Writer::finish` will now eagerly flush the underlying writer,
+  returning any error that this operation may result in.
+* Errors in inflate are now diagnosed with more details.
+* The color and depth combination is now checked in stream decoder.
+
+## 0.17.2
+
+* Added support for encoding and decoding tEXt/zTXt/iTXt chunks.
+* Added `Encoder::validate_sequence` to enable validation of the written frame
+  sequence, that is, if the number of written images is consistent with the
+  animation state.
+* Validation is now off by default. The basis of the new validation had been
+  introduced in 0.17 but this fixes some cases where this validation was too
+  aggressive compared to previous versions.
+* Added `Writer::finish` to fully check the write of the end of an image
+  instead of silently ignoring potential errors in `Drop`.
+* The `Writer::write_chunk` method now validates that the computed chunk length
+  does not overflow the limit set by PNG.
+* Fix an issue where the library would panic or even abort the process when
+  `flush` or `write` of an underlying writer panicked, or in some other uses of
+  `StreamWriter`.
+
+## 0.17.1
+
+* Fix panic in adaptive filter method `sum_buffer`
+
+## 0.17.0
+
+* Increased MSRV to 1.46.0
+* Rework output info usage
+* Implement APNG encoding
+* Improve ergonomics of encoder set_palette and set_trns methods
+* Make Info struct non-exhaustive
+* Make encoder a core feature
+* Default Transformations to Identity
+* Add Adaptive filtering method for encoding
+* Fix SCREAM_CASE on ColorType variants
+* Forbid unsafe code
 
 ## 0.16.7
 

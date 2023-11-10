@@ -2,35 +2,39 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
-use glib;
 use glib::translate::*;
-use glib::GString;
 use std::fmt;
 use std::ptr;
 
-glib_wrapper! {
-    pub struct Credentials(Object<gio_sys::GCredentials, gio_sys::GCredentialsClass, CredentialsClass>);
+glib::wrapper! {
+    #[doc(alias = "GCredentials")]
+    pub struct Credentials(Object<ffi::GCredentials, ffi::GCredentialsClass>);
 
     match fn {
-        get_type => || gio_sys::g_credentials_get_type(),
+        type_ => || ffi::g_credentials_get_type(),
     }
 }
 
 impl Credentials {
+    #[doc(alias = "g_credentials_new")]
     pub fn new() -> Credentials {
-        unsafe { from_glib_full(gio_sys::g_credentials_new()) }
+        unsafe { from_glib_full(ffi::g_credentials_new()) }
     }
 
-    //pub fn get_native(&self, native_type: CredentialsType) -> /*Unimplemented*/Option<Fundamental: Pointer> {
-    //    unsafe { TODO: call gio_sys:g_credentials_get_native() }
+    //#[doc(alias = "g_credentials_get_native")]
+    //#[doc(alias = "get_native")]
+    //pub fn native(&self, native_type: CredentialsType) -> /*Unimplemented*/Option<Fundamental: Pointer> {
+    //    unsafe { TODO: call ffi:g_credentials_get_native() }
     //}
 
     #[cfg(any(unix, feature = "dox"))]
-    pub fn get_unix_pid(&self) -> Result<i32, glib::Error> {
+    #[cfg_attr(feature = "dox", doc(cfg(unix)))]
+    #[doc(alias = "g_credentials_get_unix_pid")]
+    #[doc(alias = "get_unix_pid")]
+    pub fn unix_pid(&self) -> Result<i32, glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let ret = gio_sys::g_credentials_get_unix_pid(self.to_glib_none().0, &mut error);
+            let ret = ffi::g_credentials_get_unix_pid(self.to_glib_none().0, &mut error);
             if error.is_null() {
                 Ok(ret)
             } else {
@@ -40,26 +44,31 @@ impl Credentials {
     }
 
     #[cfg(any(unix, feature = "dox"))]
-    pub fn get_unix_user(&self) -> Result<(), glib::Error> {
+    #[cfg_attr(feature = "dox", doc(cfg(unix)))]
+    #[doc(alias = "g_credentials_get_unix_user")]
+    #[doc(alias = "get_unix_user")]
+    pub fn unix_user(&self) -> Result<u32, glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_credentials_get_unix_user(self.to_glib_none().0, &mut error);
+            let ret = ffi::g_credentials_get_unix_user(self.to_glib_none().0, &mut error);
             if error.is_null() {
-                Ok(())
+                Ok(ret)
             } else {
                 Err(from_glib_full(error))
             }
         }
     }
 
+    #[doc(alias = "g_credentials_is_same_user")]
     pub fn is_same_user(&self, other_credentials: &Credentials) -> Result<(), glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_credentials_is_same_user(
+            let is_ok = ffi::g_credentials_is_same_user(
                 self.to_glib_none().0,
                 other_credentials.to_glib_none().0,
                 &mut error,
             );
+            assert_eq!(is_ok == glib::ffi::GFALSE, !error.is_null());
             if error.is_null() {
                 Ok(())
             } else {
@@ -68,15 +77,19 @@ impl Credentials {
         }
     }
 
+    //#[doc(alias = "g_credentials_set_native")]
     //pub fn set_native(&self, native_type: CredentialsType, native: /*Unimplemented*/Fundamental: Pointer) {
-    //    unsafe { TODO: call gio_sys:g_credentials_set_native() }
+    //    unsafe { TODO: call ffi:g_credentials_set_native() }
     //}
 
     #[cfg(any(unix, feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(unix)))]
+    #[doc(alias = "g_credentials_set_unix_user")]
     pub fn set_unix_user(&self, uid: u32) -> Result<(), glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_credentials_set_unix_user(self.to_glib_none().0, uid, &mut error);
+            let is_ok = ffi::g_credentials_set_unix_user(self.to_glib_none().0, uid, &mut error);
+            assert_eq!(is_ok == glib::ffi::GFALSE, !error.is_null());
             if error.is_null() {
                 Ok(())
             } else {
@@ -85,8 +98,10 @@ impl Credentials {
         }
     }
 
-    pub fn to_string(&self) -> GString {
-        unsafe { from_glib_full(gio_sys::g_credentials_to_string(self.to_glib_none().0)) }
+    #[doc(alias = "g_credentials_to_string")]
+    #[doc(alias = "to_string")]
+    pub fn to_str(&self) -> glib::GString {
+        unsafe { from_glib_full(ffi::g_credentials_to_string(self.to_glib_none().0)) }
     }
 }
 
@@ -97,7 +112,8 @@ impl Default for Credentials {
 }
 
 impl fmt::Display for Credentials {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Credentials")
+        f.write_str(&self.to_str())
     }
 }

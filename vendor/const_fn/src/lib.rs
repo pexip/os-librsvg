@@ -6,7 +6,7 @@
 //! ```rust
 //! use const_fn::const_fn;
 //!
-//! // function is `const` on specified version and later compiler (including beta and nightly)
+//! // function is `const` on specified version and later compiler (including beta, nightly, and dev build)
 //! #[const_fn("1.36")]
 //! pub const fn version() {
 //!     /* ... */
@@ -33,6 +33,20 @@
 //! }
 //! ```
 //!
+//! ## Use this crate as an optional dependency
+//!
+//! If no arguments are passed, `const_fn` will always make the function `const`.
+//!
+//! Therefore, you can use `const_fn` as an optional dependency by combination with `cfg_attr`.
+//!
+//! ```rust
+//! // function is `const` if `cfg(feature = "...")` is true
+//! #[cfg_attr(feature = "...", const_fn::const_fn)]
+//! pub fn optional() {
+//!     /* ... */
+//! }
+//! ```
+//!
 //! # Alternatives
 //!
 //! This crate is proc-macro, but is very lightweight, and has no dependencies.
@@ -48,52 +62,45 @@
     )
 ))]
 #![forbid(unsafe_code)]
-#![warn(future_incompatible, rust_2018_idioms, single_use_lifetimes, unreachable_pub)]
-#![warn(clippy::all, clippy::default_trait_access)]
+#![warn(rust_2018_idioms, single_use_lifetimes, unreachable_pub)]
+#![warn(clippy::default_trait_access, clippy::wildcard_imports)]
 
 // older compilers require explicit `extern crate`.
 #[allow(unused_extern_crates)]
 extern crate proc_macro;
 
 #[macro_use]
-mod utils;
+mod error;
 
 mod ast;
-mod error;
 mod iter;
 mod to_tokens;
+mod utils;
 
-use proc_macro::{Delimiter, TokenStream, TokenTree};
 use std::str::FromStr;
 
+use proc_macro::{Delimiter, TokenStream, TokenTree};
+
 use crate::{
-    ast::{Func, LitStr},
-    error::Error,
+    ast::LitStr,
+    error::{Error, Result},
+    iter::TokenIter,
     to_tokens::ToTokens,
     utils::{cfg_attrs, parse_as_empty, tt_span},
 };
-
-type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// An attribute for easy generation of const functions with conditional compilations.
 ///
 /// See crate level documentation for details.
 #[proc_macro_attribute]
 pub fn const_fn(args: TokenStream, input: TokenStream) -> TokenStream {
-    let arg = match parse_arg(args) {
-        Ok(arg) => arg,
-        Err(e) => return e.to_compile_error(),
-    };
-    let func = match ast::parse_input(input) {
-        Ok(func) => func,
-        Err(e) => return e.to_compile_error(),
-    };
-
-    expand(arg, func)
+    expand(args, input).unwrap_or_else(Error::into_compile_error)
 }
 
-fn expand(arg: Arg, mut func: Func) -> TokenStream {
-    match arg {
+fn expand(args: TokenStream, input: TokenStream) -> Result<TokenStream> {
+    let arg = parse_arg(args)?;
+    let mut func = ast::parse_input(input)?;
+    Ok(match arg {
         Arg::Cfg(cfg) => {
             let (mut tokens, cfg_not) = cfg_attrs(cfg);
             tokens.extend(func.to_token_stream());
@@ -111,7 +118,9 @@ fn expand(arg: Arg, mut func: Func) -> TokenStream {
             tokens
         }
         Arg::Version(req) => {
-            if req.major > 1 || req.minor > VERSION.minor {
+            if req.major > 1
+                || req.minor + (cfg!(const_fn_assume_incomplete_release) as u32) > VERSION.minor
+            {
                 func.print_const = false;
             }
             func.to_token_stream()
@@ -121,7 +130,7 @@ fn expand(arg: Arg, mut func: Func) -> TokenStream {
             func.to_token_stream()
         }
         Arg::Always => func.to_token_stream(),
-    }
+    })
 }
 
 enum Arg {
@@ -138,7 +147,7 @@ enum Arg {
 }
 
 fn parse_arg(tokens: TokenStream) -> Result<Arg> {
-    let mut iter = tokens.into_iter();
+    let iter = &mut TokenIter::new(tokens);
 
     let next = iter.next();
     let next_span = tt_span(next.as_ref());
@@ -155,7 +164,7 @@ fn parse_arg(tokens: TokenStream) -> Result<Arg> {
                         parse_as_empty(iter)?;
                         Ok(Arg::Cfg(g.stream()))
                     }
-                    tt => Err(error!(tt_span(tt), "expected `(`")),
+                    tt => bail!(tt_span(tt), "expected `(`"),
                 };
             }
             "feature" => {
@@ -171,9 +180,9 @@ fn parse_arg(tokens: TokenStream) -> Result<Arg> {
                                     .collect(),
                             ))
                         }
-                        tt => Err(error!(tt_span(tt.as_ref()), "expected string literal")),
+                        tt => bail!(tt_span(tt.as_ref()), "expected string literal"),
                     },
-                    tt => Err(error!(tt_span(tt), "expected `=`")),
+                    tt => bail!(tt_span(tt), "expected `=`"),
                 };
             }
             _ => {}
@@ -183,14 +192,14 @@ fn parse_arg(tokens: TokenStream) -> Result<Arg> {
                 parse_as_empty(iter)?;
                 return match l.value().parse::<VersionReq>() {
                     Ok(req) => Ok(Arg::Version(req)),
-                    Err(e) => Err(error!(l.span(), "{}", e)),
+                    Err(e) => bail!(l.span(), "{}", e),
                 };
             }
         }
         Some(_) => {}
     }
 
-    Err(error!(next_span, "expected one of: `nightly`, `cfg`, `feature`, string literal"))
+    bail!(next_span, "expected one of: `nightly`, `cfg`, `feature`, string literal")
 }
 
 struct VersionReq {

@@ -2,83 +2,78 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
-use glib;
+use crate::AsyncResult;
+use crate::Cancellable;
+use crate::IOStream;
+use crate::ProxyAddress;
 use glib::object::IsA;
 use glib::translate::*;
-use glib_sys;
-use gobject_sys;
 use std::boxed::Box as Box_;
 use std::fmt;
 use std::pin::Pin;
 use std::ptr;
-use Cancellable;
-use IOStream;
-use ProxyAddress;
 
-glib_wrapper! {
-    pub struct Proxy(Interface<gio_sys::GProxy>);
+glib::wrapper! {
+    #[doc(alias = "GProxy")]
+    pub struct Proxy(Interface<ffi::GProxy, ffi::GProxyInterface>);
 
     match fn {
-        get_type => || gio_sys::g_proxy_get_type(),
+        type_ => || ffi::g_proxy_get_type(),
     }
 }
 
 impl Proxy {
-    pub fn get_default_for_protocol(protocol: &str) -> Option<Proxy> {
+    pub const NONE: Option<&'static Proxy> = None;
+
+    #[doc(alias = "g_proxy_get_default_for_protocol")]
+    #[doc(alias = "get_default_for_protocol")]
+    pub fn default_for_protocol(protocol: &str) -> Option<Proxy> {
         unsafe {
-            from_glib_full(gio_sys::g_proxy_get_default_for_protocol(
+            from_glib_full(ffi::g_proxy_get_default_for_protocol(
                 protocol.to_glib_none().0,
             ))
         }
     }
 }
 
-pub const NONE_PROXY: Option<&Proxy> = None;
-
 pub trait ProxyExt: 'static {
-    fn connect<P: IsA<IOStream>, Q: IsA<ProxyAddress>, R: IsA<Cancellable>>(
+    #[doc(alias = "g_proxy_connect")]
+    fn connect(
         &self,
-        connection: &P,
-        proxy_address: &Q,
-        cancellable: Option<&R>,
+        connection: &impl IsA<IOStream>,
+        proxy_address: &impl IsA<ProxyAddress>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<IOStream, glib::Error>;
 
-    fn connect_async<
-        P: IsA<IOStream>,
-        Q: IsA<ProxyAddress>,
-        R: IsA<Cancellable>,
-        S: FnOnce(Result<IOStream, glib::Error>) + Send + 'static,
-    >(
+    #[doc(alias = "g_proxy_connect_async")]
+    fn connect_async<P: FnOnce(Result<IOStream, glib::Error>) + 'static>(
         &self,
-        connection: &P,
-        proxy_address: &Q,
-        cancellable: Option<&R>,
-        callback: S,
+        connection: &impl IsA<IOStream>,
+        proxy_address: &impl IsA<ProxyAddress>,
+        cancellable: Option<&impl IsA<Cancellable>>,
+        callback: P,
     );
 
-    fn connect_async_future<
-        P: IsA<IOStream> + Clone + 'static,
-        Q: IsA<ProxyAddress> + Clone + 'static,
-    >(
+    fn connect_future(
         &self,
-        connection: &P,
-        proxy_address: &Q,
+        connection: &(impl IsA<IOStream> + Clone + 'static),
+        proxy_address: &(impl IsA<ProxyAddress> + Clone + 'static),
     ) -> Pin<Box_<dyn std::future::Future<Output = Result<IOStream, glib::Error>> + 'static>>;
 
+    #[doc(alias = "g_proxy_supports_hostname")]
     fn supports_hostname(&self) -> bool;
 }
 
 impl<O: IsA<Proxy>> ProxyExt for O {
-    fn connect<P: IsA<IOStream>, Q: IsA<ProxyAddress>, R: IsA<Cancellable>>(
+    fn connect(
         &self,
-        connection: &P,
-        proxy_address: &Q,
-        cancellable: Option<&R>,
+        connection: &impl IsA<IOStream>,
+        proxy_address: &impl IsA<ProxyAddress>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<IOStream, glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let ret = gio_sys::g_proxy_connect(
+            let ret = ffi::g_proxy_connect(
                 self.as_ref().to_glib_none().0,
                 connection.as_ref().to_glib_none().0,
                 proxy_address.as_ref().to_glib_none().0,
@@ -93,39 +88,47 @@ impl<O: IsA<Proxy>> ProxyExt for O {
         }
     }
 
-    fn connect_async<
-        P: IsA<IOStream>,
-        Q: IsA<ProxyAddress>,
-        R: IsA<Cancellable>,
-        S: FnOnce(Result<IOStream, glib::Error>) + Send + 'static,
-    >(
+    fn connect_async<P: FnOnce(Result<IOStream, glib::Error>) + 'static>(
         &self,
-        connection: &P,
-        proxy_address: &Q,
-        cancellable: Option<&R>,
-        callback: S,
+        connection: &impl IsA<IOStream>,
+        proxy_address: &impl IsA<ProxyAddress>,
+        cancellable: Option<&impl IsA<Cancellable>>,
+        callback: P,
     ) {
-        let user_data: Box_<S> = Box_::new(callback);
+        let main_context = glib::MainContext::ref_thread_default();
+        let is_main_context_owner = main_context.is_owner();
+        let has_acquired_main_context = (!is_main_context_owner)
+            .then(|| main_context.acquire().ok())
+            .flatten();
+        assert!(
+            is_main_context_owner || has_acquired_main_context.is_some(),
+            "Async operations only allowed if the thread is owning the MainContext"
+        );
+
+        let user_data: Box_<glib::thread_guard::ThreadGuard<P>> =
+            Box_::new(glib::thread_guard::ThreadGuard::new(callback));
         unsafe extern "C" fn connect_async_trampoline<
-            S: FnOnce(Result<IOStream, glib::Error>) + Send + 'static,
+            P: FnOnce(Result<IOStream, glib::Error>) + 'static,
         >(
-            _source_object: *mut gobject_sys::GObject,
-            res: *mut gio_sys::GAsyncResult,
-            user_data: glib_sys::gpointer,
+            _source_object: *mut glib::gobject_ffi::GObject,
+            res: *mut crate::ffi::GAsyncResult,
+            user_data: glib::ffi::gpointer,
         ) {
             let mut error = ptr::null_mut();
-            let ret = gio_sys::g_proxy_connect_finish(_source_object as *mut _, res, &mut error);
+            let ret = ffi::g_proxy_connect_finish(_source_object as *mut _, res, &mut error);
             let result = if error.is_null() {
                 Ok(from_glib_full(ret))
             } else {
                 Err(from_glib_full(error))
             };
-            let callback: Box_<S> = Box_::from_raw(user_data as *mut _);
+            let callback: Box_<glib::thread_guard::ThreadGuard<P>> =
+                Box_::from_raw(user_data as *mut _);
+            let callback: P = callback.into_inner();
             callback(result);
         }
-        let callback = connect_async_trampoline::<S>;
+        let callback = connect_async_trampoline::<P>;
         unsafe {
-            gio_sys::g_proxy_connect_async(
+            ffi::g_proxy_connect_async(
                 self.as_ref().to_glib_none().0,
                 connection.as_ref().to_glib_none().0,
                 proxy_address.as_ref().to_glib_none().0,
@@ -136,34 +139,26 @@ impl<O: IsA<Proxy>> ProxyExt for O {
         }
     }
 
-    fn connect_async_future<
-        P: IsA<IOStream> + Clone + 'static,
-        Q: IsA<ProxyAddress> + Clone + 'static,
-    >(
+    fn connect_future(
         &self,
-        connection: &P,
-        proxy_address: &Q,
+        connection: &(impl IsA<IOStream> + Clone + 'static),
+        proxy_address: &(impl IsA<ProxyAddress> + Clone + 'static),
     ) -> Pin<Box_<dyn std::future::Future<Output = Result<IOStream, glib::Error>> + 'static>> {
         let connection = connection.clone();
         let proxy_address = proxy_address.clone();
-        Box_::pin(crate::GioFuture::new(self, move |obj, send| {
-            let cancellable = Cancellable::new();
-            obj.connect_async(
-                &connection,
-                &proxy_address,
-                Some(&cancellable),
-                move |res| {
+        Box_::pin(crate::GioFuture::new(
+            self,
+            move |obj, cancellable, send| {
+                obj.connect_async(&connection, &proxy_address, Some(cancellable), move |res| {
                     send.resolve(res);
-                },
-            );
-
-            cancellable
-        }))
+                });
+            },
+        ))
     }
 
     fn supports_hostname(&self) -> bool {
         unsafe {
-            from_glib(gio_sys::g_proxy_supports_hostname(
+            from_glib(ffi::g_proxy_supports_hostname(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -172,6 +167,6 @@ impl<O: IsA<Proxy>> ProxyExt for O {
 
 impl fmt::Display for Proxy {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Proxy")
+        f.write_str("Proxy")
     }
 }

@@ -12,7 +12,7 @@
 
 [package]
 name = "rctree"
-version = "0.3.3"
+version = "0.4.0"
 authors = ["Simon Sapin <simon.sapin@exyr.org>", "Evgeniy Reizner <razrfalcon@gmail.com>"]
 description = "A 'DOM-like' tree implemented using reference counting"
 documentation = "https://docs.rs/rctree/"

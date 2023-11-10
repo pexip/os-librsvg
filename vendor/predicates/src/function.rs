@@ -28,6 +28,20 @@ where
     _phantom: PhantomData<T>,
 }
 
+unsafe impl<F, T> Send for FnPredicate<F, T>
+where
+    F: Send + Fn(&T) -> bool,
+    T: ?Sized,
+{
+}
+
+unsafe impl<F, T> Sync for FnPredicate<F, T>
+where
+    F: Sync + Fn(&T) -> bool,
+    T: ?Sized,
+{
+}
+
 impl<F, T> FnPredicate<F, T>
 where
     F: Fn(&T) -> bool,
@@ -82,7 +96,13 @@ where
     T: ?Sized,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}(var)", self.name)
+        let palette = crate::Palette::current();
+        write!(
+            f,
+            "{}({})",
+            palette.description.paint(self.name),
+            palette.var.paint("var"),
+        )
     }
 }
 
@@ -123,6 +143,6 @@ where
 #[test]
 fn str_function() {
     let f = function(|x: &str| x == "hello");
-    assert!(f.eval(&"hello"));
-    assert!(!f.eval(&"goodbye"));
+    assert!(f.eval("hello"));
+    assert!(!f.eval("goodbye"));
 }

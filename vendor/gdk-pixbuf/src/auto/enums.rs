@@ -2,21 +2,20 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gdk_pixbuf_sys;
 use glib::error::ErrorDomain;
 use glib::translate::*;
 use glib::value::FromValue;
-use glib::value::FromValueOptional;
-use glib::value::SetValue;
-use glib::value::Value;
+use glib::value::ToValue;
 use glib::Quark;
 use glib::StaticType;
 use glib::Type;
-use gobject_sys;
 use std::fmt;
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "GdkColorspace")]
 pub enum Colorspace {
+    #[doc(alias = "GDK_COLORSPACE_RGB")]
     Rgb,
     #[doc(hidden)]
     __Unknown(i32),
@@ -28,7 +27,7 @@ impl fmt::Display for Colorspace {
             f,
             "Colorspace::{}",
             match *self {
-                Colorspace::Rgb => "Rgb",
+                Self::Rgb => "Rgb",
                 _ => "Unknown",
             }
         )
@@ -36,56 +35,70 @@ impl fmt::Display for Colorspace {
 }
 
 #[doc(hidden)]
-impl ToGlib for Colorspace {
-    type GlibType = gdk_pixbuf_sys::GdkColorspace;
+impl IntoGlib for Colorspace {
+    type GlibType = ffi::GdkColorspace;
 
-    fn to_glib(&self) -> gdk_pixbuf_sys::GdkColorspace {
-        match *self {
-            Colorspace::Rgb => gdk_pixbuf_sys::GDK_COLORSPACE_RGB,
-            Colorspace::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::GdkColorspace {
+        match self {
+            Self::Rgb => ffi::GDK_COLORSPACE_RGB,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<gdk_pixbuf_sys::GdkColorspace> for Colorspace {
-    fn from_glib(value: gdk_pixbuf_sys::GdkColorspace) -> Self {
+impl FromGlib<ffi::GdkColorspace> for Colorspace {
+    unsafe fn from_glib(value: ffi::GdkColorspace) -> Self {
         match value {
-            0 => Colorspace::Rgb,
-            value => Colorspace::__Unknown(value),
+            ffi::GDK_COLORSPACE_RGB => Self::Rgb,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for Colorspace {
     fn static_type() -> Type {
-        unsafe { from_glib(gdk_pixbuf_sys::gdk_colorspace_get_type()) }
+        unsafe { from_glib(ffi::gdk_colorspace_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for Colorspace {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for Colorspace {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for Colorspace {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for Colorspace {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for Colorspace {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for Colorspace {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "GdkInterpType")]
 pub enum InterpType {
+    #[doc(alias = "GDK_INTERP_NEAREST")]
     Nearest,
+    #[doc(alias = "GDK_INTERP_TILES")]
     Tiles,
+    #[doc(alias = "GDK_INTERP_BILINEAR")]
     Bilinear,
+    #[doc(alias = "GDK_INTERP_HYPER")]
     Hyper,
     #[doc(hidden)]
     __Unknown(i32),
@@ -97,10 +110,10 @@ impl fmt::Display for InterpType {
             f,
             "InterpType::{}",
             match *self {
-                InterpType::Nearest => "Nearest",
-                InterpType::Tiles => "Tiles",
-                InterpType::Bilinear => "Bilinear",
-                InterpType::Hyper => "Hyper",
+                Self::Nearest => "Nearest",
+                Self::Tiles => "Tiles",
+                Self::Bilinear => "Bilinear",
+                Self::Hyper => "Hyper",
                 _ => "Unknown",
             }
         )
@@ -108,60 +121,73 @@ impl fmt::Display for InterpType {
 }
 
 #[doc(hidden)]
-impl ToGlib for InterpType {
-    type GlibType = gdk_pixbuf_sys::GdkInterpType;
+impl IntoGlib for InterpType {
+    type GlibType = ffi::GdkInterpType;
 
-    fn to_glib(&self) -> gdk_pixbuf_sys::GdkInterpType {
-        match *self {
-            InterpType::Nearest => gdk_pixbuf_sys::GDK_INTERP_NEAREST,
-            InterpType::Tiles => gdk_pixbuf_sys::GDK_INTERP_TILES,
-            InterpType::Bilinear => gdk_pixbuf_sys::GDK_INTERP_BILINEAR,
-            InterpType::Hyper => gdk_pixbuf_sys::GDK_INTERP_HYPER,
-            InterpType::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::GdkInterpType {
+        match self {
+            Self::Nearest => ffi::GDK_INTERP_NEAREST,
+            Self::Tiles => ffi::GDK_INTERP_TILES,
+            Self::Bilinear => ffi::GDK_INTERP_BILINEAR,
+            Self::Hyper => ffi::GDK_INTERP_HYPER,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<gdk_pixbuf_sys::GdkInterpType> for InterpType {
-    fn from_glib(value: gdk_pixbuf_sys::GdkInterpType) -> Self {
+impl FromGlib<ffi::GdkInterpType> for InterpType {
+    unsafe fn from_glib(value: ffi::GdkInterpType) -> Self {
         match value {
-            0 => InterpType::Nearest,
-            1 => InterpType::Tiles,
-            2 => InterpType::Bilinear,
-            3 => InterpType::Hyper,
-            value => InterpType::__Unknown(value),
+            ffi::GDK_INTERP_NEAREST => Self::Nearest,
+            ffi::GDK_INTERP_TILES => Self::Tiles,
+            ffi::GDK_INTERP_BILINEAR => Self::Bilinear,
+            ffi::GDK_INTERP_HYPER => Self::Hyper,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for InterpType {
     fn static_type() -> Type {
-        unsafe { from_glib(gdk_pixbuf_sys::gdk_interp_type_get_type()) }
+        unsafe { from_glib(ffi::gdk_interp_type_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for InterpType {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for InterpType {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for InterpType {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for InterpType {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for InterpType {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
+    }
+
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
-impl SetValue for InterpType {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
-    }
-}
-
+#[cfg_attr(feature = "v2_42", deprecated = "Since 2.42")]
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "GdkPixbufAlphaMode")]
 pub enum PixbufAlphaMode {
+    #[doc(alias = "GDK_PIXBUF_ALPHA_BILEVEL")]
     Bilevel,
+    #[doc(alias = "GDK_PIXBUF_ALPHA_FULL")]
     Full,
     #[doc(hidden)]
     __Unknown(i32),
@@ -173,8 +199,8 @@ impl fmt::Display for PixbufAlphaMode {
             f,
             "PixbufAlphaMode::{}",
             match *self {
-                PixbufAlphaMode::Bilevel => "Bilevel",
-                PixbufAlphaMode::Full => "Full",
+                Self::Bilevel => "Bilevel",
+                Self::Full => "Full",
                 _ => "Unknown",
             }
         )
@@ -182,61 +208,78 @@ impl fmt::Display for PixbufAlphaMode {
 }
 
 #[doc(hidden)]
-impl ToGlib for PixbufAlphaMode {
-    type GlibType = gdk_pixbuf_sys::GdkPixbufAlphaMode;
+impl IntoGlib for PixbufAlphaMode {
+    type GlibType = ffi::GdkPixbufAlphaMode;
 
-    fn to_glib(&self) -> gdk_pixbuf_sys::GdkPixbufAlphaMode {
-        match *self {
-            PixbufAlphaMode::Bilevel => gdk_pixbuf_sys::GDK_PIXBUF_ALPHA_BILEVEL,
-            PixbufAlphaMode::Full => gdk_pixbuf_sys::GDK_PIXBUF_ALPHA_FULL,
-            PixbufAlphaMode::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::GdkPixbufAlphaMode {
+        match self {
+            Self::Bilevel => ffi::GDK_PIXBUF_ALPHA_BILEVEL,
+            Self::Full => ffi::GDK_PIXBUF_ALPHA_FULL,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<gdk_pixbuf_sys::GdkPixbufAlphaMode> for PixbufAlphaMode {
-    fn from_glib(value: gdk_pixbuf_sys::GdkPixbufAlphaMode) -> Self {
+impl FromGlib<ffi::GdkPixbufAlphaMode> for PixbufAlphaMode {
+    unsafe fn from_glib(value: ffi::GdkPixbufAlphaMode) -> Self {
         match value {
-            0 => PixbufAlphaMode::Bilevel,
-            1 => PixbufAlphaMode::Full,
-            value => PixbufAlphaMode::__Unknown(value),
+            ffi::GDK_PIXBUF_ALPHA_BILEVEL => Self::Bilevel,
+            ffi::GDK_PIXBUF_ALPHA_FULL => Self::Full,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for PixbufAlphaMode {
     fn static_type() -> Type {
-        unsafe { from_glib(gdk_pixbuf_sys::gdk_pixbuf_alpha_mode_get_type()) }
+        unsafe { from_glib(ffi::gdk_pixbuf_alpha_mode_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for PixbufAlphaMode {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for PixbufAlphaMode {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for PixbufAlphaMode {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for PixbufAlphaMode {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for PixbufAlphaMode {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for PixbufAlphaMode {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "GdkPixbufError")]
 pub enum PixbufError {
+    #[doc(alias = "GDK_PIXBUF_ERROR_CORRUPT_IMAGE")]
     CorruptImage,
+    #[doc(alias = "GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY")]
     InsufficientMemory,
+    #[doc(alias = "GDK_PIXBUF_ERROR_BAD_OPTION")]
     BadOption,
+    #[doc(alias = "GDK_PIXBUF_ERROR_UNKNOWN_TYPE")]
     UnknownType,
+    #[doc(alias = "GDK_PIXBUF_ERROR_UNSUPPORTED_OPERATION")]
     UnsupportedOperation,
+    #[doc(alias = "GDK_PIXBUF_ERROR_FAILED")]
     Failed,
+    #[doc(alias = "GDK_PIXBUF_ERROR_INCOMPLETE_ANIMATION")]
     IncompleteAnimation,
     #[doc(hidden)]
     __Unknown(i32),
@@ -248,13 +291,13 @@ impl fmt::Display for PixbufError {
             f,
             "PixbufError::{}",
             match *self {
-                PixbufError::CorruptImage => "CorruptImage",
-                PixbufError::InsufficientMemory => "InsufficientMemory",
-                PixbufError::BadOption => "BadOption",
-                PixbufError::UnknownType => "UnknownType",
-                PixbufError::UnsupportedOperation => "UnsupportedOperation",
-                PixbufError::Failed => "Failed",
-                PixbufError::IncompleteAnimation => "IncompleteAnimation",
+                Self::CorruptImage => "CorruptImage",
+                Self::InsufficientMemory => "InsufficientMemory",
+                Self::BadOption => "BadOption",
+                Self::UnknownType => "UnknownType",
+                Self::UnsupportedOperation => "UnsupportedOperation",
+                Self::Failed => "Failed",
+                Self::IncompleteAnimation => "IncompleteAnimation",
                 _ => "Unknown",
             }
         )
@@ -262,95 +305,105 @@ impl fmt::Display for PixbufError {
 }
 
 #[doc(hidden)]
-impl ToGlib for PixbufError {
-    type GlibType = gdk_pixbuf_sys::GdkPixbufError;
+impl IntoGlib for PixbufError {
+    type GlibType = ffi::GdkPixbufError;
 
-    fn to_glib(&self) -> gdk_pixbuf_sys::GdkPixbufError {
-        match *self {
-            PixbufError::CorruptImage => gdk_pixbuf_sys::GDK_PIXBUF_ERROR_CORRUPT_IMAGE,
-            PixbufError::InsufficientMemory => gdk_pixbuf_sys::GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY,
-            PixbufError::BadOption => gdk_pixbuf_sys::GDK_PIXBUF_ERROR_BAD_OPTION,
-            PixbufError::UnknownType => gdk_pixbuf_sys::GDK_PIXBUF_ERROR_UNKNOWN_TYPE,
-            PixbufError::UnsupportedOperation => {
-                gdk_pixbuf_sys::GDK_PIXBUF_ERROR_UNSUPPORTED_OPERATION
-            }
-            PixbufError::Failed => gdk_pixbuf_sys::GDK_PIXBUF_ERROR_FAILED,
-            PixbufError::IncompleteAnimation => {
-                gdk_pixbuf_sys::GDK_PIXBUF_ERROR_INCOMPLETE_ANIMATION
-            }
-            PixbufError::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::GdkPixbufError {
+        match self {
+            Self::CorruptImage => ffi::GDK_PIXBUF_ERROR_CORRUPT_IMAGE,
+            Self::InsufficientMemory => ffi::GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY,
+            Self::BadOption => ffi::GDK_PIXBUF_ERROR_BAD_OPTION,
+            Self::UnknownType => ffi::GDK_PIXBUF_ERROR_UNKNOWN_TYPE,
+            Self::UnsupportedOperation => ffi::GDK_PIXBUF_ERROR_UNSUPPORTED_OPERATION,
+            Self::Failed => ffi::GDK_PIXBUF_ERROR_FAILED,
+            Self::IncompleteAnimation => ffi::GDK_PIXBUF_ERROR_INCOMPLETE_ANIMATION,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<gdk_pixbuf_sys::GdkPixbufError> for PixbufError {
-    fn from_glib(value: gdk_pixbuf_sys::GdkPixbufError) -> Self {
+impl FromGlib<ffi::GdkPixbufError> for PixbufError {
+    unsafe fn from_glib(value: ffi::GdkPixbufError) -> Self {
         match value {
-            0 => PixbufError::CorruptImage,
-            1 => PixbufError::InsufficientMemory,
-            2 => PixbufError::BadOption,
-            3 => PixbufError::UnknownType,
-            4 => PixbufError::UnsupportedOperation,
-            5 => PixbufError::Failed,
-            6 => PixbufError::IncompleteAnimation,
-            value => PixbufError::__Unknown(value),
+            ffi::GDK_PIXBUF_ERROR_CORRUPT_IMAGE => Self::CorruptImage,
+            ffi::GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY => Self::InsufficientMemory,
+            ffi::GDK_PIXBUF_ERROR_BAD_OPTION => Self::BadOption,
+            ffi::GDK_PIXBUF_ERROR_UNKNOWN_TYPE => Self::UnknownType,
+            ffi::GDK_PIXBUF_ERROR_UNSUPPORTED_OPERATION => Self::UnsupportedOperation,
+            ffi::GDK_PIXBUF_ERROR_FAILED => Self::Failed,
+            ffi::GDK_PIXBUF_ERROR_INCOMPLETE_ANIMATION => Self::IncompleteAnimation,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl ErrorDomain for PixbufError {
     fn domain() -> Quark {
-        unsafe { from_glib(gdk_pixbuf_sys::gdk_pixbuf_error_quark()) }
+        unsafe { from_glib(ffi::gdk_pixbuf_error_quark()) }
     }
 
     fn code(self) -> i32 {
-        self.to_glib()
+        self.into_glib()
     }
 
     fn from(code: i32) -> Option<Self> {
         match code {
-            0 => Some(PixbufError::CorruptImage),
-            1 => Some(PixbufError::InsufficientMemory),
-            2 => Some(PixbufError::BadOption),
-            3 => Some(PixbufError::UnknownType),
-            4 => Some(PixbufError::UnsupportedOperation),
-            5 => Some(PixbufError::Failed),
-            6 => Some(PixbufError::IncompleteAnimation),
-            _ => Some(PixbufError::Failed),
+            ffi::GDK_PIXBUF_ERROR_CORRUPT_IMAGE => Some(Self::CorruptImage),
+            ffi::GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY => Some(Self::InsufficientMemory),
+            ffi::GDK_PIXBUF_ERROR_BAD_OPTION => Some(Self::BadOption),
+            ffi::GDK_PIXBUF_ERROR_UNKNOWN_TYPE => Some(Self::UnknownType),
+            ffi::GDK_PIXBUF_ERROR_UNSUPPORTED_OPERATION => Some(Self::UnsupportedOperation),
+            ffi::GDK_PIXBUF_ERROR_FAILED => Some(Self::Failed),
+            ffi::GDK_PIXBUF_ERROR_INCOMPLETE_ANIMATION => Some(Self::IncompleteAnimation),
+            _ => Some(Self::Failed),
         }
     }
 }
 
 impl StaticType for PixbufError {
     fn static_type() -> Type {
-        unsafe { from_glib(gdk_pixbuf_sys::gdk_pixbuf_error_get_type()) }
+        unsafe { from_glib(ffi::gdk_pixbuf_error_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for PixbufError {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for PixbufError {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for PixbufError {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for PixbufError {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for PixbufError {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for PixbufError {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "GdkPixbufRotation")]
 pub enum PixbufRotation {
+    #[doc(alias = "GDK_PIXBUF_ROTATE_NONE")]
     None,
+    #[doc(alias = "GDK_PIXBUF_ROTATE_COUNTERCLOCKWISE")]
     Counterclockwise,
+    #[doc(alias = "GDK_PIXBUF_ROTATE_UPSIDEDOWN")]
     Upsidedown,
+    #[doc(alias = "GDK_PIXBUF_ROTATE_CLOCKWISE")]
     Clockwise,
     #[doc(hidden)]
     __Unknown(i32),
@@ -362,10 +415,10 @@ impl fmt::Display for PixbufRotation {
             f,
             "PixbufRotation::{}",
             match *self {
-                PixbufRotation::None => "None",
-                PixbufRotation::Counterclockwise => "Counterclockwise",
-                PixbufRotation::Upsidedown => "Upsidedown",
-                PixbufRotation::Clockwise => "Clockwise",
+                Self::None => "None",
+                Self::Counterclockwise => "Counterclockwise",
+                Self::Upsidedown => "Upsidedown",
+                Self::Clockwise => "Clockwise",
                 _ => "Unknown",
             }
         )
@@ -373,53 +426,61 @@ impl fmt::Display for PixbufRotation {
 }
 
 #[doc(hidden)]
-impl ToGlib for PixbufRotation {
-    type GlibType = gdk_pixbuf_sys::GdkPixbufRotation;
+impl IntoGlib for PixbufRotation {
+    type GlibType = ffi::GdkPixbufRotation;
 
-    fn to_glib(&self) -> gdk_pixbuf_sys::GdkPixbufRotation {
-        match *self {
-            PixbufRotation::None => gdk_pixbuf_sys::GDK_PIXBUF_ROTATE_NONE,
-            PixbufRotation::Counterclockwise => gdk_pixbuf_sys::GDK_PIXBUF_ROTATE_COUNTERCLOCKWISE,
-            PixbufRotation::Upsidedown => gdk_pixbuf_sys::GDK_PIXBUF_ROTATE_UPSIDEDOWN,
-            PixbufRotation::Clockwise => gdk_pixbuf_sys::GDK_PIXBUF_ROTATE_CLOCKWISE,
-            PixbufRotation::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::GdkPixbufRotation {
+        match self {
+            Self::None => ffi::GDK_PIXBUF_ROTATE_NONE,
+            Self::Counterclockwise => ffi::GDK_PIXBUF_ROTATE_COUNTERCLOCKWISE,
+            Self::Upsidedown => ffi::GDK_PIXBUF_ROTATE_UPSIDEDOWN,
+            Self::Clockwise => ffi::GDK_PIXBUF_ROTATE_CLOCKWISE,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<gdk_pixbuf_sys::GdkPixbufRotation> for PixbufRotation {
-    fn from_glib(value: gdk_pixbuf_sys::GdkPixbufRotation) -> Self {
+impl FromGlib<ffi::GdkPixbufRotation> for PixbufRotation {
+    unsafe fn from_glib(value: ffi::GdkPixbufRotation) -> Self {
         match value {
-            0 => PixbufRotation::None,
-            90 => PixbufRotation::Counterclockwise,
-            180 => PixbufRotation::Upsidedown,
-            270 => PixbufRotation::Clockwise,
-            value => PixbufRotation::__Unknown(value),
+            ffi::GDK_PIXBUF_ROTATE_NONE => Self::None,
+            ffi::GDK_PIXBUF_ROTATE_COUNTERCLOCKWISE => Self::Counterclockwise,
+            ffi::GDK_PIXBUF_ROTATE_UPSIDEDOWN => Self::Upsidedown,
+            ffi::GDK_PIXBUF_ROTATE_CLOCKWISE => Self::Clockwise,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for PixbufRotation {
     fn static_type() -> Type {
-        unsafe { from_glib(gdk_pixbuf_sys::gdk_pixbuf_rotation_get_type()) }
+        unsafe { from_glib(ffi::gdk_pixbuf_rotation_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for PixbufRotation {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for PixbufRotation {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for PixbufRotation {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for PixbufRotation {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for PixbufRotation {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for PixbufRotation {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }

@@ -33,7 +33,7 @@ macro_rules! impl_partial_eq_cow {
             #[inline]
             fn eq(&self, other: &$lhs) -> bool {
                 let this: &[u8] = (&**other).as_ref();
-                PartialEq::eq(this, other.as_bytes())
+                PartialEq::eq(this, self.as_bytes())
             }
         }
     };
@@ -67,20 +67,20 @@ mod bstring {
     use std::iter::FromIterator;
     use std::ops;
 
-    use bstr::BStr;
-    use bstring::BString;
-    use ext_vec::ByteVec;
+    use crate::bstr::BStr;
+    use crate::bstring::BString;
+    use crate::ext_vec::ByteVec;
 
     impl fmt::Display for BString {
         #[inline]
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             fmt::Display::fmt(self.as_bstr(), f)
         }
     }
 
     impl fmt::Debug for BString {
         #[inline]
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             fmt::Debug::fmt(self.as_bstr(), f)
         }
     }
@@ -308,15 +308,15 @@ mod bstr {
     use core::fmt;
     use core::ops;
 
-    use bstr::BStr;
-    use ext_slice::ByteSlice;
+    use crate::bstr::BStr;
+    use crate::ext_slice::ByteSlice;
 
     impl fmt::Display for BStr {
         #[inline]
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             /// Write the given bstr (lossily) to the given formatter.
             fn write_bstr(
-                f: &mut fmt::Formatter,
+                f: &mut fmt::Formatter<'_>,
                 bstr: &BStr,
             ) -> Result<(), fmt::Error> {
                 for chunk in bstr.utf8_chunks() {
@@ -329,7 +329,10 @@ mod bstr {
             }
 
             /// Write 'num' fill characters to the given formatter.
-            fn write_pads(f: &mut fmt::Formatter, num: usize) -> fmt::Result {
+            fn write_pads(
+                f: &mut fmt::Formatter<'_>,
+                num: usize,
+            ) -> fmt::Result {
                 let fill = f.fill();
                 for _ in 0..num {
                     f.write_fmt(format_args!("{}", fill))?;
@@ -372,7 +375,7 @@ mod bstr {
 
     impl fmt::Debug for BStr {
         #[inline]
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             write!(f, "\"")?;
             for (s, e, ch) in self.char_indices() {
                 match ch {
@@ -685,7 +688,7 @@ mod bstr_serde {
         Serializer,
     };
 
-    use bstr::BStr;
+    use crate::bstr::BStr;
 
     impl Serialize for BStr {
         #[inline]
@@ -744,7 +747,7 @@ mod bstring_serde {
         Serialize, Serializer,
     };
 
-    use bstring::BString;
+    use crate::bstring::BString;
 
     impl Serialize for BString {
         #[inline]
@@ -824,8 +827,8 @@ mod bstring_serde {
 
 #[cfg(test)]
 mod display {
+    use crate::bstring::BString;
     use crate::ByteSlice;
-    use bstring::BString;
 
     #[test]
     fn clean() {
@@ -923,7 +926,7 @@ mod display {
         );
     }
 
-    quickcheck! {
+    quickcheck::quickcheck! {
         fn total_length(bstr: BString) -> bool {
             let size = bstr.chars().count();
             format!("{:<1$}", bstr.as_bstr(), size).chars().count() >= size
@@ -933,12 +936,12 @@ mod display {
 
 #[cfg(test)]
 mod bstring_arbitrary {
-    use bstring::BString;
+    use crate::bstring::BString;
 
     use quickcheck::{Arbitrary, Gen};
 
     impl Arbitrary for BString {
-        fn arbitrary<G: Gen>(g: &mut G) -> BString {
+        fn arbitrary(g: &mut Gen) -> BString {
             BString::from(Vec::<u8>::arbitrary(g))
         }
 
@@ -966,4 +969,19 @@ fn test_debug() {
         //   \\xFF\\xEF\\xBF\\xBD\\xFF
         B(&format!("{:?}", b"\xFF\xEF\xBF\xBD\xFF".as_bstr())).as_bstr(),
     );
+}
+
+// See: https://github.com/BurntSushi/bstr/issues/82
+#[test]
+fn test_cows_regression() {
+    use crate::ByteSlice;
+    use std::borrow::Cow;
+
+    let c1 = Cow::from(b"hello bstr".as_bstr());
+    let c2 = b"goodbye bstr".as_bstr();
+    assert_ne!(c1, c2);
+
+    let c3 = Cow::from("hello str");
+    let c4 = "goodbye str";
+    assert_ne!(c3, c4);
 }

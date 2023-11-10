@@ -2,73 +2,76 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
-use glib;
+use crate::Cancellable;
 use glib::object::IsA;
 use glib::translate::*;
 use std::fmt;
 use std::ptr;
-use Cancellable;
 
-glib_wrapper! {
-    pub struct Seekable(Interface<gio_sys::GSeekable>);
+glib::wrapper! {
+    #[doc(alias = "GSeekable")]
+    pub struct Seekable(Interface<ffi::GSeekable, ffi::GSeekableIface>);
 
     match fn {
-        get_type => || gio_sys::g_seekable_get_type(),
+        type_ => || ffi::g_seekable_get_type(),
     }
 }
 
-pub const NONE_SEEKABLE: Option<&Seekable> = None;
+impl Seekable {
+    pub const NONE: Option<&'static Seekable> = None;
+}
 
 pub trait SeekableExt: 'static {
+    #[doc(alias = "g_seekable_can_seek")]
     fn can_seek(&self) -> bool;
 
+    #[doc(alias = "g_seekable_can_truncate")]
     fn can_truncate(&self) -> bool;
 
-    fn seek<P: IsA<Cancellable>>(
+    #[doc(alias = "g_seekable_seek")]
+    fn seek(
         &self,
         offset: i64,
         type_: glib::SeekType,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error>;
 
+    #[doc(alias = "g_seekable_tell")]
     fn tell(&self) -> i64;
 
-    fn truncate<P: IsA<Cancellable>>(
+    #[doc(alias = "g_seekable_truncate")]
+    fn truncate(
         &self,
         offset: i64,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error>;
 }
 
 impl<O: IsA<Seekable>> SeekableExt for O {
     fn can_seek(&self) -> bool {
-        unsafe { from_glib(gio_sys::g_seekable_can_seek(self.as_ref().to_glib_none().0)) }
+        unsafe { from_glib(ffi::g_seekable_can_seek(self.as_ref().to_glib_none().0)) }
     }
 
     fn can_truncate(&self) -> bool {
-        unsafe {
-            from_glib(gio_sys::g_seekable_can_truncate(
-                self.as_ref().to_glib_none().0,
-            ))
-        }
+        unsafe { from_glib(ffi::g_seekable_can_truncate(self.as_ref().to_glib_none().0)) }
     }
 
-    fn seek<P: IsA<Cancellable>>(
+    fn seek(
         &self,
         offset: i64,
         type_: glib::SeekType,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_seekable_seek(
+            let is_ok = ffi::g_seekable_seek(
                 self.as_ref().to_glib_none().0,
                 offset,
-                type_.to_glib(),
+                type_.into_glib(),
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 &mut error,
             );
+            assert_eq!(is_ok == glib::ffi::GFALSE, !error.is_null());
             if error.is_null() {
                 Ok(())
             } else {
@@ -78,22 +81,23 @@ impl<O: IsA<Seekable>> SeekableExt for O {
     }
 
     fn tell(&self) -> i64 {
-        unsafe { gio_sys::g_seekable_tell(self.as_ref().to_glib_none().0) }
+        unsafe { ffi::g_seekable_tell(self.as_ref().to_glib_none().0) }
     }
 
-    fn truncate<P: IsA<Cancellable>>(
+    fn truncate(
         &self,
         offset: i64,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<(), glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_seekable_truncate(
+            let is_ok = ffi::g_seekable_truncate(
                 self.as_ref().to_glib_none().0,
                 offset,
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 &mut error,
             );
+            assert_eq!(is_ok == glib::ffi::GFALSE, !error.is_null());
             if error.is_null() {
                 Ok(())
             } else {
@@ -105,6 +109,6 @@ impl<O: IsA<Seekable>> SeekableExt for O {
 
 impl fmt::Display for Seekable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Seekable")
+        f.write_str("Seekable")
     }
 }

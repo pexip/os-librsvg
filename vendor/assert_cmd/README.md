@@ -2,7 +2,6 @@
 
 > **Assert `process::Command`** - Easy command initialization and assertions.
 
-[![Build Status](https://dev.azure.com/assert-rs/assert-rs/_apis/build/status/assert_cmd?branchName=master)](https://dev.azure.com/assert-rs/assert-rs/_build/latest?definitionId=3&branchName=master)
 [![Documentation](https://img.shields.io/badge/docs-master-blue.svg)][Documentation]
 ![License](https://img.shields.io/crates/l/assert_cmd.svg)
 [![Crates Status](https://img.shields.io/crates/v/assert_cmd.svg)](https://crates.io/crates/assert_cmd)
@@ -10,15 +9,6 @@
 `assert_cmd` aims to simplify the process for doing integration testing of CLIs, including:
 - Finding your crate's binary to test
 - Assert on the result of your program's run.
-
-## Install
-
-Add to your `Cargo.toml`:
-
-```toml
-[dependencies]
-assert_cmd = "1.0.2"
-```
 
 ## Example
 
@@ -61,7 +51,7 @@ Licensed under either of
 
 at your option.
 
-### Testimonials
+## Testimonials
 
 fitzgen
 > assert_cmd is just such a pleasure to use every single time, I fall in love all over again
@@ -79,7 +69,7 @@ coreyja
 >
 > This library has made it really easy to add some test coverage to my project, even when I am just learning how to write Rust!
 
-### Contribution
+## Contribution
 
 Unless you explicitly state otherwise, any contribution intentionally
 submitted for inclusion in the work by you, as defined in the Apache-2.0

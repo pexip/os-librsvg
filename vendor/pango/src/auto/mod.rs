@@ -3,43 +3,31 @@
 // DO NOT EDIT
 
 mod context;
-pub use self::context::{Context, ContextClass};
-
-mod engine_lang;
-pub use self::engine_lang::{EngineLang, EngineLangClass, NONE_ENGINE_LANG};
-
-mod engine_shape;
-pub use self::engine_shape::{EngineShape, EngineShapeClass, NONE_ENGINE_SHAPE};
+pub use self::context::Context;
 
 mod font;
-pub use self::font::FontExt;
-pub use self::font::{Font, FontClass, NONE_FONT};
+pub use self::font::Font;
 
 mod font_face;
-pub use self::font_face::FontFaceExt;
-pub use self::font_face::{FontFace, FontFaceClass, NONE_FONT_FACE};
+pub use self::font_face::FontFace;
 
 mod font_family;
-pub use self::font_family::FontFamilyExt;
-pub use self::font_family::{FontFamily, FontFamilyClass, NONE_FONT_FAMILY};
+pub use self::font_family::FontFamily;
 
 mod font_map;
-pub use self::font_map::FontMapExt;
-pub use self::font_map::{FontMap, FontMapClass, NONE_FONT_MAP};
+pub use self::font_map::FontMap;
 
 mod fontset;
-pub use self::fontset::FontsetExt;
-pub use self::fontset::{Fontset, FontsetClass, NONE_FONTSET};
+pub use self::fontset::Fontset;
 
 mod fontset_simple;
-pub use self::fontset_simple::{FontsetSimple, FontsetSimpleClass};
+pub use self::fontset_simple::FontsetSimple;
 
 mod layout;
-pub use self::layout::{Layout, LayoutClass};
+pub use self::layout::Layout;
 
 mod renderer;
-pub use self::renderer::RendererExt;
-pub use self::renderer::{Renderer, RendererClass, NONE_RENDERER};
+pub use self::renderer::Renderer;
 
 mod attr_iterator;
 pub use self::attr_iterator::AttrIterator;
@@ -52,9 +40,6 @@ pub use self::attribute::Attribute;
 
 mod color;
 pub use self::color::Color;
-
-mod coverage;
-pub use self::coverage::Coverage;
 
 mod font_description;
 pub use self::font_description::FontDescription;
@@ -89,17 +74,29 @@ pub use self::tab_array::TabArray;
 mod enums;
 pub use self::enums::Alignment;
 pub use self::enums::AttrType;
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+pub use self::enums::BaselineShift;
 pub use self::enums::BidiType;
 pub use self::enums::CoverageLevel;
 pub use self::enums::Direction;
 pub use self::enums::EllipsizeMode;
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+pub use self::enums::FontScale;
 pub use self::enums::Gravity;
 pub use self::enums::GravityHint;
+#[cfg(any(feature = "v1_46", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_46")))]
+pub use self::enums::Overline;
 pub use self::enums::RenderPart;
 pub use self::enums::Script;
 pub use self::enums::Stretch;
 pub use self::enums::Style;
 pub use self::enums::TabAlign;
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+pub use self::enums::TextTransform;
 pub use self::enums::Underline;
 pub use self::enums::Variant;
 pub use self::enums::Weight;
@@ -107,6 +104,18 @@ pub use self::enums::WrapMode;
 
 mod flags;
 pub use self::flags::FontMask;
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+pub use self::flags::LayoutDeserializeFlags;
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+pub use self::flags::LayoutSerializeFlags;
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+pub use self::flags::ShapeFlags;
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+pub use self::flags::ShowFlags;
 
 mod alias;
 pub use self::alias::Glyph;
@@ -115,17 +124,12 @@ pub use self::alias::LayoutRun;
 
 pub mod functions;
 
-mod constants;
-pub use self::constants::ENGINE_TYPE_LANG;
-pub use self::constants::ENGINE_TYPE_SHAPE;
-pub use self::constants::RENDER_TYPE_NONE;
-
 #[doc(hidden)]
 pub mod traits {
-    pub use super::FontExt;
-    pub use super::FontFaceExt;
-    pub use super::FontFamilyExt;
-    pub use super::FontMapExt;
-    pub use super::FontsetExt;
-    pub use super::RendererExt;
+    pub use super::font::FontExt;
+    pub use super::font_face::FontFaceExt;
+    pub use super::font_family::FontFamilyExt;
+    pub use super::font_map::FontMapExt;
+    pub use super::fontset::FontsetExt;
+    pub use super::renderer::RendererExt;
 }

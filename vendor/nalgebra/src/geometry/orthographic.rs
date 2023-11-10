@@ -1,50 +1,68 @@
 #[cfg(feature = "arbitrary")]
 use quickcheck::{Arbitrary, Gen};
-use rand::distributions::{Distribution, Standard};
-use rand::Rng;
-#[cfg(feature = "serde-serialize")]
+#[cfg(feature = "rand-no-std")]
+use rand::{
+    distributions::{Distribution, Standard},
+    Rng,
+};
+#[cfg(feature = "serde-serialize-no-std")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
-use std::mem;
 
 use simba::scalar::RealField;
 
 use crate::base::dimension::U3;
-use crate::base::helper;
 use crate::base::storage::Storage;
 use crate::base::{Matrix4, Vector, Vector3};
 
 use crate::geometry::{Point3, Projective3};
 
 /// A 3D orthographic projection stored as a homogeneous 4x4 matrix.
-pub struct Orthographic3<N: RealField> {
-    matrix: Matrix4<N>,
+#[repr(C)]
+pub struct Orthographic3<T> {
+    matrix: Matrix4<T>,
 }
 
-impl<N: RealField> Copy for Orthographic3<N> {}
+impl<T: RealField + Copy> Copy for Orthographic3<T> {}
 
-impl<N: RealField> Clone for Orthographic3<N> {
+impl<T: RealField> Clone for Orthographic3<T> {
     #[inline]
     fn clone(&self) -> Self {
         Self::from_matrix_unchecked(self.matrix.clone())
     }
 }
 
-impl<N: RealField> fmt::Debug for Orthographic3<N> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+impl<T: RealField> fmt::Debug for Orthographic3<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         self.matrix.fmt(f)
     }
 }
 
-impl<N: RealField> PartialEq for Orthographic3<N> {
+impl<T: RealField> PartialEq for Orthographic3<T> {
     #[inline]
     fn eq(&self, right: &Self) -> bool {
         self.matrix == right.matrix
     }
 }
 
-#[cfg(feature = "serde-serialize")]
-impl<N: RealField + Serialize> Serialize for Orthographic3<N> {
+#[cfg(feature = "bytemuck")]
+unsafe impl<T> bytemuck::Zeroable for Orthographic3<T>
+where
+    T: RealField + bytemuck::Zeroable,
+    Matrix4<T>: bytemuck::Zeroable,
+{
+}
+
+#[cfg(feature = "bytemuck")]
+unsafe impl<T> bytemuck::Pod for Orthographic3<T>
+where
+    T: RealField + bytemuck::Pod,
+    Matrix4<T>: bytemuck::Pod,
+{
+}
+
+#[cfg(feature = "serde-serialize-no-std")]
+impl<T: RealField + Serialize> Serialize for Orthographic3<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -53,19 +71,43 @@ impl<N: RealField + Serialize> Serialize for Orthographic3<N> {
     }
 }
 
-#[cfg(feature = "serde-serialize")]
-impl<'a, N: RealField + Deserialize<'a>> Deserialize<'a> for Orthographic3<N> {
+#[cfg(feature = "serde-serialize-no-std")]
+impl<'a, T: RealField + Deserialize<'a>> Deserialize<'a> for Orthographic3<T> {
     fn deserialize<Des>(deserializer: Des) -> Result<Self, Des::Error>
     where
         Des: Deserializer<'a>,
     {
-        let matrix = Matrix4::<N>::deserialize(deserializer)?;
+        let matrix = Matrix4::<T>::deserialize(deserializer)?;
 
         Ok(Self::from_matrix_unchecked(matrix))
     }
 }
 
-impl<N: RealField> Orthographic3<N> {
+impl<T> Orthographic3<T> {
+    /// Wraps the given matrix to interpret it as a 3D orthographic matrix.
+    ///
+    /// It is not checked whether or not the given matrix actually represents an orthographic
+    /// projection.
+    ///
+    /// # Example
+    /// ```
+    /// # use nalgebra::{Orthographic3, Point3, Matrix4};
+    /// let mat = Matrix4::new(
+    ///     2.0 / 9.0, 0.0,        0.0,         -11.0 / 9.0,
+    ///     0.0,       2.0 / 18.0, 0.0,         -22.0 / 18.0,
+    ///     0.0,       0.0,       -2.0 / 999.9, -1000.1 / 999.9,
+    ///     0.0,       0.0,        0.0,         1.0
+    /// );
+    /// let proj = Orthographic3::from_matrix_unchecked(mat);
+    /// assert_eq!(proj, Orthographic3::new(1.0, 10.0, 2.0, 20.0, 0.1, 1000.0));
+    /// ```
+    #[inline]
+    pub const fn from_matrix_unchecked(matrix: Matrix4<T>) -> Self {
+        Self { matrix }
+    }
+}
+
+impl<T: RealField> Orthographic3<T> {
     /// Creates a new orthographic projection matrix.
     ///
     /// This follows the OpenGL convention, so this will flip the `z` axis.
@@ -76,7 +118,7 @@ impl<N: RealField> Orthographic3<N> {
     /// # use nalgebra::{Orthographic3, Point3};
     /// let proj = Orthographic3::new(1.0, 10.0, 2.0, 20.0, 0.1, 1000.0);
     /// // Check this projection actually transforms the view cuboid into the double-unit cube.
-    /// // See https://www.nalgebra.org/projections/#orthographic-projection for more details.
+    /// // See https://www.nalgebra.org/docs/user_guide/projections#orthographic-projection for more details.
     /// let p1 = Point3::new(1.0, 2.0, -0.1);
     /// let p2 = Point3::new(1.0, 2.0, -1000.0);
     /// let p3 = Point3::new(1.0, 20.0, -0.1);
@@ -109,8 +151,8 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.project_point(&p8), Point3::new(-1.0, -1.0, -1.0));
     /// ```
     #[inline]
-    pub fn new(left: N, right: N, bottom: N, top: N, znear: N, zfar: N) -> Self {
-        let matrix = Matrix4::<N>::identity();
+    pub fn new(left: T, right: T, bottom: T, top: T, znear: T, zfar: T) -> Self {
+        let matrix = Matrix4::<T>::identity();
         let mut res = Self::from_matrix_unchecked(matrix);
 
         res.set_left_and_right(left, right);
@@ -120,48 +162,26 @@ impl<N: RealField> Orthographic3<N> {
         res
     }
 
-    /// Wraps the given matrix to interpret it as a 3D orthographic matrix.
-    ///
-    /// It is not checked whether or not the given matrix actually represents an orthographic
-    /// projection.
-    ///
-    /// # Example
-    /// ```
-    /// # use nalgebra::{Orthographic3, Point3, Matrix4};
-    /// let mat = Matrix4::new(
-    ///     2.0 / 9.0, 0.0,        0.0,         -11.0 / 9.0,
-    ///     0.0,       2.0 / 18.0, 0.0,         -22.0 / 18.0,
-    ///     0.0,       0.0,       -2.0 / 999.9, -1000.1 / 999.9,
-    ///     0.0,       0.0,        0.0,         1.0
-    /// );
-    /// let proj = Orthographic3::from_matrix_unchecked(mat);
-    /// assert_eq!(proj, Orthographic3::new(1.0, 10.0, 2.0, 20.0, 0.1, 1000.0));
-    /// ```
-    #[inline]
-    pub fn from_matrix_unchecked(matrix: Matrix4<N>) -> Self {
-        Self { matrix: matrix }
-    }
-
     /// Creates a new orthographic projection matrix from an aspect ratio and the vertical field of view.
     #[inline]
-    pub fn from_fov(aspect: N, vfov: N, znear: N, zfar: N) -> Self {
+    pub fn from_fov(aspect: T, vfov: T, znear: T, zfar: T) -> Self {
         assert!(
             znear != zfar,
             "The far plane must not be equal to the near plane."
         );
         assert!(
-            !relative_eq!(aspect, N::zero()),
-            "The apsect ratio must not be zero."
+            !relative_eq!(aspect, T::zero()),
+            "The aspect ratio must not be zero."
         );
 
-        let half: N = crate::convert(0.5);
-        let width = zfar * (vfov * half).tan();
-        let height = width / aspect;
+        let half: T = crate::convert(0.5);
+        let width = zfar.clone() * (vfov.clone() * half.clone()).tan();
+        let height = width.clone() / aspect;
 
         Self::new(
-            -width * half,
-            width * half,
-            -height * half,
+            -width.clone() * half.clone(),
+            width * half.clone(),
+            -height.clone() * half.clone(),
             height * half,
             znear,
             zfar,
@@ -186,20 +206,21 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.as_matrix() * inv, Matrix4::identity());
     /// ```
     #[inline]
-    pub fn inverse(&self) -> Matrix4<N> {
-        let mut res = self.to_homogeneous();
+    #[must_use]
+    pub fn inverse(&self) -> Matrix4<T> {
+        let mut res = self.clone().to_homogeneous();
 
-        let inv_m11 = N::one() / self.matrix[(0, 0)];
-        let inv_m22 = N::one() / self.matrix[(1, 1)];
-        let inv_m33 = N::one() / self.matrix[(2, 2)];
+        let inv_m11 = T::one() / self.matrix[(0, 0)].clone();
+        let inv_m22 = T::one() / self.matrix[(1, 1)].clone();
+        let inv_m33 = T::one() / self.matrix[(2, 2)].clone();
 
-        res[(0, 0)] = inv_m11;
-        res[(1, 1)] = inv_m22;
-        res[(2, 2)] = inv_m33;
+        res[(0, 0)] = inv_m11.clone();
+        res[(1, 1)] = inv_m22.clone();
+        res[(2, 2)] = inv_m33.clone();
 
-        res[(0, 3)] = -self.matrix[(0, 3)] * inv_m11;
-        res[(1, 3)] = -self.matrix[(1, 3)] * inv_m22;
-        res[(2, 3)] = -self.matrix[(2, 3)] * inv_m33;
+        res[(0, 3)] = -self.matrix[(0, 3)].clone() * inv_m11;
+        res[(1, 3)] = -self.matrix[(1, 3)].clone() * inv_m22;
+        res[(2, 3)] = -self.matrix[(2, 3)].clone() * inv_m33;
 
         res
     }
@@ -219,7 +240,8 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_eq!(proj.to_homogeneous(), expected);
     /// ```
     #[inline]
-    pub fn to_homogeneous(&self) -> Matrix4<N> {
+    #[must_use]
+    pub fn to_homogeneous(self) -> Matrix4<T> {
         self.matrix
     }
 
@@ -238,7 +260,8 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_eq!(*proj.as_matrix(), expected);
     /// ```
     #[inline]
-    pub fn as_matrix(&self) -> &Matrix4<N> {
+    #[must_use]
+    pub fn as_matrix(&self) -> &Matrix4<T> {
         &self.matrix
     }
 
@@ -251,8 +274,9 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_eq!(proj.as_projective().to_homogeneous(), proj.to_homogeneous());
     /// ```
     #[inline]
-    pub fn as_projective(&self) -> &Projective3<N> {
-        unsafe { mem::transmute(self) }
+    #[must_use]
+    pub fn as_projective(&self) -> &Projective3<T> {
+        unsafe { &*(self as *const Orthographic3<T> as *const Projective3<T>) }
     }
 
     /// This transformation seen as a `Projective3`.
@@ -264,7 +288,8 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_eq!(proj.to_projective().to_homogeneous(), proj.to_homogeneous());
     /// ```
     #[inline]
-    pub fn to_projective(&self) -> Projective3<N> {
+    #[must_use]
+    pub fn to_projective(self) -> Projective3<T> {
         Projective3::from_matrix_unchecked(self.matrix)
     }
 
@@ -284,15 +309,15 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_eq!(proj.into_inner(), expected);
     /// ```
     #[inline]
-    pub fn into_inner(self) -> Matrix4<N> {
+    pub fn into_inner(self) -> Matrix4<T> {
         self.matrix
     }
 
     /// Retrieves the underlying homogeneous matrix.
-    /// Deprecated: Use [Orthographic3::into_inner] instead.
+    /// Deprecated: Use [`Orthographic3::into_inner`] instead.
     #[deprecated(note = "use `.into_inner()` instead")]
     #[inline]
-    pub fn unwrap(self) -> Matrix4<N> {
+    pub fn unwrap(self) -> Matrix4<T> {
         self.matrix
     }
 
@@ -308,8 +333,9 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.left(), 10.0, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn left(&self) -> N {
-        (-N::one() - self.matrix[(0, 3)]) / self.matrix[(0, 0)]
+    #[must_use]
+    pub fn left(&self) -> T {
+        (-T::one() - self.matrix[(0, 3)].clone()) / self.matrix[(0, 0)].clone()
     }
 
     /// The right offset of the view cuboid.
@@ -324,8 +350,9 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.right(), 1.0, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn right(&self) -> N {
-        (N::one() - self.matrix[(0, 3)]) / self.matrix[(0, 0)]
+    #[must_use]
+    pub fn right(&self) -> T {
+        (T::one() - self.matrix[(0, 3)].clone()) / self.matrix[(0, 0)].clone()
     }
 
     /// The bottom offset of the view cuboid.
@@ -340,8 +367,9 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.bottom(), 20.0, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn bottom(&self) -> N {
-        (-N::one() - self.matrix[(1, 3)]) / self.matrix[(1, 1)]
+    #[must_use]
+    pub fn bottom(&self) -> T {
+        (-T::one() - self.matrix[(1, 3)].clone()) / self.matrix[(1, 1)].clone()
     }
 
     /// The top offset of the view cuboid.
@@ -356,8 +384,9 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.top(), 2.0, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn top(&self) -> N {
-        (N::one() - self.matrix[(1, 3)]) / self.matrix[(1, 1)]
+    #[must_use]
+    pub fn top(&self) -> T {
+        (T::one() - self.matrix[(1, 3)].clone()) / self.matrix[(1, 1)].clone()
     }
 
     /// The near plane offset of the view cuboid.
@@ -372,8 +401,9 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.znear(), 1000.0, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn znear(&self) -> N {
-        (N::one() + self.matrix[(2, 3)]) / self.matrix[(2, 2)]
+    #[must_use]
+    pub fn znear(&self) -> T {
+        (T::one() + self.matrix[(2, 3)].clone()) / self.matrix[(2, 2)].clone()
     }
 
     /// The far plane offset of the view cuboid.
@@ -388,11 +418,12 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.zfar(), 0.1, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn zfar(&self) -> N {
-        (-N::one() + self.matrix[(2, 3)]) / self.matrix[(2, 2)]
+    #[must_use]
+    pub fn zfar(&self) -> T {
+        (-T::one() + self.matrix[(2, 3)].clone()) / self.matrix[(2, 2)].clone()
     }
 
-    // FIXME: when we get specialization, specialize the Mul impl instead.
+    // TODO: when we get specialization, specialize the Mul impl instead.
     /// Projects a point. Faster than matrix multiplication.
     ///
     /// # Example
@@ -420,11 +451,12 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.project_point(&p8), Point3::new( 1.0,  1.0,  1.0));
     /// ```
     #[inline]
-    pub fn project_point(&self, p: &Point3<N>) -> Point3<N> {
+    #[must_use]
+    pub fn project_point(&self, p: &Point3<T>) -> Point3<T> {
         Point3::new(
-            self.matrix[(0, 0)] * p[0] + self.matrix[(0, 3)],
-            self.matrix[(1, 1)] * p[1] + self.matrix[(1, 3)],
-            self.matrix[(2, 2)] * p[2] + self.matrix[(2, 3)],
+            self.matrix[(0, 0)].clone() * p[0].clone() + self.matrix[(0, 3)].clone(),
+            self.matrix[(1, 1)].clone() * p[1].clone() + self.matrix[(1, 3)].clone(),
+            self.matrix[(2, 2)].clone() * p[2].clone() + self.matrix[(2, 3)].clone(),
         )
     }
 
@@ -455,15 +487,16 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.unproject_point(&p8), Point3::new(10.0, 20.0, -1000.0), epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn unproject_point(&self, p: &Point3<N>) -> Point3<N> {
+    #[must_use]
+    pub fn unproject_point(&self, p: &Point3<T>) -> Point3<T> {
         Point3::new(
-            (p[0] - self.matrix[(0, 3)]) / self.matrix[(0, 0)],
-            (p[1] - self.matrix[(1, 3)]) / self.matrix[(1, 1)],
-            (p[2] - self.matrix[(2, 3)]) / self.matrix[(2, 2)],
+            (p[0].clone() - self.matrix[(0, 3)].clone()) / self.matrix[(0, 0)].clone(),
+            (p[1].clone() - self.matrix[(1, 3)].clone()) / self.matrix[(1, 1)].clone(),
+            (p[2].clone() - self.matrix[(2, 3)].clone()) / self.matrix[(2, 2)].clone(),
         )
     }
 
-    // FIXME: when we get specialization, specialize the Mul impl instead.
+    // TODO: when we get specialization, specialize the Mul impl instead.
     /// Projects a vector. Faster than matrix multiplication.
     ///
     /// Vectors are not affected by the translation part of the projection.
@@ -483,14 +516,15 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.project_vector(&v3), Vector3::z() * -2.0 / 999.9);
     /// ```
     #[inline]
-    pub fn project_vector<SB>(&self, p: &Vector<N, U3, SB>) -> Vector3<N>
+    #[must_use]
+    pub fn project_vector<SB>(&self, p: &Vector<T, U3, SB>) -> Vector3<T>
     where
-        SB: Storage<N, U3>,
+        SB: Storage<T, U3>,
     {
         Vector3::new(
-            self.matrix[(0, 0)] * p[0],
-            self.matrix[(1, 1)] * p[1],
-            self.matrix[(2, 2)] * p[2],
+            self.matrix[(0, 0)].clone() * p[0].clone(),
+            self.matrix[(1, 1)].clone() * p[1].clone(),
+            self.matrix[(2, 2)].clone() * p[2].clone(),
         )
     }
 
@@ -508,7 +542,7 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.left(), 20.0, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn set_left(&mut self, left: N) {
+    pub fn set_left(&mut self, left: T) {
         let right = self.right();
         self.set_left_and_right(left, right);
     }
@@ -527,7 +561,7 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.right(), -3.0, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn set_right(&mut self, right: N) {
+    pub fn set_right(&mut self, right: T) {
         let left = self.left();
         self.set_left_and_right(left, right);
     }
@@ -546,7 +580,7 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.bottom(), 50.0, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn set_bottom(&mut self, bottom: N) {
+    pub fn set_bottom(&mut self, bottom: T) {
         let top = self.top();
         self.set_bottom_and_top(bottom, top);
     }
@@ -565,7 +599,7 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.top(), -3.0, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn set_top(&mut self, top: N) {
+    pub fn set_top(&mut self, top: T) {
         let bottom = self.bottom();
         self.set_bottom_and_top(bottom, top);
     }
@@ -584,7 +618,7 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.znear(), 5000.0, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn set_znear(&mut self, znear: N) {
+    pub fn set_znear(&mut self, znear: T) {
         let zfar = self.zfar();
         self.set_znear_and_zfar(znear, zfar);
     }
@@ -603,7 +637,7 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.zfar(), -3.0, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn set_zfar(&mut self, zfar: N) {
+    pub fn set_zfar(&mut self, zfar: T) {
         let znear = self.znear();
         self.set_znear_and_zfar(znear, zfar);
     }
@@ -624,13 +658,13 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.right(), 7.0, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn set_left_and_right(&mut self, left: N, right: N) {
+    pub fn set_left_and_right(&mut self, left: T, right: T) {
         assert!(
             left != right,
             "The left corner must not be equal to the right corner."
         );
-        self.matrix[(0, 0)] = crate::convert::<_, N>(2.0) / (right - left);
-        self.matrix[(0, 3)] = -(right + left) / (right - left);
+        self.matrix[(0, 0)] = crate::convert::<_, T>(2.0) / (right.clone() - left.clone());
+        self.matrix[(0, 3)] = -(right.clone() + left.clone()) / (right - left);
     }
 
     /// Sets the view cuboid offsets along the `y` axis.
@@ -649,13 +683,13 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.top(), 7.0, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn set_bottom_and_top(&mut self, bottom: N, top: N) {
-        assert!(
-            bottom != top,
+    pub fn set_bottom_and_top(&mut self, bottom: T, top: T) {
+        assert_ne!(
+            bottom, top,
             "The top corner must not be equal to the bottom corner."
         );
-        self.matrix[(1, 1)] = crate::convert::<_, N>(2.0) / (top - bottom);
-        self.matrix[(1, 3)] = -(top + bottom) / (top - bottom);
+        self.matrix[(1, 1)] = crate::convert::<_, T>(2.0) / (top.clone() - bottom.clone());
+        self.matrix[(1, 3)] = -(top.clone() + bottom.clone()) / (top - bottom);
     }
 
     /// Sets the near and far plane offsets of the view cuboid.
@@ -674,52 +708,56 @@ impl<N: RealField> Orthographic3<N> {
     /// assert_relative_eq!(proj.zfar(), 0.5, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn set_znear_and_zfar(&mut self, znear: N, zfar: N) {
+    pub fn set_znear_and_zfar(&mut self, znear: T, zfar: T) {
         assert!(
             zfar != znear,
             "The near-plane and far-plane must not be superimposed."
         );
-        self.matrix[(2, 2)] = -crate::convert::<_, N>(2.0) / (zfar - znear);
-        self.matrix[(2, 3)] = -(zfar + znear) / (zfar - znear);
+        self.matrix[(2, 2)] = -crate::convert::<_, T>(2.0) / (zfar.clone() - znear.clone());
+        self.matrix[(2, 3)] = -(zfar.clone() + znear.clone()) / (zfar - znear);
     }
 }
 
-impl<N: RealField> Distribution<Orthographic3<N>> for Standard
+#[cfg(feature = "rand-no-std")]
+impl<T: RealField> Distribution<Orthographic3<T>> for Standard
 where
-    Standard: Distribution<N>,
+    Standard: Distribution<T>,
 {
-    fn sample<R: Rng + ?Sized>(&self, r: &mut R) -> Orthographic3<N> {
+    /// Generate an arbitrary random variate for testing purposes.
+    fn sample<R: Rng + ?Sized>(&self, r: &mut R) -> Orthographic3<T> {
+        use crate::base::helper;
         let left = r.gen();
-        let right = helper::reject_rand(r, |x: &N| *x > left);
+        let right = helper::reject_rand(r, |x: &T| *x > left);
         let bottom = r.gen();
-        let top = helper::reject_rand(r, |x: &N| *x > bottom);
+        let top = helper::reject_rand(r, |x: &T| *x > bottom);
         let znear = r.gen();
-        let zfar = helper::reject_rand(r, |x: &N| *x > znear);
+        let zfar = helper::reject_rand(r, |x: &T| *x > znear);
 
         Orthographic3::new(left, right, bottom, top, znear, zfar)
     }
 }
 
 #[cfg(feature = "arbitrary")]
-impl<N: RealField + Arbitrary> Arbitrary for Orthographic3<N>
+impl<T: RealField + Arbitrary> Arbitrary for Orthographic3<T>
 where
-    Matrix4<N>: Send,
+    Matrix4<T>: Send,
 {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
+    fn arbitrary(g: &mut Gen) -> Self {
+        use crate::base::helper;
         let left = Arbitrary::arbitrary(g);
-        let right = helper::reject(g, |x: &N| *x > left);
+        let right = helper::reject(g, |x: &T| *x > left);
         let bottom = Arbitrary::arbitrary(g);
-        let top = helper::reject(g, |x: &N| *x > bottom);
+        let top = helper::reject(g, |x: &T| *x > bottom);
         let znear = Arbitrary::arbitrary(g);
-        let zfar = helper::reject(g, |x: &N| *x > znear);
+        let zfar = helper::reject(g, |x: &T| *x > znear);
 
         Self::new(left, right, bottom, top, znear, zfar)
     }
 }
 
-impl<N: RealField> From<Orthographic3<N>> for Matrix4<N> {
+impl<T: RealField> From<Orthographic3<T>> for Matrix4<T> {
     #[inline]
-    fn from(orth: Orthographic3<N>) -> Self {
+    fn from(orth: Orthographic3<T>) -> Self {
         orth.into_inner()
     }
 }

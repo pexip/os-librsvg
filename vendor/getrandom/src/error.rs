@@ -73,7 +73,14 @@ impl Error {
     #[inline]
     pub fn raw_os_error(self) -> Option<i32> {
         if self.0.get() < Self::INTERNAL_START {
-            Some(self.0.get() as i32)
+            match () {
+                #[cfg(target_os = "solid_asp3")]
+                // On SOLID, negate the error code again to obtain the original
+                // error code.
+                () => Some(-(self.0.get() as i32)),
+                #[cfg(not(target_os = "solid_asp3"))]
+                () => Some(self.0.get() as i32),
+            }
         } else {
             None
         }
@@ -101,10 +108,6 @@ cfg_if! {
             let n = buf.len();
             let idx = buf.iter().position(|&b| b == 0).unwrap_or(n);
             core::str::from_utf8(&buf[..idx]).ok()
-        }
-    } else if #[cfg(target_os = "wasi")] {
-        fn os_err(errno: i32, _buf: &mut [u8]) -> Option<wasi::Error> {
-            wasi::Error::from_raw_error(errno as _)
         }
     } else {
         fn os_err(_errno: i32, _buf: &mut [u8]) -> Option<&str> {
@@ -162,7 +165,7 @@ fn internal_desc(error: Error) -> Option<&'static str> {
         Error::WINDOWS_RTL_GEN_RANDOM => Some("RtlGenRandom: Windows system function failure"),
         Error::FAILED_RDRAND => Some("RDRAND: failed multiple times: CPU issue likely"),
         Error::NO_RDRAND => Some("RDRAND: instruction not supported"),
-        Error::WEB_CRYPTO => Some("Web API self.crypto is unavailable"),
+        Error::WEB_CRYPTO => Some("Web Crypto API is unavailable"),
         Error::WEB_GET_RANDOM_VALUES => Some("Web API crypto.getRandomValues is unavailable"),
         Error::VXWORKS_RAND_SECURE => Some("randSecure: VxWorks RNG module is not initialized"),
         Error::NODE_CRYPTO => Some("Node.js crypto module is unavailable"),

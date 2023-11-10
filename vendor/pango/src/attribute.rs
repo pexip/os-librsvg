@@ -1,130 +1,28 @@
-// Copyright 2017, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
+use crate::{AttrClass, AttrType, Attribute};
 use glib::translate::*;
-use pango_sys;
-use AttrClass;
-use Attribute;
-use Gravity;
-use GravityHint;
-use Stretch;
-use Style;
-use Underline;
-use Variant;
-use Weight;
 
 impl Attribute {
-    #[cfg(any(feature = "v1_38", feature = "dox"))]
-    pub fn new_background_alpha(alpha: u16) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_background_alpha_new(alpha)) }
-    }
-
-    pub fn new_background(red: u16, green: u16, blue: u16) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_background_new(red, green, blue)) }
-    }
-
-    pub fn new_fallback(enable_fallback: bool) -> Option<Attribute> {
-        unsafe {
-            from_glib_full(pango_sys::pango_attr_fallback_new(
-                enable_fallback.to_glib(),
-            ))
-        }
-    }
-
-    pub fn new_family(family: &str) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_family_new(family.to_glib_none().0)) }
-    }
-
-    #[cfg(any(feature = "v1_38", feature = "dox"))]
-    pub fn new_foreground_alpha(alpha: u16) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_foreground_alpha_new(alpha)) }
-    }
-
-    pub fn new_foreground(red: u16, green: u16, blue: u16) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_foreground_new(red, green, blue)) }
-    }
-
-    pub fn new_gravity_hint(hint: GravityHint) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_gravity_hint_new(hint.to_glib())) }
-    }
-
-    pub fn new_gravity(gravity: Gravity) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_gravity_new(gravity.to_glib())) }
-    }
-
-    pub fn new_letter_spacing(letter_spacing: i32) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_letter_spacing_new(letter_spacing)) }
-    }
-
-    pub fn new_rise(rise: i32) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_rise_new(rise)) }
-    }
-
-    pub fn new_scale(scale_factor: f64) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_scale_new(scale_factor)) }
-    }
-
-    pub fn new_size(size: i32) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_size_new(size)) }
-    }
-
-    pub fn new_size_absolute(size: i32) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_size_new_absolute(size)) }
-    }
-
-    pub fn new_stretch(stretch: Stretch) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_stretch_new(stretch.to_glib())) }
-    }
-
-    pub fn new_strikethrough_color(red: u16, green: u16, blue: u16) -> Option<Attribute> {
-        unsafe {
-            from_glib_full(pango_sys::pango_attr_strikethrough_color_new(
-                red, green, blue,
-            ))
-        }
-    }
-
-    pub fn new_strikethrough(strikethrough: bool) -> Option<Attribute> {
-        unsafe {
-            from_glib_full(pango_sys::pango_attr_strikethrough_new(
-                strikethrough.to_glib(),
-            ))
-        }
-    }
-
-    pub fn new_style(style: Style) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_style_new(style.to_glib())) }
-    }
-
-    pub fn new_underline_color(red: u16, green: u16, blue: u16) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_underline_color_new(red, green, blue)) }
-    }
-
-    pub fn new_underline(underline: Underline) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_underline_new(underline.to_glib())) }
-    }
-
-    pub fn new_variant(variant: Variant) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_variant_new(variant.to_glib())) }
-    }
-
-    pub fn new_weight(weight: Weight) -> Option<Attribute> {
-        unsafe { from_glib_full(pango_sys::pango_attr_weight_new(weight.to_glib())) }
-    }
-
-    pub fn get_attr_class(&self) -> AttrClass {
+    #[doc(alias = "get_attr_class")]
+    pub fn attr_class(&self) -> AttrClass {
         unsafe { from_glib_full((*self.to_glib_none().0).klass) }
     }
 
-    pub fn get_start_index(&self) -> u32 {
+    pub fn type_(&self) -> AttrType {
+        unsafe { from_glib((*(*self.to_glib_none().0).klass).type_) }
+    }
+
+    #[doc(alias = "get_start_index")]
+    pub fn start_index(&self) -> u32 {
         unsafe {
             let stash = self.to_glib_none();
             (*stash.0).start_index
         }
     }
 
-    pub fn get_end_index(&self) -> u32 {
+    #[doc(alias = "get_end_index")]
+    pub fn end_index(&self) -> u32 {
         unsafe {
             let stash = self.to_glib_none();
             (*stash.0).end_index
@@ -142,6 +40,141 @@ impl Attribute {
         unsafe {
             let stash = self.to_glib_none_mut();
             (*stash.0).end_index = index;
+        }
+    }
+    pub fn downcast<T: IsAttribute>(self) -> Result<T, Attribute> {
+        unsafe {
+            if T::ATTR_TYPES.contains(&self.attr_class().type_()) {
+                Ok(from_glib_full(self.to_glib_full()))
+            } else {
+                Err(self)
+            }
+        }
+    }
+
+    pub fn downcast_ref<T: IsAttribute>(&self) -> Option<&T> {
+        unsafe {
+            if T::ATTR_TYPES.contains(&self.attr_class().type_()) {
+                Some(&*(self as *const Attribute as *const T))
+            } else {
+                None
+            }
+        }
+    }
+}
+
+pub unsafe trait IsAttribute:
+    FromGlibPtrFull<*const ffi::PangoAttribute>
+    + FromGlibPtrFull<*mut ffi::PangoAttribute>
+    + std::convert::AsRef<crate::Attribute>
+    + 'static
+{
+    const ATTR_TYPES: &'static [AttrType];
+    fn upcast(self) -> Attribute;
+    fn upcast_ref(&self) -> &Attribute;
+}
+
+macro_rules! define_attribute_struct {
+    ($rust_type:ident, $ffi_type:path, $attr_types:expr) => {
+
+        #[cfg(any(feature = "v1_44", feature = "dox"))]
+        #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+        glib::wrapper! {
+            #[derive(Debug)]
+            pub struct $rust_type(Boxed<$ffi_type>);
+
+            match fn {
+                copy => |ptr| ffi::pango_attribute_copy(ptr as *const ffi::PangoAttribute) as *mut $ffi_type,
+                free => |ptr| ffi::pango_attribute_destroy(ptr as *mut ffi::PangoAttribute),
+                type_ => || ffi::pango_attribute_get_type(),
+            }
+        }
+
+        unsafe impl Send for $rust_type {}
+        unsafe impl Sync for $rust_type {}
+
+        #[cfg(not(any(feature = "v1_44", feature = "dox")))]
+        glib::wrapper! {
+            #[derive(Debug)]
+            pub struct $rust_type(Boxed<$ffi_type>);
+
+            match fn {
+                copy => |ptr| ffi::pango_attribute_copy(ptr as *const ffi::PangoAttribute) as *mut $ffi_type,
+                free => |ptr| ffi::pango_attribute_destroy(ptr as *mut ffi::PangoAttribute),
+            }
+        }
+
+        impl $rust_type {
+            #[doc(alias = "pango_attribute_equal")]
+            fn equal<'a, T:  crate::attribute::IsAttribute>(&self, attr2: &'a T) -> bool {
+                unsafe {
+                    glib::translate::from_glib(ffi::pango_attribute_equal(
+                       glib::translate::ToGlibPtr::to_glib_none(self).0 as *const ffi::PangoAttribute,
+                       glib::translate::ToGlibPtr::to_glib_none(attr2.upcast_ref()).0 as *const ffi::PangoAttribute,
+                    ))
+                }
+            }
+        }
+
+        impl PartialEq for $rust_type {
+            #[inline]
+            fn eq(&self, other: &Self) -> bool {
+                self.equal(other)
+            }
+        }
+
+        impl Eq for $rust_type {}
+
+        unsafe impl crate::attribute::IsAttribute for $rust_type {
+            const ATTR_TYPES: &'static [crate::AttrType] = $attr_types;
+
+            fn upcast(self) -> crate::Attribute {
+                unsafe { glib::translate::from_glib_full(glib::translate::ToGlibPtr::to_glib_full(&self) as *mut ffi::PangoAttribute) }
+            }
+
+            fn upcast_ref(&self) -> &crate::Attribute {
+                &*self
+            }
+        }
+
+        #[doc(hidden)]
+        impl glib::translate::FromGlibPtrFull<*mut ffi::PangoAttribute> for $rust_type {
+            unsafe fn from_glib_full(ptr: *mut ffi::PangoAttribute) -> Self {
+                glib::translate::from_glib_full(ptr as *mut $ffi_type)
+            }
+        }
+
+        #[doc(hidden)]
+        impl glib::translate::FromGlibPtrFull<*const ffi::PangoAttribute> for $rust_type {
+            unsafe fn from_glib_full(ptr: *const ffi::PangoAttribute) -> Self {
+                glib::translate::from_glib_full(ptr as *const $ffi_type)
+            }
+        }
+
+        impl std::convert::AsRef<crate::Attribute> for $rust_type {
+            fn as_ref(&self) -> &crate::Attribute {
+                &*self
+            }
+        }
+
+        impl From<$rust_type> for crate::Attribute {
+            fn from(attr: $rust_type) -> crate::Attribute {
+                crate::IsAttribute::upcast(attr)
+            }
+        }
+
+        impl std::ops::Deref for $rust_type {
+            type Target = crate::Attribute;
+
+            fn deref(&self) -> &Self::Target {
+                unsafe { &*(self as *const $rust_type as *const crate::Attribute) }
+            }
+        }
+
+        impl std::ops::DerefMut for $rust_type {
+            fn deref_mut(&mut self) -> &mut crate::Attribute {
+                unsafe { &mut *(self as *mut $rust_type as *mut crate::Attribute) }
+            }
         }
     }
 }

@@ -7,13 +7,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use std::borrow::Cow;
 use std::mem;
 use std::ptr::NonNull;
 use std::sync::atomic::AtomicIsize;
 use std::sync::atomic::Ordering::SeqCst;
-use std::sync::Mutex;
 
 const NB_BUCKETS: usize = 1 << 12; // 4096
 const BUCKET_MASK: u32 = (1 << 12) - 1;
@@ -38,16 +38,16 @@ fn entry_alignment_is_sufficient() {
     assert!(mem::align_of::<Entry>() >= ENTRY_ALIGNMENT);
 }
 
-lazy_static! {
-    pub(crate) static ref DYNAMIC_SET: Mutex<Set> = Mutex::new({
+pub(crate) static DYNAMIC_SET: Lazy<Mutex<Set>> = Lazy::new(|| {
+    Mutex::new({
         type T = Option<Box<Entry>>;
         let _static_assert_size_eq = std::mem::transmute::<T, usize>;
         let vec = std::mem::ManuallyDrop::new(vec![0_usize; NB_BUCKETS]);
         Set {
             buckets: unsafe { Box::from_raw(vec.as_ptr() as *mut [T; NB_BUCKETS]) },
         }
-    });
-}
+    })
+});
 
 impl Set {
     pub(crate) fn insert(&mut self, string: Cow<str>, hash: u32) -> NonNull<Entry> {
@@ -56,7 +56,7 @@ impl Set {
             let mut ptr: Option<&mut Box<Entry>> = self.buckets[bucket_index].as_mut();
 
             while let Some(entry) = ptr.take() {
-                if entry.hash == hash && &*entry.string == &*string {
+                if entry.hash == hash && *entry.string == *string {
                     if entry.ref_count.fetch_add(1, SeqCst) > 0 {
                         return NonNull::from(&mut **entry);
                     }
@@ -94,11 +94,8 @@ impl Set {
 
         let mut current: &mut Option<Box<Entry>> = &mut self.buckets[bucket_index];
 
-        loop {
-            let entry_ptr: *mut Entry = match current.as_mut() {
-                Some(entry) => &mut **entry,
-                None => break,
-            };
+        while let Some(entry_ptr) = current.as_mut() {
+            let entry_ptr: *mut Entry = &mut **entry_ptr;
             if entry_ptr == ptr {
                 mem::drop(mem::replace(current, unsafe {
                     (*entry_ptr).next_in_bucket.take()

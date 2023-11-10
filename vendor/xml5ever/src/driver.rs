@@ -12,10 +12,10 @@ use crate::tree_builder::{TreeSink, XmlTreeBuilder, XmlTreeBuilderOpts};
 
 use std::borrow::Cow;
 
-use markup5ever::buffer_queue::BufferQueue;
 use crate::tendril;
 use crate::tendril::stream::{TendrilSink, Utf8LossyDecoder};
 use crate::tendril::StrTendril;
+use markup5ever::buffer_queue::BufferQueue;
 
 /// All-encompasing parser setting structure.
 #[derive(Clone, Default)]
@@ -82,6 +82,7 @@ impl<Sink: TreeSink> XmlParser<Sink> {
     ///
     /// Use this when your input is bytes that are known to be in the UTF-8 encoding.
     /// Decoding is lossy, like `String::from_utf8_lossy`.
+    #[allow(clippy::wrong_self_convention)]
     pub fn from_utf8(self) -> Utf8LossyDecoder<Self> {
         Utf8LossyDecoder::new(self)
     }

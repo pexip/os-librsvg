@@ -34,7 +34,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! unicode-normalization = "0.1.8"
+//! unicode-normalization = "0.1.20"
 //! ```
 
 #![deny(missing_docs, unsafe_code)]
@@ -59,9 +59,13 @@ pub use crate::quick_check::{
     IsNormalized,
 };
 pub use crate::recompose::Recompositions;
+pub use crate::replace::Replacements;
 pub use crate::stream_safe::StreamSafe;
 pub use crate::tables::UNICODE_VERSION;
-use core::str::Chars;
+use core::{
+    str::Chars,
+    option,
+};
 
 mod no_std_prelude;
 
@@ -71,6 +75,7 @@ mod normalize;
 mod perfect_hash;
 mod quick_check;
 mod recompose;
+mod replace;
 mod stream_safe;
 
 #[rustfmt::skip]
@@ -83,9 +88,16 @@ mod test;
 
 /// Methods for composing and decomposing characters.
 pub mod char {
-    pub use crate::normalize::{compose, decompose_canonical, decompose_compatible};
+    pub use crate::normalize::{
+        compose, decompose_canonical, decompose_cjk_compat_variants, decompose_compatible,
+    };
 
     pub use crate::lookups::{canonical_combining_class, is_combining_mark};
+
+    /// Return whether the given character is assigned (`General_Category` != `Unassigned`)
+    /// and not Private-Use (`General_Category` != `Private_Use`), in the supported version
+    /// of Unicode.
+    pub use crate::tables::is_public_assigned;
 }
 
 /// Methods for iterating over strings while applying Unicode normalizations
@@ -107,6 +119,18 @@ pub trait UnicodeNormalization<I: Iterator<Item = char>> {
     /// An Iterator over the string in Unicode Normalization Form KC
     /// (compatibility decomposition followed by canonical composition).
     fn nfkc(self) -> Recompositions<I>;
+
+    /// A transformation which replaces CJK Compatibility Ideograph codepoints
+    /// with normal forms using Standardized Variation Sequences. This is not
+    /// part of the canonical or compatibility decomposition algorithms, but
+    /// performing it before those algorithms produces normalized output which
+    /// better preserves the intent of the original text.
+    ///
+    /// Note that many systems today ignore variation selectors, so these
+    /// may not immediately help text display as intended, but they at
+    /// least preserve the information in a standardized form, giving
+    /// implementations the option to recognize them.
+    fn cjk_compat_variants(self) -> Replacements<I>;
 
     /// An Iterator over the string with Conjoining Grapheme Joiner characters
     /// inserted according to the Stream-Safe Text Process (UAX15-D4)
@@ -135,8 +159,46 @@ impl<'a> UnicodeNormalization<Chars<'a>> for &'a str {
     }
 
     #[inline]
+    fn cjk_compat_variants(self) -> Replacements<Chars<'a>> {
+        replace::new_cjk_compat_variants(self.chars())
+    }
+
+    #[inline]
     fn stream_safe(self) -> StreamSafe<Chars<'a>> {
         StreamSafe::new(self.chars())
+    }
+}
+
+
+impl UnicodeNormalization<option::IntoIter<char>> for char {
+    #[inline]
+    fn nfd(self) -> Decompositions<option::IntoIter<char>> {
+        decompose::new_canonical(Some(self).into_iter())
+    }
+
+    #[inline]
+    fn nfkd(self) -> Decompositions<option::IntoIter<char>> {
+        decompose::new_compatible(Some(self).into_iter())
+    }
+
+    #[inline]
+    fn nfc(self) -> Recompositions<option::IntoIter<char>> {
+        recompose::new_canonical(Some(self).into_iter())
+    }
+
+    #[inline]
+    fn nfkc(self) -> Recompositions<option::IntoIter<char>> {
+        recompose::new_compatible(Some(self).into_iter())
+    }
+
+    #[inline]
+    fn cjk_compat_variants(self) -> Replacements<option::IntoIter<char>> {
+        replace::new_cjk_compat_variants(Some(self).into_iter())
+    }
+
+    #[inline]
+    fn stream_safe(self) -> StreamSafe<option::IntoIter<char>> {
+        StreamSafe::new(Some(self).into_iter())
     }
 }
 
@@ -159,6 +221,11 @@ impl<I: Iterator<Item = char>> UnicodeNormalization<I> for I {
     #[inline]
     fn nfkc(self) -> Recompositions<I> {
         recompose::new_compatible(self)
+    }
+
+    #[inline]
+    fn cjk_compat_variants(self) -> Replacements<I> {
+        replace::new_cjk_compat_variants(self)
     }
 
     #[inline]

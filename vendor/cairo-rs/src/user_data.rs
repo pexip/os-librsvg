@@ -1,6 +1,8 @@
+// Take a look at the license at the top of the repository in the LICENSE file.
+
 use std::marker::PhantomData;
 
-use ffi::cairo_user_data_key_t;
+use crate::ffi::cairo_user_data_key_t;
 
 pub struct UserDataKey<T> {
     pub(crate) ffi: cairo_user_data_key_t,
@@ -11,7 +13,7 @@ unsafe impl<T> Sync for UserDataKey<T> {}
 
 impl<T> UserDataKey<T> {
     pub const fn new() -> Self {
-        UserDataKey {
+        Self {
             ffi: cairo_user_data_key_t { unused: 0 },
             marker: PhantomData,
         }
@@ -28,7 +30,7 @@ impl<T> UserDataKey<T> {
 // while the borrow still needs to be valid.
 // (Borrowing with `&mut self` would not help as `Self` can be itself reference-counted.)
 //
-// Therefore the value must be reference-counted.
+// Therefore, the value must be reference-counted.
 //
 // We use `Rc` over `Arc` because the types implementing these methods are `!Send` and `!Sync`.
 // See <https://github.com/gtk-rs/cairo/issues/256>
@@ -36,32 +38,35 @@ impl<T> UserDataKey<T> {
 macro_rules! user_data_methods {
     ($ffi_get_user_data: path, $ffi_set_user_data: path,) => {
         /// Attach user data to `self` for the given `key`.
-        pub fn set_user_data<T: 'static>(&self, key: &'static crate::UserDataKey<T>,
-                                         value: std::rc::Rc<T>)
-        {
+        pub fn set_user_data<T: 'static>(
+            &self,
+            key: &'static crate::UserDataKey<T>,
+            value: std::rc::Rc<T>,
+        ) -> Result<(), crate::Error> {
             unsafe extern "C" fn destructor<T>(ptr: *mut libc::c_void) {
                 let ptr: *const T = ptr as _;
                 drop(std::rc::Rc::from_raw(ptr))
             }
             // Safety:
             //
-            // The destructor’s cast and `from_raw` are symetric
+            // The destructor’s cast and `from_raw` are symmetric
             // with the `into_raw` and cast below.
             // They both transfer ownership of one strong reference:
             // neither of them touches the reference count.
             let ptr: *const T = std::rc::Rc::into_raw(value);
             let ptr = ptr as *mut T as *mut libc::c_void;
-            let result = unsafe {
+            let status = unsafe {
                 $ffi_set_user_data(self.to_raw_none(), &key.ffi, ptr, Some(destructor::<T>))
             };
-            Status::from(result).ensure_valid()
+            crate::utils::status_to_result(status)
         }
 
         /// Return the user data previously attached to `self` with the given `key`, if any.
-        pub fn get_user_data<T: 'static>(&self, key: &'static crate::UserDataKey<T>)
-                                         -> Option<std::rc::Rc<T>>
-        {
-            let ptr = self.get_user_data_ptr(key)?.as_ptr();
+        pub fn user_data<T: 'static>(
+            &self,
+            key: &'static crate::UserDataKey<T>,
+        ) -> Option<std::rc::Rc<T>> {
+            let ptr = self.user_data_ptr(key)?.as_ptr();
 
             // Safety:
             //
@@ -82,9 +87,10 @@ macro_rules! user_data_methods {
         /// The pointer is valid when it is returned from this method,
         /// until the cairo object that `self` represents is destroyed
         /// or `remove_user_data` or `set_user_data` is called with the same key.
-        pub fn get_user_data_ptr<T: 'static>(&self, key: &'static crate::UserDataKey<T>)
-                                             -> Option<std::ptr::NonNull<T>>
-        {
+        pub fn user_data_ptr<T: 'static>(
+            &self,
+            key: &'static crate::UserDataKey<T>,
+        ) -> Option<std::ptr::NonNull<T>> {
             // Safety:
             //
             // If `ffi_get_user_data` returns a non-null pointer,
@@ -96,7 +102,7 @@ macro_rules! user_data_methods {
             //   the key used then must live at that address until the end of the process.
             //   Because `UserDataKey<T>` has a non-zero size regardless of `T`,
             //   no other `UserDataKey<U>` value can have the same address.
-            //   Therefore the `T` type was the same then at it is now and `cast` is type-safe.
+            //   Therefore, the `T` type was the same then at it is now and `cast` is type-safe.
             //
             // * Or, it is technically possible that the `set` call was to the C function directly,
             //   with a `cairo_user_data_key_t` in heap-allocated memory that was then freed,
@@ -111,13 +117,16 @@ macro_rules! user_data_methods {
             }
         }
 
-        /// Unattach from `self` the user data associated with `key`, if any.
+        /// Unattached from `self` the user data associated with `key`, if any.
         /// If there is no other `Rc` strong reference, the data is destroyed.
-        pub fn remove_user_data<T: 'static>(&self, key: &'static crate::UserDataKey<T>) {
-            let result = unsafe {
+        pub fn remove_user_data<T: 'static>(
+            &self,
+            key: &'static crate::UserDataKey<T>,
+        ) -> Result<(), crate::Error> {
+            let status = unsafe {
                 $ffi_set_user_data(self.to_raw_none(), &key.ffi, std::ptr::null_mut(), None)
             };
-            Status::from(result).ensure_valid()
+            crate::utils::status_to_result(status)
         }
     };
 }

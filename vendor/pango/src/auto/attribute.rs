@@ -3,32 +3,39 @@
 // DO NOT EDIT
 
 use glib::translate::*;
-use pango_sys;
-use AttrClass;
 
-glib_wrapper! {
+#[cfg(any(feature = "v1_44", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_44")))]
+glib::wrapper! {
     #[derive(Debug, PartialOrd, Ord, Hash)]
-    pub struct Attribute(Boxed<pango_sys::PangoAttribute>);
+    pub struct Attribute(Boxed<ffi::PangoAttribute>);
 
     match fn {
-        copy => |ptr| pango_sys::pango_attribute_copy(mut_override(ptr)),
-        free => |ptr| pango_sys::pango_attribute_destroy(ptr),
+        copy => |ptr| ffi::pango_attribute_copy(ptr),
+        free => |ptr| ffi::pango_attribute_destroy(ptr),
+        type_ => || ffi::pango_attribute_get_type(),
+    }
+}
+
+#[cfg(not(any(feature = "v1_44", feature = "dox")))]
+glib::wrapper! {
+    #[derive(Debug, PartialOrd, Ord, Hash)]
+    pub struct Attribute(Boxed<ffi::PangoAttribute>);
+
+    match fn {
+        copy => |ptr| ffi::pango_attribute_copy(ptr),
+        free => |ptr| ffi::pango_attribute_destroy(ptr),
     }
 }
 
 impl Attribute {
+    #[doc(alias = "pango_attribute_equal")]
     fn equal(&self, attr2: &Attribute) -> bool {
         unsafe {
-            from_glib(pango_sys::pango_attribute_equal(
+            from_glib(ffi::pango_attribute_equal(
                 self.to_glib_none().0,
                 attr2.to_glib_none().0,
             ))
-        }
-    }
-
-    pub fn init(&mut self, klass: &AttrClass) {
-        unsafe {
-            pango_sys::pango_attribute_init(self.to_glib_none_mut().0, klass.to_glib_none().0);
         }
     }
 }
@@ -41,3 +48,6 @@ impl PartialEq for Attribute {
 }
 
 impl Eq for Attribute {}
+
+unsafe impl Send for Attribute {}
+unsafe impl Sync for Attribute {}

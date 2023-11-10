@@ -1,11 +1,11 @@
 use num::{One, Zero};
 use std::cmp::Ordering;
 
-use na::dimension::{U15, U2, U4, U8};
+use na::dimension::{U15, U8};
 use na::{
-    self, DMatrix, DVector, Matrix2, Matrix2x3, Matrix2x4, Matrix3, Matrix3x2, Matrix3x4, Matrix4,
-    Matrix4x3, Matrix4x5, Matrix5, Matrix6, MatrixMN, RowVector3, RowVector4, RowVector5, Vector1,
-    Vector2, Vector3, Vector4, Vector5, Vector6,
+    self, Const, DMatrix, DVector, Matrix2, Matrix2x3, Matrix2x4, Matrix3, Matrix3x2, Matrix3x4,
+    Matrix4, Matrix4x3, Matrix4x5, Matrix5, Matrix6, OMatrix, RowVector3, RowVector4, RowVector5,
+    Vector1, Vector2, Vector3, Vector4, Vector5, Vector6,
 };
 
 #[test]
@@ -19,6 +19,24 @@ fn iter() {
     assert_eq!(*it.next().unwrap(), 5.0);
     assert_eq!(*it.next().unwrap(), 3.0);
     assert_eq!(*it.next().unwrap(), 6.0);
+    assert!(it.next().is_none());
+
+    let mut it = a.iter();
+    assert_eq!(*it.next().unwrap(), 1.0);
+    assert_eq!(*it.next_back().unwrap(), 6.0);
+    assert_eq!(*it.next_back().unwrap(), 3.0);
+    assert_eq!(*it.next_back().unwrap(), 5.0);
+    assert_eq!(*it.next().unwrap(), 4.0);
+    assert_eq!(*it.next().unwrap(), 2.0);
+    assert!(it.next().is_none());
+
+    let mut it = a.iter().rev();
+    assert_eq!(*it.next().unwrap(), 6.0);
+    assert_eq!(*it.next().unwrap(), 3.0);
+    assert_eq!(*it.next().unwrap(), 5.0);
+    assert_eq!(*it.next().unwrap(), 2.0);
+    assert_eq!(*it.next().unwrap(), 4.0);
+    assert_eq!(*it.next().unwrap(), 1.0);
     assert!(it.next().is_none());
 
     let row = a.row(0);
@@ -61,10 +79,15 @@ fn iter() {
 
 #[test]
 fn debug_output_corresponds_to_data_container() {
-    assert!(
-        format!("{:?}", Matrix2::new(1.0, 2.0, 3.0, 4.0)) == "Matrix { data: [1, 3, 2, 4] }" || // Current output on the stable chanel.
-        format!("{:?}", Matrix2::new(1.0, 2.0, 3.0, 4.0)) == "Matrix { data: [1.0, 3.0, 2.0, 4.0] }" // Current output on the nightyl chanel.
-    );
+    let m = Matrix2::new(1.0, 2.0, 3.0, 4.0);
+    let output_stable = "Matrix { data: [[1, 3], [2, 4]] }"; // Current output on the stable channel.
+    let output_nightly = "Matrix { data: [[1.0, 3.0], [2.0, 4.0]] }"; // Current output on the nightly channel.
+    let current_output = format!("{:?}", m);
+    dbg!(output_stable);
+    dbg!(output_nightly);
+    dbg!(&current_output);
+
+    assert!(current_output == output_stable || current_output == output_nightly);
 }
 
 #[test]
@@ -424,7 +447,7 @@ fn apply() {
         1.0, 2.0, 3.0, 4.0, 6.0, 7.0, 8.0, 9.0, 10.0, 9.0, 8.0, 7.0, 6.0, 4.0, 3.0, 2.0,
     );
 
-    a.apply(|e| e.round());
+    a.apply(|e| *e = e.round());
 
     assert_eq!(a, expected);
 }
@@ -680,7 +703,7 @@ fn kronecker() {
         440, 450,
     );
 
-    let expected = MatrixMN::<_, U8, U15>::from_row_slice(&[
+    let expected = OMatrix::<_, U8, U15>::from_row_slice(&[
         1210, 1320, 1430, 1540, 1650, 1320, 1440, 1560, 1680, 1800, 1430, 1560, 1690, 1820, 1950,
         2310, 2420, 2530, 2640, 2750, 2520, 2640, 2760, 2880, 3000, 2730, 2860, 2990, 3120, 3250,
         3410, 3520, 3630, 3740, 3850, 3720, 3840, 3960, 4080, 4200, 4030, 4160, 4290, 4420, 4550,
@@ -811,151 +834,144 @@ fn swizzle() {
     assert_eq!(c.zyz(), Vector3::new(3.0, 2.0, 3.0));
 }
 
-#[cfg(feature = "arbitrary")]
+#[cfg(feature = "proptest-support")]
 mod transposition_tests {
     use super::*;
-    use na::Matrix4x6;
+    use crate::proptest::{dmatrix, matrix, vector4, PROPTEST_F64};
+    use proptest::{prop_assert, prop_assert_eq, proptest};
 
-    quickcheck! {
-        fn transpose_transpose_is_self(m: Matrix2x3<f64>) -> bool {
-            m.transpose().transpose() == m
+    proptest! {
+        #[test]
+        fn transpose_transpose_is_self(m in matrix(PROPTEST_F64, Const::<2>, Const::<3>)) {
+            prop_assert_eq!(m.transpose().transpose(), m)
         }
 
-        fn transpose_mut_transpose_mut_is_self(m: Matrix3<f64>) -> bool {
+        #[test]
+        fn transpose_mut_transpose_mut_is_self(m in matrix(PROPTEST_F64, Const::<3>, Const::<3>)) {
             let mut mm = m;
             mm.transpose_mut();
             mm.transpose_mut();
-            m == mm
+            prop_assert_eq!(m, mm)
         }
 
-        fn transpose_transpose_is_id_dyn(m: DMatrix<f64>) -> bool {
-            m.transpose().transpose() == m
+        #[test]
+        fn transpose_transpose_is_id_dyn(m in dmatrix()) {
+            prop_assert_eq!(m.transpose().transpose(), m)
         }
 
-        fn check_transpose_components_dyn(m: DMatrix<f64>) -> bool {
+        #[test]
+        fn check_transpose_components_dyn(m in dmatrix()) {
             let tr = m.transpose();
             let (nrows, ncols) = m.shape();
 
-            if nrows != tr.shape().1 || ncols != tr.shape().0 {
-                return false
-            }
+            prop_assert!(nrows == tr.shape().1 && ncols == tr.shape().0);
 
             for i in 0 .. nrows {
                 for j in 0 .. ncols {
-                    if m[(i, j)] != tr[(j, i)] {
-                        return false
-                    }
+                    prop_assert_eq!(m[(i, j)], tr[(j, i)]);
                 }
             }
-
-            true
         }
 
-        fn tr_mul_is_transpose_then_mul(m: Matrix4x6<f64>, v: Vector4<f64>) -> bool {
-            relative_eq!(m.transpose() * v, m.tr_mul(&v), epsilon = 1.0e-7)
+        #[test]
+        fn tr_mul_is_transpose_then_mul(m in matrix(PROPTEST_F64, Const::<4>, Const::<6>), v in vector4()) {
+            prop_assert!(relative_eq!(m.transpose() * v, m.tr_mul(&v), epsilon = 1.0e-7))
         }
     }
 }
 
-#[cfg(feature = "arbitrary")]
+#[cfg(feature = "proptest-support")]
 mod inversion_tests {
     use super::*;
+    use crate::proptest::*;
     use na::Matrix1;
+    use proptest::{prop_assert, proptest};
 
-    quickcheck! {
-        fn self_mul_inv_is_id_dim1(m: Matrix1<f64>) -> bool {
+    proptest! {
+        #[test]
+        fn self_mul_inv_is_id_dim1(m in matrix1()) {
             if let Some(im) = m.try_inverse() {
                 let id = Matrix1::one();
-                relative_eq!(im * m, id, epsilon = 1.0e-7) &&
-                relative_eq!(m * im, id, epsilon = 1.0e-7)
-            }
-            else {
-                true
+                prop_assert!(relative_eq!(im * m, id, epsilon = 1.0e-7));
+                prop_assert!(relative_eq!(m * im, id, epsilon = 1.0e-7));
             }
         }
 
-        fn self_mul_inv_is_id_dim2(m: Matrix2<f64>) -> bool {
+        #[test]
+        fn self_mul_inv_is_id_dim2(m in matrix2()) {
             if let Some(im) = m.try_inverse() {
                 let id = Matrix2::one();
-                relative_eq!(im * m, id, epsilon = 1.0e-7) &&
-                relative_eq!(m * im, id, epsilon = 1.0e-7)
-            }
-            else {
-                true
+                prop_assert!(relative_eq!(im * m, id, epsilon = 1.0e-7));
+                prop_assert!(relative_eq!(m * im, id, epsilon = 1.0e-7));
             }
         }
 
-        fn self_mul_inv_is_id_dim3(m: Matrix3<f64>) -> bool {
+        #[test]
+        fn self_mul_inv_is_id_dim3(m in matrix3()) {
             if let Some(im) = m.try_inverse() {
                 let id = Matrix3::one();
-                relative_eq!(im * m, id, epsilon = 1.0e-7) &&
-                relative_eq!(m * im, id, epsilon = 1.0e-7)
-            }
-            else {
-                true
+                prop_assert!(relative_eq!(im * m, id, epsilon = 1.0e-7));
+                prop_assert!(relative_eq!(m * im, id, epsilon = 1.0e-7));
             }
         }
 
-        fn self_mul_inv_is_id_dim4(m: Matrix4<f64>) -> bool {
+        #[test]
+        fn self_mul_inv_is_id_dim4(m in matrix4()) {
             if let Some(im) = m.try_inverse() {
                 let id = Matrix4::one();
-                relative_eq!(im * m, id, epsilon = 1.0e-7) &&
-                relative_eq!(m * im, id, epsilon = 1.0e-7)
-            }
-            else {
-                true
+                prop_assert!(relative_eq!(im * m, id, epsilon = 1.0e-7));
+                prop_assert!(relative_eq!(m * im, id, epsilon = 1.0e-7));
             }
         }
 
-        fn self_mul_inv_is_id_dim6(m: Matrix6<f64>) -> bool {
+        #[test]
+        fn self_mul_inv_is_id_dim6(m in matrix6()) {
             if let Some(im) = m.try_inverse() {
                 let id = Matrix6::one();
-                relative_eq!(im * m, id, epsilon = 1.0e-7) &&
-                relative_eq!(m * im, id, epsilon = 1.0e-7)
-            }
-            else {
-                true
+                prop_assert!(relative_eq!(im * m, id, epsilon = 1.0e-7));
+                prop_assert!(relative_eq!(m * im, id, epsilon = 1.0e-7));
             }
         }
     }
 }
 
-#[cfg(feature = "arbitrary")]
+#[cfg(feature = "proptest-support")]
 mod normalization_tests {
-    use super::*;
+    use crate::proptest::*;
+    use proptest::{prop_assert, proptest};
 
-    quickcheck! {
-        fn normalized_vec_norm_is_one(v: Vector3<f64>) -> bool {
+    proptest! {
+        #[test]
+        fn normalized_vec_norm_is_one(v in vector3()) {
             if let Some(nv) = v.try_normalize(1.0e-10) {
-                relative_eq!(nv.norm(), 1.0, epsilon = 1.0e-7)
-            }
-            else {
-                true
+                prop_assert!(relative_eq!(nv.norm(), 1.0, epsilon = 1.0e-7));
             }
         }
 
-        fn normalized_vec_norm_is_one_dyn(v: DVector<f64>) -> bool {
+        #[test]
+        fn normalized_vec_norm_is_one_dyn(v in dvector()) {
             if let Some(nv) = v.try_normalize(1.0e-10) {
-                relative_eq!(nv.norm(), 1.0, epsilon = 1.0e-7)
-            }
-            else {
-                true
+                prop_assert!(relative_eq!(nv.norm(), 1.0, epsilon = 1.0e-7));
             }
         }
     }
 }
 
-#[cfg(all(feature = "arbitrary", feature = "alga"))]
-// FIXME: move this to alga ?
+#[cfg(all(feature = "proptest-support", feature = "alga"))]
+// TODO: move this to alga ?
 mod finite_dim_inner_space_tests {
     use super::*;
+    use crate::proptest::*;
     use alga::linear::FiniteDimInnerSpace;
+    use proptest::collection::vec;
+    use proptest::{prop_assert, proptest};
     use std::fmt::Display;
 
     macro_rules! finite_dim_inner_space_test(
-        ($($Vector: ident, $orthonormal_subspace: ident, $orthonormalization: ident);* $(;)*) => {$(
-            quickcheck!{
-                fn $orthonormal_subspace(vs: Vec<$Vector<f64>>) -> bool {
+        ($($Vector: ident, $vstrategy: ident, $orthonormal_subspace: ident, $orthonormalization: ident);* $(;)*) => {$(
+            proptest! {
+                #[test]
+                fn $orthonormal_subspace(vs in vec($vstrategy(), 0..10)) {
                     let mut given_basis = vs.clone();
                     let given_basis_dim = $Vector::orthonormalize(&mut given_basis[..]);
                     let mut ortho_basis = Vec::new();
@@ -964,29 +980,21 @@ mod finite_dim_inner_space_tests {
                         |e| { ortho_basis.push(*e); true }
                     );
 
-                    if !is_subspace_basis(&ortho_basis[..]) {
-                        return false;
-                    }
+                    prop_assert!(is_subspace_basis(&ortho_basis[..]));
 
                     for v in vs {
                         for b in &ortho_basis {
-                            if !relative_eq!(v.dot(b), 0.0, epsilon = 1.0e-7) {
-                                println!("Found dot product: {} · {} = {}", v, b, v.dot(b));
-                                return false;
-                            }
+                            prop_assert!(relative_eq!(v.dot(b), 0.0, epsilon = 1.0e-7));
                         }
                     }
-
-                    true
                 }
 
-                fn $orthonormalization(vs: Vec<$Vector<f64>>) -> bool {
+                #[test]
+                fn $orthonormalization(vs in vec($vstrategy(), 0..10)) {
                     let mut basis = vs.clone();
                     let subdim = $Vector::orthonormalize(&mut basis[..]);
 
-                    if !is_subspace_basis(&basis[.. subdim]) {
-                        return false;
-                    }
+                    prop_assert!(is_subspace_basis(&basis[.. subdim]));
 
                     for mut e in vs {
                         for b in &basis[.. subdim] {
@@ -994,26 +1002,20 @@ mod finite_dim_inner_space_tests {
                         }
 
                         // Any element of `e` must be a linear combination of the basis elements.
-                        if !relative_eq!(e.norm(), 0.0, epsilon = 1.0e-7) {
-                            println!("Orthonormalization; element decomposition failure: {}", e);
-                            println!("... the non-zero norm is: {}", e.norm());
-                            return false;
-                        }
+                        prop_assert!(relative_eq!(e.norm(), 0.0, epsilon = 1.0e-7));
                     }
-
-                    true
                 }
             }
         )*}
     );
 
     finite_dim_inner_space_test!(
-        Vector1, orthonormal_subspace_basis1, orthonormalize1;
-        Vector2, orthonormal_subspace_basis2, orthonormalize2;
-        Vector3, orthonormal_subspace_basis3, orthonormalize3;
-        Vector4, orthonormal_subspace_basis4, orthonormalize4;
-        Vector5, orthonormal_subspace_basis5, orthonormalize5;
-        Vector6, orthonormal_subspace_basis6, orthonormalize6;
+        Vector1, vector1, orthonormal_subspace_basis1, orthonormalize1;
+        Vector2, vector2, orthonormal_subspace_basis2, orthonormalize2;
+        Vector3, vector3, orthonormal_subspace_basis3, orthonormalize3;
+        Vector4, vector4, orthonormal_subspace_basis4, orthonormalize4;
+        Vector5, vector5, orthonormal_subspace_basis5, orthonormalize5;
+        Vector6, vector6, orthonormal_subspace_basis6, orthonormalize6;
     );
 
     /*
@@ -1021,7 +1023,6 @@ mod finite_dim_inner_space_tests {
      * Helper functions.
      *
      */
-    #[cfg(feature = "arbitrary")]
     fn is_subspace_basis<T: FiniteDimInnerSpace<RealField = f64, ComplexField = f64> + Display>(
         vs: &[T],
     ) -> bool {
@@ -1064,13 +1065,13 @@ fn partial_eq_different_types() {
     let dynamic_mat = DMatrix::from_row_slice(2, 4, &[1, 2, 3, 4, 5, 6, 7, 8]);
     let static_mat = Matrix2x4::new(1, 2, 3, 4, 5, 6, 7, 8);
 
-    let mut typenum_static_mat = MatrixMN::<u8, typenum::U1024, U4>::zeros();
+    let mut typenum_static_mat = OMatrix::<u8, Const<1024>, Const<4>>::zeros();
     let mut slice = typenum_static_mat.slice_mut((0, 0), (2, 4));
     slice += static_mat;
 
-    let fslice_of_dmat = dynamic_mat.fixed_slice::<U2, U2>(0, 0);
+    let fslice_of_dmat = dynamic_mat.fixed_slice::<2, 2>(0, 0);
     let dslice_of_dmat = dynamic_mat.slice((0, 0), (2, 2));
-    let fslice_of_smat = static_mat.fixed_slice::<U2, U2>(0, 0);
+    let fslice_of_smat = static_mat.fixed_slice::<2, 2>(0, 0);
     let dslice_of_smat = static_mat.slice((0, 0), (2, 2));
 
     assert_eq!(dynamic_mat, static_mat);
@@ -1106,4 +1107,32 @@ fn partial_eq_different_types() {
     // TODO - implement those comparisons
     // assert_ne!(static_mat, typenum_static_mat);
     //assert_ne!(typenum_static_mat, static_mat);
+}
+
+fn generic_omatrix_to_string<D>(
+    vector: &nalgebra::OVector<f64, D>,
+    matrix: &nalgebra::OMatrix<f64, D, D>,
+) -> (String, String)
+where
+    D: nalgebra::Dim,
+    nalgebra::DefaultAllocator: nalgebra::base::allocator::Allocator<f64, D>,
+    nalgebra::DefaultAllocator: nalgebra::base::allocator::Allocator<f64, D, D>,
+{
+    (vector.to_string(), matrix.to_string())
+}
+
+#[test]
+fn omatrix_to_string() {
+    let dvec: nalgebra::DVector<f64> = nalgebra::dvector![1.0, 2.0];
+    let dmatr: nalgebra::DMatrix<f64> = nalgebra::dmatrix![1.0, 2.0; 3.0, 4.0];
+    let svec: nalgebra::SVector<f64, 2> = nalgebra::vector![1.0, 2.0];
+    let smatr: nalgebra::SMatrix<f64, 2, 2> = nalgebra::matrix![1.0, 2.0; 3.0, 4.0];
+    assert_eq!(
+        generic_omatrix_to_string(&dvec, &dmatr),
+        (dvec.to_string(), dmatr.to_string())
+    );
+    assert_eq!(
+        generic_omatrix_to_string(&svec, &smatr),
+        (svec.to_string(), smatr.to_string())
+    );
 }

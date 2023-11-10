@@ -1,27 +1,29 @@
-// Copyright 2016, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
+// rustdoc-stripper-ignore-next
 //! `Error` binding and helper trait.
 
-use glib_sys;
+use crate::translate::*;
+use crate::Quark;
 use std::borrow::Cow;
+use std::convert::Infallible;
 use std::error;
 use std::ffi::CStr;
 use std::fmt;
+use std::mem;
 use std::str;
-use translate::*;
-use Quark;
 
-glib_wrapper! {
+wrapper! {
+    // rustdoc-stripper-ignore-next
     /// A generic error capable of representing various error domains (types).
     #[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
-    pub struct Error(Boxed<glib_sys::GError>);
+    #[doc(alias = "GError")]
+    pub struct Error(Boxed<ffi::GError>);
 
     match fn {
-        copy => |ptr| glib_sys::g_error_copy(ptr),
-        free => |ptr| glib_sys::g_error_free(ptr),
-        get_type => || glib_sys::g_error_get_type(),
+        copy => |ptr| ffi::g_error_copy(ptr),
+        free => |ptr| ffi::g_error_free(ptr),
+        type_ => || ffi::g_error_get_type(),
     }
 }
 
@@ -29,22 +31,40 @@ unsafe impl Send for Error {}
 unsafe impl Sync for Error {}
 
 impl Error {
+    // rustdoc-stripper-ignore-next
     /// Creates an error with supplied error enum variant and message.
+    #[doc(alias = "g_error_new_literal")]
+    #[doc(alias = "g_error_new")]
     pub fn new<T: ErrorDomain>(error: T, message: &str) -> Error {
         unsafe {
-            from_glib_full(glib_sys::g_error_new_literal(
-                T::domain().to_glib(),
+            from_glib_full(ffi::g_error_new_literal(
+                T::domain().into_glib(),
                 error.code(),
                 message.to_glib_none().0,
             ))
         }
     }
 
+    // rustdoc-stripper-ignore-next
     /// Checks if the error domain matches `T`.
     pub fn is<T: ErrorDomain>(&self) -> bool {
-        self.0.domain == T::domain().to_glib()
+        self.inner.domain == T::domain().into_glib()
     }
 
+    // rustdoc-stripper-ignore-next
+    /// Returns the error domain quark
+    pub fn domain(&self) -> Quark {
+        unsafe { from_glib(self.inner.domain) }
+    }
+
+    // rustdoc-stripper-ignore-next
+    /// Checks if the error matches the specified domain and error code.
+    #[doc(alias = "g_error_matches")]
+    pub fn matches<T: ErrorDomain>(&self, err: T) -> bool {
+        self.is::<T>() && self.inner.code == err.code()
+    }
+
+    // rustdoc-stripper-ignore-next
     /// Tries to convert to a specific error enum.
     ///
     /// Returns `Some` if the error belongs to the enum's error domain and
@@ -61,28 +81,32 @@ impl Error {
     ///     }
     /// }
     /// ```
-    ///
-    /// ```ignore
-    /// match error {
-    ///     Some(FileError::Exist) => ...
-    ///     Some(FileError::Isdir) => ...
-    ///     ...
-    /// }
-    /// ```
     pub fn kind<T: ErrorDomain>(&self) -> Option<T> {
-        if self.0.domain == T::domain().to_glib() {
-            T::from(self.0.code)
+        if self.is::<T>() {
+            T::from(self.inner.code)
         } else {
             None
         }
     }
 
-    fn message(&self) -> &str {
+    // rustdoc-stripper-ignore-next
+    /// Returns the error message
+    ///
+    /// Most of the time you can simply print the error since it implements the `Display`
+    /// trait, but you can use this method if you need to have the message as a `&str`.
+    pub fn message(&self) -> &str {
         unsafe {
-            let bytes = CStr::from_ptr(self.0.message).to_bytes();
+            let bytes = CStr::from_ptr(self.inner.message).to_bytes();
             str::from_utf8(bytes)
                 .unwrap_or_else(|err| str::from_utf8(&bytes[..err.valid_up_to()]).unwrap())
         }
+    }
+
+    // rustdoc-stripper-ignore-next
+    /// Consumes the `Error` and returns the corresponding `GError` pointer.
+    pub fn into_raw(self) -> *mut ffi::GError {
+        let mut e = mem::ManuallyDrop::new(self);
+        e.to_glib_none_mut().0
     }
 }
 
@@ -92,34 +116,42 @@ impl fmt::Display for Error {
     }
 }
 
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        self.message()
-    }
-}
-
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Error")
-            .field("domain", &::Quark::from_glib(self.0.domain))
-            .field("code", &self.0.code)
+            .field("domain", unsafe {
+                &crate::Quark::from_glib(self.inner.domain)
+            })
+            .field("code", &self.inner.code)
             .field("message", &self.message())
             .finish()
     }
 }
 
+impl error::Error for Error {}
+
+impl From<Infallible> for Error {
+    fn from(e: Infallible) -> Self {
+        match e {}
+    }
+}
+
+// rustdoc-stripper-ignore-next
 /// `GLib` error domain.
 ///
 /// This trait is implemented by error enums that represent error domains (types).
 pub trait ErrorDomain: Copy {
+    // rustdoc-stripper-ignore-next
     /// Returns the quark identifying the error domain.
     ///
     /// As returned from `g_some_error_quark`.
     fn domain() -> Quark;
 
+    // rustdoc-stripper-ignore-next
     /// Gets the integer representation of the variant.
     fn code(self) -> i32;
 
+    // rustdoc-stripper-ignore-next
     /// Tries to convert an integer code to an enum variant.
     ///
     /// By convention, the `Failed` variant, if present, is a catch-all,
@@ -129,9 +161,10 @@ pub trait ErrorDomain: Copy {
         Self: Sized;
 }
 
+// rustdoc-stripper-ignore-next
 /// Generic error used for functions that fail without any further information
 #[macro_export]
-macro_rules! glib_bool_error(
+macro_rules! bool_error(
 // Plain strings
     ($msg:expr) =>  {
         $crate::BoolError::new($msg, file!(), module_path!(), line!())
@@ -144,7 +177,7 @@ macro_rules! glib_bool_error(
 );
 
 #[macro_export]
-macro_rules! glib_result_from_gboolean(
+macro_rules! result_from_gboolean(
 // Plain strings
     ($ffi_bool:expr, $msg:expr) =>  {
         $crate::BoolError::from_glib($ffi_bool, $msg, file!(), module_path!(), line!())
@@ -180,7 +213,7 @@ impl BoolError {
         function: &'static str,
         line: u32,
     ) -> Self {
-        BoolError {
+        Self {
             message: message.into(),
             filename,
             function,
@@ -189,14 +222,14 @@ impl BoolError {
     }
 
     pub fn from_glib<Msg: Into<Cow<'static, str>>>(
-        b: glib_sys::gboolean,
+        b: ffi::gboolean,
         message: Msg,
         filename: &'static str,
         function: &'static str,
         line: u32,
     ) -> Result<(), Self> {
         match b {
-            glib_sys::GFALSE => Err(BoolError::new(message, filename, function, line)),
+            ffi::GFALSE => Err(BoolError::new(message, filename, function, line)),
             _ => Ok(()),
         }
     }
@@ -204,49 +237,84 @@ impl BoolError {
 
 impl fmt::Display for BoolError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "Error {:?} in {:?} at {}:{}",
-            self.message, self.function, self.filename, self.line
-        )
+        f.write_str(&self.message)
     }
 }
 
-impl error::Error for BoolError {
-    fn description(&self) -> &str {
-        self.message.as_ref()
-    }
-}
+impl error::Error for BoolError {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ToValue;
+    use std::ffi::CString;
+
+    #[test]
+    fn test_error_matches() {
+        let e = Error::new(crate::FileError::Failed, "Failed");
+        assert!(e.matches(crate::FileError::Failed));
+        assert!(!e.matches(crate::FileError::Again));
+        assert!(!e.matches(crate::KeyFileError::NotFound));
+    }
+
+    #[test]
+    fn test_error_kind() {
+        let e = Error::new(crate::FileError::Failed, "Failed");
+        assert_eq!(e.kind::<crate::FileError>(), Some(crate::FileError::Failed));
+        assert_eq!(e.kind::<crate::KeyFileError>(), None);
+    }
+
+    #[test]
+    fn test_into_raw() {
+        let e = Error::new(crate::FileError::Failed, "Failed").into_raw();
+        unsafe {
+            assert_eq!((*e).domain, ffi::g_file_error_quark());
+            assert_eq!((*e).code, ffi::G_FILE_ERROR_FAILED);
+            assert_eq!(
+                CStr::from_ptr((*e).message),
+                CString::new("Failed").unwrap().as_c_str()
+            );
+
+            ffi::g_error_free(e);
+        }
+    }
 
     #[test]
     fn test_bool_error() {
-        use std::error::Error;
+        let from_static_msg = bool_error!("Static message");
+        assert_eq!(from_static_msg.to_string(), "Static message");
 
-        let from_static_msg = glib_bool_error!("Static message");
-        assert_eq!(from_static_msg.description(), "Static message");
+        let from_dynamic_msg = bool_error!("{} message", "Dynamic");
+        assert_eq!(from_dynamic_msg.to_string(), "Dynamic message");
 
-        let from_dynamic_msg = glib_bool_error!("{} message", "Dynamic");
-        assert_eq!(from_dynamic_msg.description(), "Dynamic message");
-
-        let false_static_res = glib_result_from_gboolean!(glib_sys::GFALSE, "Static message");
+        let false_static_res = result_from_gboolean!(ffi::GFALSE, "Static message");
         assert!(false_static_res.is_err());
         let static_err = false_static_res.err().unwrap();
-        assert_eq!(static_err.description(), "Static message");
+        assert_eq!(static_err.to_string(), "Static message");
 
-        let true_static_res = glib_result_from_gboolean!(glib_sys::GTRUE, "Static message");
+        let true_static_res = result_from_gboolean!(ffi::GTRUE, "Static message");
         assert!(true_static_res.is_ok());
 
-        let false_dynamic_res =
-            glib_result_from_gboolean!(glib_sys::GFALSE, "{} message", "Dynamic");
+        let false_dynamic_res = result_from_gboolean!(ffi::GFALSE, "{} message", "Dynamic");
         assert!(false_dynamic_res.is_err());
         let dynamic_err = false_dynamic_res.err().unwrap();
-        assert_eq!(dynamic_err.description(), "Dynamic message");
+        assert_eq!(dynamic_err.to_string(), "Dynamic message");
 
-        let true_dynamic_res = glib_result_from_gboolean!(glib_sys::GTRUE, "{} message", "Dynamic");
+        let true_dynamic_res = result_from_gboolean!(ffi::GTRUE, "{} message", "Dynamic");
         assert!(true_dynamic_res.is_ok());
+    }
+
+    #[test]
+    fn test_value() {
+        let e1 = Error::new(crate::FileError::Failed, "Failed");
+        // This creates a copy ...
+        let v = e1.to_value();
+        // ... so we have to get the raw pointer from inside the value to check for equality.
+        let ptr =
+            unsafe { gobject_ffi::g_value_get_boxed(v.to_glib_none().0) as *const ffi::GError };
+
+        let e2 = v.get::<&Error>().unwrap();
+
+        assert_eq!(ptr, e2.to_glib_none().0);
     }
 }

@@ -22,54 +22,6 @@ pub struct FontDesc<'a> {
     style: FontStyle,
 }
 
-impl<'a> From<&'a str> for FontDesc<'a> {
-    fn from(from: &'a str) -> FontDesc<'a> {
-        FontDesc::new(from.into(), 1.0, FontStyle::Normal)
-    }
-}
-
-impl<'a> From<FontFamily<'a>> for FontDesc<'a> {
-    fn from(family: FontFamily<'a>) -> FontDesc<'a> {
-        FontDesc::new(family, 1.0, FontStyle::Normal)
-    }
-}
-
-impl<'a, T: Into<f64>> From<(FontFamily<'a>, T)> for FontDesc<'a> {
-    fn from((family, size): (FontFamily<'a>, T)) -> FontDesc<'a> {
-        FontDesc::new(family, size.into(), FontStyle::Normal)
-    }
-}
-
-impl<'a, T: Into<f64>> From<(&'a str, T)> for FontDesc<'a> {
-    fn from((typeface, size): (&'a str, T)) -> FontDesc<'a> {
-        FontDesc::new(typeface.into(), size.into(), FontStyle::Normal)
-    }
-}
-
-impl<'a, T: Into<f64>, S: Into<FontStyle>> From<(FontFamily<'a>, T, S)> for FontDesc<'a> {
-    fn from((family, size, style): (FontFamily<'a>, T, S)) -> FontDesc<'a> {
-        FontDesc::new(family, size.into(), style.into())
-    }
-}
-
-impl<'a, T: Into<f64>, S: Into<FontStyle>> From<(&'a str, T, S)> for FontDesc<'a> {
-    fn from((typeface, size, style): (&'a str, T, S)) -> FontDesc<'a> {
-        FontDesc::new(typeface.into(), size.into(), style.into())
-    }
-}
-
-/// The trait that allows some type turns into a font description
-pub trait IntoFont<'a> {
-    /// Make the font description from the source type
-    fn into_font(self) -> FontDesc<'a>;
-}
-
-impl<'a, T: Into<FontDesc<'a>>> IntoFont<'a> for T {
-    fn into_font(self) -> FontDesc<'a> {
-        self.into()
-    }
-}
-
 impl<'a> FontDesc<'a> {
     /// Create a new font
     ///
@@ -91,7 +43,7 @@ impl<'a> FontDesc<'a> {
     ///
     /// - `size`: The new size to set
     /// - **returns** The newly created font descriptor with a new size
-    pub fn resize(&self, size: f64) -> FontDesc<'a> {
+    pub fn resize(&self, size: f64) -> Self {
         Self {
             size,
             family: self.family,
@@ -134,15 +86,38 @@ impl<'a> FontDesc<'a> {
         self.transform.clone()
     }
 
-    /// Set the color of the font and return the result text style object
+    /** Returns a new text style object with the specified `color`.
+
+    # Example
+
+    ```
+    use plotters::prelude::*;
+    let text_style = ("sans-serif", 20).into_font().color(&RED);
+    let drawing_area = SVGBackend::new("font_desc_color.svg", (200, 100)).into_drawing_area();
+    drawing_area.fill(&WHITE).unwrap();
+    drawing_area.draw_text("This is a big red label", &text_style, (10, 50));
+    ```
+
+    The result is a text label colorized accordingly:
+
+    ![](https://cdn.jsdelivr.net/gh/facorread/plotters-doc-data@f030ed3/apidoc/font_desc_color.svg)
+
+    # See also
+
+    [`IntoTextStyle::with_color()`](crate::style::IntoTextStyle::with_color)
+
+    [`IntoTextStyle::into_text_style()`](crate::style::IntoTextStyle::into_text_style) for a more succinct example
+
+    */
     pub fn color<C: Color>(&self, color: &C) -> TextStyle<'a> {
         TextStyle {
             font: self.clone(),
-            color: color.color(),
+            color: color.to_backend_color(),
             pos: Pos::default(),
         }
     }
 
+    /// Returns the font family
     pub fn get_family(&self) -> FontFamily {
         self.family
     }
@@ -179,7 +154,7 @@ impl<'a> FontDesc<'a> {
     pub fn box_size(&self, text: &str) -> FontResult<(u32, u32)> {
         let ((min_x, min_y), (max_x, max_y)) = self.layout_box(text)?;
         let (w, h) = self.get_transform().transform(max_x - min_x, max_y - min_y);
-        Ok((w.abs() as u32, h.abs() as u32))
+        Ok((w.unsigned_abs(), h.unsigned_abs()))
     }
 
     /// Actually draws a font with a drawing function
@@ -193,5 +168,53 @@ impl<'a> FontDesc<'a> {
             Ok(ref font) => font.draw((x, y), self.size, text, draw),
             Err(e) => Err(e.clone()),
         }
+    }
+}
+
+impl<'a> From<&'a str> for FontDesc<'a> {
+    fn from(from: &'a str) -> FontDesc<'a> {
+        FontDesc::new(from.into(), 12.0, FontStyle::Normal)
+    }
+}
+
+impl<'a> From<FontFamily<'a>> for FontDesc<'a> {
+    fn from(family: FontFamily<'a>) -> FontDesc<'a> {
+        FontDesc::new(family, 12.0, FontStyle::Normal)
+    }
+}
+
+impl<'a, T: Into<f64>> From<(FontFamily<'a>, T)> for FontDesc<'a> {
+    fn from((family, size): (FontFamily<'a>, T)) -> FontDesc<'a> {
+        FontDesc::new(family, size.into(), FontStyle::Normal)
+    }
+}
+
+impl<'a, T: Into<f64>> From<(&'a str, T)> for FontDesc<'a> {
+    fn from((typeface, size): (&'a str, T)) -> FontDesc<'a> {
+        FontDesc::new(typeface.into(), size.into(), FontStyle::Normal)
+    }
+}
+
+impl<'a, T: Into<f64>, S: Into<FontStyle>> From<(FontFamily<'a>, T, S)> for FontDesc<'a> {
+    fn from((family, size, style): (FontFamily<'a>, T, S)) -> FontDesc<'a> {
+        FontDesc::new(family, size.into(), style.into())
+    }
+}
+
+impl<'a, T: Into<f64>, S: Into<FontStyle>> From<(&'a str, T, S)> for FontDesc<'a> {
+    fn from((typeface, size, style): (&'a str, T, S)) -> FontDesc<'a> {
+        FontDesc::new(typeface.into(), size.into(), style.into())
+    }
+}
+
+/// The trait that allows some type turns into a font description
+pub trait IntoFont<'a> {
+    /// Make the font description from the source type
+    fn into_font(self) -> FontDesc<'a>;
+}
+
+impl<'a, T: Into<FontDesc<'a>>> IntoFont<'a> for T {
+    fn into_font(self) -> FontDesc<'a> {
+        self.into()
     }
 }

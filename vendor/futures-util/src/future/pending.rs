@@ -1,3 +1,4 @@
+use super::assert_future;
 use core::marker;
 use core::pin::Pin;
 use futures_core::future::{FusedFuture, Future};
@@ -32,10 +33,9 @@ impl<T> FusedFuture for Pending<T> {
 /// unreachable!();
 /// # });
 /// ```
+#[cfg_attr(docsrs, doc(alias = "never"))]
 pub fn pending<T>() -> Pending<T> {
-    Pending {
-        _data: marker::PhantomData,
-    }
+    assert_future::<T, _>(Pending { _data: marker::PhantomData })
 }
 
 impl<T> Future for Pending<T> {
@@ -46,8 +46,7 @@ impl<T> Future for Pending<T> {
     }
 }
 
-impl<T> Unpin for Pending<T> {
-}
+impl<T> Unpin for Pending<T> {}
 
 impl<T> Clone for Pending<T> {
     fn clone(&self) -> Self {

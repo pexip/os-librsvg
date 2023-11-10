@@ -9,6 +9,14 @@ pub trait ComponentSlice<T> {
     /// The components interpreted as a mutable array, e.g. one `RGB` expands to 3 elements.
     ///
     /// It's implemented for individual pixels as well as slices of pixels.
+    ///
+    /// If you get an error when calling this on an array, add `[..]`
+    ///
+    /// > use of unstable library feature 'array_methods'
+    ///
+    /// ```rust,ignore
+    /// arr[..].as_mut_slice()
+    /// ```
     fn as_mut_slice(&mut self) -> &mut [T];
 }
 
@@ -64,5 +72,14 @@ pub trait ComponentMap<DestPixel, SrcComponent, DestComponent> {
     ///
     /// Note that it returns the pixel directly, not an Interator.
     fn map<Callback>(&self, f: Callback) -> DestPixel
+        where Callback: FnMut(SrcComponent) -> DestComponent;
+}
+
+/// Same as `ComponentMap`, but doesn't change the alpha channel (if there's any alpha).
+pub trait ColorComponentMap<DestPixel, SrcComponent, DestComponent> {
+    /// Convenience function for applying the same formula to every rgb/gray component, but skipping the alpha component.
+    ///
+    /// Note that it returns the pixel directly, not an Interator.
+    fn map_c<Callback>(&self, f: Callback) -> DestPixel
         where Callback: FnMut(SrcComponent) -> DestComponent;
 }

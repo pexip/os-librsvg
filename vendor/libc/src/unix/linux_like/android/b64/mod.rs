@@ -105,6 +105,14 @@ s! {
         pub f_namemax: ::c_ulong,
         __f_spare: [::c_int; 6],
     }
+
+    pub struct pthread_barrier_t {
+        __private: [i64; 4],
+    }
+
+    pub struct pthread_spinlock_t {
+        __private: i64,
+    }
 }
 
 s_no_extra_traits! {
@@ -305,8 +313,30 @@ pub const UT_LINESIZE: usize = 32;
 pub const UT_NAMESIZE: usize = 32;
 pub const UT_HOSTSIZE: usize = 256;
 
+f! {
+    // Sadly, Android before 5.0 (API level 21), the accept4 syscall is not
+    // exposed by the libc. As work-around, we implement it through `syscall`
+    // directly. This workaround can be removed if the minimum version of
+    // Android is bumped. When the workaround is removed, `accept4` can be
+    // moved back to `linux_like/mod.rs`
+    pub fn accept4(
+        fd: ::c_int,
+        addr: *mut ::sockaddr,
+        len: *mut ::socklen_t,
+        flg: ::c_int
+    ) -> ::c_int {
+        ::syscall(SYS_accept4, fd, addr, len, flg) as ::c_int
+    }
+}
+
 extern "C" {
     pub fn getauxval(type_: ::c_ulong) -> ::c_ulong;
+    pub fn __system_property_wait(
+        pi: *const ::prop_info,
+        __old_serial: u32,
+        __new_serial_ptr: *mut u32,
+        __relative_timeout: *const ::timespec,
+    ) -> bool;
 }
 
 cfg_if! {
@@ -316,6 +346,9 @@ cfg_if! {
     } else if #[cfg(target_arch = "aarch64")] {
         mod aarch64;
         pub use self::aarch64::*;
+    } else if #[cfg(target_arch = "riscv64")] {
+        mod riscv64;
+        pub use self::riscv64::*;
     } else {
         // Unknown target_arch
     }

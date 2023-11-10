@@ -12,7 +12,7 @@
 
 [package]
 name = "selectors"
-version = "0.22.0"
+version = "0.23.0"
 authors = ["The Servo Project Developers"]
 build = "build.rs"
 description = "CSS Selectors matching for Rust"
@@ -29,7 +29,7 @@ path = "lib.rs"
 version = "1.0"
 
 [dependencies.cssparser]
-version = "0.27"
+version = "0.28"
 
 [dependencies.derive_more]
 version = "0.99"
@@ -39,9 +39,6 @@ version = "0.2"
 
 [dependencies.log]
 version = "0.4"
-
-[dependencies.matches]
-version = "0.1"
 
 [dependencies.phf]
 version = "0.8"
@@ -54,9 +51,6 @@ version = "0.1"
 
 [dependencies.smallvec]
 version = "1.0"
-
-[dependencies.thin-slice]
-version = "0.1.0"
 [build-dependencies.phf_codegen]
 version = "0.8"
 

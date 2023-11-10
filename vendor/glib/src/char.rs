@@ -1,7 +1,12 @@
-use libc::{c_char, c_uchar};
-use translate::FromGlib;
-use translate::ToGlib;
+// Take a look at the license at the top of the repository in the LICENSE file.
 
+use crate::translate::FromGlib;
+use crate::translate::IntoGlib;
+use libc::{c_char, c_uchar};
+use std::convert::TryFrom;
+use std::num::TryFromIntError;
+
+// rustdoc-stripper-ignore-next
 /// Wrapper for values where C functions expect a plain C `char`
 ///
 /// Consider the following C function prototype from glib:
@@ -26,31 +31,33 @@ use translate::ToGlib;
 /// The check for whether a Rust `char` (a Unicode scalar value) actually fits in a `libc::c_char` is
 /// done in the `new` function; see its documentation for details.
 ///
-/// The inner `libc::c_char` (which is equivalent to `i8` can be extracted with `.0`, or
-/// by calling `my_char.to_glib()`.
+/// The inner `libc::c_char` (which is equivalent to `i8`) can be extracted with `.0`, or
+/// by calling `my_char.into_glib()`.
+///
+/// # Examples
+/// ```
+/// use glib::Char;
+/// use std::convert::TryFrom;
+///
+/// Char::from(b'a');
+/// Char::try_from('a').unwrap();
+/// assert!(Char::try_from('☔').is_err());
+/// ```
+///
+/// ```ignore
+/// extern "C" fn have_a_byte(b: libc::c_char);
+///
+/// have_a_byte(Char::from(b'a').into_glib());
+/// ```
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Char(pub c_char);
 
-impl Char {
-    /// Creates a `Some(Char)` if the given `char` is representable as an `libc::c_char`
-    ///
-    /// # Example
-    /// ```ignore
-    /// extern "C" fn have_a_byte(b: libc::c_char);
-    ///
-    /// let a = Char::new('a').unwrap();
-    /// assert!(a.0 == 65);
-    /// have_a_byte(a.to_glib());
-    ///
-    /// let not_representable = Char::new('☔');
-    /// assert!(not_representable.is_none());
-    /// ```
-    pub fn new(c: char) -> Option<Char> {
-        if c as u32 > 255 {
-            None
-        } else {
-            Some(Char(c as c_char))
-        }
+impl TryFrom<char> for Char {
+    type Error = TryFromIntError;
+
+    #[allow(clippy::unnecessary_cast)]
+    fn try_from(c: char) -> Result<Char, Self::Error> {
+        Ok(Self(u8::try_from(u32::from(c))? as c_char))
     }
 }
 
@@ -60,53 +67,70 @@ impl From<Char> for char {
     }
 }
 
-#[doc(hidden)]
-impl FromGlib<c_char> for Char {
-    fn from_glib(value: c_char) -> Self {
-        Char(value)
+impl From<u8> for Char {
+    #[allow(clippy::unnecessary_cast)]
+    fn from(c: u8) -> Char {
+        Char(c as c_char)
+    }
+}
+
+impl From<Char> for u8 {
+    #[allow(clippy::unnecessary_cast)]
+    fn from(c: Char) -> u8 {
+        c.0 as u8
     }
 }
 
 #[doc(hidden)]
-impl ToGlib for Char {
+impl FromGlib<c_char> for Char {
+    unsafe fn from_glib(value: c_char) -> Self {
+        Self(value)
+    }
+}
+
+#[doc(hidden)]
+impl IntoGlib for Char {
     type GlibType = c_char;
 
-    fn to_glib(&self) -> c_char {
+    fn into_glib(self) -> c_char {
         self.0
     }
 }
 
+// rustdoc-stripper-ignore-next
 /// Wrapper for values where C functions expect a plain C `unsigned char`
 ///
 /// This `UChar` type is a wrapper over an `libc::c_uchar`, so that we can pass it to Glib or C functions.
 /// The check for whether a Rust `char` (a Unicode scalar value) actually fits in a `libc::c_uchar` is
 /// done in the `new` function; see its documentation for details.
 ///
-/// The inner `libc::c_uchar` (which is equivalent to `u8` can be extracted with `.0`, or
-/// by calling `my_char.to_glib()`.
+/// The inner `libc::c_uchar` (which is equivalent to `u8`) can be extracted with `.0`, or
+/// by calling `my_char.into_glib()`.
+///
+/// # Examples
+/// ```
+/// use glib::UChar;
+/// use std::convert::TryFrom;
+///
+/// UChar::from(b'a');
+/// UChar::try_from('a').unwrap();
+/// assert!(UChar::try_from('☔').is_err());
+/// ```
+///
+/// ```ignore
+/// extern "C" fn have_a_byte(b: libc::c_uchar);
+///
+/// have_a_byte(UChar::from(b'a').into_glib());
+/// ```
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct UChar(pub c_uchar);
 
-impl UChar {
-    /// Creates a `Some(UChar)` if the given `char` is representable as an `libc::c_uchar`
-    ///
-    /// # Example
-    /// ```ignore
-    /// extern "C" fn have_a_byte(b: libc::c_uchar);
-    ///
-    /// let a = Char::new('a').unwrap();
-    /// assert!(a.0 == 65);
-    /// have_a_byte(a.to_glib());
-    ///
-    /// let not_representable = Char::new('☔');
-    /// assert!(not_representable.is_none());
-    /// ```
-    pub fn new(c: char) -> Option<UChar> {
-        if c as u32 > 255 {
-            None
-        } else {
-            Some(UChar(c as c_uchar))
-        }
+impl TryFrom<char> for UChar {
+    type Error = TryFromIntError;
+
+    #[allow(clippy::unnecessary_cast)]
+    fn try_from(c: char) -> Result<UChar, Self::Error> {
+        Ok(Self(u8::try_from(u32::from(c))? as c_uchar))
     }
 }
 
@@ -116,18 +140,31 @@ impl From<UChar> for char {
     }
 }
 
-#[doc(hidden)]
-impl FromGlib<c_uchar> for UChar {
-    fn from_glib(value: c_uchar) -> Self {
-        UChar(value)
+impl From<u8> for UChar {
+    #[allow(clippy::unnecessary_cast)]
+    fn from(c: u8) -> UChar {
+        UChar(c as c_uchar)
+    }
+}
+
+impl From<UChar> for u8 {
+    fn from(c: UChar) -> u8 {
+        c.0 as u8
     }
 }
 
 #[doc(hidden)]
-impl ToGlib for UChar {
+impl FromGlib<c_uchar> for UChar {
+    unsafe fn from_glib(value: c_uchar) -> Self {
+        Self(value)
+    }
+}
+
+#[doc(hidden)]
+impl IntoGlib for UChar {
     type GlibType = c_uchar;
 
-    fn to_glib(&self) -> c_uchar {
+    fn into_glib(self) -> c_uchar {
         self.0
     }
 }
@@ -135,43 +172,46 @@ impl ToGlib for UChar {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use translate::from_glib;
+    use crate::translate::from_glib;
 
     #[test]
+    #[allow(clippy::unnecessary_cast)]
     fn converts_single_byte_chars() {
-        assert_eq!(Char::new(0 as char), Some(Char(0 as c_char)));
-        assert_eq!(Char::new(255 as char), Some(Char(-1 as i8 as c_char)));
-        assert_eq!(Char::new('ñ'), Some(Char(241 as u8 as c_char)));
-        assert_eq!(UChar::new(0 as char), Some(UChar(0 as c_uchar)));
-        assert_eq!(UChar::new(255 as char), Some(UChar(255 as c_uchar)));
-        assert_eq!(UChar::new('ñ'), Some(UChar(241 as c_uchar)));
+        assert_eq!(Char::try_from(0 as char), Ok(Char(0 as c_char)));
+        assert_eq!(UChar::try_from(0 as char), Ok(UChar(0 as c_uchar)));
+        assert_eq!(UChar::try_from(255 as char), Ok(UChar(255 as c_uchar)));
+        assert_eq!(UChar::try_from('ñ'), Ok(UChar(241 as c_uchar)));
     }
 
     #[test]
     fn refuses_multibyte_chars() {
-        assert_eq!(Char::new('☔'), None); // no umbrella for you
-        assert_eq!(UChar::new('☔'), None);
+        assert!(Char::try_from('☔').is_err()); // no umbrella for you
+        assert!(UChar::try_from('☔').is_err());
     }
 
     #[test]
+    #[allow(clippy::unnecessary_cast)]
     fn into_i8() {
-        assert_eq!(Char::new('A').unwrap().to_glib(), 65 as c_char);
+        assert_eq!(Char::from(b'A').into_glib(), 65 as c_char);
     }
 
     #[test]
+    #[allow(clippy::unnecessary_cast)]
     fn into_u8() {
-        assert_eq!(UChar::new('A').unwrap().to_glib(), 65 as c_uchar);
+        assert_eq!(UChar::from(b'A').into_glib(), 65 as c_uchar);
     }
 
     #[test]
+    #[allow(clippy::unnecessary_cast)]
     fn into_char() {
         assert_eq!(char::from(Char(65 as c_char)), 'A');
         assert_eq!('ñ', UChar(241 as c_uchar).into());
     }
 
     #[test]
+    #[allow(clippy::unnecessary_cast)]
     fn convert_from_glib() {
-        assert_eq!(Char(65 as c_char), from_glib(65 as c_char));
-        assert_eq!(UChar(241 as c_uchar), from_glib(241 as u8 as c_uchar));
+        assert_eq!(Char(65 as c_char), unsafe { from_glib(65 as c_char) });
+        assert_eq!(UChar(241 as c_uchar), unsafe { from_glib(241 as c_uchar) });
     }
 }

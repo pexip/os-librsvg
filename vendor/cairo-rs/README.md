@@ -1,16 +1,74 @@
-# cairo [![Build Status](https://travis-ci.org/gtk-rs/cairo.png?branch=master)](https://travis-ci.org/gtk-rs/cairo) [![Build status](https://ci.appveyor.com/api/projects/status/9q998histb9vk2o2?svg=true)](https://ci.appveyor.com/project/GuillaumeGomez/cairo-p0df1) [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/gtk-rs/gtk)
+# Cairo bindings
 
-Cairo bindings for Rust.
+__Rust__ bindings for Rust and wrappers for [Cairo](https://www.cairographics.org/), part of [gtk-rs-core](https://github.com/gtk-rs/gtk-rs-core).
 
-- [Gtk-rs project site](http://gtk-rs.org/)
+![screenshot](https://guillaume-gomez.fr/image/cairo.png)
 
-- [Online documentation](http://gtk-rs.org/docs/)
+Cairo __1.14__ is the lowest supported version for the underlying library.
 
-- [Readme](https://github.com/gtk-rs/gtk/blob/master/README.md) in our
-  [main repo](https://github.com/gtk-rs/gtk)
+## Minimum supported Rust version
 
-![screenshot](http://guillaume-gomez.fr/image/cairo.png)
+Currently, the minimum supported Rust version is `1.56.0`.
+
+## Default-on features
+
+* **use_glib** - Use with [glib](mod@glib)
+
+## Fileformat features
+
+ * **png** - Reading and writing PNG images
+ * **pdf** - Rendering PDF documents
+ * **svg** - Rendering SVG documents
+ * **ps** - Rendering PostScript documents
+
+## Cairo API version features
+
+ * **v1_16** - Use Cairo 1.16 APIs
+
+## Documentation
+
+ * [Rust API - Stable](https://gtk-rs.org/gtk-rs-core/stable/latest/docs/cairo)
+ * [Rust API - Development](https://gtk-rs.org/gtk-rs-core/git/docs/cairo)
+ * [C API](https://www.cairographics.org/documentation/)
+
+## Documentation features
+
+ * **dox** - Used to keep system dependent items in documentation
+
+## X Window features
+
+ * **xcb** - X Window System rendering using the XCB library
+ * **xlib** - X Window System rendering using XLib
+
+## Windows API features
+
+ * **win32-surface** - Microsoft Windows surface support
+
+## Using
+
+We recommend using [crates from crates.io](https://crates.io/keywords/gtk-rs),
+as [demonstrated here](https://gtk-rs.org/#using).
+
+If you want to track the bleeding edge, use the git dependency instead:
+
+```toml
+[dependencies]
+cairo-rs = { git = "https://github.com/gtk-rs/gtk-rs-core.git", package = "cairo-rs" }
+```
+
+Avoid mixing versioned and git crates like this:
+
+```toml
+# This will not compile
+[dependencies]
+cairo-rs = "0.13"
+cairo-rs = { git = "https://github.com/gtk-rs/gtk-rs-core.git", package = "cairo-rs" }
+```
+
+### See Also
+
+ * [glib](https://crates.io/crates/glib)
 
 ## License
 
-MIT
+__cairo__ is available under the MIT License, please refer to it.

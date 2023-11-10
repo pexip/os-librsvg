@@ -1,28 +1,29 @@
 //! [`std::process::Command`][Command] customized for testing.
 //!
-//! [Command]: https://doc.rust-lang.org/std/process/struct.Command.html
+//! [Command]: std::process::Command
 
 use std::ffi;
 use std::io;
 use std::io::{Read, Write};
+use std::ops::Deref;
 use std::path;
 use std::process;
 
 use crate::assert::Assert;
 use crate::assert::OutputAssertExt;
-use crate::output::dump_buffer;
 use crate::output::DebugBuffer;
+use crate::output::DebugBytes;
 use crate::output::OutputError;
 use crate::output::OutputOkExt;
 use crate::output::OutputResult;
 
 /// [`std::process::Command`][Command] customized for testing.
 ///
-/// [Command]: https://doc.rust-lang.org/std/process/struct.Command.html
+/// [Command]: std::process::Command
 #[derive(Debug)]
 pub struct Command {
     cmd: process::Command,
-    stdin: Option<Vec<u8>>,
+    stdin: Option<bstr::BString>,
     timeout: Option<std::time::Duration>,
 }
 
@@ -38,7 +39,7 @@ impl Command {
 
     /// Create a `Command` to run a specific binary of the current crate.
     ///
-    /// See the [`cargo` module documentation][`cargo`] for caveats and workarounds.
+    /// See the [`cargo` module documentation][crate::cargo] for caveats and workarounds.
     ///
     /// # Examples
     ///
@@ -60,7 +61,6 @@ impl Command {
     /// println!("{:?}", output);
     /// ```
     ///
-    /// [`cargo`]: index.html
     pub fn cargo_bin<S: AsRef<str>>(name: S) -> Result<Self, crate::cargo::CargoError> {
         let cmd = crate::cargo::cargo_bin_cmd(name)?;
         Ok(Self::from_std(cmd))
@@ -83,7 +83,7 @@ impl Command {
     where
         S: Into<Vec<u8>>,
     {
-        self.stdin = Some(buffer.into());
+        self.stdin = Some(bstr::BString::from(buffer.into()));
         self
     }
 
@@ -109,8 +109,8 @@ impl Command {
     /// Paths are relative to the [`env::current_dir`][env_current_dir] and not
     /// [`Command::current_dir`][Command_current_dir].
     ///
-    /// [env_current_dir]: https://doc.rust-lang.org/std/env/fn.current_dir.html
-    /// [Command_current_dir]: https://doc.rust-lang.org/std/process/struct.Command.html#method.current_dir
+    /// [env_current_dir]: std::env::current_dir()
+    /// [Command_current_dir]: std::process::Command::current_dir()
     pub fn pipe_stdin<P>(&mut self, file: P) -> io::Result<&mut Self>
     where
         P: AsRef<path::Path>,
@@ -132,7 +132,6 @@ impl Command {
     /// assert!(result.is_ok());
     /// ```
     ///
-    /// [OutputResult]: type.OutputResult.html
     pub fn ok(&mut self) -> OutputResult {
         OutputOkExt::ok(self)
     }
@@ -149,7 +148,6 @@ impl Command {
     ///     .unwrap();
     /// ```
     ///
-    /// [OutputResult]: type.OutputResult.html
     pub fn unwrap(&mut self) -> process::Output {
         OutputOkExt::unwrap(self)
     }
@@ -166,7 +164,7 @@ impl Command {
     ///     .unwrap_err();
     /// ```
     ///
-    /// [Output]: https://doc.rust-lang.org/std/process/struct.Output.html
+    /// [Output]: std::process::Output
     pub fn unwrap_err(&mut self) -> OutputError {
         OutputOkExt::unwrap_err(self)
     }
@@ -184,7 +182,7 @@ impl Command {
     ///     .success();
     /// ```
     ///
-    /// [`Output`]: https://doc.rust-lang.org/std/process/struct.Output.html
+    /// [`Output`]: std::process::Output
     pub fn assert(&mut self) -> Assert {
         OutputAssertExt::assert(self)
     }
@@ -192,7 +190,7 @@ impl Command {
 
 /// Mirror [`std::process::Command`][Command]'s API
 ///
-/// [Command]: https://doc.rust-lang.org/std/process/struct.Command.html
+/// [Command]: std::process::Command
 impl Command {
     /// Constructs a new `Command` for launching the program at
     /// path `program`, with the following default configuration:
@@ -248,7 +246,7 @@ impl Command {
     ///
     /// To pass multiple arguments see [`args`].
     ///
-    /// [`args`]: #method.args
+    /// [`args`]: Command::args()
     ///
     /// # Examples
     ///
@@ -271,7 +269,7 @@ impl Command {
     ///
     /// To pass a single argument see [`arg`].
     ///
-    /// [`arg`]: #method.arg
+    /// [`arg`]: Command::arg()
     ///
     /// # Examples
     ///
@@ -374,8 +372,8 @@ impl Command {
     ///
     /// Basic usage:
     ///
-    /// use std::process::Command;;
-
+    /// ```no_run
+    /// use assert_cmd::Command;
     ///
     /// Command::new("ls")
     ///         .env_clear()
@@ -408,7 +406,7 @@ impl Command {
     ///         .unwrap();
     /// ```
     ///
-    /// [`canonicalize`]: ../fs/fn.canonicalize.html
+    /// [`canonicalize`]: std::fs::canonicalize()
     pub fn current_dir<P: AsRef<path::Path>>(&mut self, dir: P) -> &mut Self {
         self.cmd.current_dir(dir);
         self
@@ -439,7 +437,7 @@ impl Command {
     /// ```
     pub fn output(&mut self) -> io::Result<process::Output> {
         let spawn = self.spawn()?;
-        Self::wait_with_input_output(spawn, self.stdin.clone(), self.timeout)
+        Self::wait_with_input_output(spawn, self.stdin.as_deref().cloned(), self.timeout)
     }
 
     /// If `input`, write it to `child`'s stdin while also reading `child`'s
@@ -521,7 +519,7 @@ impl<'c> OutputOkExt for &'c mut Command {
         } else {
             let error = OutputError::new(output).set_cmd(format!("{:?}", self.cmd));
             let error = if let Some(stdin) = self.stdin.as_ref() {
-                error.set_stdin(stdin.clone())
+                error.set_stdin(stdin.deref().clone())
             } else {
                 error
             };
@@ -536,14 +534,14 @@ impl<'c> OutputOkExt for &'c mut Command {
                     panic!(
                         "Completed successfully:\ncommand=`{:?}`\nstdin=```{}```\nstdout=```{}```",
                         self.cmd,
-                        dump_buffer(&stdin),
-                        dump_buffer(&output.stdout)
+                        DebugBytes::new(stdin),
+                        DebugBytes::new(&output.stdout)
                     )
                 } else {
                     panic!(
                         "Completed successfully:\ncommand=`{:?}`\nstdout=```{}```",
                         self.cmd,
-                        dump_buffer(&output.stdout)
+                        DebugBytes::new(&output.stdout)
                     )
                 }
             }
@@ -554,10 +552,15 @@ impl<'c> OutputOkExt for &'c mut Command {
 
 impl<'c> OutputAssertExt for &'c mut Command {
     fn assert(self) -> Assert {
-        let output = self.output().unwrap();
+        let output = match self.output() {
+            Ok(output) => output,
+            Err(err) => {
+                panic!("Failed to spawn {:?}: {}", self, err);
+            }
+        };
         let assert = Assert::new(output).append_context("command", format!("{:?}", self.cmd));
         if let Some(stdin) = self.stdin.as_ref() {
-            assert.append_context("stdin", DebugBuffer::new(stdin.clone()))
+            assert.append_context("stdin", DebugBuffer::new(stdin.deref().clone()))
         } else {
             assert
         }

@@ -1,6 +1,4 @@
-// Copyright 2015-2016, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 use libc::{c_ulong, c_void};
 use std::ffi::CString;
@@ -9,48 +7,55 @@ use std::ops::Deref;
 use std::ptr;
 use std::slice;
 
-use enums::{Content, Format, Status, SurfaceType};
-use ffi;
+use crate::enums::{Content, Format, SurfaceType};
+use crate::error::Error;
+use crate::utils::status_to_result;
 #[cfg(feature = "use_glib")]
 use glib::translate::*;
 
-use image_surface::ImageSurface;
-use rectangle_int::RectangleInt;
+use crate::device::Device;
+use crate::image_surface::ImageSurface;
+use crate::rectangle::Rectangle;
+use crate::rectangle_int::RectangleInt;
 
 #[derive(Debug)]
-pub struct Surface(*mut ffi::cairo_surface_t, bool);
+#[doc(alias = "cairo_surface_t")]
+#[repr(transparent)]
+pub struct Surface(ptr::NonNull<ffi::cairo_surface_t>);
 
 impl Surface {
     pub unsafe fn from_raw_none(ptr: *mut ffi::cairo_surface_t) -> Surface {
         assert!(!ptr.is_null());
         ffi::cairo_surface_reference(ptr);
-        Surface(ptr, false)
+        Surface(ptr::NonNull::new_unchecked(ptr))
     }
 
-    pub unsafe fn from_raw_borrow(ptr: *mut ffi::cairo_surface_t) -> Surface {
+    pub unsafe fn from_raw_borrow(ptr: *mut ffi::cairo_surface_t) -> crate::Borrowed<Surface> {
         assert!(!ptr.is_null());
-        Surface(ptr, true)
+        crate::Borrowed::new(Surface(ptr::NonNull::new_unchecked(ptr)))
     }
 
-    pub unsafe fn from_raw_full(ptr: *mut ffi::cairo_surface_t) -> Result<Surface, Status> {
+    pub unsafe fn from_raw_full(ptr: *mut ffi::cairo_surface_t) -> Result<Surface, Error> {
         assert!(!ptr.is_null());
-        let status = Status::from(ffi::cairo_surface_status(ptr));
-        status.to_result(Surface(ptr, false))
+        let status = ffi::cairo_surface_status(ptr);
+        status_to_result(status)?;
+        Ok(Surface(ptr::NonNull::new_unchecked(ptr)))
     }
 
     pub fn to_raw_none(&self) -> *mut ffi::cairo_surface_t {
-        self.0
+        self.0.as_ptr()
     }
 
+    #[doc(alias = "cairo_surface_create_similar")]
     pub fn create_similar(
         &self,
         content: Content,
         width: i32,
         height: i32,
-    ) -> Result<Surface, Status> {
+    ) -> Result<Surface, Error> {
         unsafe {
             Self::from_raw_full(ffi::cairo_surface_create_similar(
-                self.0,
+                self.0.as_ptr(),
                 content.into(),
                 width,
                 height,
@@ -58,7 +63,22 @@ impl Surface {
         }
     }
 
-    pub fn get_mime_data(&self, mime_type: &str) -> Option<Vec<u8>> {
+    #[doc(alias = "cairo_surface_create_for_rectangle")]
+    pub fn create_for_rectangle(&self, bounds: Rectangle) -> Result<Surface, Error> {
+        unsafe {
+            Self::from_raw_full(ffi::cairo_surface_create_for_rectangle(
+                self.0.as_ptr(),
+                bounds.x,
+                bounds.y,
+                bounds.width,
+                bounds.height,
+            ))
+        }
+    }
+
+    #[doc(alias = "cairo_surface_get_mime_data")]
+    #[doc(alias = "get_mime_data")]
+    pub fn mime_data(&self, mime_type: &str) -> Option<Vec<u8>> {
         let data_ptr: *mut u8 = ptr::null_mut();
         let mut length: c_ulong = 0;
         unsafe {
@@ -77,7 +97,9 @@ impl Surface {
         }
     }
 
-    pub unsafe fn get_mime_data_raw(&self, mime_type: &str) -> Option<&[u8]> {
+    #[doc(alias = "cairo_surface_get_mime_data")]
+    #[doc(alias = "get_mime_data_raw")]
+    pub unsafe fn mime_data_raw(&self, mime_type: &str) -> Option<&[u8]> {
         let data_ptr: *mut u8 = ptr::null_mut();
         let mut length: c_ulong = 0;
         let mime_type = CString::new(mime_type).unwrap();
@@ -97,11 +119,12 @@ impl Surface {
         }
     }
 
+    #[doc(alias = "cairo_surface_set_mime_data")]
     pub fn set_mime_data<T: AsRef<[u8]> + 'static>(
         &self,
         mime_type: &str,
         slice: T,
-    ) -> Result<(), Status> {
+    ) -> Result<(), Error> {
         let b = Box::new(slice);
         let (size, data) = {
             let slice = (*b).as_ref();
@@ -117,31 +140,47 @@ impl Surface {
 
         let status = unsafe {
             let mime_type = CString::new(mime_type).unwrap();
-            Status::from(ffi::cairo_surface_set_mime_data(
+            ffi::cairo_surface_set_mime_data(
                 self.to_raw_none(),
                 mime_type.as_ptr(),
                 data,
                 size as c_ulong,
                 Some(unbox::<T>),
                 user_data as *mut _,
-            ))
+            )
         };
-
-        status.to_result(())
+        status_to_result(status)
     }
 
+    #[doc(alias = "cairo_surface_supports_mime_type")]
     pub fn supports_mime_type(&self, mime_type: &str) -> bool {
         unsafe {
             let mime_type = CString::new(mime_type).unwrap();
-            ffi::cairo_surface_supports_mime_type(self.0, mime_type.as_ptr()).as_bool()
+            ffi::cairo_surface_supports_mime_type(self.0.as_ptr(), mime_type.as_ptr()).as_bool()
         }
     }
 
+    #[doc(alias = "cairo_surface_get_device")]
+    #[doc(alias = "get_device")]
+    pub fn device(&self) -> Option<Device> {
+        unsafe {
+            let device = ffi::cairo_surface_get_device(self.to_raw_none());
+            if device.is_null() {
+                None
+            } else {
+                Some(Device::from_raw_none(device))
+            }
+        }
+    }
+
+    #[doc(alias = "cairo_surface_set_device_offset")]
     pub fn set_device_offset(&self, x_offset: f64, y_offset: f64) {
         unsafe { ffi::cairo_surface_set_device_offset(self.to_raw_none(), x_offset, y_offset) }
     }
 
-    pub fn get_device_offset(&self) -> (f64, f64) {
+    #[doc(alias = "cairo_surface_get_device_offset")]
+    #[doc(alias = "get_device_offset")]
+    pub fn device_offset(&self) -> (f64, f64) {
         let mut x_offset = 0.0f64;
         let mut y_offset = 0.0f64;
         unsafe {
@@ -150,13 +189,14 @@ impl Surface {
         (x_offset, y_offset)
     }
 
-    #[cfg(any(feature = "v1_14", feature = "dox"))]
+    #[doc(alias = "cairo_surface_set_device_scale")]
     pub fn set_device_scale(&self, x_scale: f64, y_scale: f64) {
         unsafe { ffi::cairo_surface_set_device_scale(self.to_raw_none(), x_scale, y_scale) }
     }
 
-    #[cfg(any(feature = "v1_14", feature = "dox"))]
-    pub fn get_device_scale(&self) -> (f64, f64) {
+    #[doc(alias = "cairo_surface_get_device_scale")]
+    #[doc(alias = "get_device_scale")]
+    pub fn device_scale(&self) -> (f64, f64) {
         let mut x_scale = 0.0f64;
         let mut y_scale = 0.0f64;
         unsafe {
@@ -165,6 +205,7 @@ impl Surface {
         (x_scale, y_scale)
     }
 
+    #[doc(alias = "cairo_surface_set_fallback_resolution")]
     pub fn set_fallback_resolution(&self, x_pixels_per_inch: f64, y_pixels_per_inch: f64) {
         unsafe {
             ffi::cairo_surface_set_fallback_resolution(
@@ -175,7 +216,9 @@ impl Surface {
         }
     }
 
-    pub fn get_fallback_resolution(&self) -> (f64, f64) {
+    #[doc(alias = "cairo_surface_get_fallback_resolution")]
+    #[doc(alias = "get_fallback_resolution")]
+    pub fn fallback_resolution(&self) -> (f64, f64) {
         let mut x_pixels_per_inch = 0.0f64;
         let mut y_pixels_per_inch = 0.0f64;
         unsafe {
@@ -188,12 +231,13 @@ impl Surface {
         (x_pixels_per_inch, y_pixels_per_inch)
     }
 
+    #[doc(alias = "cairo_surface_create_similar_image")]
     pub fn create_similar_image(
         &self,
         format: Format,
         width: i32,
         height: i32,
-    ) -> Result<Surface, Status> {
+    ) -> Result<Surface, Error> {
         unsafe {
             Self::from_raw_full(ffi::cairo_surface_create_similar_image(
                 self.to_raw_none(),
@@ -204,20 +248,34 @@ impl Surface {
         }
     }
 
-    pub fn map_to_image(
-        &self,
-        extents: Option<RectangleInt>,
-    ) -> Result<MappedImageSurface, Status> {
+    #[doc(alias = "cairo_surface_map_to_image")]
+    pub fn map_to_image(&self, extents: Option<RectangleInt>) -> Result<MappedImageSurface, Error> {
         unsafe {
-            ImageSurface::from_raw_full(match extents {
+            ImageSurface::from_raw_none(match extents {
                 Some(ref e) => ffi::cairo_surface_map_to_image(self.to_raw_none(), e.to_raw_none()),
-                None => ffi::cairo_surface_map_to_image(self.to_raw_none(), 0 as *const _),
+                None => ffi::cairo_surface_map_to_image(self.to_raw_none(), std::ptr::null()),
             })
             .map(|s| MappedImageSurface {
                 original_surface: self.clone(),
                 image_surface: s,
             })
         }
+    }
+
+    #[doc(alias = "cairo_surface_mark_dirty")]
+    pub fn mark_dirty(&self) {
+        unsafe { ffi::cairo_surface_mark_dirty(self.to_raw_none()) }
+    }
+
+    #[doc(alias = "cairo_surface_mark_dirty_rectangle")]
+    pub fn mark_dirty_rectangle(&self, x: i32, y: i32, width: i32, height: i32) {
+        unsafe { ffi::cairo_surface_mark_dirty_rectangle(self.to_raw_none(), x, y, width, height) }
+    }
+
+    #[doc(alias = "cairo_surface_status")]
+    pub fn status(&self) -> Result<(), Error> {
+        let status = unsafe { ffi::cairo_surface_status(self.to_raw_none()) };
+        status_to_result(status)
     }
 
     user_data_methods! {
@@ -252,7 +310,7 @@ impl FromGlibPtrNone<*mut ffi::cairo_surface_t> for Surface {
 #[cfg(feature = "use_glib")]
 impl FromGlibPtrBorrow<*mut ffi::cairo_surface_t> for Surface {
     #[inline]
-    unsafe fn from_glib_borrow(ptr: *mut ffi::cairo_surface_t) -> Surface {
+    unsafe fn from_glib_borrow(ptr: *mut ffi::cairo_surface_t) -> crate::Borrowed<Surface> {
         Self::from_raw_borrow(ptr)
     }
 }
@@ -274,16 +332,14 @@ gvalue_impl!(
 
 impl Clone for Surface {
     fn clone(&self) -> Surface {
-        unsafe { Self::from_raw_none(self.0) }
+        unsafe { Self::from_raw_none(self.0.as_ptr()) }
     }
 }
 
 impl Drop for Surface {
     fn drop(&mut self) {
-        if !self.1 {
-            unsafe {
-                ffi::cairo_surface_destroy(self.0);
-            }
+        unsafe {
+            ffi::cairo_surface_destroy(self.0.as_ptr());
         }
     }
 }
@@ -295,24 +351,24 @@ impl fmt::Display for Surface {
 }
 
 impl Surface {
+    #[doc(alias = "cairo_surface_flush")]
     pub fn flush(&self) {
         unsafe {
-            ffi::cairo_surface_flush(self.0);
+            ffi::cairo_surface_flush(self.0.as_ptr());
         }
     }
 
+    #[doc(alias = "cairo_surface_finish")]
     pub fn finish(&self) {
         unsafe {
-            ffi::cairo_surface_finish(self.0);
+            ffi::cairo_surface_finish(self.0.as_ptr());
         }
     }
 
-    pub fn get_type(&self) -> SurfaceType {
-        unsafe { SurfaceType::from(ffi::cairo_surface_get_type(self.0)) }
-    }
-
-    pub fn status(&self) -> Status {
-        unsafe { Status::from(ffi::cairo_surface_status(self.0)) }
+    #[doc(alias = "cairo_surface_get_type")]
+    #[doc(alias = "get_type")]
+    pub fn type_(&self) -> SurfaceType {
+        unsafe { SurfaceType::from(ffi::cairo_surface_get_type(self.0.as_ptr())) }
     }
 }
 
@@ -337,7 +393,6 @@ impl Drop for MappedImageSurface {
                 self.original_surface.to_raw_none(),
                 self.image_surface.to_raw_none(),
             );
-            ffi::cairo_surface_reference(self.image_surface.to_raw_none());
         }
     }
 }
@@ -350,19 +405,19 @@ impl fmt::Display for MappedImageSurface {
 
 #[cfg(test)]
 mod tests {
-    use constants::MIME_TYPE_PNG;
-    use Format;
-    use ImageSurface;
+    use crate::constants::MIME_TYPE_PNG;
+    use crate::Format;
+    use crate::ImageSurface;
 
     #[test]
     fn mime_data() {
         let surface = ImageSurface::create(Format::ARgb32, 500, 500).unwrap();
-        let data = surface.get_mime_data(MIME_TYPE_PNG);
+        let data = surface.mime_data(MIME_TYPE_PNG);
         /* Initially the data for any mime type has to be none */
         assert!(data.is_none());
 
         assert!(surface.set_mime_data(MIME_TYPE_PNG, &[1u8, 10u8]).is_ok());
-        let data = surface.get_mime_data(MIME_TYPE_PNG).unwrap();
+        let data = surface.mime_data(MIME_TYPE_PNG).unwrap();
         assert_eq!(data, &[1u8, 10u8]);
     }
 }

@@ -2,47 +2,72 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
+use crate::FontDescription;
+#[cfg(any(feature = "v1_46", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_46")))]
+use crate::FontFamily;
 use glib::object::IsA;
 use glib::translate::*;
-use glib::GString;
-use pango_sys;
 use std::fmt;
 use std::mem;
 use std::ptr;
-use FontDescription;
 
-glib_wrapper! {
-    pub struct FontFace(Object<pango_sys::PangoFontFace, pango_sys::PangoFontFaceClass, FontFaceClass>);
+glib::wrapper! {
+    #[doc(alias = "PangoFontFace")]
+    pub struct FontFace(Object<ffi::PangoFontFace, ffi::PangoFontFaceClass>);
 
     match fn {
-        get_type => || pango_sys::pango_font_face_get_type(),
+        type_ => || ffi::pango_font_face_get_type(),
     }
 }
 
-pub const NONE_FONT_FACE: Option<&FontFace> = None;
+impl FontFace {
+    pub const NONE: Option<&'static FontFace> = None;
+}
 
 pub trait FontFaceExt: 'static {
+    #[doc(alias = "pango_font_face_describe")]
     fn describe(&self) -> Option<FontDescription>;
 
-    fn get_face_name(&self) -> Option<GString>;
+    #[doc(alias = "pango_font_face_get_face_name")]
+    #[doc(alias = "get_face_name")]
+    fn face_name(&self) -> Option<glib::GString>;
 
+    #[cfg(any(feature = "v1_46", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_46")))]
+    #[doc(alias = "pango_font_face_get_family")]
+    #[doc(alias = "get_family")]
+    fn family(&self) -> Option<FontFamily>;
+
+    #[doc(alias = "pango_font_face_is_synthesized")]
     fn is_synthesized(&self) -> bool;
 
+    #[doc(alias = "pango_font_face_list_sizes")]
     fn list_sizes(&self) -> Vec<i32>;
 }
 
 impl<O: IsA<FontFace>> FontFaceExt for O {
     fn describe(&self) -> Option<FontDescription> {
         unsafe {
-            from_glib_full(pango_sys::pango_font_face_describe(
+            from_glib_full(ffi::pango_font_face_describe(
                 self.as_ref().to_glib_none().0,
             ))
         }
     }
 
-    fn get_face_name(&self) -> Option<GString> {
+    fn face_name(&self) -> Option<glib::GString> {
         unsafe {
-            from_glib_none(pango_sys::pango_font_face_get_face_name(
+            from_glib_none(ffi::pango_font_face_get_face_name(
+                self.as_ref().to_glib_none().0,
+            ))
+        }
+    }
+
+    #[cfg(any(feature = "v1_46", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_46")))]
+    fn family(&self) -> Option<FontFamily> {
+        unsafe {
+            from_glib_none(ffi::pango_font_face_get_family(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -50,7 +75,7 @@ impl<O: IsA<FontFace>> FontFaceExt for O {
 
     fn is_synthesized(&self) -> bool {
         unsafe {
-            from_glib(pango_sys::pango_font_face_is_synthesized(
+            from_glib(ffi::pango_font_face_is_synthesized(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -60,7 +85,7 @@ impl<O: IsA<FontFace>> FontFaceExt for O {
         unsafe {
             let mut sizes = ptr::null_mut();
             let mut n_sizes = mem::MaybeUninit::uninit();
-            pango_sys::pango_font_face_list_sizes(
+            ffi::pango_font_face_list_sizes(
                 self.as_ref().to_glib_none().0,
                 &mut sizes,
                 n_sizes.as_mut_ptr(),
@@ -72,6 +97,6 @@ impl<O: IsA<FontFace>> FontFaceExt for O {
 
 impl fmt::Display for FontFace {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "FontFace")
+        f.write_str("FontFace")
     }
 }

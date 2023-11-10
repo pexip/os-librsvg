@@ -1,40 +1,40 @@
-// Copyright 2013-2017, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
-use error::to_std_io_result;
-use gio_sys;
+use crate::error::to_std_io_result;
+use crate::prelude::*;
+use crate::Cancellable;
+use crate::InputStream;
+use crate::Seekable;
+use futures_core::task::{Context, Poll};
+use futures_io::{AsyncBufRead, AsyncRead};
 use glib::object::IsA;
 use glib::translate::*;
 use glib::Priority;
-use glib_sys;
-use gobject_sys;
+use std::future::Future;
 use std::io;
 use std::mem;
 use std::pin::Pin;
 use std::ptr;
-use Cancellable;
-use InputStream;
-use Seekable;
-use SeekableExt;
 
 pub trait InputStreamExtManual: Sized {
+    #[doc(alias = "g_input_stream_read")]
     fn read<B: AsMut<[u8]>, C: IsA<Cancellable>>(
         &self,
         buffer: B,
         cancellable: Option<&C>,
     ) -> Result<usize, glib::Error>;
 
+    #[doc(alias = "g_input_stream_read_all")]
     fn read_all<B: AsMut<[u8]>, C: IsA<Cancellable>>(
         &self,
         buffer: B,
         cancellable: Option<&C>,
     ) -> Result<(usize, Option<glib::Error>), glib::Error>;
 
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
+    #[doc(alias = "g_input_stream_read_all_async")]
     fn read_all_async<
         B: AsMut<[u8]> + Send + 'static,
-        Q: FnOnce(Result<(B, usize, Option<glib::Error>), (B, glib::Error)>) + Send + 'static,
+        Q: FnOnce(Result<(B, usize, Option<glib::Error>), (B, glib::Error)>) + 'static,
         C: IsA<Cancellable>,
     >(
         &self,
@@ -44,9 +44,10 @@ pub trait InputStreamExtManual: Sized {
         callback: Q,
     );
 
+    #[doc(alias = "g_input_stream_read_async")]
     fn read_async<
         B: AsMut<[u8]> + Send + 'static,
-        Q: FnOnce(Result<(B, usize), (B, glib::Error)>) + Send + 'static,
+        Q: FnOnce(Result<(B, usize), (B, glib::Error)>) + 'static,
         C: IsA<Cancellable>,
     >(
         &self,
@@ -56,8 +57,7 @@ pub trait InputStreamExtManual: Sized {
         callback: Q,
     );
 
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
-    fn read_all_async_future<B: AsMut<[u8]> + Send + 'static>(
+    fn read_all_future<B: AsMut<[u8]> + Send + 'static>(
         &self,
         buffer: B,
         io_priority: Priority,
@@ -69,7 +69,7 @@ pub trait InputStreamExtManual: Sized {
         >,
     >;
 
-    fn read_async_future<B: AsMut<[u8]> + Send + 'static>(
+    fn read_future<B: AsMut<[u8]> + Send + 'static>(
         &self,
         buffer: B,
         io_priority: Priority,
@@ -80,6 +80,13 @@ pub trait InputStreamExtManual: Sized {
         Self: IsA<InputStream>,
     {
         InputStreamRead(self)
+    }
+
+    fn into_async_buf_read(self, buffer_size: usize) -> InputStreamAsyncBufRead<Self>
+    where
+        Self: IsA<InputStream>,
+    {
+        InputStreamAsyncBufRead::new(self, buffer_size)
     }
 }
 
@@ -96,7 +103,7 @@ impl<O: IsA<InputStream>> InputStreamExtManual for O {
         let count = buffer.len();
         unsafe {
             let mut error = ptr::null_mut();
-            let ret = gio_sys::g_input_stream_read(
+            let ret = ffi::g_input_stream_read(
                 self.as_ref().to_glib_none().0,
                 buffer_ptr,
                 count,
@@ -124,7 +131,7 @@ impl<O: IsA<InputStream>> InputStreamExtManual for O {
         unsafe {
             let mut bytes_read = mem::MaybeUninit::uninit();
             let mut error = ptr::null_mut();
-            let _ = gio_sys::g_input_stream_read_all(
+            let _ = ffi::g_input_stream_read_all(
                 self.as_ref().to_glib_none().0,
                 buffer_ptr,
                 count,
@@ -144,10 +151,9 @@ impl<O: IsA<InputStream>> InputStreamExtManual for O {
         }
     }
 
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     fn read_all_async<
         B: AsMut<[u8]> + Send + 'static,
-        Q: FnOnce(Result<(B, usize, Option<glib::Error>), (B, glib::Error)>) + Send + 'static,
+        Q: FnOnce(Result<(B, usize, Option<glib::Error>), (B, glib::Error)>) + 'static,
         C: IsA<Cancellable>,
     >(
         &self,
@@ -156,29 +162,42 @@ impl<O: IsA<InputStream>> InputStreamExtManual for O {
         cancellable: Option<&C>,
         callback: Q,
     ) {
+        let main_context = glib::MainContext::ref_thread_default();
+        let is_main_context_owner = main_context.is_owner();
+        let has_acquired_main_context = (!is_main_context_owner)
+            .then(|| main_context.acquire().ok())
+            .flatten();
+        assert!(
+            is_main_context_owner || has_acquired_main_context.is_some(),
+            "Async operations only allowed if the thread is owning the MainContext"
+        );
+
         let cancellable = cancellable.map(|c| c.as_ref());
         let gcancellable = cancellable.to_glib_none();
-        let mut user_data: Box<Option<(Q, B)>> = Box::new(Some((callback, buffer)));
+        let mut user_data: Box<(glib::thread_guard::ThreadGuard<Q>, B)> =
+            Box::new((glib::thread_guard::ThreadGuard::new(callback), buffer));
         // Need to do this after boxing as the contents pointer might change by moving into the box
         let (count, buffer_ptr) = {
-            let buffer = &mut (*user_data).as_mut().unwrap().1;
+            let buffer = &mut user_data.1;
             let slice = (*buffer).as_mut();
             (slice.len(), slice.as_mut_ptr())
         };
         unsafe extern "C" fn read_all_async_trampoline<
             B: AsMut<[u8]> + Send + 'static,
-            Q: FnOnce(Result<(B, usize, Option<glib::Error>), (B, glib::Error)>) + Send + 'static,
+            Q: FnOnce(Result<(B, usize, Option<glib::Error>), (B, glib::Error)>) + 'static,
         >(
-            _source_object: *mut gobject_sys::GObject,
-            res: *mut gio_sys::GAsyncResult,
-            user_data: glib_sys::gpointer,
+            _source_object: *mut glib::gobject_ffi::GObject,
+            res: *mut ffi::GAsyncResult,
+            user_data: glib::ffi::gpointer,
         ) {
-            let mut user_data: Box<Option<(Q, B)>> = Box::from_raw(user_data as *mut _);
-            let (callback, buffer) = user_data.take().unwrap();
+            let user_data: Box<(glib::thread_guard::ThreadGuard<Q>, B)> =
+                Box::from_raw(user_data as *mut _);
+            let (callback, buffer) = *user_data;
+            let callback = callback.into_inner();
 
             let mut error = ptr::null_mut();
             let mut bytes_read = mem::MaybeUninit::uninit();
-            let _ = gio_sys::g_input_stream_read_all_finish(
+            let _ = ffi::g_input_stream_read_all_finish(
                 _source_object as *mut _,
                 res,
                 bytes_read.as_mut_ptr(),
@@ -198,11 +217,11 @@ impl<O: IsA<InputStream>> InputStreamExtManual for O {
         }
         let callback = read_all_async_trampoline::<B, Q>;
         unsafe {
-            gio_sys::g_input_stream_read_all_async(
+            ffi::g_input_stream_read_all_async(
                 self.as_ref().to_glib_none().0,
                 buffer_ptr,
                 count,
-                io_priority.to_glib(),
+                io_priority.into_glib(),
                 gcancellable.0,
                 Some(callback),
                 Box::into_raw(user_data) as *mut _,
@@ -212,7 +231,7 @@ impl<O: IsA<InputStream>> InputStreamExtManual for O {
 
     fn read_async<
         B: AsMut<[u8]> + Send + 'static,
-        Q: FnOnce(Result<(B, usize), (B, glib::Error)>) + Send + 'static,
+        Q: FnOnce(Result<(B, usize), (B, glib::Error)>) + 'static,
         C: IsA<Cancellable>,
     >(
         &self,
@@ -221,29 +240,41 @@ impl<O: IsA<InputStream>> InputStreamExtManual for O {
         cancellable: Option<&C>,
         callback: Q,
     ) {
+        let main_context = glib::MainContext::ref_thread_default();
+        let is_main_context_owner = main_context.is_owner();
+        let has_acquired_main_context = (!is_main_context_owner)
+            .then(|| main_context.acquire().ok())
+            .flatten();
+        assert!(
+            is_main_context_owner || has_acquired_main_context.is_some(),
+            "Async operations only allowed if the thread is owning the MainContext"
+        );
+
         let cancellable = cancellable.map(|c| c.as_ref());
         let gcancellable = cancellable.to_glib_none();
-        let mut user_data: Box<Option<(Q, B)>> = Box::new(Some((callback, buffer)));
+        let mut user_data: Box<(glib::thread_guard::ThreadGuard<Q>, B)> =
+            Box::new((glib::thread_guard::ThreadGuard::new(callback), buffer));
         // Need to do this after boxing as the contents pointer might change by moving into the box
         let (count, buffer_ptr) = {
-            let buffer = &mut (*user_data).as_mut().unwrap().1;
+            let buffer = &mut user_data.1;
             let slice = (*buffer).as_mut();
             (slice.len(), slice.as_mut_ptr())
         };
         unsafe extern "C" fn read_async_trampoline<
             B: AsMut<[u8]> + Send + 'static,
-            Q: FnOnce(Result<(B, usize), (B, glib::Error)>) + Send + 'static,
+            Q: FnOnce(Result<(B, usize), (B, glib::Error)>) + 'static,
         >(
-            _source_object: *mut gobject_sys::GObject,
-            res: *mut gio_sys::GAsyncResult,
-            user_data: glib_sys::gpointer,
+            _source_object: *mut glib::gobject_ffi::GObject,
+            res: *mut ffi::GAsyncResult,
+            user_data: glib::ffi::gpointer,
         ) {
-            let mut user_data: Box<Option<(Q, B)>> = Box::from_raw(user_data as *mut _);
-            let (callback, buffer) = user_data.take().unwrap();
+            let user_data: Box<(glib::thread_guard::ThreadGuard<Q>, B)> =
+                Box::from_raw(user_data as *mut _);
+            let (callback, buffer) = *user_data;
+            let callback = callback.into_inner();
 
             let mut error = ptr::null_mut();
-            let ret =
-                gio_sys::g_input_stream_read_finish(_source_object as *mut _, res, &mut error);
+            let ret = ffi::g_input_stream_read_finish(_source_object as *mut _, res, &mut error);
 
             let result = if error.is_null() {
                 Ok((buffer, ret as usize))
@@ -255,11 +286,11 @@ impl<O: IsA<InputStream>> InputStreamExtManual for O {
         }
         let callback = read_async_trampoline::<B, Q>;
         unsafe {
-            gio_sys::g_input_stream_read_async(
+            ffi::g_input_stream_read_async(
                 self.as_ref().to_glib_none().0,
                 buffer_ptr,
                 count,
-                io_priority.to_glib(),
+                io_priority.into_glib(),
                 gcancellable.0,
                 Some(callback),
                 Box::into_raw(user_data) as *mut _,
@@ -267,8 +298,7 @@ impl<O: IsA<InputStream>> InputStreamExtManual for O {
         }
     }
 
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
-    fn read_all_async_future<'a, B: AsMut<[u8]> + Send + 'static>(
+    fn read_all_future<'a, B: AsMut<[u8]> + Send + 'static>(
         &self,
         buffer: B,
         io_priority: Priority,
@@ -279,30 +309,30 @@ impl<O: IsA<InputStream>> InputStreamExtManual for O {
                 > + 'static,
         >,
     > {
-        Box::pin(crate::GioFuture::new(self, move |obj, send| {
-            let cancellable = Cancellable::new();
-            obj.read_all_async(buffer, io_priority, Some(&cancellable), move |res| {
-                send.resolve(res);
-            });
-
-            cancellable
-        }))
+        Box::pin(crate::GioFuture::new(
+            self,
+            move |obj, cancellable, send| {
+                obj.read_all_async(buffer, io_priority, Some(cancellable), move |res| {
+                    send.resolve(res);
+                });
+            },
+        ))
     }
 
-    fn read_async_future<'a, B: AsMut<[u8]> + Send + 'static>(
+    fn read_future<'a, B: AsMut<[u8]> + Send + 'static>(
         &self,
         buffer: B,
         io_priority: Priority,
     ) -> Pin<Box<dyn std::future::Future<Output = Result<(B, usize), (B, glib::Error)>> + 'static>>
     {
-        Box::pin(crate::GioFuture::new(self, move |obj, send| {
-            let cancellable = Cancellable::new();
-            obj.read_async(buffer, io_priority, Some(&cancellable), move |res| {
-                send.resolve(res);
-            });
-
-            cancellable
-        }))
+        Box::pin(crate::GioFuture::new(
+            self,
+            move |obj, cancellable, send| {
+                obj.read_async(buffer, io_priority, Some(cancellable), move |res| {
+                    send.resolve(res);
+                });
+            },
+        ))
     }
 }
 
@@ -321,7 +351,7 @@ impl<T: IsA<InputStream>> InputStreamRead<T> {
 
 impl<T: IsA<InputStream>> io::Read for InputStreamRead<T> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let gio_result = self.0.as_ref().read(buf, ::NONE_CANCELLABLE);
+        let gio_result = self.0.as_ref().read(buf, crate::Cancellable::NONE);
         to_std_io_result(gio_result)
     }
 }
@@ -335,32 +365,252 @@ impl<T: IsA<InputStream> + IsA<Seekable>> io::Seek for InputStreamRead<T> {
         };
         let seekable: &Seekable = self.0.as_ref();
         let gio_result = seekable
-            .seek(pos, type_, ::NONE_CANCELLABLE)
+            .seek(pos, type_, crate::Cancellable::NONE)
             .map(|_| seekable.tell() as u64);
         to_std_io_result(gio_result)
     }
 }
 
+enum State {
+    Waiting {
+        buffer: Vec<u8>,
+    },
+    Transitioning,
+    Reading {
+        pending: Pin<
+            Box<
+                dyn std::future::Future<Output = Result<(Vec<u8>, usize), (Vec<u8>, glib::Error)>>
+                    + 'static,
+            >,
+        >,
+    },
+    HasData {
+        buffer: Vec<u8>,
+        valid: (usize, usize), // first index is inclusive, second is exclusive
+    },
+    Failed(crate::IOErrorEnum),
+}
+
+impl State {
+    fn into_buffer(self) -> Vec<u8> {
+        match self {
+            State::Waiting { buffer } => buffer,
+            _ => panic!("Invalid state"),
+        }
+    }
+
+    #[doc(alias = "get_pending")]
+    fn pending(
+        &mut self,
+    ) -> &mut Pin<
+        Box<
+            dyn std::future::Future<Output = Result<(Vec<u8>, usize), (Vec<u8>, glib::Error)>>
+                + 'static,
+        >,
+    > {
+        match self {
+            State::Reading { ref mut pending } => pending,
+            _ => panic!("Invalid state"),
+        }
+    }
+}
+pub struct InputStreamAsyncBufRead<T: IsA<InputStream>> {
+    stream: T,
+    state: State,
+}
+
+impl<T: IsA<InputStream>> InputStreamAsyncBufRead<T> {
+    pub fn into_input_stream(self) -> T {
+        self.stream
+    }
+
+    pub fn input_stream(&self) -> &T {
+        &self.stream
+    }
+
+    fn new(stream: T, buffer_size: usize) -> Self {
+        let buffer = vec![0; buffer_size];
+
+        Self {
+            stream,
+            state: State::Waiting { buffer },
+        }
+    }
+    fn set_reading(
+        &mut self,
+    ) -> &mut Pin<
+        Box<
+            dyn std::future::Future<Output = Result<(Vec<u8>, usize), (Vec<u8>, glib::Error)>>
+                + 'static,
+        >,
+    > {
+        match self.state {
+            State::Waiting { .. } => {
+                let waiting = mem::replace(&mut self.state, State::Transitioning);
+                let buffer = waiting.into_buffer();
+                let pending = self.input_stream().read_future(buffer, Priority::default());
+                self.state = State::Reading { pending };
+            }
+            State::Reading { .. } => {}
+            _ => panic!("Invalid state"),
+        };
+
+        self.state.pending()
+    }
+
+    #[doc(alias = "get_data")]
+    fn data(&self) -> Poll<io::Result<&[u8]>> {
+        if let State::HasData {
+            ref buffer,
+            valid: (i, j),
+        } = self.state
+        {
+            return Poll::Ready(Ok(&buffer[i..j]));
+        }
+        panic!("Invalid state")
+    }
+
+    fn set_waiting(&mut self, buffer: Vec<u8>) {
+        match self.state {
+            State::Reading { .. } | State::Transitioning => self.state = State::Waiting { buffer },
+            _ => panic!("Invalid state"),
+        }
+    }
+
+    fn set_has_data(&mut self, buffer: Vec<u8>, valid: (usize, usize)) {
+        match self.state {
+            State::Reading { .. } | State::Transitioning { .. } => {
+                self.state = State::HasData { buffer, valid }
+            }
+            _ => panic!("Invalid state"),
+        }
+    }
+
+    fn poll_fill_buf(&mut self, cx: &mut Context) -> Poll<Result<&[u8], futures_io::Error>> {
+        match self.state {
+            State::Failed(kind) => Poll::Ready(Err(io::Error::new(
+                io::ErrorKind::from(kind),
+                BufReadError::Failed,
+            ))),
+            State::HasData { .. } => self.data(),
+            State::Transitioning => panic!("Invalid state"),
+            State::Waiting { .. } | State::Reading { .. } => {
+                let pending = self.set_reading();
+                match Pin::new(pending).poll(cx) {
+                    Poll::Ready(Ok((buffer, res))) => {
+                        if res == 0 {
+                            self.set_waiting(buffer);
+                            Poll::Ready(Ok(&[]))
+                        } else {
+                            self.set_has_data(buffer, (0, res));
+                            self.data()
+                        }
+                    }
+                    Poll::Ready(Err((_, err))) => {
+                        let kind = err.kind::<crate::IOErrorEnum>().unwrap();
+                        self.state = State::Failed(kind);
+                        Poll::Ready(Err(io::Error::new(io::ErrorKind::from(kind), err)))
+                    }
+                    Poll::Pending => Poll::Pending,
+                }
+            }
+        }
+    }
+
+    fn consume(&mut self, amt: usize) {
+        if amt == 0 {
+            return;
+        }
+
+        if let State::HasData { .. } = self.state {
+            let has_data = mem::replace(&mut self.state, State::Transitioning);
+            if let State::HasData {
+                buffer,
+                valid: (i, j),
+            } = has_data
+            {
+                let available = j - i;
+                if amt > available {
+                    panic!(
+                        "Cannot consume {} bytes as only {} are available",
+                        amt, available
+                    )
+                }
+                let remaining = available - amt;
+                if remaining == 0 {
+                    return self.set_waiting(buffer);
+                } else {
+                    return self.set_has_data(buffer, (i + amt, j));
+                }
+            }
+        }
+
+        panic!("Invalid state")
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+enum BufReadError {
+    #[error("Previous read operation failed")]
+    Failed,
+}
+
+impl<T: IsA<InputStream>> AsyncRead for InputStreamAsyncBufRead<T> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context,
+        out_buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
+        let reader = self.get_mut();
+        let poll = reader.poll_fill_buf(cx);
+
+        let poll = poll.map_ok(|buffer| {
+            let copied = buffer.len().min(out_buf.len());
+            out_buf[..copied].copy_from_slice(&buffer[..copied]);
+            copied
+        });
+
+        if let Poll::Ready(Ok(consumed)) = poll {
+            reader.consume(consumed);
+        }
+        poll
+    }
+}
+
+impl<T: IsA<InputStream>> AsyncBufRead for InputStreamAsyncBufRead<T> {
+    fn poll_fill_buf(
+        self: Pin<&mut Self>,
+        cx: &mut Context,
+    ) -> Poll<Result<&[u8], futures_io::Error>> {
+        self.get_mut().poll_fill_buf(cx)
+    }
+
+    fn consume(self: Pin<&mut Self>, amt: usize) {
+        self.get_mut().consume(amt);
+    }
+}
+
+impl<T: IsA<InputStream>> Unpin for InputStreamAsyncBufRead<T> {}
+
 #[cfg(test)]
 mod tests {
     use crate::prelude::*;
+    use crate::test_util::run_async;
     use crate::MemoryInputStream;
     use glib::Bytes;
     use std::io::Read;
-    use test_util::run_async;
 
     #[test]
-    #[cfg(feature = "v2_44")]
     fn read_all_async() {
         let ret = run_async(|tx, l| {
             let b = Bytes::from_owned(vec![1, 2, 3]);
-            let strm = MemoryInputStream::new_from_bytes(&b);
+            let strm = MemoryInputStream::from_bytes(&b);
 
             let buf = vec![0; 10];
             strm.read_all_async(
                 buf,
                 glib::PRIORITY_DEFAULT_IDLE,
-                ::NONE_CANCELLABLE,
+                crate::Cancellable::NONE,
                 move |ret| {
                     tx.send(ret).unwrap();
                     l.quit();
@@ -379,10 +629,10 @@ mod tests {
     #[test]
     fn read_all() {
         let b = Bytes::from_owned(vec![1, 2, 3]);
-        let strm = MemoryInputStream::new_from_bytes(&b);
+        let strm = MemoryInputStream::from_bytes(&b);
         let mut buf = vec![0; 10];
 
-        let ret = strm.read_all(&mut buf, ::NONE_CANCELLABLE).unwrap();
+        let ret = strm.read_all(&mut buf, crate::Cancellable::NONE).unwrap();
 
         assert_eq!(ret.0, 3);
         assert!(ret.1.is_none());
@@ -394,10 +644,10 @@ mod tests {
     #[test]
     fn read() {
         let b = Bytes::from_owned(vec![1, 2, 3]);
-        let strm = MemoryInputStream::new_from_bytes(&b);
+        let strm = MemoryInputStream::from_bytes(&b);
         let mut buf = vec![0; 10];
 
-        let ret = strm.read(&mut buf, ::NONE_CANCELLABLE);
+        let ret = strm.read(&mut buf, crate::Cancellable::NONE);
 
         assert_eq!(ret.unwrap(), 3);
         assert_eq!(buf[0], 1);
@@ -409,13 +659,13 @@ mod tests {
     fn read_async() {
         let ret = run_async(|tx, l| {
             let b = Bytes::from_owned(vec![1, 2, 3]);
-            let strm = MemoryInputStream::new_from_bytes(&b);
+            let strm = MemoryInputStream::from_bytes(&b);
 
             let buf = vec![0; 10];
             strm.read_async(
                 buf,
                 glib::PRIORITY_DEFAULT_IDLE,
-                ::NONE_CANCELLABLE,
+                crate::Cancellable::NONE,
                 move |ret| {
                     tx.send(ret).unwrap();
                     l.quit();
@@ -434,12 +684,12 @@ mod tests {
     fn read_bytes_async() {
         let ret = run_async(|tx, l| {
             let b = Bytes::from_owned(vec![1, 2, 3]);
-            let strm = MemoryInputStream::new_from_bytes(&b);
+            let strm = MemoryInputStream::from_bytes(&b);
 
             strm.read_bytes_async(
                 10,
                 glib::PRIORITY_DEFAULT_IDLE,
-                ::NONE_CANCELLABLE,
+                crate::Cancellable::NONE,
                 move |ret| {
                     tx.send(ret).unwrap();
                     l.quit();
@@ -455,12 +705,12 @@ mod tests {
     fn skip_async() {
         let ret = run_async(|tx, l| {
             let b = Bytes::from_owned(vec![1, 2, 3]);
-            let strm = MemoryInputStream::new_from_bytes(&b);
+            let strm = MemoryInputStream::from_bytes(&b);
 
             strm.skip_async(
                 10,
                 glib::PRIORITY_DEFAULT_IDLE,
-                ::NONE_CANCELLABLE,
+                crate::Cancellable::NONE,
                 move |ret| {
                     tx.send(ret).unwrap();
                     l.quit();
@@ -475,7 +725,7 @@ mod tests {
     #[test]
     fn std_io_read() {
         let b = Bytes::from_owned(vec![1, 2, 3]);
-        let mut read = MemoryInputStream::new_from_bytes(&b).into_read();
+        let mut read = MemoryInputStream::from_bytes(&b).into_read();
         let mut buf = [0u8; 10];
 
         let ret = read.read(&mut buf);
@@ -489,7 +739,7 @@ mod tests {
     #[test]
     fn into_input_stream() {
         let b = Bytes::from_owned(vec![1, 2, 3]);
-        let stream = MemoryInputStream::new_from_bytes(&b);
+        let stream = MemoryInputStream::from_bytes(&b);
         let stream_clone = stream.clone();
         let stream = stream.into_read().into_input_stream();
 

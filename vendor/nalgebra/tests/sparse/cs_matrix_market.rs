@@ -18,7 +18,7 @@ fn cs_matrix_market() {
 % |%                                             | <--+
 % |% comments                                    |    |-- 0 or more comment lines
 % |%                                             | <--+
-% |    M  N  L                                   | <--- rows, columns, entries
+% |    M  T  L                                   | <--- rows, columns, entries
 % |    I1  J1  A(I1, J1)                         | <--+
 % |    I2  J2  A(I2, J2)                         |    |
 % |    I3  J3  A(I3, J3)                         |    |-- L lines
@@ -41,7 +41,6 @@ fn cs_matrix_market() {
 "#;
 
     let cs_mat = io::cs_matrix_from_matrix_market_str(file_str).unwrap();
-    println!("CS mat: {:?}", cs_mat);
     let mat: DMatrix<_> = cs_mat.into();
     let expected = DMatrix::from_row_slice(5, 5, &[
         1.0, 0.0,   0.0,   6.0,    0.0,

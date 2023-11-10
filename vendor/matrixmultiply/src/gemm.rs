@@ -6,21 +6,32 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#[cfg(feature="std")]
+use core::cell::UnsafeCell;
 use core::cmp::min;
 use core::mem::size_of;
 use core::ptr::copy_nonoverlapping;
+use core::slice;
 
-use aligned_alloc::Alloc;
+use crate::aligned_alloc::Alloc;
 
-use util::range_chunk;
-use util::round_up_to;
+use crate::ptr::Ptr;
+use crate::util::range_chunk;
+use crate::util::round_up_to;
 
-use kernel::ConstNum;
-use kernel::Element;
-use kernel::GemmKernel;
-use kernel::GemmSelect;
-use sgemm_kernel;
-use dgemm_kernel;
+use crate::kernel::ConstNum;
+use crate::kernel::Element;
+use crate::kernel::GemmKernel;
+use crate::kernel::GemmSelect;
+#[cfg(feature = "cgemm")]
+use crate::kernel::{c32, c64};
+use crate::threading::{get_thread_pool, ThreadPoolCtx, LoopThreadConfig};
+use crate::sgemm_kernel;
+use crate::dgemm_kernel;
+#[cfg(feature = "cgemm")]
+use crate::cgemm_kernel;
+#[cfg(feature = "cgemm")]
+use crate::zgemm_kernel;
 use rawpointer::PointerExt;
 
 /// General matrix multiplication (f32)
@@ -87,6 +98,91 @@ pub unsafe fn dgemm(
                 c, rsc, csc})
 }
 
+/// cgemm/zgemm per-operand options
+///
+/// TBD.
+#[cfg(feature = "cgemm")]
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug)]
+pub enum CGemmOption {
+    /// Standard
+    Standard,
+}
+
+#[cfg(feature = "cgemm")]
+/// General matrix multiplication (complex f32)
+///
+/// C ← α A B + β C
+///
+/// + m, k, n: dimensions
+/// + a, b, c: pointer to the first element in the matrix
+/// + A: m by k matrix
+/// + B: k by n matrix
+/// + C: m by n matrix
+/// + rs<em>x</em>: row stride of *x*
+/// + cs<em>x</em>: col stride of *x*
+///
+/// Strides for A and B may be arbitrary. Strides for C must not result in
+/// elements that alias each other, for example they can not be zero.
+///
+/// If β is zero, then C does not need to be initialized.
+///
+/// Requires crate feature `"cgemm"`
+pub unsafe fn cgemm(
+    flaga: CGemmOption, flagb: CGemmOption,
+    m: usize, k: usize, n: usize,
+    alpha: c32,
+    a: *const c32, rsa: isize, csa: isize,
+    b: *const c32, rsb: isize, csb: isize,
+    beta: c32,
+    c: *mut c32, rsc: isize, csc: isize)
+{
+    let _ = (flaga, flagb);
+    cgemm_kernel::detect(GemmParameters { m, k, n,
+                alpha,
+                a, rsa, csa,
+                b, rsb, csb,
+                beta,
+                c, rsc, csc})
+}
+
+#[cfg(feature = "cgemm")]
+/// General matrix multiplication (complex f64)
+///
+/// C ← α A B + β C
+///
+/// + m, k, n: dimensions
+/// + a, b, c: pointer to the first element in the matrix
+/// + A: m by k matrix
+/// + B: k by n matrix
+/// + C: m by n matrix
+/// + rs<em>x</em>: row stride of *x*
+/// + cs<em>x</em>: col stride of *x*
+///
+/// Strides for A and B may be arbitrary. Strides for C must not result in
+/// elements that alias each other, for example they can not be zero.
+///
+/// If β is zero, then C does not need to be initialized.
+///
+/// Requires crate feature `"cgemm"`
+pub unsafe fn zgemm(
+    flaga: CGemmOption, flagb: CGemmOption,
+    m: usize, k: usize, n: usize,
+    alpha: c64,
+    a: *const c64, rsa: isize, csa: isize,
+    b: *const c64, rsb: isize, csb: isize,
+    beta: c64,
+    c: *mut c64, rsc: isize, csc: isize)
+{
+    let _ = (flaga, flagb);
+    zgemm_kernel::detect(GemmParameters { m, k, n,
+                alpha,
+                a, rsa, csa,
+                b, rsb, csb,
+                beta,
+                c, rsc, csc})
+}
+
 struct GemmParameters<T> {
     // Parameters grouped logically in rows
     m: usize, k: usize, n: usize,
@@ -136,6 +232,8 @@ fn ensure_kernel_params<K>()
 {
     let mr = K::MR;
     let nr = K::NR;
+    // These are current limitations,
+    // can change if corresponding code in gemm_loop is updated.
     assert!(mr > 0 && mr <= 8);
     assert!(nr > 0 && nr <= 8);
     assert!(mr * nr * size_of::<K::Elem>() <= 8 * 4 * 8);
@@ -143,6 +241,11 @@ fn ensure_kernel_params<K>()
     // one row/col of the kernel is limiting the max align we can provide
     let max_align = size_of::<K::Elem>() * min(mr, nr);
     assert!(K::align_to() <= max_align);
+
+    assert!(K::MR <= K::mc());
+    assert!(K::mc() <= K::kc());
+    assert!(K::kc() <= K::nc());
+    assert!(K::nc() <= 65536);
 }
 
 /// Implement matrix multiply using packed buffers and a microkernel
@@ -172,9 +275,17 @@ unsafe fn gemm_loop<K>(
     let kmc = K::mc();
     ensure_kernel_params::<K>();
 
-    let (mut packing_buffer, bp_offset) = make_packing_buffer::<K>(m, k, n);
-    let app = packing_buffer.ptr_mut();
-    let bpp = app.add(bp_offset);
+    let a = Ptr(a);
+    let b = Ptr(b);
+    let c = Ptr(c);
+
+    let (nthreads, tp) = get_thread_pool();
+    let thread_config = LoopThreadConfig::new::<K>(m, k, n, nthreads);
+    let nap = thread_config.num_pack_a();
+
+    let (mut packing_buffer, ap_size) = make_packing_buffer::<K>(m, k, n, nap);
+    let app = Ptr(packing_buffer.ptr_mut());
+    let bpp = app.add(ap_size * nap);
 
     // LOOP 5: split n into nc parts (B, C)
     for (l5, nc) in range_chunk(n, knc) {
@@ -183,35 +294,66 @@ unsafe fn gemm_loop<K>(
         let c = c.stride_offset(csc, knc * l5);
 
         // LOOP 4: split k in kc parts (A, B)
+        // This particular loop can't be parallelized because the
+        // C chunk (writable) is shared between iterations.
         for (l4, kc) in range_chunk(k, kkc) {
             dprint!("LOOP 4, {}, kc={}", l4, kc);
             let b = b.stride_offset(rsb, kkc * l4);
             let a = a.stride_offset(csa, kkc * l4);
 
             // Pack B -> B~
-            pack::<K::NRTy, _>(kc, nc, bpp, b, csb, rsb);
+            pack::<K::NRTy, _>(kc, nc, bpp.ptr(), b.ptr(), csb, rsb);
+
+            // First time writing to C, use user's `beta`, else accumulate
+            let betap = if l4 == 0 { beta } else { <_>::one() };
 
             // LOOP 3: split m into mc parts (A, C)
-            for (l3, mc) in range_chunk(m, kmc) {
-                dprint!("LOOP 3, {}, mc={}", l3, mc);
-                let a = a.stride_offset(rsa, kmc * l3);
-                let c = c.stride_offset(rsc, kmc * l3);
+            range_chunk(m, kmc)
+                .parallel(thread_config.loop3, tp)
+                .thread_local(move |i, _nt| {
+                    // a packing buffer A~ per thread
+                    debug_assert!(i < nap);
+                    app.add(ap_size * i)
+                })
+                .for_each(move |tp, &mut app, l3, mc| {
+                    dprint!("LOOP 3, {}, mc={}", l3, mc);
+                    let a = a.stride_offset(rsa, kmc * l3);
+                    let c = c.stride_offset(rsc, kmc * l3);
 
-                // Pack A -> A~
-                pack::<K::MRTy, _>(kc, mc, app, a, rsa, csa);
+                    // Pack A -> A~
+                    pack::<K::MRTy, _>(kc, mc, app.ptr(), a.ptr(), rsa, csa);
 
-                // First time writing to C, use user's `beta`, else accumulate
-                let betap = if l4 == 0 { beta } else { <_>::one() };
-
-                // LOOP 2 and 1
-                gemm_packed::<K>(nc, kc, mc,
-                                 alpha,
-                                 app, bpp,
-                                 betap,
-                                 c, rsc, csc);
-            }
+                    // LOOP 2 and 1
+                    gemm_packed::<K>(nc, kc, mc,
+                                     alpha,
+                                     app.to_const(), bpp.to_const(),
+                                     betap,
+                                     c, rsc, csc,
+                                     tp, thread_config);
+                });
         }
     }
+}
+
+// set up buffer for masked (redirected output of) kernel
+const KERNEL_MAX_SIZE: usize = 8 * 8 * 4;
+const KERNEL_MAX_ALIGN: usize = 32;
+const MASK_BUF_SIZE: usize = KERNEL_MAX_SIZE + KERNEL_MAX_ALIGN - 1;
+
+// Pointers into buffer will be manually aligned anyway, due to
+// bugs we have seen on certain platforms (macos) that look like
+// we don't get aligned allocations out of TLS (?).
+#[repr(align(32))]
+struct MaskBuffer {
+    buffer: [u8; MASK_BUF_SIZE],
+}
+
+// Use thread local if we can; this is faster even in the single threaded case because
+// it is possible to skip zeroing out the array.
+#[cfg(feature = "std")]
+thread_local! {
+    static MASK_BUF: UnsafeCell<MaskBuffer> =
+        UnsafeCell::new(MaskBuffer { buffer: [0; MASK_BUF_SIZE] });
 }
 
 /// Loops 1 and 2 around the µ-kernel
@@ -223,41 +365,59 @@ unsafe fn gemm_loop<K>(
 /// + mc: rows of packed A
 unsafe fn gemm_packed<K>(nc: usize, kc: usize, mc: usize,
                          alpha: K::Elem,
-                         app: *const K::Elem, bpp: *const K::Elem,
+                         app: Ptr<*const K::Elem>, bpp: Ptr<*const K::Elem>,
                          beta: K::Elem,
-                         c: *mut K::Elem, rsc: isize, csc: isize)
+                         c: Ptr<*mut K::Elem>, rsc: isize, csc: isize,
+                         tp: ThreadPoolCtx, thread_config: LoopThreadConfig)
     where K: GemmKernel,
 {
     let mr = K::MR;
     let nr = K::NR;
-    // make a mask buffer that fits 8 x 8 f32 and 8 x 4 f64 kernels and alignment
-    assert!(mr * nr * size_of::<K::Elem>() <= 256 && K::align_to() <= 32);
-    let mut mask_buf = [0u8; 256 + 31];
-    let mask_ptr = align_ptr(32, mask_buf.as_mut_ptr()) as *mut K::Elem;
+    // check for the mask buffer that fits 8 x 8 f32 and 8 x 4 f64 kernels and alignment
+    assert!(mr * nr * size_of::<K::Elem>() <= KERNEL_MAX_SIZE && K::align_to() <= KERNEL_MAX_ALIGN);
+
+    #[cfg(not(feature = "std"))]
+    let mut mask_buf = MaskBuffer { buffer: [0; MASK_BUF_SIZE] };
 
     // LOOP 2: through micropanels in packed `b` (B~, C)
-    for (l2, nr_) in range_chunk(nc, nr) {
-        let bpp = bpp.stride_offset(1, kc * nr * l2);
-        let c = c.stride_offset(csc, nr * l2);
-
-        // LOOP 1: through micropanels in packed `a` while `b` is constant (A~, C)
-        for (l1, mr_) in range_chunk(mc, mr) {
-            let app = app.stride_offset(1, kc * mr * l1);
-            let c = c.stride_offset(rsc, mr * l1);
-
-            // GEMM KERNEL
-            // NOTE: For the rust kernels, it performs better to simply
-            // always use the masked kernel function!
-            if K::always_masked() || nr_ < nr || mr_ < mr {
-                masked_kernel::<_, K>(kc, alpha, &*app, &*bpp,
-                                      beta, &mut *c, rsc, csc,
-                                      mr_, nr_, mask_ptr);
-                continue;
-            } else {
-                K::kernel(kc, alpha, app, bpp, beta, c, rsc, csc);
+    range_chunk(nc, nr)
+        .parallel(thread_config.loop2, tp)
+        .thread_local(|_i, _nt| {
+            let mut ptr;
+            #[cfg(not(feature = "std"))]
+            {
+                debug_assert_eq!(_nt, 1);
+                ptr = mask_buf.buffer.as_mut_ptr();
             }
-        }
-    }
+            #[cfg(feature = "std")]
+            {
+                ptr = MASK_BUF.with(|buf| (*buf.get()).buffer.as_mut_ptr());
+            }
+            ptr = align_ptr(K::align_to(), ptr);
+            slice::from_raw_parts_mut(ptr as *mut K::Elem, KERNEL_MAX_SIZE / size_of::<K::Elem>())
+        })
+        .for_each(move |_tp, mask_buf, l2, nr_| {
+            let bpp = bpp.stride_offset(1, kc * nr * l2);
+            let c = c.stride_offset(csc, nr * l2);
+
+            // LOOP 1: through micropanels in packed `a` while `b` is constant (A~, C)
+            for (l1, mr_) in range_chunk(mc, mr) {
+                let app = app.stride_offset(1, kc * mr * l1);
+                let c = c.stride_offset(rsc, mr * l1);
+
+                // GEMM KERNEL
+                // NOTE: For the rust kernels, it performs better to simply
+                // always use the masked kernel function!
+                if K::always_masked() || nr_ < nr || mr_ < mr {
+                    masked_kernel::<_, K>(kc, alpha, &*app.ptr(), &*bpp.ptr(),
+                                          beta, &mut *c.ptr(), rsc, csc,
+                                          mr_, nr_, mask_buf);
+                    continue;
+                } else {
+                    K::kernel(kc, alpha, app.ptr(), bpp.ptr(), beta, c.ptr(), rsc, csc);
+                }
+            }
+        });
 }
 
 /// Allocate a vector of uninitialized data to be used for both packing buffers.
@@ -267,8 +427,10 @@ unsafe fn gemm_packed<K>(nc: usize, kc: usize, mc: usize,
 /// but we can make them smaller if the matrix is smaller than this (just ensure
 /// we have rounded up to a multiple of the kernel size).
 ///
-/// Return packing buffer and offset to start of b
-unsafe fn make_packing_buffer<K>(m: usize, k: usize, n: usize) -> (Alloc<K::Elem>, usize)
+/// na: Number of buffers to alloc for A
+///
+/// Return packing buffer and size of A~ (The offset to B~ is A~ size times `na`).
+unsafe fn make_packing_buffer<K>(m: usize, k: usize, n: usize, na: usize) -> (Alloc<K::Elem>, usize)
     where K: GemmKernel,
 {
     // max alignment requirement is a multiple of min(MR, NR) * sizeof<Elem>
@@ -278,24 +440,28 @@ unsafe fn make_packing_buffer<K>(m: usize, k: usize, n: usize) -> (Alloc<K::Elem
     let n = min(n, K::nc());
     // round up k, n to multiples of mr, nr
     // round up to multiple of kc
+    debug_assert_ne!(na, 0);
+    debug_assert!(na <= 128);
     let apack_size = k * round_up_to(m, K::MR);
     let bpack_size = k * round_up_to(n, K::NR);
-    let nelem = apack_size + bpack_size;
+    let nelem = apack_size * na + bpack_size;
 
     dprint!("packed nelem={}, apack={}, bpack={},
-             m={} k={} n={}",
+             m={} k={} n={}, na={}",
              nelem, apack_size, bpack_size,
-             m,k,n);
+             m,k,n, na);
 
     (Alloc::new(nelem, K::align_to()), apack_size)
 }
 
 /// offset the ptr forwards to align to a specific byte count
-unsafe fn align_ptr<U>(align_to: usize, mut ptr: *mut U) -> *mut U {
+/// Safety: align_to must be a power of two and ptr valid for the pointer arithmetic
+#[inline]
+unsafe fn align_ptr<T>(align_to: usize, mut ptr: *mut T) -> *mut T {
     if align_to != 0 {
         let cur_align = ptr as usize % align_to;
         if cur_align != 0 {
-            ptr = ptr.offset(((align_to - cur_align) / size_of::<U>()) as isize);
+            ptr = ptr.offset(((align_to - cur_align) / size_of::<T>()) as isize);
         }
     }
     ptr
@@ -382,11 +548,11 @@ unsafe fn masked_kernel<T, K>(k: usize, alpha: T,
                               beta: T,
                               c: *mut T, rsc: isize, csc: isize,
                               rows: usize, cols: usize,
-                              mask_buf: *mut T)
+                              mask_buf: &mut [T])
     where K: GemmKernel<Elem=T>, T: Element,
 {
     // use column major order for `mask_buf`
-    K::kernel(k, alpha, a, b, T::zero(), mask_buf, 1, K::MR as isize);
+    K::kernel(k, alpha, a, b, T::zero(), mask_buf.as_mut_ptr(), 1, K::MR as isize);
     c_to_masked_ab_beta_c::<_, K>(beta, c, rsc, csc, rows, cols, &*mask_buf);
 }
 
@@ -397,14 +563,14 @@ unsafe fn masked_kernel<T, K>(k: usize, alpha: T,
 unsafe fn c_to_masked_ab_beta_c<T, K>(beta: T,
                                       c: *mut T, rsc: isize, csc: isize,
                                       rows: usize, cols: usize,
-                                      mask_buf: &T)
+                                      mask_buf: &[T])
     where K: GemmKernel<Elem=T>, T: Element,
 {
     // note: use separate function here with `&T` argument for mask buf,
     // so that the compiler sees that `c` and `mask_buf` never alias.
     let mr = K::MR;
     let nr = K::NR;
-    let mut ab: *const _ = mask_buf;
+    let mut ab = mask_buf.as_ptr();
     for j in 0..nr {
         for i in 0..mr {
             if i < rows && j < cols {
@@ -413,8 +579,8 @@ unsafe fn c_to_masked_ab_beta_c<T, K>(beta: T,
                 if beta.is_zero() {
                     *cptr = *ab; // initialize
                 } else {
-                    *cptr *= beta;
-                    *cptr += *ab;
+                    (*cptr).mul_assign(beta);
+                    (*cptr).add_assign(*ab);
                 }
             }
             ab.inc();
@@ -434,7 +600,7 @@ unsafe fn c_to_beta_c<T>(m: usize, n: usize, beta: T,
             if beta.is_zero() {
                 *cptr = T::zero(); // initialize C
             } else {
-                *cptr *= beta;
+                (*cptr).mul_assign(beta);
             }
         }
     }

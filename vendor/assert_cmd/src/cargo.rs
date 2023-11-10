@@ -43,15 +43,14 @@
 //! ```
 //!
 //! Notes:
-//! - There is a [noticeable per-call overhead](cargo-overhead) for `CargoBuild`.  We recommend
+//! - There is a [noticeable per-call overhead][cargo-overhead] for `CargoBuild`.  We recommend
 //!   caching the binary location (`.path()` instead of `.command()`) with [`lazy_static`].
 //! - `.current_target()` improves platform coverage at the cost of [slower test runs if you don't
-//!   explicitly pass `--target <TRIPLET>` on the command line](first-call).
+//!   explicitly pass `--target <TRIPLET>` on the command line][first-call].
 //!
 //! [`lazy_static`]: https://crates.io/crates/lazy_static
-//! [`CommandCargoExt`]: trait.CommandCargoExt.html
-//! [`Command`]: https://doc.rust-lang.org/std/process/struct.Command.html
-//! [`escargot`]: https://docs.rs/escargot/
+//! [`Command`]: std::process::Command
+//! [`escargot`]: https://crates.io/crates/escargot
 //! [cargo-overhead]: https://github.com/assert-rs/assert_cmd/issues/6
 //! [first-call]: https://github.com/assert-rs/assert_cmd/issues/57
 
@@ -63,10 +62,10 @@ use std::process;
 
 /// Create a [`Command`] for a `bin` in the Cargo project.
 ///
-/// `CommandCargoExt` is an extension trait for [`Command`][Command] to easily launch a crate's
+/// `CommandCargoExt` is an extension trait for [`Command`][std::process::Command] to easily launch a crate's
 /// binaries.
 ///
-/// See the [`cargo` module documentation][`cargo`] for caveats and workarounds.
+/// See the [`cargo` module documentation][super::cargo] for caveats and workarounds.
 ///
 /// # Examples
 ///
@@ -81,15 +80,14 @@ use std::process;
 /// println!("{:?}", output);
 /// ```
 ///
-/// [`Command`]: https://doc.rust-lang.org/std/process/struct.Command.html
-/// [`cargo`]: index.html
+/// [`Command`]: std::process::Command
 pub trait CommandCargoExt
 where
     Self: Sized,
 {
     /// Create a [`Command`] to run a specific binary of the current crate.
     ///
-    /// See the [`cargo` module documentation][`cargo`] for caveats and workarounds.
+    /// See the [`cargo` module documentation][crate::cargo] for caveats and workarounds.
     ///
     /// # Examples
     ///
@@ -115,8 +113,7 @@ where
     /// println!("{:?}", output);
     /// ```
     ///
-    /// [`Command`]: https://doc.rust-lang.org/std/process/struct.Command.html
-    /// [`cargo`]: index.html
+    /// [`Command`]: std::process::Command
     fn cargo_bin<S: AsRef<str>>(name: S) -> Result<Self, CargoError>;
 }
 
@@ -204,5 +201,8 @@ pub fn cargo_bin<S: AsRef<str>>(name: S) -> path::PathBuf {
 }
 
 fn cargo_bin_str(name: &str) -> path::PathBuf {
-    target_dir().join(format!("{}{}", name, env::consts::EXE_SUFFIX))
+    let env_var = format!("CARGO_BIN_EXE_{}", name);
+    std::env::var_os(&env_var)
+        .map(|p| p.into())
+        .unwrap_or_else(|| target_dir().join(format!("{}{}", name, env::consts::EXE_SUFFIX)))
 }

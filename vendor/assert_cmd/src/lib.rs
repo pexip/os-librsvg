@@ -4,11 +4,6 @@
 //! - Finding your crate's binary to test
 //! - Assert on the result of your program's run.
 //!
-//! ```toml
-//! [dependencies]
-//! assert_cmd = "1.0.2"
-//! ```
-//!
 //! ## Overview
 //!
 //! Create a [`Command`]:
@@ -46,35 +41,31 @@
 //! ```rust,no_run
 //! use assert_cmd::Command;
 //!
-//! fn main() {
-//!     let mut cmd = Command::cargo_bin("bin_fixture").unwrap();
-//!     cmd.assert().success();
-//! }
+//! let mut cmd = Command::cargo_bin("bin_fixture").unwrap();
+//! cmd.assert().success();
 //! ```
 //!
 //! And a little of everything:
 //! ```rust,no_run
 //! use assert_cmd::Command;
 //!
-//! fn main() {
-//!     let mut cmd = Command::cargo_bin("bin_fixture").unwrap();
-//!     let assert = cmd
-//!         .arg("-A")
-//!         .env("stdout", "hello")
-//!         .env("exit", "42")
-//!         .write_stdin("42")
-//!         .assert();
-//!     assert
-//!         .failure()
-//!         .code(42)
-//!         .stdout("hello\n");
-//! }
+//! let mut cmd = Command::cargo_bin("bin_fixture").unwrap();
+//! let assert = cmd
+//!     .arg("-A")
+//!     .env("stdout", "hello")
+//!     .env("exit", "42")
+//!     .write_stdin("42")
+//!     .assert();
+//! assert
+//!     .failure()
+//!     .code(42)
+//!     .stdout("hello\n");
 //! ```
 //!
 //! ## Relevant crates
 //!
 //! Other crates that might be useful in testing command line programs.
-//! * [escargot][escargot] for more control over configuring the crate's binary.
+//! * [escargot] for more control over configuring the crate's binary.
 //! * [duct] for orchestrating multiple processes.
 //!   * or [commandspec] for easier writing of commands
 //! * [rexpect][rexpect] for testing interactive programs.
@@ -98,17 +89,16 @@
 //! [assert_cli]: https://crates.io/crates/assert_cli/0.6.3
 //! [dir-diff]: https://crates.io/crates/dir-diff
 //! [tempfile]: https://crates.io/crates/tempfile
+//! [escargot]: https://crates.io/crates/escargot
 //! [duct]: https://crates.io/crates/duct
 //! [assert_fs]: https://crates.io/crates/assert_fs
-//! [escargot]: http://docs.rs/escargot
 //! [rexpect]: https://crates.io/crates/rexpect
-//! [`Command`]: cmd/struct.Command.html
-//! [`std::process::Command`]: https://doc.rust-lang.org/std/process/struct.Command.html
-//! [`Assert`]: assert/struct.Assert.html
-//! [`success()`]: assert/struct.Assert.html#method.success
-//! [`CommandCargoExt`]: cargo/trait.CommandCargoExt.html
-//! [`OutputOkExt`]: cmd/trait.OutputOkExt.html
-//! [`OutputAssertExt`]: assert/trait.OutputAssertExt.html
+//! [`Command`]: cmd::Command
+//! [`Assert`]: assert::Assert
+//! [`success()`]: assert::Assert::success()
+//! [`CommandCargoExt`]: cargo::CommandCargoExt
+//! [`OutputOkExt`]: output::OutputOkExt
+//! [`OutputAssertExt`]: assert::OutputAssertExt
 
 #![warn(missing_docs)]
 
@@ -153,5 +143,8 @@ pub mod prelude {
 }
 
 pub use crate::cmd::Command;
+
+mod color;
+use color::Palette;
 
 doc_comment::doctest!("../README.md");

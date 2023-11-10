@@ -16,8 +16,10 @@
 //! let pixel = pixel_rgba.rgb();
 //!
 //! let pixels = vec![pixel; 100];
+//! use rgb::ComponentBytes; // Import byte conversion trait
 //! let bytes = pixels.as_bytes();
 //!
+//! use rgb::ComponentMap; // Import pixel map trait
 //! let half_bright = pixel.map(|channel| channel / 2);
 //! let doubled = half_bright * 2;
 //! # let _ = doubled;
@@ -190,8 +192,8 @@ fn bytes() {
         assert_eq!(&[rgb], rgb_bytes.as_pixels());
     }
     let mut rgb2 = [rgb];
-    assert_eq!(rgb2.as_mut_slice().as_rgb_mut(), &mut [rgb]);
-    assert_eq!(&mut [rgb], rgb2.as_mut_slice().as_pixels_mut());
+    assert_eq!(rgb2[..].as_mut_slice().as_rgb_mut(), &mut [rgb]);
+    assert_eq!(&mut [rgb], rgb2[..].as_mut_slice().as_pixels_mut());
 
 
     #[cfg(feature = "as-bytes")]
@@ -219,7 +221,7 @@ fn bytes() {
     assert_eq!(&[rgba], rgba_slice.as_rgba());
     assert_eq!(rgba, rgba_slice.into_iter().cloned().collect());
     let mut rgba2 = [rgba];
-    assert_eq!(rgba2.as_mut_slice().as_rgba_mut(), &mut [rgba]);
+    assert_eq!(rgba2[..].as_mut_slice().as_rgba_mut(), &mut [rgba]);
 
     let mut foo = vec![0u8; 8];
     foo.as_rgba_mut()[1] = RGBA::new(1,2,3,4);

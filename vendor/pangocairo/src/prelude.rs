@@ -1,9 +1,9 @@
-// Copyright 2019, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
-pub use auto::*;
+pub use crate::auto::*;
 
-pub use font_map::FontMapExtManual;
+pub use crate::font_map::FontMapExtManual;
 #[doc(hidden)]
 pub use glib::prelude::*;
+#[doc(hidden)]
+pub use pango::prelude::*;

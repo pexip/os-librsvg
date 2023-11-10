@@ -1,36 +1,33 @@
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::vec::Vec;
-
 use simba::simd::SimdValue;
 
 use crate::base::allocator::Allocator;
 use crate::base::dimension::Dim;
-use crate::base::{DefaultAllocator, MatrixMN, Scalar};
+use crate::base::{DefaultAllocator, OMatrix, Scalar};
 
 /*
  *
  * Simd structures.
  *
  */
-impl<N, R, C> SimdValue for MatrixMN<N, R, C>
+impl<T, R, C> SimdValue for OMatrix<T, R, C>
 where
-    N: Scalar + SimdValue,
+    T: Scalar + SimdValue,
     R: Dim,
     C: Dim,
-    N::Element: Scalar,
-    DefaultAllocator: Allocator<N, R, C> + Allocator<N::Element, R, C>,
+    T::Element: Scalar,
+    DefaultAllocator: Allocator<T, R, C> + Allocator<T::Element, R, C>,
 {
-    type Element = MatrixMN<N::Element, R, C>;
-    type SimdBool = N::SimdBool;
+    type Element = OMatrix<T::Element, R, C>;
+    type SimdBool = T::SimdBool;
 
     #[inline]
     fn lanes() -> usize {
-        N::lanes()
+        T::lanes()
     }
 
     #[inline]
     fn splat(val: Self::Element) -> Self {
-        val.map(N::splat)
+        val.map(T::splat)
     }
 
     #[inline]
@@ -47,7 +44,6 @@ where
     fn replace(&mut self, i: usize, val: Self::Element) {
         self.zip_apply(&val, |mut a, b| {
             a.replace(i, b);
-            a
         })
     }
 
@@ -55,7 +51,6 @@ where
     unsafe fn replace_unchecked(&mut self, i: usize, val: Self::Element) {
         self.zip_apply(&val, |mut a, b| {
             a.replace_unchecked(i, b);
-            a
         })
     }
 

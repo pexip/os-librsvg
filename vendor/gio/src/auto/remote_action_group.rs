@@ -2,24 +2,26 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
-use glib;
+use crate::ActionGroup;
 use glib::object::IsA;
 use glib::translate::*;
 use std::fmt;
-use ActionGroup;
 
-glib_wrapper! {
-    pub struct RemoteActionGroup(Interface<gio_sys::GRemoteActionGroup>) @requires ActionGroup;
+glib::wrapper! {
+    #[doc(alias = "GRemoteActionGroup")]
+    pub struct RemoteActionGroup(Interface<ffi::GRemoteActionGroup, ffi::GRemoteActionGroupInterface>) @requires ActionGroup;
 
     match fn {
-        get_type => || gio_sys::g_remote_action_group_get_type(),
+        type_ => || ffi::g_remote_action_group_get_type(),
     }
 }
 
-pub const NONE_REMOTE_ACTION_GROUP: Option<&RemoteActionGroup> = None;
+impl RemoteActionGroup {
+    pub const NONE: Option<&'static RemoteActionGroup> = None;
+}
 
 pub trait RemoteActionGroupExt: 'static {
+    #[doc(alias = "g_remote_action_group_activate_action_full")]
     fn activate_action_full(
         &self,
         action_name: &str,
@@ -27,6 +29,7 @@ pub trait RemoteActionGroupExt: 'static {
         platform_data: &glib::Variant,
     );
 
+    #[doc(alias = "g_remote_action_group_change_action_state_full")]
     fn change_action_state_full(
         &self,
         action_name: &str,
@@ -43,7 +46,7 @@ impl<O: IsA<RemoteActionGroup>> RemoteActionGroupExt for O {
         platform_data: &glib::Variant,
     ) {
         unsafe {
-            gio_sys::g_remote_action_group_activate_action_full(
+            ffi::g_remote_action_group_activate_action_full(
                 self.as_ref().to_glib_none().0,
                 action_name.to_glib_none().0,
                 parameter.to_glib_none().0,
@@ -59,7 +62,7 @@ impl<O: IsA<RemoteActionGroup>> RemoteActionGroupExt for O {
         platform_data: &glib::Variant,
     ) {
         unsafe {
-            gio_sys::g_remote_action_group_change_action_state_full(
+            ffi::g_remote_action_group_change_action_state_full(
                 self.as_ref().to_glib_none().0,
                 action_name.to_glib_none().0,
                 value.to_glib_none().0,
@@ -71,6 +74,6 @@ impl<O: IsA<RemoteActionGroup>> RemoteActionGroupExt for O {
 
 impl fmt::Display for RemoteActionGroup {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "RemoteActionGroup")
+        f.write_str("RemoteActionGroup")
     }
 }

@@ -2,36 +2,33 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
-use glib;
+use crate::SocketConnection;
+use crate::SocketListener;
 use glib::object::Cast;
 use glib::object::IsA;
 use glib::signal::connect_raw;
 use glib::signal::SignalHandlerId;
 use glib::translate::*;
-#[cfg(any(feature = "v2_46", feature = "dox"))]
-use glib::StaticType;
-#[cfg(any(feature = "v2_46", feature = "dox"))]
-use glib::Value;
-use glib_sys;
-use gobject_sys;
+use glib::ToValue;
 use std::boxed::Box as Box_;
 use std::fmt;
 use std::mem::transmute;
-use SocketConnection;
-use SocketListener;
 
-glib_wrapper! {
-    pub struct SocketService(Object<gio_sys::GSocketService, gio_sys::GSocketServiceClass, SocketServiceClass>) @extends SocketListener;
+glib::wrapper! {
+    #[doc(alias = "GSocketService")]
+    pub struct SocketService(Object<ffi::GSocketService, ffi::GSocketServiceClass>) @extends SocketListener;
 
     match fn {
-        get_type => || gio_sys::g_socket_service_get_type(),
+        type_ => || ffi::g_socket_service_get_type(),
     }
 }
 
 impl SocketService {
+    pub const NONE: Option<&'static SocketService> = None;
+
+    #[doc(alias = "g_socket_service_new")]
     pub fn new() -> SocketService {
-        unsafe { from_glib_full(gio_sys::g_socket_service_new()) }
+        unsafe { from_glib_full(ffi::g_socket_service_new()) }
     }
 }
 
@@ -41,34 +38,32 @@ impl Default for SocketService {
     }
 }
 
-pub const NONE_SOCKET_SERVICE: Option<&SocketService> = None;
-
 pub trait SocketServiceExt: 'static {
+    #[doc(alias = "g_socket_service_is_active")]
     fn is_active(&self) -> bool;
 
+    #[doc(alias = "g_socket_service_start")]
     fn start(&self);
 
+    #[doc(alias = "g_socket_service_stop")]
     fn stop(&self);
 
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
-    fn get_property_active(&self) -> bool;
+    fn set_active(&self, active: bool);
 
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
-    fn set_property_active(&self, active: bool);
-
+    #[doc(alias = "incoming")]
     fn connect_incoming<F: Fn(&Self, &SocketConnection, Option<&glib::Object>) -> bool + 'static>(
         &self,
         f: F,
     ) -> SignalHandlerId;
 
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
-    fn connect_property_active_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
+    #[doc(alias = "active")]
+    fn connect_active_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
 }
 
 impl<O: IsA<SocketService>> SocketServiceExt for O {
     fn is_active(&self) -> bool {
         unsafe {
-            from_glib(gio_sys::g_socket_service_is_active(
+            from_glib(ffi::g_socket_service_is_active(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -76,41 +71,18 @@ impl<O: IsA<SocketService>> SocketServiceExt for O {
 
     fn start(&self) {
         unsafe {
-            gio_sys::g_socket_service_start(self.as_ref().to_glib_none().0);
+            ffi::g_socket_service_start(self.as_ref().to_glib_none().0);
         }
     }
 
     fn stop(&self) {
         unsafe {
-            gio_sys::g_socket_service_stop(self.as_ref().to_glib_none().0);
+            ffi::g_socket_service_stop(self.as_ref().to_glib_none().0);
         }
     }
 
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
-    fn get_property_active(&self) -> bool {
-        unsafe {
-            let mut value = Value::from_type(<bool as StaticType>::static_type());
-            gobject_sys::g_object_get_property(
-                self.to_glib_none().0 as *mut gobject_sys::GObject,
-                b"active\0".as_ptr() as *const _,
-                value.to_glib_none_mut().0,
-            );
-            value
-                .get()
-                .expect("Return Value for property `active` getter")
-                .unwrap()
-        }
-    }
-
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
-    fn set_property_active(&self, active: bool) {
-        unsafe {
-            gobject_sys::g_object_set_property(
-                self.to_glib_none().0 as *mut gobject_sys::GObject,
-                b"active\0".as_ptr() as *const _,
-                Value::from(&active).to_glib_none().0,
-            );
-        }
+    fn set_active(&self, active: bool) {
+        glib::ObjectExt::set_property(self.as_ref(), "active", &active)
     }
 
     fn connect_incoming<
@@ -120,54 +92,57 @@ impl<O: IsA<SocketService>> SocketServiceExt for O {
         f: F,
     ) -> SignalHandlerId {
         unsafe extern "C" fn incoming_trampoline<
-            P,
+            P: IsA<SocketService>,
             F: Fn(&P, &SocketConnection, Option<&glib::Object>) -> bool + 'static,
         >(
-            this: *mut gio_sys::GSocketService,
-            connection: *mut gio_sys::GSocketConnection,
-            source_object: *mut gobject_sys::GObject,
-            f: glib_sys::gpointer,
-        ) -> glib_sys::gboolean
-        where
-            P: IsA<SocketService>,
-        {
+            this: *mut ffi::GSocketService,
+            connection: *mut ffi::GSocketConnection,
+            source_object: *mut glib::gobject_ffi::GObject,
+            f: glib::ffi::gpointer,
+        ) -> glib::ffi::gboolean {
             let f: &F = &*(f as *const F);
             f(
-                &SocketService::from_glib_borrow(this).unsafe_cast(),
+                SocketService::from_glib_borrow(this).unsafe_cast_ref(),
                 &from_glib_borrow(connection),
-                Option::<glib::Object>::from_glib_borrow(source_object).as_ref(),
+                Option::<glib::Object>::from_glib_borrow(source_object)
+                    .as_ref()
+                    .as_ref(),
             )
-            .to_glib()
+            .into_glib()
         }
         unsafe {
             let f: Box_<F> = Box_::new(f);
             connect_raw(
                 self.as_ptr() as *mut _,
                 b"incoming\0".as_ptr() as *const _,
-                Some(transmute(incoming_trampoline::<Self, F> as usize)),
+                Some(transmute::<_, unsafe extern "C" fn()>(
+                    incoming_trampoline::<Self, F> as *const (),
+                )),
                 Box_::into_raw(f),
             )
         }
     }
 
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
-    fn connect_property_active_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
-        unsafe extern "C" fn notify_active_trampoline<P, F: Fn(&P) + 'static>(
-            this: *mut gio_sys::GSocketService,
-            _param_spec: glib_sys::gpointer,
-            f: glib_sys::gpointer,
-        ) where
+    fn connect_active_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
+        unsafe extern "C" fn notify_active_trampoline<
             P: IsA<SocketService>,
-        {
+            F: Fn(&P) + 'static,
+        >(
+            this: *mut ffi::GSocketService,
+            _param_spec: glib::ffi::gpointer,
+            f: glib::ffi::gpointer,
+        ) {
             let f: &F = &*(f as *const F);
-            f(&SocketService::from_glib_borrow(this).unsafe_cast())
+            f(SocketService::from_glib_borrow(this).unsafe_cast_ref())
         }
         unsafe {
             let f: Box_<F> = Box_::new(f);
             connect_raw(
                 self.as_ptr() as *mut _,
                 b"notify::active\0".as_ptr() as *const _,
-                Some(transmute(notify_active_trampoline::<Self, F> as usize)),
+                Some(transmute::<_, unsafe extern "C" fn()>(
+                    notify_active_trampoline::<Self, F> as *const (),
+                )),
                 Box_::into_raw(f),
             )
         }
@@ -176,6 +151,6 @@ impl<O: IsA<SocketService>> SocketServiceExt for O {
 
 impl fmt::Display for SocketService {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SocketService")
+        f.write_str("SocketService")
     }
 }

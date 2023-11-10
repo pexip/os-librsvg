@@ -21,8 +21,9 @@ fn read_data<BR: BufRead>(reader: BR) -> HashMap<(String, String), Vec<f64>> {
     ds
 }
 
+const OUT_FILE_NAME: &'static str = "plotters-doc-data/boxplot.svg";
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let root = SVGBackend::new("plotters-doc-data/boxplot.svg", (1024, 768)).into_drawing_area();
+    let root = SVGBackend::new(OUT_FILE_NAME, (1024, 768)).into_drawing_area();
     root.fill(&WHITE)?;
 
     let root = root.margin(5, 5, 5, 5);
@@ -69,7 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut chart = ChartBuilder::on(&upper)
         .x_label_area_size(40)
         .y_label_area_size(80)
-        .caption("Ping Boxplot", ("sans-serif", 20).into_font())
+        .caption("Ping Boxplot", ("sans-serif", 20))
         .build_cartesian_2d(
             values_range.start - 1.0..values_range.end + 1.0,
             host_list[..].into_segmented(),
@@ -122,7 +123,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut chart = ChartBuilder::on(&left)
         .x_label_area_size(40)
         .y_label_area_size(40)
-        .caption("Vertical Boxplot", ("sans-serif", 20).into_font())
+        .caption("Vertical Boxplot", ("sans-serif", 20))
         .build_cartesian_2d(
             ab_axis[..].into_segmented(),
             values_range.start - 10.0..values_range.end + 10.0,
@@ -137,7 +138,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut chart = ChartBuilder::on(&right)
         .x_label_area_size(40)
         .y_label_area_size(40)
-        .caption("Horizontal Boxplot", ("sans-serif", 20).into_font())
+        .caption("Horizontal Boxplot", ("sans-serif", 20))
         .build_cartesian_2d(-30f32..90f32, 0..3)?;
 
     chart.configure_mesh().light_line_style(&WHITE).draw()?;
@@ -146,6 +147,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Boxplot::new_horizontal(2, &Quartiles::new(&[30])),
     ])?;
 
+    // To avoid the IO failure being ignored silently, we manually call the present function
+    root.present().expect("Unable to write result to file, please make sure 'plotters-doc-data' dir exists under current dir");
+    println!("Result has been saved to {}", OUT_FILE_NAME);
     Ok(())
 }
 

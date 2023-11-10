@@ -3,14 +3,19 @@
 // DO NOT EDIT
 
 mod pixbuf;
-pub use self::pixbuf::{Pixbuf, PixbufClass};
+pub use self::pixbuf::Pixbuf;
+
+mod pixbuf_animation;
+pub use self::pixbuf_animation::PixbufAnimation;
 
 mod pixbuf_loader;
-pub use self::pixbuf_loader::PixbufLoaderExt;
-pub use self::pixbuf_loader::{PixbufLoader, PixbufLoaderClass, NONE_PIXBUF_LOADER};
+pub use self::pixbuf_loader::PixbufLoader;
+
+mod pixbuf_non_anim;
+pub use self::pixbuf_non_anim::PixbufNonAnim;
 
 mod pixbuf_simple_anim;
-pub use self::pixbuf_simple_anim::{PixbufSimpleAnim, PixbufSimpleAnimClass};
+pub use self::pixbuf_simple_anim::PixbufSimpleAnim;
 
 mod pixbuf_format;
 pub use self::pixbuf_format::PixbufFormat;
@@ -22,7 +27,11 @@ pub use self::enums::PixbufAlphaMode;
 pub use self::enums::PixbufError;
 pub use self::enums::PixbufRotation;
 
+mod flags;
+pub use self::flags::PixbufFormatFlags;
+
 #[doc(hidden)]
 pub mod traits {
-    pub use super::PixbufLoaderExt;
+    pub use super::pixbuf_animation::PixbufAnimationExt;
+    pub use super::pixbuf_loader::PixbufLoaderExt;
 }

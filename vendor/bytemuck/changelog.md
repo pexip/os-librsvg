@@ -1,5 +1,144 @@
 # `bytemuck` changelog
 
+## 1.12.1
+
+* Patch bumped the required `bytemuck_derive` version because of a regression in
+  how it handled `align(N)` attributes.
+
+## 1.12
+
+* This minor version bump is caused by a version bump in our `bytemuck_derive`
+  dependency, which is in turn caused by a mixup in the minimum version of `syn`
+  that `bytemuck_derive` uses. See [Issue
+  122](https://github.com/Lokathor/bytemuck/issues/122). There's not any
+  specific "new" API as you might normally expect from a minor version bump.
+* [pali](https://github.com/pali6) fixed a problem with SPIR-V builds being
+  broken. The error handling functions were trying to be generic over `Display`,
+  which the error types normally support, except on SPIR-V targets (which run on
+  the GPU and don't have text formatting).
+
+## 1.11
+
+* [WaffleLapkin](https://github.com/WaffleLapkin) added `wrap_box` and `peel_box`
+  to the `TransparentWrapperAlloc` trait. Default impls of these functions are
+  provided, and (as usual with the transparent trait stuff) you should not override
+  the default versions.
+
+## 1.10
+
+* [TheEdward162](https://github.com/TheEdward162) added the `ZeroableInOption`
+  and `PodInOption` traits. These are for types that are `Zeroable` or `Pod`
+  *when in an option*, but not on their own. We provide impls for the various
+  "NonZeroINTEGER" types in `core`, and if you need to newtype a NonZero value
+  then you can impl these traits when you use `repr(transparent)`.
+
+## 1.9.1
+
+* Bumped the minimum `bytemuck_derive` dependency version from `1.0` to `1.1`.
+  The fact that `bytemuck` and `bytemuck_derive` are separate crates at all is
+  an unfortunate technical limit of current Rust, woe and calamity.
+
+## 1.9.0
+
+* [fu5ha](https://github.com/fu5ha) added the `NoUninit`, `AnyBitPattern`, and
+  `CheckedBitPattern` traits. This allows for a more fine-grained level of
+  detail in what casting operations are allowed for a type. Types that already
+  implement `Zeroable` and `Pod` will have a blanket impl for these new traits.
+  This is a "preview" of the direction that the crate will probably go in the
+  eventual 2.0 version. We're still waiting on [Project Safe
+  Transmute](https://github.com/rust-lang/project-safe-transmute) for an actual
+  2.0 version of the crate, but until then please enjoy this preview.
+* Also Fusha added better support for `union` types in the derive macros. I
+  still don't know how any of the proc-macro stuff works at all, so please
+  direct questions to her.
+
+## 1.8.0
+
+* `try_pod_read_unaligned` and `pod_read_unaligned` let you go from `&[u8]` to
+  `T:Pod` without worrying about alignment.
+
+## 1.7.3
+
+* Experimental support for the `portable_simd` language extension under the
+  `nightly_portable_simd` cargo feature. As the name implies, this is an
+  experimental crate feature and it's **not** part of the semver contract. All
+  it does is add the appropriate `Zeroable` and `Pod` impls.
+
+## 1.7.2
+
+* Why does this repo keep being hit with publishing problems? What did I do to
+  deserve this curse, Ferris? This doesn't ever happen with tinyvec or fermium,
+  only bytemuck.
+
+## 1.7.1
+
+* **Soundness Fix:** The wrap/peel methods for owned value conversion, added to
+  `TransparentWrapper` in 1.6, can cause a double-drop if used with types that
+  impl `Drop`. The fix was simply to add a `ManuallyDrop` layer around the value
+  before doing the `transmute_copy` that is used to wrap/peel. While this fix
+  could technically be backported to the 1.6 series, since 1.7 is semver
+  compatible anyway the 1.6 series has simply been yanked.
+
+## 1.7
+
+* In response to [Unsafe Code Guidelines Issue
+  #286](https://github.com/rust-lang/unsafe-code-guidelines/issues/286), this
+  version of Bytemuck has a ***Soundness-Required Breaking Change***. This is
+  "allowed" under Rust's backwards-compatibility guidelines, but it's still
+  annoying of course so we're trying to keep the damage minimal.
+  * **The Reason:** It turns out that pointer values should not have been `Pod`. More
+    specifically, `ptr as usize` is *not* the same operation as calling
+    `transmute::<_, usize>(ptr)`.
+  * LLVM has yet to fully sort out their story, but until they do, transmuting
+    pointers can cause miscompilations. They may fix things up in the future,
+    but we're not gonna just wait and have broken code in the mean time.
+  * **The Fix:** The breaking change is that the `Pod` impls for `*const T`,
+    `*mut T`, and `Option<NonNull<T>` are now gated behind the
+    `unsound_ptr_pod_impl` feature, which is off by default.
+  * You are *strongly discouraged* from using this feature, but if a dependency
+    of yours doesn't work when you upgrade to 1.7 because it relied on pointer
+    casting, then you might wish to temporarily enable the feature just to get
+    that dependency to build. Enabled features are global across all users of a
+    given semver compatible version, so if you enable the feature in your own
+    crate, your dependency will also end up getting the feature too, and then
+    it'll be able to compile.
+  * Please move away from using this feature as soon as you can. Consider it to
+    *already* be deprecated.
+  * [PR 65](https://github.com/Lokathor/bytemuck/pull/65)
+
+## 1.6.3
+
+* Small goof with an errant `;`, so [PR 69](https://github.com/Lokathor/bytemuck/pull/69)
+  *actually* got things working on SPIR-V.
+
+## 1.6.2
+
+cargo upload goof! ignore this one.
+
+## 1.6.1
+
+* [DJMcNab](https://github.com/DJMcNab) did a fix so that the crate can build for SPIR-V
+  [PR 67](https://github.com/Lokathor/bytemuck/pull/67)
+
+## 1.6
+
+* The `TransparentWrapper` trait now has more methods. More ways to wrap, and
+  now you can "peel" too! Note that we don't call it "unwrap" because that name
+  is too strongly associated with the Option/Result methods.
+  Thanks to [LU15W1R7H](https://github.com/LU15W1R7H) for doing
+  [PR 58](https://github.com/Lokathor/bytemuck/pull/58)
+* Min Const Generics! Now there's Pod and Zeroable for arrays of any size when
+  you turn on the `min_const_generics` crate feature.
+  [zakarumych](https://github.com/zakarumych) got the work started in
+  [PR 59](https://github.com/Lokathor/bytemuck/pull/59),
+  and [chorman0773](https://github.com/chorman0773) finished off the task in
+  [PR 63](https://github.com/Lokathor/bytemuck/pull/63)
+
+## 1.5.1
+
+* Fix `bytes_of` failing on zero sized types.
+  [PR 53](https://github.com/Lokathor/bytemuck/pull/53)
+
 ## 1.5
 
 * Added `pod_collect_to_vec`, which will gather a slice into a vec,

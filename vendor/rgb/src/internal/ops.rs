@@ -5,6 +5,8 @@ use crate::RGB;
 use crate::RGBA;
 use core::ops::*;
 use core::iter::Sum;
+#[cfg(feature = "argb")]
+use crate::alt::ARGB;
 
 macro_rules! impl_struct_ops_opaque {
     ($ty:ident => $($field:tt)+) => {
@@ -31,6 +33,34 @@ macro_rules! impl_struct_ops_opaque {
                 *self = Self {
                     $(
                         $field: self.$field + other.$field,
+                    )+
+                };
+            }
+        }
+
+        /// `px * px`
+        impl<T: Mul> Mul for $ty<T> {
+            type Output = $ty<<T as Mul>::Output>;
+
+            #[inline(always)]
+            fn mul(self, other: $ty<T>) -> Self::Output {
+                $ty {
+                    $(
+                        $field: self.$field * other.$field,
+                    )+
+                }
+            }
+        }
+
+        /// `px * px`
+        impl<T> MulAssign for $ty<T> where
+            T: Mul<Output = T> + Copy
+        {
+            #[inline(always)]
+            fn mul_assign(&mut self, other: $ty<T>) {
+                *self = Self {
+                    $(
+                        $field: self.$field * other.$field,
                     )+
                 };
             }
@@ -236,6 +266,8 @@ macro_rules! impl_scalar {
 
 impl_scalar!{RGB}
 impl_scalar!{RGBA}
+#[cfg(feature = "argb")]
+impl_scalar!{ARGB}
 impl_scalar!{Gray}
 impl_scalar!{GrayAlpha}
 
@@ -243,6 +275,8 @@ impl_struct_ops_opaque! {RGB => r g b}
 impl_struct_ops_opaque! {Gray => 0}
 
 impl_struct_ops_alpha! {RGBA => r g b a}
+#[cfg(feature = "argb")]
+impl_struct_ops_alpha! {ARGB => a r g b}
 impl_struct_ops_alpha! {GrayAlpha => 0 1}
 
 #[cfg(test)]
@@ -335,6 +369,8 @@ mod test {
     fn test_mult() {
         assert_eq!(RGB::new(0.5,1.5,2.5), RGB::new(1.,3.,5.) * 0.5);
         assert_eq!(RGBA::new(2,4,6,8), RGBA::new(1,2,3,4) * 2);
+        assert_eq!(RGB::new(0.5,1.5,2.5) * RGB::new(1.,3.,5.),
+        RGB::new(0.5,4.5,12.5));
     }
 
     #[test]
@@ -344,6 +380,10 @@ mod test {
         assert_eq!(RGB::new(0, 255, 0), green_rgb);
         green_rgb *= 2;
         assert_eq!(RGB::new(0, 255*2, 0), green_rgb);
+
+        let mut rgb = RGB::new(0.5,1.5,2.5);
+        rgb *= RGB::new(1.,3.,5.);
+        assert_eq!(rgb, RGB::new(0.5,4.5,12.5));
 
         let mut green_rgba = RGBA::new(0u16, 255, 0, 0);
         green_rgba *= 1;

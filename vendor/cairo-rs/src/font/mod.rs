@@ -1,17 +1,15 @@
-// Copyright 2013-2015, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 mod font_face;
 mod font_options;
 mod scaled_font;
 
-pub use enums::{
+pub use crate::enums::{
     Antialias, FontSlant, FontType, FontWeight, HintMetrics, HintStyle, SubpixelOrder,
     TextClusterFlags,
 };
 
-pub use ffi::{FontExtents, Glyph, TextCluster, TextExtents};
+pub use crate::ffi::{FontExtents, Glyph, TextCluster, TextExtents};
 
 /* TODO
  Allocates an array of cairo_glyph_t's. This function is only useful in

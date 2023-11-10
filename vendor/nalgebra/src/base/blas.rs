@@ -1,326 +1,82 @@
-use crate::SimdComplexField;
-#[cfg(feature = "std")]
-use matrixmultiply;
-use num::{One, Signed, Zero};
-use simba::scalar::{ClosedAdd, ClosedMul, ComplexField};
-#[cfg(feature = "std")]
-use std::mem;
+use crate::{RawStorage, SimdComplexField};
+use num::{One, Zero};
+use simba::scalar::{ClosedAdd, ClosedMul};
 
 use crate::base::allocator::Allocator;
+use crate::base::blas_uninit::{axcpy_uninit, gemm_uninit, gemv_uninit};
 use crate::base::constraint::{
     AreMultipliable, DimEq, SameNumberOfColumns, SameNumberOfRows, ShapeConstraint,
 };
-use crate::base::dimension::{Dim, Dynamic, U1, U2, U3, U4};
+use crate::base::dimension::{Const, Dim, Dynamic, U1, U2, U3, U4};
 use crate::base::storage::{Storage, StorageMut};
+use crate::base::uninit::Init;
 use crate::base::{
-    DVectorSlice, DefaultAllocator, Matrix, Scalar, SquareMatrix, Vector, VectorSliceN,
+    DVectorSlice, DefaultAllocator, Matrix, Scalar, SquareMatrix, Vector, VectorSlice,
 };
 
-// FIXME: find a way to avoid code duplication just for complex number support.
-impl<N: ComplexField, D: Dim, S: Storage<N, D>> Vector<N, D, S> {
-    /// Computes the index of the vector component with the largest complex or real absolute value.
-    ///
-    /// # Examples:
-    ///
-    /// ```
-    /// # extern crate num_complex;
-    /// # extern crate nalgebra;
-    /// # use num_complex::Complex;
-    /// # use nalgebra::Vector3;
-    /// let vec = Vector3::new(Complex::new(11.0, 3.0), Complex::new(-15.0, 0.0), Complex::new(13.0, 5.0));
-    /// assert_eq!(vec.icamax(), 2);
-    /// ```
-    #[inline]
-    pub fn icamax(&self) -> usize {
-        assert!(!self.is_empty(), "The input vector must not be empty.");
-
-        let mut the_max = unsafe { self.vget_unchecked(0).norm1() };
-        let mut the_i = 0;
-
-        for i in 1..self.nrows() {
-            let val = unsafe { self.vget_unchecked(i).norm1() };
-
-            if val > the_max {
-                the_max = val;
-                the_i = i;
-            }
-        }
-
-        the_i
-    }
-}
-
-impl<N: Scalar + PartialOrd, D: Dim, S: Storage<N, D>> Vector<N, D, S> {
-    /// Computes the index and value of the vector component with the largest value.
-    ///
-    /// # Examples:
-    ///
-    /// ```
-    /// # use nalgebra::Vector3;
-    /// let vec = Vector3::new(11, -15, 13);
-    /// assert_eq!(vec.argmax(), (2, 13));
-    /// ```
-    #[inline]
-    pub fn argmax(&self) -> (usize, N) {
-        assert!(!self.is_empty(), "The input vector must not be empty.");
-
-        let mut the_max = unsafe { self.vget_unchecked(0) };
-        let mut the_i = 0;
-
-        for i in 1..self.nrows() {
-            let val = unsafe { self.vget_unchecked(i) };
-
-            if val > the_max {
-                the_max = val;
-                the_i = i;
-            }
-        }
-
-        (the_i, the_max.inlined_clone())
-    }
-
-    /// Computes the index of the vector component with the largest value.
-    ///
-    /// # Examples:
-    ///
-    /// ```
-    /// # use nalgebra::Vector3;
-    /// let vec = Vector3::new(11, -15, 13);
-    /// assert_eq!(vec.imax(), 2);
-    /// ```
-    #[inline]
-    pub fn imax(&self) -> usize {
-        self.argmax().0
-    }
-
-    /// Computes the index of the vector component with the largest absolute value.
-    ///
-    /// # Examples:
-    ///
-    /// ```
-    /// # use nalgebra::Vector3;
-    /// let vec = Vector3::new(11, -15, 13);
-    /// assert_eq!(vec.iamax(), 1);
-    /// ```
-    #[inline]
-    pub fn iamax(&self) -> usize
-    where
-        N: Signed,
-    {
-        assert!(!self.is_empty(), "The input vector must not be empty.");
-
-        let mut the_max = unsafe { self.vget_unchecked(0).abs() };
-        let mut the_i = 0;
-
-        for i in 1..self.nrows() {
-            let val = unsafe { self.vget_unchecked(i).abs() };
-
-            if val > the_max {
-                the_max = val;
-                the_i = i;
-            }
-        }
-
-        the_i
-    }
-
-    /// Computes the index and value of the vector component with the smallest value.
-    ///
-    /// # Examples:
-    ///
-    /// ```
-    /// # use nalgebra::Vector3;
-    /// let vec = Vector3::new(11, -15, 13);
-    /// assert_eq!(vec.argmin(), (1, -15));
-    /// ```
-    #[inline]
-    pub fn argmin(&self) -> (usize, N) {
-        assert!(!self.is_empty(), "The input vector must not be empty.");
-
-        let mut the_min = unsafe { self.vget_unchecked(0) };
-        let mut the_i = 0;
-
-        for i in 1..self.nrows() {
-            let val = unsafe { self.vget_unchecked(i) };
-
-            if val < the_min {
-                the_min = val;
-                the_i = i;
-            }
-        }
-
-        (the_i, the_min.inlined_clone())
-    }
-
-    /// Computes the index of the vector component with the smallest value.
-    ///
-    /// # Examples:
-    ///
-    /// ```
-    /// # use nalgebra::Vector3;
-    /// let vec = Vector3::new(11, -15, 13);
-    /// assert_eq!(vec.imin(), 1);
-    /// ```
-    #[inline]
-    pub fn imin(&self) -> usize {
-        self.argmin().0
-    }
-
-    /// Computes the index of the vector component with the smallest absolute value.
-    ///
-    /// # Examples:
-    ///
-    /// ```
-    /// # use nalgebra::Vector3;
-    /// let vec = Vector3::new(11, -15, 13);
-    /// assert_eq!(vec.iamin(), 0);
-    /// ```
-    #[inline]
-    pub fn iamin(&self) -> usize
-    where
-        N: Signed,
-    {
-        assert!(!self.is_empty(), "The input vector must not be empty.");
-
-        let mut the_min = unsafe { self.vget_unchecked(0).abs() };
-        let mut the_i = 0;
-
-        for i in 1..self.nrows() {
-            let val = unsafe { self.vget_unchecked(i).abs() };
-
-            if val < the_min {
-                the_min = val;
-                the_i = i;
-            }
-        }
-
-        the_i
-    }
-}
-
-// FIXME: find a way to avoid code duplication just for complex number support.
-impl<N: ComplexField, R: Dim, C: Dim, S: Storage<N, R, C>> Matrix<N, R, C, S> {
-    /// Computes the index of the matrix component with the largest absolute value.
-    ///
-    /// # Examples:
-    ///
-    /// ```
-    /// # extern crate num_complex;
-    /// # extern crate nalgebra;
-    /// # use num_complex::Complex;
-    /// # use nalgebra::Matrix2x3;
-    /// let mat = Matrix2x3::new(Complex::new(11.0, 1.0), Complex::new(-12.0, 2.0), Complex::new(13.0, 3.0),
-    ///                          Complex::new(21.0, 43.0), Complex::new(22.0, 5.0), Complex::new(-23.0, 0.0));
-    /// assert_eq!(mat.icamax_full(), (1, 0));
-    /// ```
-    #[inline]
-    pub fn icamax_full(&self) -> (usize, usize) {
-        assert!(!self.is_empty(), "The input matrix must not be empty.");
-
-        let mut the_max = unsafe { self.get_unchecked((0, 0)).norm1() };
-        let mut the_ij = (0, 0);
-
-        for j in 0..self.ncols() {
-            for i in 0..self.nrows() {
-                let val = unsafe { self.get_unchecked((i, j)).norm1() };
-
-                if val > the_max {
-                    the_max = val;
-                    the_ij = (i, j);
-                }
-            }
-        }
-
-        the_ij
-    }
-}
-
-impl<N: Scalar + PartialOrd + Signed, R: Dim, C: Dim, S: Storage<N, R, C>> Matrix<N, R, C, S> {
-    /// Computes the index of the matrix component with the largest absolute value.
-    ///
-    /// # Examples:
-    ///
-    /// ```
-    /// # use nalgebra::Matrix2x3;
-    /// let mat = Matrix2x3::new(11, -12, 13,
-    ///                          21, 22, -23);
-    /// assert_eq!(mat.iamax_full(), (1, 2));
-    /// ```
-    #[inline]
-    pub fn iamax_full(&self) -> (usize, usize) {
-        assert!(!self.is_empty(), "The input matrix must not be empty.");
-
-        let mut the_max = unsafe { self.get_unchecked((0, 0)).abs() };
-        let mut the_ij = (0, 0);
-
-        for j in 0..self.ncols() {
-            for i in 0..self.nrows() {
-                let val = unsafe { self.get_unchecked((i, j)).abs() };
-
-                if val > the_max {
-                    the_max = val;
-                    the_ij = (i, j);
-                }
-            }
-        }
-
-        the_ij
-    }
-}
-
-impl<N, R: Dim, C: Dim, S: Storage<N, R, C>> Matrix<N, R, C, S>
+/// # Dot/scalar product
+impl<T, R: Dim, C: Dim, S: RawStorage<T, R, C>> Matrix<T, R, C, S>
 where
-    N: Scalar + Zero + ClosedAdd + ClosedMul,
+    T: Scalar + Zero + ClosedAdd + ClosedMul,
 {
     #[inline(always)]
     fn dotx<R2: Dim, C2: Dim, SB>(
         &self,
-        rhs: &Matrix<N, R2, C2, SB>,
-        conjugate: impl Fn(N) -> N,
-    ) -> N
+        rhs: &Matrix<T, R2, C2, SB>,
+        conjugate: impl Fn(T) -> T,
+    ) -> T
     where
-        SB: Storage<N, R2, C2>,
+        SB: RawStorage<T, R2, C2>,
         ShapeConstraint: DimEq<R, R2> + DimEq<C, C2>,
     {
         assert!(
             self.nrows() == rhs.nrows(),
-            "Dot product dimensions mismatch."
+            "Dot product dimensions mismatch for shapes {:?} and {:?}: left rows != right rows.",
+            self.shape(),
+            rhs.shape(),
+        );
+
+        assert!(
+            self.ncols() == rhs.ncols(),
+            "Dot product dimensions mismatch for shapes {:?} and {:?}: left cols != right cols.",
+            self.shape(),
+            rhs.shape(),
         );
 
         // So we do some special cases for common fixed-size vectors of dimension lower than 8
         // because the `for` loop below won't be very efficient on those.
         if (R::is::<U2>() || R2::is::<U2>()) && (C::is::<U1>() || C2::is::<U1>()) {
             unsafe {
-                let a = conjugate(self.get_unchecked((0, 0)).inlined_clone())
-                    * rhs.get_unchecked((0, 0)).inlined_clone();
-                let b = conjugate(self.get_unchecked((1, 0)).inlined_clone())
-                    * rhs.get_unchecked((1, 0)).inlined_clone();
+                let a = conjugate(self.get_unchecked((0, 0)).clone())
+                    * rhs.get_unchecked((0, 0)).clone();
+                let b = conjugate(self.get_unchecked((1, 0)).clone())
+                    * rhs.get_unchecked((1, 0)).clone();
 
                 return a + b;
             }
         }
         if (R::is::<U3>() || R2::is::<U3>()) && (C::is::<U1>() || C2::is::<U1>()) {
             unsafe {
-                let a = conjugate(self.get_unchecked((0, 0)).inlined_clone())
-                    * rhs.get_unchecked((0, 0)).inlined_clone();
-                let b = conjugate(self.get_unchecked((1, 0)).inlined_clone())
-                    * rhs.get_unchecked((1, 0)).inlined_clone();
-                let c = conjugate(self.get_unchecked((2, 0)).inlined_clone())
-                    * rhs.get_unchecked((2, 0)).inlined_clone();
+                let a = conjugate(self.get_unchecked((0, 0)).clone())
+                    * rhs.get_unchecked((0, 0)).clone();
+                let b = conjugate(self.get_unchecked((1, 0)).clone())
+                    * rhs.get_unchecked((1, 0)).clone();
+                let c = conjugate(self.get_unchecked((2, 0)).clone())
+                    * rhs.get_unchecked((2, 0)).clone();
 
                 return a + b + c;
             }
         }
         if (R::is::<U4>() || R2::is::<U4>()) && (C::is::<U1>() || C2::is::<U1>()) {
             unsafe {
-                let mut a = conjugate(self.get_unchecked((0, 0)).inlined_clone())
-                    * rhs.get_unchecked((0, 0)).inlined_clone();
-                let mut b = conjugate(self.get_unchecked((1, 0)).inlined_clone())
-                    * rhs.get_unchecked((1, 0)).inlined_clone();
-                let c = conjugate(self.get_unchecked((2, 0)).inlined_clone())
-                    * rhs.get_unchecked((2, 0)).inlined_clone();
-                let d = conjugate(self.get_unchecked((3, 0)).inlined_clone())
-                    * rhs.get_unchecked((3, 0)).inlined_clone();
+                let mut a = conjugate(self.get_unchecked((0, 0)).clone())
+                    * rhs.get_unchecked((0, 0)).clone();
+                let mut b = conjugate(self.get_unchecked((1, 0)).clone())
+                    * rhs.get_unchecked((1, 0)).clone();
+                let c = conjugate(self.get_unchecked((2, 0)).clone())
+                    * rhs.get_unchecked((2, 0)).clone();
+                let d = conjugate(self.get_unchecked((3, 0)).clone())
+                    * rhs.get_unchecked((3, 0)).clone();
 
                 a += c;
                 b += d;
@@ -334,7 +90,7 @@ where
         //
         // And this comment from bluss:
         // https://users.rust-lang.org/t/how-to-zip-two-slices-efficiently/2048/12
-        let mut res = N::zero();
+        let mut res = T::zero();
 
         // We have to define them outside of the loop (and not inside at first assignment)
         // otherwise vectorization won't kick in for some reason.
@@ -350,47 +106,47 @@ where
         for j in 0..self.ncols() {
             let mut i = 0;
 
-            acc0 = N::zero();
-            acc1 = N::zero();
-            acc2 = N::zero();
-            acc3 = N::zero();
-            acc4 = N::zero();
-            acc5 = N::zero();
-            acc6 = N::zero();
-            acc7 = N::zero();
+            acc0 = T::zero();
+            acc1 = T::zero();
+            acc2 = T::zero();
+            acc3 = T::zero();
+            acc4 = T::zero();
+            acc5 = T::zero();
+            acc6 = T::zero();
+            acc7 = T::zero();
 
             while self.nrows() - i >= 8 {
                 acc0 += unsafe {
-                    conjugate(self.get_unchecked((i + 0, j)).inlined_clone())
-                        * rhs.get_unchecked((i + 0, j)).inlined_clone()
+                    conjugate(self.get_unchecked((i, j)).clone())
+                        * rhs.get_unchecked((i, j)).clone()
                 };
                 acc1 += unsafe {
-                    conjugate(self.get_unchecked((i + 1, j)).inlined_clone())
-                        * rhs.get_unchecked((i + 1, j)).inlined_clone()
+                    conjugate(self.get_unchecked((i + 1, j)).clone())
+                        * rhs.get_unchecked((i + 1, j)).clone()
                 };
                 acc2 += unsafe {
-                    conjugate(self.get_unchecked((i + 2, j)).inlined_clone())
-                        * rhs.get_unchecked((i + 2, j)).inlined_clone()
+                    conjugate(self.get_unchecked((i + 2, j)).clone())
+                        * rhs.get_unchecked((i + 2, j)).clone()
                 };
                 acc3 += unsafe {
-                    conjugate(self.get_unchecked((i + 3, j)).inlined_clone())
-                        * rhs.get_unchecked((i + 3, j)).inlined_clone()
+                    conjugate(self.get_unchecked((i + 3, j)).clone())
+                        * rhs.get_unchecked((i + 3, j)).clone()
                 };
                 acc4 += unsafe {
-                    conjugate(self.get_unchecked((i + 4, j)).inlined_clone())
-                        * rhs.get_unchecked((i + 4, j)).inlined_clone()
+                    conjugate(self.get_unchecked((i + 4, j)).clone())
+                        * rhs.get_unchecked((i + 4, j)).clone()
                 };
                 acc5 += unsafe {
-                    conjugate(self.get_unchecked((i + 5, j)).inlined_clone())
-                        * rhs.get_unchecked((i + 5, j)).inlined_clone()
+                    conjugate(self.get_unchecked((i + 5, j)).clone())
+                        * rhs.get_unchecked((i + 5, j)).clone()
                 };
                 acc6 += unsafe {
-                    conjugate(self.get_unchecked((i + 6, j)).inlined_clone())
-                        * rhs.get_unchecked((i + 6, j)).inlined_clone()
+                    conjugate(self.get_unchecked((i + 6, j)).clone())
+                        * rhs.get_unchecked((i + 6, j)).clone()
                 };
                 acc7 += unsafe {
-                    conjugate(self.get_unchecked((i + 7, j)).inlined_clone())
-                        * rhs.get_unchecked((i + 7, j)).inlined_clone()
+                    conjugate(self.get_unchecked((i + 7, j)).clone())
+                        * rhs.get_unchecked((i + 7, j)).clone()
                 };
                 i += 8;
             }
@@ -402,8 +158,8 @@ where
 
             for k in i..self.nrows() {
                 res += unsafe {
-                    conjugate(self.get_unchecked((k, j)).inlined_clone())
-                        * rhs.get_unchecked((k, j)).inlined_clone()
+                    conjugate(self.get_unchecked((k, j)).clone())
+                        * rhs.get_unchecked((k, j)).clone()
                 }
             }
         }
@@ -435,9 +191,10 @@ where
     /// ```
     ///
     #[inline]
-    pub fn dot<R2: Dim, C2: Dim, SB>(&self, rhs: &Matrix<N, R2, C2, SB>) -> N
+    #[must_use]
+    pub fn dot<R2: Dim, C2: Dim, SB>(&self, rhs: &Matrix<T, R2, C2, SB>) -> T
     where
-        SB: Storage<N, R2, C2>,
+        SB: RawStorage<T, R2, C2>,
         ShapeConstraint: DimEq<R, R2> + DimEq<C, C2>,
     {
         self.dotx(rhs, |e| e)
@@ -463,13 +220,14 @@ where
     /// assert_ne!(vec1.dotc(&vec2), vec1.dot(&vec2));
     /// ```
     #[inline]
-    pub fn dotc<R2: Dim, C2: Dim, SB>(&self, rhs: &Matrix<N, R2, C2, SB>) -> N
+    #[must_use]
+    pub fn dotc<R2: Dim, C2: Dim, SB>(&self, rhs: &Matrix<T, R2, C2, SB>) -> T
     where
-        N: SimdComplexField,
-        SB: Storage<N, R2, C2>,
+        T: SimdComplexField,
+        SB: RawStorage<T, R2, C2>,
         ShapeConstraint: DimEq<R, R2> + DimEq<C, C2>,
     {
-        self.dotx(rhs, N::simd_conjugate)
+        self.dotx(rhs, T::simd_conjugate)
     }
 
     /// The dot product between the transpose of `self` and `rhs`.
@@ -490,24 +248,25 @@ where
     /// assert_eq!(mat1.tr_dot(&mat2), 9.1);
     /// ```
     #[inline]
-    pub fn tr_dot<R2: Dim, C2: Dim, SB>(&self, rhs: &Matrix<N, R2, C2, SB>) -> N
+    #[must_use]
+    pub fn tr_dot<R2: Dim, C2: Dim, SB>(&self, rhs: &Matrix<T, R2, C2, SB>) -> T
     where
-        SB: Storage<N, R2, C2>,
+        SB: RawStorage<T, R2, C2>,
         ShapeConstraint: DimEq<C, R2> + DimEq<R, C2>,
     {
         let (nrows, ncols) = self.shape();
-        assert!(
-            (ncols, nrows) == rhs.shape(),
+        assert_eq!(
+            (ncols, nrows),
+            rhs.shape(),
             "Transposed dot product dimension mismatch."
         );
 
-        let mut res = N::zero();
+        let mut res = T::zero();
 
         for j in 0..self.nrows() {
             for i in 0..self.ncols() {
                 res += unsafe {
-                    self.get_unchecked((j, i)).inlined_clone()
-                        * rhs.get_unchecked((i, j)).inlined_clone()
+                    self.get_unchecked((j, i)).clone() * rhs.get_unchecked((i, j)).clone()
                 }
             }
         }
@@ -516,46 +275,11 @@ where
     }
 }
 
-fn array_axcpy<N>(
-    y: &mut [N],
-    a: N,
-    x: &[N],
-    c: N,
-    beta: N,
-    stride1: usize,
-    stride2: usize,
-    len: usize,
-) where
-    N: Scalar + Zero + ClosedAdd + ClosedMul,
-{
-    for i in 0..len {
-        unsafe {
-            let y = y.get_unchecked_mut(i * stride1);
-            *y = a.inlined_clone()
-                * x.get_unchecked(i * stride2).inlined_clone()
-                * c.inlined_clone()
-                + beta.inlined_clone() * y.inlined_clone();
-        }
-    }
-}
-
-fn array_axc<N>(y: &mut [N], a: N, x: &[N], c: N, stride1: usize, stride2: usize, len: usize)
+/// # BLAS functions
+impl<T, D: Dim, S> Vector<T, D, S>
 where
-    N: Scalar + Zero + ClosedAdd + ClosedMul,
-{
-    for i in 0..len {
-        unsafe {
-            *y.get_unchecked_mut(i * stride1) = a.inlined_clone()
-                * x.get_unchecked(i * stride2).inlined_clone()
-                * c.inlined_clone();
-        }
-    }
-}
-
-impl<N, D: Dim, S> Vector<N, D, S>
-where
-    N: Scalar + Zero + ClosedAdd + ClosedMul,
-    S: StorageMut<N, D>,
+    T: Scalar + Zero + ClosedAdd + ClosedMul,
+    S: StorageMut<T, D>,
 {
     /// Computes `self = a * x * c + b * self`.
     ///
@@ -571,24 +295,13 @@ where
     /// assert_eq!(vec1, Vector3::new(6.0, 12.0, 18.0));
     /// ```
     #[inline]
-    pub fn axcpy<D2: Dim, SB>(&mut self, a: N, x: &Vector<N, D2, SB>, c: N, b: N)
+    #[allow(clippy::many_single_char_names)]
+    pub fn axcpy<D2: Dim, SB>(&mut self, a: T, x: &Vector<T, D2, SB>, c: T, b: T)
     where
-        SB: Storage<N, D2>,
+        SB: Storage<T, D2>,
         ShapeConstraint: DimEq<D, D2>,
     {
-        assert_eq!(self.nrows(), x.nrows(), "Axcpy: mismatched vector shapes.");
-
-        let rstride1 = self.strides().0;
-        let rstride2 = x.strides().0;
-
-        let y = self.data.as_mut_slice();
-        let x = x.data.as_slice();
-
-        if !b.is_zero() {
-            array_axcpy(y, a, x, c, b, rstride1, rstride2, x.len());
-        } else {
-            array_axc(y, a, x, c, rstride1, rstride2, x.len());
-        }
+        unsafe { axcpy_uninit(Init, self, a, x, c, b) };
     }
 
     /// Computes `self = a * x + b * self`.
@@ -605,14 +318,14 @@ where
     /// assert_eq!(vec1, Vector3::new(6.0, 12.0, 18.0));
     /// ```
     #[inline]
-    pub fn axpy<D2: Dim, SB>(&mut self, a: N, x: &Vector<N, D2, SB>, b: N)
+    pub fn axpy<D2: Dim, SB>(&mut self, a: T, x: &Vector<T, D2, SB>, b: T)
     where
-        N: One,
-        SB: Storage<N, D2>,
+        T: One,
+        SB: Storage<T, D2>,
         ShapeConstraint: DimEq<D, D2>,
     {
         assert_eq!(self.nrows(), x.nrows(), "Axpy: mismatched vector shapes.");
-        self.axcpy(a, x, N::one(), b)
+        self.axcpy(a, x, T::one(), b)
     }
 
     /// Computes `self = alpha * a * x + beta * self`, where `a` is a matrix, `x` a vector, and
@@ -634,65 +347,35 @@ where
     #[inline]
     pub fn gemv<R2: Dim, C2: Dim, D3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        a: &Matrix<N, R2, C2, SB>,
-        x: &Vector<N, D3, SC>,
-        beta: N,
+        alpha: T,
+        a: &Matrix<T, R2, C2, SB>,
+        x: &Vector<T, D3, SC>,
+        beta: T,
     ) where
-        N: One,
-        SB: Storage<N, R2, C2>,
-        SC: Storage<N, D3>,
+        T: One,
+        SB: Storage<T, R2, C2>,
+        SC: Storage<T, D3>,
         ShapeConstraint: DimEq<D, R2> + AreMultipliable<R2, C2, D3, U1>,
     {
-        let dim1 = self.nrows();
-        let (nrows2, ncols2) = a.shape();
-        let dim3 = x.nrows();
-
-        assert!(
-            ncols2 == dim3 && dim1 == nrows2,
-            "Gemv: dimensions mismatch."
-        );
-
-        if ncols2 == 0 {
-            // NOTE: we can't just always multiply by beta
-            // because we documented the guaranty that `self` is
-            // never read if `beta` is zero.
-            if beta.is_zero() {
-                self.fill(N::zero());
-            } else {
-                *self *= beta;
-            }
-            return;
-        }
-
-        // FIXME: avoid bound checks.
-        let col2 = a.column(0);
-        let val = unsafe { x.vget_unchecked(0).inlined_clone() };
-        self.axcpy(alpha.inlined_clone(), &col2, val, beta);
-
-        for j in 1..ncols2 {
-            let col2 = a.column(j);
-            let val = unsafe { x.vget_unchecked(j).inlined_clone() };
-
-            self.axcpy(alpha.inlined_clone(), &col2, val, N::one());
-        }
+        // Safety: this is safe because we are passing Status == Init.
+        unsafe { gemv_uninit(Init, self, alpha, a, x, beta) }
     }
 
     #[inline(always)]
     fn xxgemv<D2: Dim, D3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        a: &SquareMatrix<N, D2, SB>,
-        x: &Vector<N, D3, SC>,
-        beta: N,
+        alpha: T,
+        a: &SquareMatrix<T, D2, SB>,
+        x: &Vector<T, D3, SC>,
+        beta: T,
         dot: impl Fn(
-            &DVectorSlice<N, SB::RStride, SB::CStride>,
-            &DVectorSlice<N, SC::RStride, SC::CStride>,
-        ) -> N,
+            &DVectorSlice<'_, T, SB::RStride, SB::CStride>,
+            &DVectorSlice<'_, T, SC::RStride, SC::CStride>,
+        ) -> T,
     ) where
-        N: One,
-        SB: Storage<N, D2, D2>,
-        SC: Storage<N, D3>,
+        T: One,
+        SB: Storage<T, D2, D2>,
+        SC: Storage<T, D3>,
         ShapeConstraint: DimEq<D, D2> + AreMultipliable<D2, D2, D3, U1>,
     {
         let dim1 = self.nrows();
@@ -712,11 +395,11 @@ where
             return;
         }
 
-        // FIXME: avoid bound checks.
+        // TODO: avoid bound checks.
         let col2 = a.column(0);
-        let val = unsafe { x.vget_unchecked(0).inlined_clone() };
-        self.axpy(alpha.inlined_clone() * val, &col2, beta);
-        self[0] += alpha.inlined_clone() * dot(&a.slice_range(1.., 0), &x.rows_range(1..));
+        let val = unsafe { x.vget_unchecked(0).clone() };
+        self.axpy(alpha.clone() * val, &col2, beta);
+        self[0] += alpha.clone() * dot(&a.slice_range(1.., 0), &x.rows_range(1..));
 
         for j in 1..dim2 {
             let col2 = a.column(j);
@@ -724,34 +407,15 @@ where
 
             let val;
             unsafe {
-                val = x.vget_unchecked(j).inlined_clone();
-                *self.vget_unchecked_mut(j) += alpha.inlined_clone() * dot;
+                val = x.vget_unchecked(j).clone();
+                *self.vget_unchecked_mut(j) += alpha.clone() * dot;
             }
             self.rows_range_mut(j + 1..).axpy(
-                alpha.inlined_clone() * val,
+                alpha.clone() * val,
                 &col2.rows_range(j + 1..),
-                N::one(),
+                T::one(),
             );
         }
-    }
-
-    /// Computes `self = alpha * a * x + beta * self`, where `a` is a **symmetric** matrix, `x` a
-    /// vector, and `alpha, beta` two scalars. DEPRECATED: use `sygemv` instead.
-    #[inline]
-    #[deprecated(note = "This is renamed `sygemv` to match the original BLAS terminology.")]
-    pub fn gemv_symm<D2: Dim, D3: Dim, SB, SC>(
-        &mut self,
-        alpha: N,
-        a: &SquareMatrix<N, D2, SB>,
-        x: &Vector<N, D3, SC>,
-        beta: N,
-    ) where
-        N: One,
-        SB: Storage<N, D2, D2>,
-        SC: Storage<N, D3>,
-        ShapeConstraint: DimEq<D, D2> + AreMultipliable<D2, D2, D3, U1>,
-    {
-        self.sygemv(alpha, a, x, beta)
     }
 
     /// Computes `self = alpha * a * x + beta * self`, where `a` is a **symmetric** matrix, `x` a
@@ -785,14 +449,14 @@ where
     #[inline]
     pub fn sygemv<D2: Dim, D3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        a: &SquareMatrix<N, D2, SB>,
-        x: &Vector<N, D3, SC>,
-        beta: N,
+        alpha: T,
+        a: &SquareMatrix<T, D2, SB>,
+        x: &Vector<T, D3, SC>,
+        beta: T,
     ) where
-        N: One,
-        SB: Storage<N, D2, D2>,
-        SC: Storage<N, D3>,
+        T: One,
+        SB: Storage<T, D2, D2>,
+        SC: Storage<T, D3>,
         ShapeConstraint: DimEq<D, D2> + AreMultipliable<D2, D2, D3, U1>,
     {
         self.xxgemv(alpha, a, x, beta, |a, b| a.dot(b))
@@ -830,14 +494,14 @@ where
     #[inline]
     pub fn hegemv<D2: Dim, D3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        a: &SquareMatrix<N, D2, SB>,
-        x: &Vector<N, D3, SC>,
-        beta: N,
+        alpha: T,
+        a: &SquareMatrix<T, D2, SB>,
+        x: &Vector<T, D3, SC>,
+        beta: T,
     ) where
-        N: SimdComplexField,
-        SB: Storage<N, D2, D2>,
-        SC: Storage<N, D3>,
+        T: SimdComplexField,
+        SB: Storage<T, D2, D2>,
+        SC: Storage<T, D3>,
         ShapeConstraint: DimEq<D, D2> + AreMultipliable<D2, D2, D3, U1>,
     {
         self.xxgemv(alpha, a, x, beta, |a, b| a.dotc(b))
@@ -846,15 +510,15 @@ where
     #[inline(always)]
     fn gemv_xx<R2: Dim, C2: Dim, D3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        a: &Matrix<N, R2, C2, SB>,
-        x: &Vector<N, D3, SC>,
-        beta: N,
-        dot: impl Fn(&VectorSliceN<N, R2, SB::RStride, SB::CStride>, &Vector<N, D3, SC>) -> N,
+        alpha: T,
+        a: &Matrix<T, R2, C2, SB>,
+        x: &Vector<T, D3, SC>,
+        beta: T,
+        dot: impl Fn(&VectorSlice<'_, T, R2, SB::RStride, SB::CStride>, &Vector<T, D3, SC>) -> T,
     ) where
-        N: One,
-        SB: Storage<N, R2, C2>,
-        SC: Storage<N, D3>,
+        T: One,
+        SB: Storage<T, R2, C2>,
+        SC: Storage<T, D3>,
         ShapeConstraint: DimEq<D, C2> + AreMultipliable<C2, R2, D3, U1>,
     {
         let dim1 = self.nrows();
@@ -873,13 +537,12 @@ where
         if beta.is_zero() {
             for j in 0..ncols2 {
                 let val = unsafe { self.vget_unchecked_mut(j) };
-                *val = alpha.inlined_clone() * dot(&a.column(j), x)
+                *val = alpha.clone() * dot(&a.column(j), x)
             }
         } else {
             for j in 0..ncols2 {
                 let val = unsafe { self.vget_unchecked_mut(j) };
-                *val = alpha.inlined_clone() * dot(&a.column(j), x)
-                    + beta.inlined_clone() * val.inlined_clone();
+                *val = alpha.clone() * dot(&a.column(j), x) + beta.clone() * val.clone();
             }
         }
     }
@@ -905,14 +568,14 @@ where
     #[inline]
     pub fn gemv_tr<R2: Dim, C2: Dim, D3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        a: &Matrix<N, R2, C2, SB>,
-        x: &Vector<N, D3, SC>,
-        beta: N,
+        alpha: T,
+        a: &Matrix<T, R2, C2, SB>,
+        x: &Vector<T, D3, SC>,
+        beta: T,
     ) where
-        N: One,
-        SB: Storage<N, R2, C2>,
-        SC: Storage<N, D3>,
+        T: One,
+        SB: Storage<T, R2, C2>,
+        SC: Storage<T, D3>,
         ShapeConstraint: DimEq<D, C2> + AreMultipliable<C2, R2, D3, U1>,
     {
         self.gemv_xx(alpha, a, x, beta, |a, b| a.dot(b))
@@ -940,36 +603,36 @@ where
     #[inline]
     pub fn gemv_ad<R2: Dim, C2: Dim, D3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        a: &Matrix<N, R2, C2, SB>,
-        x: &Vector<N, D3, SC>,
-        beta: N,
+        alpha: T,
+        a: &Matrix<T, R2, C2, SB>,
+        x: &Vector<T, D3, SC>,
+        beta: T,
     ) where
-        N: SimdComplexField,
-        SB: Storage<N, R2, C2>,
-        SC: Storage<N, D3>,
+        T: SimdComplexField,
+        SB: Storage<T, R2, C2>,
+        SC: Storage<T, D3>,
         ShapeConstraint: DimEq<D, C2> + AreMultipliable<C2, R2, D3, U1>,
     {
         self.gemv_xx(alpha, a, x, beta, |a, b| a.dotc(b))
     }
 }
 
-impl<N, R1: Dim, C1: Dim, S: StorageMut<N, R1, C1>> Matrix<N, R1, C1, S>
+impl<T, R1: Dim, C1: Dim, S: StorageMut<T, R1, C1>> Matrix<T, R1, C1, S>
 where
-    N: Scalar + Zero + ClosedAdd + ClosedMul,
+    T: Scalar + Zero + ClosedAdd + ClosedMul,
 {
     #[inline(always)]
     fn gerx<D2: Dim, D3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        x: &Vector<N, D2, SB>,
-        y: &Vector<N, D3, SC>,
-        beta: N,
-        conjugate: impl Fn(N) -> N,
+        alpha: T,
+        x: &Vector<T, D2, SB>,
+        y: &Vector<T, D3, SC>,
+        beta: T,
+        conjugate: impl Fn(T) -> T,
     ) where
-        N: One,
-        SB: Storage<N, D2>,
-        SC: Storage<N, D3>,
+        T: One,
+        SB: Storage<T, D2>,
+        SC: Storage<T, D3>,
         ShapeConstraint: DimEq<R1, D2> + DimEq<C1, D3>,
     {
         let (nrows1, ncols1) = self.shape();
@@ -982,10 +645,10 @@ where
         );
 
         for j in 0..ncols1 {
-            // FIXME: avoid bound checks.
-            let val = unsafe { conjugate(y.vget_unchecked(j).inlined_clone()) };
+            // TODO: avoid bound checks.
+            let val = unsafe { conjugate(y.vget_unchecked(j).clone()) };
             self.column_mut(j)
-                .axpy(alpha.inlined_clone() * val, x, beta.inlined_clone());
+                .axpy(alpha.clone() * val, x, beta.clone());
         }
     }
 
@@ -1008,14 +671,14 @@ where
     #[inline]
     pub fn ger<D2: Dim, D3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        x: &Vector<N, D2, SB>,
-        y: &Vector<N, D3, SC>,
-        beta: N,
+        alpha: T,
+        x: &Vector<T, D2, SB>,
+        y: &Vector<T, D3, SC>,
+        beta: T,
     ) where
-        N: One,
-        SB: Storage<N, D2>,
-        SC: Storage<N, D3>,
+        T: One,
+        SB: Storage<T, D2>,
+        SC: Storage<T, D3>,
         ShapeConstraint: DimEq<R1, D2> + DimEq<C1, D3>,
     {
         self.gerx(alpha, x, y, beta, |e| e)
@@ -1041,14 +704,14 @@ where
     #[inline]
     pub fn gerc<D2: Dim, D3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        x: &Vector<N, D2, SB>,
-        y: &Vector<N, D3, SC>,
-        beta: N,
+        alpha: T,
+        x: &Vector<T, D2, SB>,
+        y: &Vector<T, D3, SC>,
+        beta: T,
     ) where
-        N: SimdComplexField,
-        SB: Storage<N, D2>,
-        SC: Storage<N, D3>,
+        T: SimdComplexField,
+        SB: Storage<T, D2>,
+        SC: Storage<T, D3>,
         ShapeConstraint: DimEq<R1, D2> + DimEq<C1, D3>,
     {
         self.gerx(alpha, x, y, beta, SimdComplexField::simd_conjugate)
@@ -1078,134 +741,21 @@ where
     #[inline]
     pub fn gemm<R2: Dim, C2: Dim, R3: Dim, C3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        a: &Matrix<N, R2, C2, SB>,
-        b: &Matrix<N, R3, C3, SC>,
-        beta: N,
+        alpha: T,
+        a: &Matrix<T, R2, C2, SB>,
+        b: &Matrix<T, R3, C3, SC>,
+        beta: T,
     ) where
-        N: One,
-        SB: Storage<N, R2, C2>,
-        SC: Storage<N, R3, C3>,
+        T: One,
+        SB: Storage<T, R2, C2>,
+        SC: Storage<T, R3, C3>,
         ShapeConstraint: SameNumberOfRows<R1, R2>
             + SameNumberOfColumns<C1, C3>
             + AreMultipliable<R2, C2, R3, C3>,
     {
-        let ncols1 = self.ncols();
-
-        #[cfg(feature = "std")]
-        {
-            // We assume large matrices will be Dynamic but small matrices static.
-            // We could use matrixmultiply for large statically-sized matrices but the performance
-            // threshold to activate it would be different from SMALL_DIM because our code optimizes
-            // better for statically-sized matrices.
-            if R1::is::<Dynamic>()
-                || C1::is::<Dynamic>()
-                || R2::is::<Dynamic>()
-                || C2::is::<Dynamic>()
-                || R3::is::<Dynamic>()
-                || C3::is::<Dynamic>()
-            {
-                // matrixmultiply can be used only if the std feature is available.
-                let nrows1 = self.nrows();
-                let (nrows2, ncols2) = a.shape();
-                let (nrows3, ncols3) = b.shape();
-
-                // Threshold determined empirically.
-                const SMALL_DIM: usize = 5;
-
-                if nrows1 > SMALL_DIM
-                    && ncols1 > SMALL_DIM
-                    && nrows2 > SMALL_DIM
-                    && ncols2 > SMALL_DIM
-                {
-                    assert_eq!(
-                        ncols2, nrows3,
-                        "gemm: dimensions mismatch for multiplication."
-                    );
-                    assert_eq!(
-                        (nrows1, ncols1),
-                        (nrows2, ncols3),
-                        "gemm: dimensions mismatch for addition."
-                    );
-
-                    // NOTE: this case should never happen because we enter this
-                    // codepath only when ncols2 > SMALL_DIM. Though we keep this
-                    // here just in case if in the future we change the conditions to
-                    // enter this codepath.
-                    if ncols2 == 0 {
-                        // NOTE: we can't just always multiply by beta
-                        // because we documented the guaranty that `self` is
-                        // never read if `beta` is zero.
-                        if beta.is_zero() {
-                            self.fill(N::zero());
-                        } else {
-                            *self *= beta;
-                        }
-                        return;
-                    }
-
-                    if N::is::<f32>() {
-                        let (rsa, csa) = a.strides();
-                        let (rsb, csb) = b.strides();
-                        let (rsc, csc) = self.strides();
-
-                        unsafe {
-                            matrixmultiply::sgemm(
-                                nrows2,
-                                ncols2,
-                                ncols3,
-                                mem::transmute_copy(&alpha),
-                                a.data.ptr() as *const f32,
-                                rsa as isize,
-                                csa as isize,
-                                b.data.ptr() as *const f32,
-                                rsb as isize,
-                                csb as isize,
-                                mem::transmute_copy(&beta),
-                                self.data.ptr_mut() as *mut f32,
-                                rsc as isize,
-                                csc as isize,
-                            );
-                        }
-                        return;
-                    } else if N::is::<f64>() {
-                        let (rsa, csa) = a.strides();
-                        let (rsb, csb) = b.strides();
-                        let (rsc, csc) = self.strides();
-
-                        unsafe {
-                            matrixmultiply::dgemm(
-                                nrows2,
-                                ncols2,
-                                ncols3,
-                                mem::transmute_copy(&alpha),
-                                a.data.ptr() as *const f64,
-                                rsa as isize,
-                                csa as isize,
-                                b.data.ptr() as *const f64,
-                                rsb as isize,
-                                csb as isize,
-                                mem::transmute_copy(&beta),
-                                self.data.ptr_mut() as *mut f64,
-                                rsc as isize,
-                                csc as isize,
-                            );
-                        }
-                        return;
-                    }
-                }
-            }
-        }
-
-        for j1 in 0..ncols1 {
-            // FIXME: avoid bound checks.
-            self.column_mut(j1).gemv(
-                alpha.inlined_clone(),
-                a,
-                &b.column(j1),
-                beta.inlined_clone(),
-            );
-        }
+        // SAFETY: this is valid because our matrices are initialized and
+        // we are using status = Init.
+        unsafe { gemm_uninit(Init, self, alpha, a, b, beta) }
     }
 
     /// Computes `self = alpha * a.transpose() * b + beta * self`, where `a, b, self` are matrices.
@@ -1233,14 +783,14 @@ where
     #[inline]
     pub fn gemm_tr<R2: Dim, C2: Dim, R3: Dim, C3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        a: &Matrix<N, R2, C2, SB>,
-        b: &Matrix<N, R3, C3, SC>,
-        beta: N,
+        alpha: T,
+        a: &Matrix<T, R2, C2, SB>,
+        b: &Matrix<T, R3, C3, SC>,
+        beta: T,
     ) where
-        N: One,
-        SB: Storage<N, R2, C2>,
-        SC: Storage<N, R3, C3>,
+        T: One,
+        SB: Storage<T, R2, C2>,
+        SC: Storage<T, R3, C3>,
         ShapeConstraint: SameNumberOfRows<R1, C2>
             + SameNumberOfColumns<C1, C3>
             + AreMultipliable<C2, R2, R3, C3>,
@@ -1260,13 +810,9 @@ where
         );
 
         for j1 in 0..ncols1 {
-            // FIXME: avoid bound checks.
-            self.column_mut(j1).gemv_tr(
-                alpha.inlined_clone(),
-                a,
-                &b.column(j1),
-                beta.inlined_clone(),
-            );
+            // TODO: avoid bound checks.
+            self.column_mut(j1)
+                .gemv_tr(alpha.clone(), a, &b.column(j1), beta.clone());
         }
     }
 
@@ -1295,14 +841,14 @@ where
     #[inline]
     pub fn gemm_ad<R2: Dim, C2: Dim, R3: Dim, C3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        a: &Matrix<N, R2, C2, SB>,
-        b: &Matrix<N, R3, C3, SC>,
-        beta: N,
+        alpha: T,
+        a: &Matrix<T, R2, C2, SB>,
+        b: &Matrix<T, R3, C3, SC>,
+        beta: T,
     ) where
-        N: SimdComplexField,
-        SB: Storage<N, R2, C2>,
-        SC: Storage<N, R3, C3>,
+        T: SimdComplexField,
+        SB: Storage<T, R2, C2>,
+        SC: Storage<T, R3, C3>,
         ShapeConstraint: SameNumberOfRows<R1, C2>
             + SameNumberOfColumns<C1, C3>
             + AreMultipliable<C2, R2, R3, C3>,
@@ -1322,28 +868,29 @@ where
         );
 
         for j1 in 0..ncols1 {
-            // FIXME: avoid bound checks.
-            self.column_mut(j1).gemv_ad(alpha, a, &b.column(j1), beta);
+            // TODO: avoid bound checks.
+            self.column_mut(j1)
+                .gemv_ad(alpha.clone(), a, &b.column(j1), beta.clone());
         }
     }
 }
 
-impl<N, R1: Dim, C1: Dim, S: StorageMut<N, R1, C1>> Matrix<N, R1, C1, S>
+impl<T, R1: Dim, C1: Dim, S: StorageMut<T, R1, C1>> Matrix<T, R1, C1, S>
 where
-    N: Scalar + Zero + ClosedAdd + ClosedMul,
+    T: Scalar + Zero + ClosedAdd + ClosedMul,
 {
     #[inline(always)]
     fn xxgerx<D2: Dim, D3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        x: &Vector<N, D2, SB>,
-        y: &Vector<N, D3, SC>,
-        beta: N,
-        conjugate: impl Fn(N) -> N,
+        alpha: T,
+        x: &Vector<T, D2, SB>,
+        y: &Vector<T, D3, SC>,
+        beta: T,
+        conjugate: impl Fn(T) -> T,
     ) where
-        N: One,
-        SB: Storage<N, D2>,
-        SC: Storage<N, D3>,
+        T: One,
+        SB: Storage<T, D2>,
+        SC: Storage<T, D3>,
         ShapeConstraint: DimEq<R1, D2> + DimEq<C1, D3>,
     {
         let dim1 = self.nrows();
@@ -1357,13 +904,13 @@ where
         assert!(dim1 == dim2 && dim1 == dim3, "ger: dimensions mismatch.");
 
         for j in 0..dim1 {
-            let val = unsafe { conjugate(y.vget_unchecked(j).inlined_clone()) };
+            let val = unsafe { conjugate(y.vget_unchecked(j).clone()) };
             let subdim = Dynamic::new(dim1 - j);
-            // FIXME: avoid bound checks.
-            self.generic_slice_mut((j, j), (subdim, U1)).axpy(
-                alpha.inlined_clone() * val,
+            // TODO: avoid bound checks.
+            self.generic_slice_mut((j, j), (subdim, Const::<1>)).axpy(
+                alpha.clone() * val,
                 &x.rows_range(j..),
-                beta.inlined_clone(),
+                beta.clone(),
             );
         }
     }
@@ -1391,14 +938,14 @@ where
     #[deprecated(note = "This is renamed `syger` to match the original BLAS terminology.")]
     pub fn ger_symm<D2: Dim, D3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        x: &Vector<N, D2, SB>,
-        y: &Vector<N, D3, SC>,
-        beta: N,
+        alpha: T,
+        x: &Vector<T, D2, SB>,
+        y: &Vector<T, D3, SC>,
+        beta: T,
     ) where
-        N: One,
-        SB: Storage<N, D2>,
-        SC: Storage<N, D3>,
+        T: One,
+        SB: Storage<T, D2>,
+        SC: Storage<T, D3>,
         ShapeConstraint: DimEq<R1, D2> + DimEq<C1, D3>,
     {
         self.syger(alpha, x, y, beta)
@@ -1427,14 +974,14 @@ where
     #[inline]
     pub fn syger<D2: Dim, D3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        x: &Vector<N, D2, SB>,
-        y: &Vector<N, D3, SC>,
-        beta: N,
+        alpha: T,
+        x: &Vector<T, D2, SB>,
+        y: &Vector<T, D3, SC>,
+        beta: T,
     ) where
-        N: One,
-        SB: Storage<N, D2>,
-        SC: Storage<N, D3>,
+        T: One,
+        SB: Storage<T, D2>,
+        SC: Storage<T, D3>,
         ShapeConstraint: DimEq<R1, D2> + DimEq<C1, D3>,
     {
         self.xxgerx(alpha, x, y, beta, |e| e)
@@ -1462,23 +1009,23 @@ where
     #[inline]
     pub fn hegerc<D2: Dim, D3: Dim, SB, SC>(
         &mut self,
-        alpha: N,
-        x: &Vector<N, D2, SB>,
-        y: &Vector<N, D3, SC>,
-        beta: N,
+        alpha: T,
+        x: &Vector<T, D2, SB>,
+        y: &Vector<T, D3, SC>,
+        beta: T,
     ) where
-        N: SimdComplexField,
-        SB: Storage<N, D2>,
-        SC: Storage<N, D3>,
+        T: SimdComplexField,
+        SB: Storage<T, D2>,
+        SC: Storage<T, D3>,
         ShapeConstraint: DimEq<R1, D2> + DimEq<C1, D3>,
     {
         self.xxgerx(alpha, x, y, beta, SimdComplexField::simd_conjugate)
     }
 }
 
-impl<N, D1: Dim, S: StorageMut<N, D1, D1>> SquareMatrix<N, D1, S>
+impl<T, D1: Dim, S: StorageMut<T, D1, D1>> SquareMatrix<T, D1, S>
 where
-    N: Scalar + Zero + One + ClosedAdd + ClosedMul,
+    T: Scalar + Zero + One + ClosedAdd + ClosedMul,
 {
     /// Computes the quadratic form `self = alpha * lhs * mid * lhs.transpose() + beta * self`.
     ///
@@ -1508,27 +1055,27 @@ where
     /// assert_relative_eq!(mat, expected);
     pub fn quadform_tr_with_workspace<D2, S2, R3, C3, S3, D4, S4>(
         &mut self,
-        work: &mut Vector<N, D2, S2>,
-        alpha: N,
-        lhs: &Matrix<N, R3, C3, S3>,
-        mid: &SquareMatrix<N, D4, S4>,
-        beta: N,
+        work: &mut Vector<T, D2, S2>,
+        alpha: T,
+        lhs: &Matrix<T, R3, C3, S3>,
+        mid: &SquareMatrix<T, D4, S4>,
+        beta: T,
     ) where
         D2: Dim,
         R3: Dim,
         C3: Dim,
         D4: Dim,
-        S2: StorageMut<N, D2>,
-        S3: Storage<N, R3, C3>,
-        S4: Storage<N, D4, D4>,
+        S2: StorageMut<T, D2>,
+        S3: Storage<T, R3, C3>,
+        S4: Storage<T, D4, D4>,
         ShapeConstraint: DimEq<D1, D2> + DimEq<D1, R3> + DimEq<D2, R3> + DimEq<C3, D4>,
     {
-        work.gemv(N::one(), lhs, &mid.column(0), N::zero());
-        self.ger(alpha.inlined_clone(), work, &lhs.column(0), beta);
+        work.gemv(T::one(), lhs, &mid.column(0), T::zero());
+        self.ger(alpha.clone(), work, &lhs.column(0), beta);
 
         for j in 1..mid.ncols() {
-            work.gemv(N::one(), lhs, &mid.column(j), N::zero());
-            self.ger(alpha.inlined_clone(), work, &lhs.column(j), N::one());
+            work.gemv(T::one(), lhs, &mid.column(j), T::zero());
+            self.ger(alpha.clone(), work, &lhs.column(j), T::one());
         }
     }
 
@@ -1555,20 +1102,21 @@ where
     /// assert_relative_eq!(mat, expected);
     pub fn quadform_tr<R3, C3, S3, D4, S4>(
         &mut self,
-        alpha: N,
-        lhs: &Matrix<N, R3, C3, S3>,
-        mid: &SquareMatrix<N, D4, S4>,
-        beta: N,
+        alpha: T,
+        lhs: &Matrix<T, R3, C3, S3>,
+        mid: &SquareMatrix<T, D4, S4>,
+        beta: T,
     ) where
         R3: Dim,
         C3: Dim,
         D4: Dim,
-        S3: Storage<N, R3, C3>,
-        S4: Storage<N, D4, D4>,
+        S3: Storage<T, R3, C3>,
+        S4: Storage<T, D4, D4>,
         ShapeConstraint: DimEq<D1, D1> + DimEq<D1, R3> + DimEq<C3, D4>,
-        DefaultAllocator: Allocator<N, D1>,
+        DefaultAllocator: Allocator<T, D1>,
     {
-        let mut work = unsafe { Vector::new_uninitialized_generic(self.data.shape().0, U1) };
+        // TODO: would it be useful to avoid the zero-initialization of the workspace data?
+        let mut work = Matrix::zeros_generic(self.shape_generic().0, Const::<1>);
         self.quadform_tr_with_workspace(&mut work, alpha, lhs, mid, beta)
     }
 
@@ -1599,30 +1147,30 @@ where
     /// assert_relative_eq!(mat, expected);
     pub fn quadform_with_workspace<D2, S2, D3, S3, R4, C4, S4>(
         &mut self,
-        work: &mut Vector<N, D2, S2>,
-        alpha: N,
-        mid: &SquareMatrix<N, D3, S3>,
-        rhs: &Matrix<N, R4, C4, S4>,
-        beta: N,
+        work: &mut Vector<T, D2, S2>,
+        alpha: T,
+        mid: &SquareMatrix<T, D3, S3>,
+        rhs: &Matrix<T, R4, C4, S4>,
+        beta: T,
     ) where
         D2: Dim,
         D3: Dim,
         R4: Dim,
         C4: Dim,
-        S2: StorageMut<N, D2>,
-        S3: Storage<N, D3, D3>,
-        S4: Storage<N, R4, C4>,
+        S2: StorageMut<T, D2>,
+        S3: Storage<T, D3, D3>,
+        S4: Storage<T, R4, C4>,
         ShapeConstraint:
             DimEq<D3, R4> + DimEq<D1, C4> + DimEq<D2, D3> + AreMultipliable<C4, R4, D2, U1>,
     {
-        work.gemv(N::one(), mid, &rhs.column(0), N::zero());
+        work.gemv(T::one(), mid, &rhs.column(0), T::zero());
         self.column_mut(0)
-            .gemv_tr(alpha.inlined_clone(), &rhs, work, beta.inlined_clone());
+            .gemv_tr(alpha.clone(), rhs, work, beta.clone());
 
         for j in 1..rhs.ncols() {
-            work.gemv(N::one(), mid, &rhs.column(j), N::zero());
+            work.gemv(T::one(), mid, &rhs.column(j), T::zero());
             self.column_mut(j)
-                .gemv_tr(alpha.inlined_clone(), &rhs, work, beta.inlined_clone());
+                .gemv_tr(alpha.clone(), rhs, work, beta.clone());
         }
     }
 
@@ -1648,20 +1196,21 @@ where
     /// assert_relative_eq!(mat, expected);
     pub fn quadform<D2, S2, R3, C3, S3>(
         &mut self,
-        alpha: N,
-        mid: &SquareMatrix<N, D2, S2>,
-        rhs: &Matrix<N, R3, C3, S3>,
-        beta: N,
+        alpha: T,
+        mid: &SquareMatrix<T, D2, S2>,
+        rhs: &Matrix<T, R3, C3, S3>,
+        beta: T,
     ) where
         D2: Dim,
         R3: Dim,
         C3: Dim,
-        S2: Storage<N, D2, D2>,
-        S3: Storage<N, R3, C3>,
+        S2: Storage<T, D2, D2>,
+        S3: Storage<T, R3, C3>,
         ShapeConstraint: DimEq<D2, R3> + DimEq<D1, C3> + AreMultipliable<C3, R3, D2, U1>,
-        DefaultAllocator: Allocator<N, D2>,
+        DefaultAllocator: Allocator<T, D2>,
     {
-        let mut work = unsafe { Vector::new_uninitialized_generic(mid.data.shape().0, U1) };
+        // TODO: would it be useful to avoid the zero-initialization of the workspace data?
+        let mut work = Vector::zeros_generic(mid.shape_generic().0, Const::<1>);
         self.quadform_with_workspace(&mut work, alpha, mid, rhs, beta)
     }
 }

@@ -1,6 +1,4 @@
-// Copyright 2018-2019, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 use std::convert::TryFrom;
 use std::ffi::{CStr, CString};
@@ -12,10 +10,10 @@ use std::path::Path;
 use std::ptr;
 
 #[cfg(any(all(feature = "pdf", feature = "v1_16"), feature = "dox"))]
-use enums::{PdfMetadata, PdfOutline};
-use enums::{PdfVersion, Status, SurfaceType};
-use ffi;
-use surface::Surface;
+use crate::enums::{PdfMetadata, PdfOutline};
+use crate::enums::{PdfVersion, SurfaceType};
+use crate::error::Error;
+use crate::surface::Surface;
 
 #[cfg(feature = "use_glib")]
 use glib::translate::*;
@@ -33,7 +31,8 @@ impl PdfVersion {
 declare_surface!(PdfSurface, SurfaceType::Pdf);
 
 impl PdfSurface {
-    pub fn new<P: AsRef<Path>>(width: f64, height: f64, path: P) -> Result<Self, Status> {
+    #[doc(alias = "cairo_pdf_surface_create")]
+    pub fn new<P: AsRef<Path>>(width: f64, height: f64, path: P) -> Result<Self, Error> {
         let path = path.as_ref().to_string_lossy().into_owned();
         let path = CString::new(path).unwrap();
 
@@ -42,33 +41,43 @@ impl PdfSurface {
 
     for_stream_constructors!(cairo_pdf_surface_create_for_stream);
 
-    pub fn get_versions() -> impl Iterator<Item = PdfVersion> {
+    #[doc(alias = "cairo_pdf_get_versions")]
+    #[doc(alias = "get_versions")]
+    pub fn versions() -> impl Iterator<Item = PdfVersion> {
         let vers_slice = unsafe {
             let mut vers_ptr = ptr::null_mut();
             let mut num_vers = mem::MaybeUninit::uninit();
             ffi::cairo_pdf_get_versions(&mut vers_ptr, num_vers.as_mut_ptr());
 
-            std::slice::from_raw_parts(vers_ptr, num_vers.assume_init() as _)
+            let num_vers = num_vers.assume_init();
+            if num_vers == 0 {
+                &[]
+            } else {
+                std::slice::from_raw_parts(vers_ptr, num_vers as _)
+            }
         };
         vers_slice.iter().map(|v| PdfVersion::from(*v))
     }
 
-    pub fn restrict(&self, version: PdfVersion) -> Result<(), Status> {
+    #[doc(alias = "cairo_pdf_surface_restrict_to_version")]
+    pub fn restrict(&self, version: PdfVersion) -> Result<(), Error> {
         unsafe {
             ffi::cairo_pdf_surface_restrict_to_version(self.0.to_raw_none(), version.into());
         }
-        self.status().to_result(())
+        self.status()
     }
 
-    pub fn set_size(&self, width: f64, height: f64) -> Result<(), Status> {
+    #[doc(alias = "cairo_pdf_surface_set_size")]
+    pub fn set_size(&self, width: f64, height: f64) -> Result<(), Error> {
         unsafe {
             ffi::cairo_pdf_surface_set_size(self.0.to_raw_none(), width, height);
         }
-        self.status().to_result(())
+        self.status()
     }
 
     #[cfg(any(all(feature = "pdf", feature = "v1_16"), feature = "dox"))]
-    pub fn set_metadata(&self, metadata: PdfMetadata, value: &str) -> Result<(), Status> {
+    #[doc(alias = "cairo_pdf_surface_set_metadata")]
+    pub fn set_metadata(&self, metadata: PdfMetadata, value: &str) -> Result<(), Error> {
         let value = CString::new(value).unwrap();
         unsafe {
             ffi::cairo_pdf_surface_set_metadata(
@@ -77,20 +86,22 @@ impl PdfSurface {
                 value.as_ptr(),
             );
         }
-        self.status().to_result(())
+        self.status()
     }
 
     #[cfg(any(all(feature = "pdf", feature = "v1_16"), feature = "dox"))]
-    pub fn set_page_label(&self, label: &str) -> Result<(), Status> {
+    #[doc(alias = "cairo_pdf_surface_set_page_label")]
+    pub fn set_page_label(&self, label: &str) -> Result<(), Error> {
         let label = CString::new(label).unwrap();
         unsafe {
             ffi::cairo_pdf_surface_set_page_label(self.0.to_raw_none(), label.as_ptr());
         }
-        self.status().to_result(())
+        self.status()
     }
 
     #[cfg(any(all(feature = "pdf", feature = "v1_16"), feature = "dox"))]
-    pub fn set_thumbnail_size(&self, width: i32, height: i32) -> Result<(), Status> {
+    #[doc(alias = "cairo_pdf_surface_set_thumbnail_size")]
+    pub fn set_thumbnail_size(&self, width: i32, height: i32) -> Result<(), Error> {
         unsafe {
             ffi::cairo_pdf_surface_set_thumbnail_size(
                 self.0.to_raw_none(),
@@ -98,17 +109,18 @@ impl PdfSurface {
                 height as _,
             );
         }
-        self.status().to_result(())
+        self.status()
     }
 
     #[cfg(any(all(feature = "pdf", feature = "v1_16"), feature = "dox"))]
+    #[doc(alias = "cairo_pdf_surface_add_outline")]
     pub fn add_outline(
         &self,
         parent_id: i32,
         name: &str,
         link_attribs: &str,
         flags: PdfOutline,
-    ) -> Result<i32, Status> {
+    ) -> Result<i32, Error> {
         let name = CString::new(name).unwrap();
         let link_attribs = CString::new(link_attribs).unwrap();
 
@@ -122,43 +134,45 @@ impl PdfSurface {
             ) as _
         };
 
-        self.status().to_result(res)
+        self.status()?;
+        Ok(res)
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use context::*;
+    use crate::context::*;
     use tempfile::tempfile;
 
     fn draw(surface: &Surface) {
-        let cr = Context::new(surface);
+        let cr = Context::new(surface).expect("Can't create a Cairo context");
 
         cr.set_line_width(25.0);
 
         cr.set_source_rgba(1.0, 0.0, 0.0, 0.5);
         cr.line_to(0., 0.);
         cr.line_to(100., 100.);
-        cr.stroke();
+        cr.stroke().expect("Surface on an invalid state");
 
         cr.set_source_rgba(0.0, 0.0, 1.0, 0.5);
         cr.line_to(0., 100.);
         cr.line_to(100., 0.);
-        cr.stroke();
+        cr.stroke().expect("Surface on an invalid state");
     }
 
     fn draw_in_buffer() -> Vec<u8> {
         let buffer: Vec<u8> = vec![];
 
         let surface = PdfSurface::for_stream(100., 100., buffer).unwrap();
+        surface.restrict(PdfVersion::_1_5);
         draw(&surface);
         *surface.finish_output_stream().unwrap().downcast().unwrap()
     }
 
     #[test]
     fn versions() {
-        assert!(PdfSurface::get_versions().any(|v| v == PdfVersion::_1_4));
+        assert!(PdfSurface::versions().any(|v| v == PdfVersion::_1_4));
     }
 
     #[test]

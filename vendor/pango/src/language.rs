@@ -1,109 +1,117 @@
-// Copyright 2018, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
+use crate::Script;
 use glib::translate::*;
 use glib::GString;
-use pango_sys;
-use Script;
 
-pub struct Language(*mut pango_sys::PangoLanguage);
+#[doc(alias = "PangoLanguage")]
+pub struct Language(*mut ffi::PangoLanguage);
+
+unsafe impl Send for Language {}
+unsafe impl Sync for Language {}
 
 #[doc(hidden)]
-impl<'a> ToGlibPtr<'a, *mut pango_sys::PangoLanguage> for &'a Language {
+impl<'a> ToGlibPtr<'a, *mut ffi::PangoLanguage> for &'a Language {
     type Storage = &'a Language;
 
-    fn to_glib_none(&self) -> Stash<'a, *mut pango_sys::PangoLanguage, Self> {
+    fn to_glib_none(&self) -> Stash<'a, *mut ffi::PangoLanguage, Self> {
         Stash(self.0, *self)
     }
 }
 
 #[doc(hidden)]
-impl<'a> ToGlibPtrMut<'a, *mut pango_sys::PangoLanguage> for Language {
+impl<'a> ToGlibPtrMut<'a, *mut ffi::PangoLanguage> for Language {
     type Storage = &'a mut Self;
 
     #[inline]
-    fn to_glib_none_mut(&'a mut self) -> StashMut<'a, *mut pango_sys::PangoLanguage, Self> {
+    fn to_glib_none_mut(&'a mut self) -> StashMut<'a, *mut ffi::PangoLanguage, Self> {
         StashMut(self.0, self)
     }
 }
 
 #[doc(hidden)]
-impl FromGlibPtrNone<*mut pango_sys::PangoLanguage> for Language {
-    unsafe fn from_glib_none(ptr: *mut pango_sys::PangoLanguage) -> Self {
+impl FromGlibPtrNone<*mut ffi::PangoLanguage> for Language {
+    unsafe fn from_glib_none(ptr: *mut ffi::PangoLanguage) -> Self {
         assert!(!ptr.is_null());
-        Language(ptr)
+        Self(ptr)
     }
 }
 
 #[doc(hidden)]
-impl FromGlibPtrFull<*mut pango_sys::PangoLanguage> for Language {
-    unsafe fn from_glib_full(ptr: *mut pango_sys::PangoLanguage) -> Self {
+impl FromGlibPtrFull<*mut ffi::PangoLanguage> for Language {
+    unsafe fn from_glib_full(ptr: *mut ffi::PangoLanguage) -> Self {
         assert!(!ptr.is_null());
-        Language(ptr)
+        Self(ptr)
     }
 }
 
 #[doc(hidden)]
-impl FromGlibPtrNone<*const pango_sys::PangoLanguage> for Language {
-    unsafe fn from_glib_none(ptr: *const pango_sys::PangoLanguage) -> Self {
+impl FromGlibPtrNone<*const ffi::PangoLanguage> for Language {
+    unsafe fn from_glib_none(ptr: *const ffi::PangoLanguage) -> Self {
         assert!(!ptr.is_null());
-        Language(ptr as *mut _)
+        Self(ptr as *mut _)
     }
 }
 
 #[doc(hidden)]
-impl FromGlibPtrFull<*const pango_sys::PangoLanguage> for Language {
-    unsafe fn from_glib_full(ptr: *const pango_sys::PangoLanguage) -> Self {
+impl FromGlibPtrFull<*const ffi::PangoLanguage> for Language {
+    unsafe fn from_glib_full(ptr: *const ffi::PangoLanguage) -> Self {
         assert!(!ptr.is_null());
-        Language(ptr as *mut _)
+        Self(ptr as *mut _)
     }
 }
 
 impl Default for Language {
-    fn default() -> Language {
-        unsafe { from_glib_full(pango_sys::pango_language_get_default()) }
+    #[doc(alias = "pango_language_get_default")]
+    fn default() -> Self {
+        unsafe { from_glib_full(ffi::pango_language_get_default()) }
     }
 }
 
 impl Language {
-    pub fn from_string(language: &str) -> Language {
+    #[doc(alias = "pango_language_from_string")]
+    pub fn from_string(language: &str) -> Self {
+        unsafe { from_glib_full(ffi::pango_language_from_string(language.to_glib_none().0)) }
+    }
+
+    #[doc(alias = "pango_language_to_string")]
+    pub fn to_string(&self) -> GString {
+        unsafe { from_glib_none(ffi::pango_language_to_string(self.to_glib_none().0)) }
+    }
+
+    #[doc(alias = "pango_language_matches")]
+    pub fn matches(&self, range_list: &str) -> bool {
         unsafe {
-            from_glib_full(pango_sys::pango_language_from_string(
-                language.to_glib_none().0,
+            from_glib(ffi::pango_language_matches(
+                self.to_glib_none().0,
+                range_list.to_glib_none().0,
             ))
         }
     }
 
-    pub fn to_string(&self) -> GString {
-        unsafe { from_glib_none(pango_sys::pango_language_to_string(self.to_glib_none().0)) }
-    }
-
-    pub fn matches(&self, range_list: &str) -> bool {
-        unsafe {
-            pango_sys::pango_language_matches(self.to_glib_none().0, range_list.to_glib_none().0)
-                .to_bool()
-        }
-    }
-
+    #[doc(alias = "pango_language_includes_script")]
     pub fn includes_script(&self, script: Script) -> bool {
         unsafe {
-            pango_sys::pango_language_includes_script(self.to_glib_none().0, script.to_glib())
-                .to_bool()
+            from_glib(ffi::pango_language_includes_script(
+                self.to_glib_none().0,
+                script.into_glib(),
+            ))
         }
     }
 
-    pub fn get_scripts(&self) -> Vec<Script> {
+    #[doc(alias = "get_scripts")]
+    #[doc(alias = "pango_language_get_scripts")]
+    pub fn scripts(&self) -> Vec<Script> {
         let mut num_scripts = 0;
         let mut ret = Vec::new();
 
         unsafe {
-            let scripts: *const pango_sys::PangoScript =
-                pango_sys::pango_language_get_scripts(self.to_glib_none().0, &mut num_scripts);
+            let scripts: *const ffi::PangoScript =
+                ffi::pango_language_get_scripts(self.to_glib_none().0, &mut num_scripts);
             if num_scripts > 0 {
                 for x in 0..num_scripts {
                     ret.push(from_glib(
-                        *(scripts.offset(x as isize) as *const pango_sys::PangoScript),
+                        *(scripts.offset(x as isize) as *const ffi::PangoScript),
                     ));
                 }
             }
@@ -111,11 +119,29 @@ impl Language {
         }
     }
 
-    pub fn get_sample_string(&self) -> GString {
+    #[doc(alias = "get_sample_string")]
+    #[doc(alias = "pango_language_get_sample_string")]
+    pub fn sample_string(&self) -> GString {
+        unsafe { from_glib_none(ffi::pango_language_get_sample_string(self.to_glib_none().0)) }
+    }
+
+    #[cfg(any(feature = "v1_48", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_48")))]
+    #[doc(alias = "get_preferred")]
+    #[doc(alias = "pango_language_get_preferred")]
+    pub fn preferred(&self) -> Vec<Language> {
         unsafe {
-            from_glib_none(pango_sys::pango_language_get_sample_string(
-                self.to_glib_none().0,
-            ))
+            let langs = ffi::pango_language_get_preferred();
+            let mut ptr = langs;
+
+            let mut ret = vec![];
+
+            while !(*ptr).is_null() {
+                ret.push(Language(*ptr));
+                ptr = ptr.add(1);
+            }
+
+            ret
         }
     }
 }

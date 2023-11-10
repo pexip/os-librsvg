@@ -23,9 +23,7 @@
     allow(
         clippy::just_underscores_and_digits, // Used in the stats code
         clippy::transmute_ptr_to_ptr, // Used in the stats code
-        clippy::option_as_ref_deref, // Remove when MSRV bumped above 1.40
         clippy::manual_non_exhaustive, // Remove when MSRV bumped above 1.40
-        clippy::match_like_matches_macro, // Remove when MSRV bumped above 1.42
     )
 )]
 
@@ -339,10 +337,7 @@ pub(crate) enum Mode {
 }
 impl Mode {
     pub fn is_benchmark(&self) -> bool {
-        match self {
-            Mode::Benchmark => true,
-            _ => false,
-        }
+        matches!(self, Mode::Benchmark)
     }
 }
 
@@ -495,9 +490,12 @@ impl<M: Measurement> Criterion<M> {
     /// Panics if `backend` is `PlottingBackend::Gnuplot` and gnuplot is not available.
     pub fn plotting_backend(mut self, backend: PlottingBackend) -> Criterion<M> {
         if let PlottingBackend::Gnuplot = backend {
-            if GNUPLOT_VERSION.is_err() {
-                panic!("Gnuplot plotting backend was requested, but gnuplot is not available. To continue, either install Gnuplot or allow Criterion.rs to fall back to using plotters.");
-            }
+            assert!(
+                !GNUPLOT_VERSION.is_err(),
+                "Gnuplot plotting backend was requested, but gnuplot is not available. \
+                To continue, either install Gnuplot or allow Criterion.rs to fall back \
+                to using plotters."
+            );
         }
 
         self.report.html = Html::new(backend.create_plotter());
@@ -833,6 +831,10 @@ impl<M: Measurement> Criterion<M> {
                 .long("nocapture")
                 .hidden(true)
                 .help("Ignored, but added for compatibility with libtest."))
+            .arg(Arg::with_name("show-output")
+                .long("show-output")
+                .hidden(true)
+                .help("Ignored, but added for compatibility with libtest."))
             .arg(Arg::with_name("version")
                 .hidden(true)
                 .short("V")
@@ -1065,8 +1067,8 @@ https://bheisler.github.io/criterion.rs/book/faq.html
     }
 
     fn filter_matches(&self, id: &str) -> bool {
-        match self.filter {
-            Some(ref regex) => regex.is_match(id),
+        match &self.filter {
+            Some(regex) => regex.is_match(id),
             None => true,
         }
     }
@@ -1096,9 +1098,7 @@ https://bheisler.github.io/criterion.rs/book/faq.html
     /// Panics if the group name is empty
     pub fn benchmark_group<S: Into<String>>(&mut self, group_name: S) -> BenchmarkGroup<'_, M> {
         let group_name = group_name.into();
-        if group_name.is_empty() {
-            panic!("Group name must not be empty.");
-        }
+        assert!(!group_name.is_empty(), "Group name must not be empty.");
 
         if let Some(conn) = &self.connection {
             conn.send(&OutgoingMessage::BeginningBenchmarkGroup { group: &group_name })
@@ -1335,7 +1335,7 @@ impl DurationExt for Duration {
 /// If the throughput setting is configured for a benchmark then the estimated throughput will
 /// be reported as well as the time per iteration.
 // TODO: Remove serialize/deserialize from the public API.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Throughput {
     /// Measure throughput in terms of bytes/second. The value should be the number of bytes
     /// processed by one iteration of the benchmarked code. Typically, this would be the length of
@@ -1515,10 +1515,7 @@ impl ActualSamplingMode {
     }
 
     fn is_linear(&self) -> bool {
-        match self {
-            ActualSamplingMode::Linear => true,
-            _ => false,
-        }
+        matches!(self, ActualSamplingMode::Linear)
     }
 
     fn recommend_linear_sample_size(target_time: f64, met: f64) -> u64 {

@@ -1,14 +1,23 @@
-extern crate data_url;
-extern crate rustc_test;
-#[macro_use] extern crate serde;
-extern crate serde_json;
+#[macro_use]
+extern crate serde;
 
-fn run_data_url(input: String, expected_mime: Option<String>, expected_body: Option<Vec<u8>>) {
+fn run_data_url(
+    input: String,
+    expected_mime: Option<String>,
+    expected_body: Option<Vec<u8>>,
+    expected_panic: bool,
+) {
+    let priorhook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |p| {
+        if !expected_panic {
+            priorhook(p);
+        }
+    }));
     let url = data_url::DataUrl::process(&input);
     if let Some(expected_mime) = expected_mime {
         let url = url.unwrap();
         let (body, _) = url.decode_to_vec().unwrap();
-        if expected_mime == "" {
+        if expected_mime.is_empty() {
             assert_eq!(url.mime_type().to_string(), "text/plain;charset=US-ASCII")
         } else {
             assert_eq!(url.mime_type().to_string(), expected_mime)
@@ -22,18 +31,17 @@ fn run_data_url(input: String, expected_mime: Option<String>, expected_body: Opt
 }
 
 fn collect_data_url<F>(add_test: &mut F)
-    where F: FnMut(String, bool, rustc_test::TestFn)
+where
+    F: FnMut(String, bool, rustc_test::TestFn),
 {
-    let known_failures = [
-        "data://test:test/,X",
-    ];
+    let known_failures = ["data://test:test/,X"];
 
     #[derive(Deserialize)]
     #[serde(untagged)]
     enum TestCase {
         Two(String, Option<String>),
         Three(String, Option<String>, Vec<u8>),
-    };
+    }
 
     let v: Vec<TestCase> = serde_json::from_str(include_str!("data-urls.json")).unwrap();
     for test in v {
@@ -46,8 +54,8 @@ fn collect_data_url<F>(add_test: &mut F)
             format!("data: URL {:?}", input),
             should_panic,
             rustc_test::TestFn::dyn_test_fn(move || {
-                run_data_url(input, expected_mime, expected_body)
-            })
+                run_data_url(input, expected_mime, expected_body, should_panic)
+            }),
         );
     }
 }
@@ -62,9 +70,9 @@ fn run_base64(input: String, expected: Option<Vec<u8>>) {
     }
 }
 
-
 fn collect_base64<F>(add_test: &mut F)
-    where F: FnMut(String, bool, rustc_test::TestFn)
+where
+    F: FnMut(String, bool, rustc_test::TestFn),
 {
     let known_failures = [];
 
@@ -75,9 +83,7 @@ fn collect_base64<F>(add_test: &mut F)
         add_test(
             format!("base64 {:?}", input),
             should_panic,
-            rustc_test::TestFn::dyn_test_fn(move || {
-                run_base64(input, expected)
-            })
+            rustc_test::TestFn::dyn_test_fn(move || run_base64(input, expected)),
         );
     }
 }
@@ -92,9 +98,9 @@ fn run_mime(input: String, expected: Option<String>) {
     }
 }
 
-
 fn collect_mime<F>(add_test: &mut F)
-    where F: FnMut(String, bool, rustc_test::TestFn)
+where
+    F: FnMut(String, bool, rustc_test::TestFn),
 {
     let known_failures = [];
 
@@ -102,7 +108,10 @@ fn collect_mime<F>(add_test: &mut F)
     #[serde(untagged)]
     enum Entry {
         Comment(String),
-        TestCase { input: String, output: Option<String> }
+        TestCase {
+            input: String,
+            output: Option<String>,
+        },
     }
 
     let v: Vec<Entry> = serde_json::from_str(include_str!("mime-types.json")).unwrap();
@@ -115,7 +124,7 @@ fn collect_mime<F>(add_test: &mut F)
             Entry::TestCase { input, output } => (input, output),
             Entry::Comment(s) => {
                 last_comment = Some(s);
-                continue
+                continue;
             }
         };
 
@@ -127,9 +136,7 @@ fn collect_mime<F>(add_test: &mut F)
                 format!("MIME type {:?}", input)
             },
             should_panic,
-            rustc_test::TestFn::dyn_test_fn(move || {
-                run_mime(input, expected)
-            })
+            rustc_test::TestFn::dyn_test_fn(move || run_mime(input, expected)),
         );
     }
 }

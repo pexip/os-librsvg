@@ -1,18 +1,28 @@
-// Copyright 2019, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
-pub mod application;
-pub mod input_stream;
-pub mod io_stream;
-pub mod output_stream;
-pub mod seekable;
+mod action_group;
+mod action_map;
+mod application;
+mod initable;
+mod input_stream;
+mod io_stream;
+mod list_model;
+mod output_stream;
+mod seekable;
+
+pub use self::application::ArgumentList;
 
 pub mod prelude {
-    pub use super::application::{ApplicationImpl, ArgumentList};
-    pub use super::input_stream::InputStreamImpl;
-    pub use super::io_stream::IOStreamImpl;
-    pub use super::output_stream::OutputStreamImpl;
-    pub use super::seekable::SeekableImpl;
+    #[doc(hidden)]
     pub use glib::subclass::prelude::*;
+
+    pub use super::action_group::{ActionGroupImpl, ActionGroupImplExt};
+    pub use super::action_map::{ActionMapImpl, ActionMapImplExt};
+    pub use super::application::{ApplicationImpl, ApplicationImplExt};
+    pub use super::initable::{InitableImpl, InitableImplExt};
+    pub use super::input_stream::{InputStreamImpl, InputStreamImplExt};
+    pub use super::io_stream::{IOStreamImpl, IOStreamImplExt};
+    pub use super::list_model::{ListModelImpl, ListModelImplExt};
+    pub use super::output_stream::{OutputStreamImpl, OutputStreamImplExt};
+    pub use super::seekable::{SeekableImpl, SeekableImplExt};
 }

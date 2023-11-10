@@ -128,7 +128,7 @@ macro_rules! impl_parse_for_custom_keyword {
         // For peek.
         impl $crate::token::CustomToken for $ident {
             fn peek(cursor: $crate::buffer::Cursor) -> $crate::__private::bool {
-                if let Some((ident, _rest)) = cursor.ident() {
+                if let $crate::__private::Some((ident, _rest)) = cursor.ident() {
                     ident == stringify!($ident)
                 } else {
                     false
@@ -198,6 +198,7 @@ macro_rules! impl_clone_for_custom_keyword {
     ($ident:ident) => {
         impl $crate::__private::Copy for $ident {}
 
+        #[allow(clippy::expl_impl_clone_on_copy)]
         impl $crate::__private::Clone for $ident {
             fn clone(&self) -> Self {
                 *self

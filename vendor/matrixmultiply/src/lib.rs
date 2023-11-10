@@ -1,4 +1,4 @@
-// Copyright 2016 - 2018 Ulrik Sverdrup "bluss"
+// Copyright 2016 - 2021 Ulrik Sverdrup "bluss"
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
@@ -60,6 +60,10 @@
 //!
 //! ## Features
 //!
+//! ### `std`
+//!
+//! `std` is enabled by default.
+//!
 //! This crate can be used without the standard library (`#![no_std]`) by
 //! disabling the default `std` feature. To do so, use this in your
 //! `Cargo.toml`:
@@ -77,10 +81,41 @@
 //! [`target-feature`](https://doc.rust-lang.org/rustc/codegen-options/index.html#target-feature)
 //! option to `rustc`.)
 //!
+//! ### `threading`
+//!
+//! `threading` is an optional crate feature
+//!
+//! Threading enables multithreading for the operations. The environment variable
+//! `MATMUL_NUM_THREADS` decides how many threads are used at maximum. At the moment 1-4 are
+//! supported and the default is the number of physical cpus (as detected by `num_cpus`).
+//!
+//! ### `cgemm`
+//!
+//! `cgemm` is an optional crate feature.
+//!
+//! It enables the `cgemm` and `zgemm` methods for complex matrix multiplication.
+//! This is an **experimental feature** and not yet as performant as the float kernels on x86.
+//!
+//! The complex representation we use is `[f64; 2]`.
+//!
+//! ### `constconf`
+//!
+//! `constconf` is an optional feature. When enabled, cache-sensitive parameters of
+//! the gemm implementations can be tweaked *at compile time* by defining the following variables:
+//!
+//! - `MATMUL_SGEMM_MC`
+//!   (And so on, for S, D, C, ZGEMM and with NC, KC or MC).
+//!
 //! ## Other Notes
 //!
 //! The functions in this crate are thread safe, as long as the destination
 //! matrix is distinct.
+//!
+//! ## Rust Version
+//!
+//! This version requires Rust 1.41.1 or later; the crate follows a carefully
+//! considered upgrade policy, where updating the minimum Rust version is not a breaking
+//! change.
 
 #![doc(html_root_url = "https://docs.rs/matrixmultiply/0.2/")]
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -90,15 +125,25 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate core;
 
-extern crate rawpointer;
-
 #[macro_use]
 mod debugmacros;
 #[macro_use]
 mod loopmacros;
+
+mod archparam_defaults;
+
+#[cfg(feature = "constconf")]
 mod archparam;
+#[cfg(feature = "constconf")]
+mod constparse;
+
+#[cfg(not(feature = "constconf"))]
+pub(crate) use archparam_defaults as archparam;
+
 mod gemm;
 mod kernel;
+mod ptr;
+mod threading;
 
 mod aligned_alloc;
 mod util;
@@ -109,5 +154,20 @@ mod x86;
 mod dgemm_kernel;
 mod sgemm_kernel;
 
-pub use gemm::dgemm;
-pub use gemm::sgemm;
+pub use crate::gemm::dgemm;
+pub use crate::gemm::sgemm;
+
+#[cfg(feature = "cgemm")]
+#[macro_use]
+mod cgemm_common;
+#[cfg(feature = "cgemm")]
+mod cgemm_kernel;
+#[cfg(feature = "cgemm")]
+mod zgemm_kernel;
+
+#[cfg(feature = "cgemm")]
+pub use crate::gemm::cgemm;
+#[cfg(feature = "cgemm")]
+pub use crate::gemm::zgemm;
+#[cfg(feature = "cgemm")]
+pub use crate::gemm::CGemmOption;

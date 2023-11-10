@@ -6,7 +6,7 @@ use std::cmp::Ordering;
 use std::error;
 use std::fmt;
 
-pub use ast::visitor::{visit, Visitor};
+pub use crate::ast::visitor::{visit, Visitor};
 
 pub mod parse;
 pub mod print;
@@ -15,7 +15,7 @@ mod visitor;
 /// An error that occurred while parsing a regular expression into an abstract
 /// syntax tree.
 ///
-/// Note that note all ASTs represents a valid regular expression. For example,
+/// Note that not all ASTs represents a valid regular expression. For example,
 /// an AST is constructed without error for `\p{Quux}`, but `Quux` is not a
 /// valid Unicode property name. That particular error is reported when
 /// translating an AST to the high-level intermediate representation (`HIR`).
@@ -220,13 +220,13 @@ impl error::Error for Error {
 }
 
 impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        ::error::Formatter::from(self).fmt(f)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        crate::error::Formatter::from(self).fmt(f)
     }
 }
 
 impl fmt::Display for ErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use self::ErrorKind::*;
         match *self {
             CaptureLimitExceeded => write!(
@@ -328,7 +328,7 @@ pub struct Span {
 }
 
 impl fmt::Debug for Span {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Span({:?}, {:?})", self.start, self.end)
     }
 }
@@ -361,7 +361,7 @@ pub struct Position {
 }
 
 impl fmt::Debug for Position {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "Position(o: {:?}, l: {:?}, c: {:?})",
@@ -385,7 +385,7 @@ impl PartialOrd for Position {
 impl Span {
     /// Create a new span with the given positions.
     pub fn new(start: Position, end: Position) -> Span {
-        Span { start: start, end: end }
+        Span { start, end }
     }
 
     /// Create a new span using the given position as the start and end.
@@ -427,7 +427,7 @@ impl Position {
     ///
     /// `column` is the approximate column number, starting at `1`.
     pub fn new(offset: usize, line: usize, column: usize) -> Position {
-        Position { offset: offset, line: line, column: column }
+        Position { offset, line, column }
     }
 }
 
@@ -542,8 +542,8 @@ impl Ast {
 /// This implementation uses constant stack space and heap space proportional
 /// to the size of the `Ast`.
 impl fmt::Display for Ast {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use ast::print::Printer;
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use crate::ast::print::Printer;
         Printer::new().print(self, f)
     }
 }

@@ -8,8 +8,6 @@
 
 use std::fmt;
 
-use regex;
-
 use crate::reflection;
 use crate::utils;
 use crate::Predicate;
@@ -49,6 +47,7 @@ impl Predicate<str> for RegexPredicate {
 
     fn find_case<'a>(&'a self, expected: bool, variable: &str) -> Option<reflection::Case<'a>> {
         utils::default_find_case(self, expected, variable)
+            .map(|case| case.add_product(reflection::Product::new("var", variable.to_owned())))
     }
 }
 
@@ -56,7 +55,14 @@ impl reflection::PredicateReflection for RegexPredicate {}
 
 impl fmt::Display for RegexPredicate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "var.is_match({})", self.re)
+        let palette = crate::Palette::current();
+        write!(
+            f,
+            "{}.{}({})",
+            palette.var.paint("var"),
+            palette.description.paint("is_match"),
+            palette.expected.paint(&self.re),
+        )
     }
 }
 
@@ -80,6 +86,7 @@ impl Predicate<str> for RegexMatchesPredicate {
         if result == expected {
             Some(
                 reflection::Case::new(Some(self), result)
+                    .add_product(reflection::Product::new("var", variable.to_owned()))
                     .add_product(reflection::Product::new("actual count", actual_count)),
             )
         } else {
@@ -97,7 +104,14 @@ impl reflection::PredicateReflection for RegexMatchesPredicate {
 
 impl fmt::Display for RegexMatchesPredicate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "var.is_match({})", self.re)
+        let palette = crate::Palette::current();
+        write!(
+            f,
+            "{}.{}({})",
+            palette.var.paint("var"),
+            palette.description.paint("is_match"),
+            palette.expected.paint(&self.re),
+        )
     }
 }
 
@@ -108,7 +122,7 @@ impl fmt::Display for RegexMatchesPredicate {
 /// ```
 /// use predicates::prelude::*;
 ///
-/// let predicate_fn = predicate::str::is_match("^Hel.o.*$").unwrap();
+/// let predicate_fn = predicate::str::is_match("^Hello.*$").unwrap();
 /// assert_eq!(true, predicate_fn.eval("Hello World"));
 /// assert_eq!(false, predicate_fn.eval("Food World"));
 /// ```

@@ -13,9 +13,10 @@ and the official package manager: [cargo](https://github.com/rust-lang/cargo).
 
 Simply add the following to your `Cargo.toml` file:
 
-```.ignore
+```ignore
 [dependencies]
-nalgebra = "0.18"
+// TODO: replace the * by the latest version.
+nalgebra = "*"
 ```
 
 
@@ -24,7 +25,7 @@ Most useful functionalities of **nalgebra** are grouped in the root module `nalg
 However, the recommended way to use **nalgebra** is to import types and traits
 explicitly, and call free-functions using the `na::` prefix:
 
-```.rust
+```
 #[macro_use]
 extern crate approx; // For the macro relative_eq!
 extern crate nalgebra as na;
@@ -70,47 +71,37 @@ an optimized set of tools for computer graphics and physics. Those features incl
 * Insertion and removal of rows of columns of a matrix.
 */
 
-// #![feature(plugin)]
-//
-// #![plugin(clippy)]
-
-#![deny(non_camel_case_types)]
-#![deny(unused_parens)]
-#![deny(non_upper_case_globals)]
-#![deny(unused_qualifications)]
-#![deny(unused_results)]
-#![deny(missing_docs)]
+#![allow(unused_variables, unused_mut)]
+#![deny(
+    missing_docs,
+    nonstandard_style,
+    unused_parens,
+    unused_qualifications,
+    unused_results,
+    rust_2018_idioms,
+    rust_2018_compatibility,
+    future_incompatible,
+    missing_copy_implementations
+)]
 #![doc(
     html_favicon_url = "https://nalgebra.org/img/favicon.ico",
-    html_root_url = "https://nalgebra.org/rustdoc"
+    html_root_url = "https://docs.rs/nalgebra/0.25.0"
 )]
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(all(feature = "alloc", not(feature = "std")), feature(alloc))]
 
-#[cfg(feature = "arbitrary")]
-extern crate quickcheck;
+#[cfg(feature = "rand-no-std")]
+extern crate rand_package as rand;
 
-#[cfg(feature = "serde")]
-extern crate serde;
-#[cfg(feature = "serde")]
+#[cfg(feature = "serde-serialize-no-std")]
 #[macro_use]
-extern crate serde_derive;
-
-#[cfg(feature = "abomonation-serialize")]
-extern crate abomonation;
-
-#[cfg(feature = "mint")]
-extern crate mint;
+extern crate serde;
 
 #[macro_use]
 extern crate approx;
-#[cfg(feature = "std")]
-extern crate matrixmultiply;
 extern crate num_traits as num;
-#[cfg(feature = "std")]
-extern crate rand_distr;
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
+#[cfg_attr(test, macro_use)]
 extern crate alloc;
 
 #[cfg(not(feature = "std"))]
@@ -129,8 +120,11 @@ pub mod geometry;
 #[cfg(feature = "io")]
 pub mod io;
 pub mod linalg;
+#[cfg(feature = "proptest-support")]
+pub mod proptest;
 #[cfg(feature = "sparse")]
 pub mod sparse;
+mod third_party;
 
 pub use crate::base::*;
 pub use crate::geometry::*;
@@ -143,6 +137,9 @@ pub use crate::sparse::*;
 )]
 pub use base as core;
 
+#[cfg(feature = "macros")]
+pub use nalgebra_macros::{dmatrix, dvector, matrix, point, vector};
+
 use simba::scalar::SupersetOf;
 use std::cmp::{self, Ordering, PartialOrd};
 
@@ -153,7 +150,7 @@ pub use num_complex::Complex;
 pub use simba::scalar::{
     ClosedAdd, ClosedDiv, ClosedMul, ClosedSub, ComplexField, Field, RealField,
 };
-pub use simba::simd::{SimdBool, SimdComplexField, SimdPartialOrd, SimdRealField};
+pub use simba::simd::{SimdBool, SimdComplexField, SimdPartialOrd, SimdRealField, SimdValue};
 
 /// Gets the multiplicative identity element.
 ///
@@ -188,6 +185,7 @@ pub fn zero<T: Zero>() -> T {
 /// Wraps `val` into the range `[min, max]` using modular arithmetics.
 ///
 /// The range must not be empty.
+#[must_use]
 #[inline]
 pub fn wrap<T>(mut val: T, min: T, max: T) -> T
 where
@@ -202,19 +200,15 @@ where
         while val < min {
             val += width
         }
-
-        val
     } else if val > max {
         val -= width;
 
         while val > max {
             val -= width
         }
-
-        val
-    } else {
-        val
     }
+
+    val
 }
 
 /// Returns a reference to the input value clamped to the interval `[min, max]`.
@@ -223,6 +217,7 @@ where
 ///     * If `min < val < max`, this returns `val`.
 ///     * If `val <= min`, this returns `min`.
 ///     * If `val >= max`, this returns `max`.
+#[must_use]
 #[inline]
 pub fn clamp<T: PartialOrd>(val: T, min: T, max: T) -> T {
     if val > min {
@@ -250,7 +245,7 @@ pub fn min<T: Ord>(a: T, b: T) -> T {
 
 /// The absolute value of `a`.
 ///
-/// Deprecated: Use [Matrix::abs] or [RealField::abs] instead.
+/// Deprecated: Use [`Matrix::abs`] or [`RealField::abs`] instead.
 #[deprecated(note = "use the inherent method `Matrix::abs` or `RealField::abs` instead")]
 #[inline]
 pub fn abs<T: Signed>(a: &T) -> T {
@@ -260,10 +255,10 @@ pub fn abs<T: Signed>(a: &T) -> T {
 /// Returns the infimum of `a` and `b`.
 #[deprecated(note = "use the inherent method `Matrix::inf` instead")]
 #[inline]
-pub fn inf<N, R: Dim, C: Dim>(a: &MatrixMN<N, R, C>, b: &MatrixMN<N, R, C>) -> MatrixMN<N, R, C>
+pub fn inf<T, R: Dim, C: Dim>(a: &OMatrix<T, R, C>, b: &OMatrix<T, R, C>) -> OMatrix<T, R, C>
 where
-    N: Scalar + SimdPartialOrd,
-    DefaultAllocator: Allocator<N, R, C>,
+    T: Scalar + SimdPartialOrd,
+    DefaultAllocator: Allocator<T, R, C>,
 {
     a.inf(b)
 }
@@ -271,10 +266,10 @@ where
 /// Returns the supremum of `a` and `b`.
 #[deprecated(note = "use the inherent method `Matrix::sup` instead")]
 #[inline]
-pub fn sup<N, R: Dim, C: Dim>(a: &MatrixMN<N, R, C>, b: &MatrixMN<N, R, C>) -> MatrixMN<N, R, C>
+pub fn sup<T, R: Dim, C: Dim>(a: &OMatrix<T, R, C>, b: &OMatrix<T, R, C>) -> OMatrix<T, R, C>
 where
-    N: Scalar + SimdPartialOrd,
-    DefaultAllocator: Allocator<N, R, C>,
+    T: Scalar + SimdPartialOrd,
+    DefaultAllocator: Allocator<T, R, C>,
 {
     a.sup(b)
 }
@@ -282,13 +277,13 @@ where
 /// Returns simultaneously the infimum and supremum of `a` and `b`.
 #[deprecated(note = "use the inherent method `Matrix::inf_sup` instead")]
 #[inline]
-pub fn inf_sup<N, R: Dim, C: Dim>(
-    a: &MatrixMN<N, R, C>,
-    b: &MatrixMN<N, R, C>,
-) -> (MatrixMN<N, R, C>, MatrixMN<N, R, C>)
+pub fn inf_sup<T, R: Dim, C: Dim>(
+    a: &OMatrix<T, R, C>,
+    b: &OMatrix<T, R, C>,
+) -> (OMatrix<T, R, C>, OMatrix<T, R, C>)
 where
-    N: Scalar + SimdPartialOrd,
-    DefaultAllocator: Allocator<N, R, C>,
+    T: Scalar + SimdPartialOrd,
+    DefaultAllocator: Allocator<T, R, C>,
 {
     a.inf_sup(b)
 }
@@ -389,13 +384,13 @@ pub fn partial_sort2<'a, T: PartialOrd>(a: &'a T, b: &'a T) -> Option<(&'a T, &'
 /// # See also:
 ///
 /// * [distance](fn.distance.html)
-/// * [distance_squared](fn.distance_squared.html)
+/// * [`distance_squared`](fn.distance_squared.html)
 #[inline]
-pub fn center<N: SimdComplexField, D: DimName>(p1: &Point<N, D>, p2: &Point<N, D>) -> Point<N, D>
-where
-    DefaultAllocator: Allocator<N, D>,
-{
-    ((&p1.coords + &p2.coords) * convert::<_, N>(0.5)).into()
+pub fn center<T: SimdComplexField, const D: usize>(
+    p1: &Point<T, D>,
+    p2: &Point<T, D>,
+) -> Point<T, D> {
+    ((&p1.coords + &p2.coords) * convert::<_, T>(0.5)).into()
 }
 
 /// The distance between two points.
@@ -403,15 +398,12 @@ where
 /// # See also:
 ///
 /// * [center](fn.center.html)
-/// * [distance_squared](fn.distance_squared.html)
+/// * [`distance_squared`](fn.distance_squared.html)
 #[inline]
-pub fn distance<N: SimdComplexField, D: DimName>(
-    p1: &Point<N, D>,
-    p2: &Point<N, D>,
-) -> N::SimdRealField
-where
-    DefaultAllocator: Allocator<N, D>,
-{
+pub fn distance<T: SimdComplexField, const D: usize>(
+    p1: &Point<T, D>,
+    p2: &Point<T, D>,
+) -> T::SimdRealField {
     (&p2.coords - &p1.coords).norm()
 }
 
@@ -422,13 +414,10 @@ where
 /// * [center](fn.center.html)
 /// * [distance](fn.distance.html)
 #[inline]
-pub fn distance_squared<N: SimdComplexField, D: DimName>(
-    p1: &Point<N, D>,
-    p2: &Point<N, D>,
-) -> N::SimdRealField
-where
-    DefaultAllocator: Allocator<N, D>,
-{
+pub fn distance_squared<T: SimdComplexField, const D: usize>(
+    p1: &Point<T, D>,
+    p2: &Point<T, D>,
+) -> T::SimdRealField {
     (&p2.coords - &p1.coords).norm_squared()
 }
 
@@ -441,11 +430,11 @@ where
 ///
 /// # See also:
 ///
-/// * [convert_ref](fn.convert_ref.html)
-/// * [convert_ref_unchecked](fn.convert_ref_unchecked.html)
-/// * [is_convertible](../nalgebra/fn.is_convertible.html)
-/// * [try_convert](fn.try_convert.html)
-/// * [try_convert_ref](fn.try_convert_ref.html)
+/// * [`convert_ref`](fn.convert_ref.html)
+/// * [`convert_ref_unchecked`](fn.convert_ref_unchecked.html)
+/// * [`is_convertible`](../nalgebra/fn.is_convertible.html)
+/// * [`try_convert`](fn.try_convert.html)
+/// * [`try_convert_ref`](fn.try_convert_ref.html)
 #[inline]
 pub fn convert<From, To: SupersetOf<From>>(t: From) -> To {
     To::from_subset(&t)
@@ -458,10 +447,10 @@ pub fn convert<From, To: SupersetOf<From>>(t: From) -> To {
 /// # See also:
 ///
 /// * [convert](fn.convert.html)
-/// * [convert_ref](fn.convert_ref.html)
-/// * [convert_ref_unchecked](fn.convert_ref_unchecked.html)
-/// * [is_convertible](../nalgebra/fn.is_convertible.html)
-/// * [try_convert_ref](fn.try_convert_ref.html)
+/// * [`convert_ref`](fn.convert_ref.html)
+/// * [`convert_ref_unchecked`](fn.convert_ref_unchecked.html)
+/// * [`is_convertible`](../nalgebra/fn.is_convertible.html)
+/// * [`try_convert_ref`](fn.try_convert_ref.html)
 #[inline]
 pub fn try_convert<From: SupersetOf<To>, To>(t: From) -> Option<To> {
     t.to_subset()
@@ -473,10 +462,10 @@ pub fn try_convert<From: SupersetOf<To>, To>(t: From) -> Option<To> {
 /// # See also:
 ///
 /// * [convert](fn.convert.html)
-/// * [convert_ref](fn.convert_ref.html)
-/// * [convert_ref_unchecked](fn.convert_ref_unchecked.html)
-/// * [try_convert](fn.try_convert.html)
-/// * [try_convert_ref](fn.try_convert_ref.html)
+/// * [`convert_ref`](fn.convert_ref.html)
+/// * [`convert_ref_unchecked`](fn.convert_ref_unchecked.html)
+/// * [`try_convert`](fn.try_convert.html)
+/// * [`try_convert_ref`](fn.try_convert_ref.html)
 #[inline]
 pub fn is_convertible<From: SupersetOf<To>, To>(t: &From) -> bool {
     t.is_in_subset()
@@ -488,11 +477,11 @@ pub fn is_convertible<From: SupersetOf<To>, To>(t: &From) -> bool {
 /// # See also:
 ///
 /// * [convert](fn.convert.html)
-/// * [convert_ref](fn.convert_ref.html)
-/// * [convert_ref_unchecked](fn.convert_ref_unchecked.html)
-/// * [is_convertible](../nalgebra/fn.is_convertible.html)
-/// * [try_convert](fn.try_convert.html)
-/// * [try_convert_ref](fn.try_convert_ref.html)
+/// * [`convert_ref`](fn.convert_ref.html)
+/// * [`convert_ref_unchecked`](fn.convert_ref_unchecked.html)
+/// * [`is_convertible`](../nalgebra/fn.is_convertible.html)
+/// * [`try_convert`](fn.try_convert.html)
+/// * [`try_convert_ref`](fn.try_convert_ref.html)
 #[inline]
 pub fn convert_unchecked<From: SupersetOf<To>, To>(t: From) -> To {
     t.to_subset_unchecked()
@@ -503,10 +492,10 @@ pub fn convert_unchecked<From: SupersetOf<To>, To>(t: From) -> To {
 /// # See also:
 ///
 /// * [convert](fn.convert.html)
-/// * [convert_ref_unchecked](fn.convert_ref_unchecked.html)
-/// * [is_convertible](../nalgebra/fn.is_convertible.html)
-/// * [try_convert](fn.try_convert.html)
-/// * [try_convert_ref](fn.try_convert_ref.html)
+/// * [`convert_ref_unchecked`](fn.convert_ref_unchecked.html)
+/// * [`is_convertible`](../nalgebra/fn.is_convertible.html)
+/// * [`try_convert`](fn.try_convert.html)
+/// * [`try_convert_ref`](fn.try_convert_ref.html)
 #[inline]
 pub fn convert_ref<From, To: SupersetOf<From>>(t: &From) -> To {
     To::from_subset(t)
@@ -517,10 +506,10 @@ pub fn convert_ref<From, To: SupersetOf<From>>(t: &From) -> To {
 /// # See also:
 ///
 /// * [convert](fn.convert.html)
-/// * [convert_ref](fn.convert_ref.html)
-/// * [convert_ref_unchecked](fn.convert_ref_unchecked.html)
-/// * [is_convertible](../nalgebra/fn.is_convertible.html)
-/// * [try_convert](fn.try_convert.html)
+/// * [`convert_ref`](fn.convert_ref.html)
+/// * [`convert_ref_unchecked`](fn.convert_ref_unchecked.html)
+/// * [`is_convertible`](../nalgebra/fn.is_convertible.html)
+/// * [`try_convert`](fn.try_convert.html)
 #[inline]
 pub fn try_convert_ref<From: SupersetOf<To>, To>(t: &From) -> Option<To> {
     t.to_subset()
@@ -532,10 +521,10 @@ pub fn try_convert_ref<From: SupersetOf<To>, To>(t: &From) -> Option<To> {
 /// # See also:
 ///
 /// * [convert](fn.convert.html)
-/// * [convert_ref](fn.convert_ref.html)
-/// * [is_convertible](../nalgebra/fn.is_convertible.html)
-/// * [try_convert](fn.try_convert.html)
-/// * [try_convert_ref](fn.try_convert_ref.html)
+/// * [`convert_ref`](fn.convert_ref.html)
+/// * [`is_convertible`](../nalgebra/fn.is_convertible.html)
+/// * [`try_convert`](fn.try_convert.html)
+/// * [`try_convert_ref`](fn.try_convert_ref.html)
 #[inline]
 pub fn convert_ref_unchecked<From: SupersetOf<To>, To>(t: &From) -> To {
     t.to_subset_unchecked()

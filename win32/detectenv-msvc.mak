@@ -27,7 +27,9 @@ _HASH=^#
     && ![cl -nologo -TC -P vercl.x $(ERRNUL)]
 !include vercl.i
 !if ![echo VCVER= ^\> vercl.vc] \
-    && ![set /a $(VCVERSION) / 100 - 6 >> vercl.vc]
+    && ![set /a $(VCVERSION) / 100 - 6 >> vercl.vc]	\
+	&& ![echo.>>vercl.vc]	\
+	&& ![if not exist ..\.git echo IS_NOT_GIT=1 >>vercl.vc]
 !include vercl.vc
 !endif
 !endif
@@ -46,8 +48,10 @@ VSVER = 12
 VSVER = 14
 !elseif $(VCVERSION) > 1909 && $(VCVERSION) < 1920
 VSVER = 15
-!elseif $(VCVERSION) > 1919 && $(VCVERSION) < 2000
+!elseif $(VCVERSION) > 1919 && $(VCVERSION) < 1930
 VSVER = 16
+!elseif $(VCVERSION) > 1929 && $(VCVERSION) < 2000
+VSVER = 17
 !else
 VSVER = 0
 !endif

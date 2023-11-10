@@ -1,8 +1,6 @@
 use std::io::Write;
 use std::{io, thread};
 
-use byteorder::{BigEndian, WriteBytesExt};
-
 use crate::checksum::{Adler32Checksum, RollingChecksum};
 use crate::compress::compress_data_dynamic_n;
 use crate::compress::Flush;
@@ -241,7 +239,9 @@ impl<W: Write> ZlibEncoder<W> {
             .inner
             .as_mut()
             .expect(ERR_STR)
-            .write_u32::<BigEndian>(hash)
+            .write_all(&hash.to_be_bytes())?;
+
+        Ok(())
     }
 
     /// Return the adler32 checksum of the currently consumed data.
@@ -297,7 +297,6 @@ pub mod gzip {
 
     use super::*;
 
-    use byteorder::{LittleEndian, WriteBytesExt};
     use gzip_header::{Crc, GzBuilder};
 
     /// A Gzip encoder/compressor.
@@ -416,8 +415,8 @@ pub mod gzip {
             // writing fails.
             let mut buf = [0u8; 8];
             let mut temp = Cursor::new(&mut buf[..]);
-            temp.write_u32::<LittleEndian>(crc).unwrap();
-            temp.write_u32::<LittleEndian>(amount).unwrap();
+            temp.write_all(&crc.to_le_bytes()).unwrap();
+            temp.write_all(&amount.to_le_bytes()).unwrap();
             self.inner
                 .deflate_state
                 .inner
