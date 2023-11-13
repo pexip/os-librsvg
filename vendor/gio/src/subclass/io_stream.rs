@@ -1,84 +1,79 @@
-// Copyright 2019, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
-
-use gio_sys;
-use glib_sys;
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 use glib::prelude::*;
 use glib::subclass::prelude::*;
 use glib::translate::*;
 
-use glib::Error;
+use glib::{Cast, Error};
 
-use Cancellable;
-use IOStream;
-use IOStreamClass;
+use crate::Cancellable;
+use crate::{IOStream, InputStream, OutputStream};
 
-use std::mem;
 use std::ptr;
 
-pub trait IOStreamImpl: IOStreamImplExt + Send + 'static {
-    fn get_input_stream(&self, stream: &IOStream) -> crate::InputStream {
-        self.parent_get_input_stream(stream)
+use once_cell::sync::Lazy;
+
+pub trait IOStreamImpl: ObjectImpl + IOStreamImplExt + Send {
+    fn input_stream(&self, stream: &Self::Type) -> InputStream {
+        self.parent_input_stream(stream)
     }
 
-    fn get_output_stream(&self, stream: &IOStream) -> crate::OutputStream {
-        self.parent_get_output_stream(stream)
+    fn output_stream(&self, stream: &Self::Type) -> OutputStream {
+        self.parent_output_stream(stream)
     }
 
-    fn close(&self, stream: &IOStream, cancellable: Option<&Cancellable>) -> Result<(), Error> {
+    fn close(&self, stream: &Self::Type, cancellable: Option<&Cancellable>) -> Result<(), Error> {
         self.parent_close(stream, cancellable)
     }
 }
 
-pub trait IOStreamImplExt {
-    fn parent_get_input_stream(&self, stream: &IOStream) -> crate::InputStream;
+pub trait IOStreamImplExt: ObjectSubclass {
+    fn parent_input_stream(&self, stream: &Self::Type) -> InputStream;
 
-    fn parent_get_output_stream(&self, stream: &IOStream) -> crate::OutputStream;
+    fn parent_output_stream(&self, stream: &Self::Type) -> OutputStream;
 
     fn parent_close(
         &self,
-        stream: &IOStream,
+        stream: &Self::Type,
         cancellable: Option<&Cancellable>,
     ) -> Result<(), Error>;
 }
 
-impl<T: IOStreamImpl + ObjectImpl> IOStreamImplExt for T {
-    fn parent_get_input_stream(&self, stream: &IOStream) -> crate::InputStream {
+impl<T: IOStreamImpl> IOStreamImplExt for T {
+    fn parent_input_stream(&self, stream: &Self::Type) -> InputStream {
         unsafe {
-            let data = self.get_type_data();
-            let parent_class = data.as_ref().get_parent_class() as *mut gio_sys::GIOStreamClass;
+            let data = T::type_data();
+            let parent_class = data.as_ref().parent_class() as *mut ffi::GIOStreamClass;
             let f = (*parent_class)
                 .get_input_stream
-                .expect("No parent class implementation for \"get_input_stream\"");
-            from_glib_none(f(stream.to_glib_none().0))
+                .expect("No parent class implementation for \"input_stream\"");
+            from_glib_none(f(stream.unsafe_cast_ref::<IOStream>().to_glib_none().0))
         }
     }
 
-    fn parent_get_output_stream(&self, stream: &IOStream) -> crate::OutputStream {
+    fn parent_output_stream(&self, stream: &Self::Type) -> OutputStream {
         unsafe {
-            let data = self.get_type_data();
-            let parent_class = data.as_ref().get_parent_class() as *mut gio_sys::GIOStreamClass;
+            let data = T::type_data();
+            let parent_class = data.as_ref().parent_class() as *mut ffi::GIOStreamClass;
             let f = (*parent_class)
                 .get_output_stream
-                .expect("No parent class implementation for \"get_output_stream\"");
-            from_glib_none(f(stream.to_glib_none().0))
+                .expect("No parent class implementation for \"output_stream\"");
+            from_glib_none(f(stream.unsafe_cast_ref::<IOStream>().to_glib_none().0))
         }
     }
 
     fn parent_close(
         &self,
-        stream: &IOStream,
+        stream: &Self::Type,
         cancellable: Option<&Cancellable>,
     ) -> Result<(), Error> {
         unsafe {
-            let data = self.get_type_data();
-            let parent_class = data.as_ref().get_parent_class() as *mut gio_sys::GIOStreamClass;
+            let data = T::type_data();
+            let parent_class = data.as_ref().parent_class() as *mut ffi::GIOStreamClass;
             let mut err = ptr::null_mut();
             if let Some(f) = (*parent_class).close_fn {
                 if from_glib(f(
-                    stream.to_glib_none().0,
+                    stream.unsafe_cast_ref::<IOStream>().to_glib_none().0,
                     cancellable.to_glib_none().0,
                     &mut err,
                 )) {
@@ -93,120 +88,89 @@ impl<T: IOStreamImpl + ObjectImpl> IOStreamImplExt for T {
     }
 }
 
-unsafe impl<T: ObjectSubclass + IOStreamImpl> IsSubclassable<T> for IOStreamClass {
-    fn override_vfuncs(&mut self) {
-        <glib::ObjectClass as IsSubclassable<T>>::override_vfuncs(self);
-        unsafe {
-            let klass = &mut *(self as *mut Self as *mut gio_sys::GIOStreamClass);
-            klass.get_input_stream = Some(stream_get_input_stream::<T>);
-            klass.get_output_stream = Some(stream_get_output_stream::<T>);
-            klass.close_fn = Some(stream_close::<T>);
-        }
+unsafe impl<T: IOStreamImpl> IsSubclassable<T> for IOStream {
+    fn class_init(class: &mut ::glib::Class<Self>) {
+        Self::parent_class_init::<T>(class);
+
+        let klass = class.as_mut();
+        klass.get_input_stream = Some(stream_get_input_stream::<T>);
+        klass.get_output_stream = Some(stream_get_output_stream::<T>);
+        klass.close_fn = Some(stream_close::<T>);
     }
 }
 
-lazy_static! {
-    pub static ref OUTPUT_STREAM_QUARK: glib::Quark =
-        glib::Quark::from_string("gtk-rs-subclass-output-stream");
-    pub static ref INPUT_STREAM_QUARK: glib::Quark =
-        glib::Quark::from_string("gtk-rs-subclass-input-stream");
-}
+static OUTPUT_STREAM_QUARK: Lazy<glib::Quark> =
+    Lazy::new(|| glib::Quark::from_str("gtk-rs-subclass-output-stream"));
+static INPUT_STREAM_QUARK: Lazy<glib::Quark> =
+    Lazy::new(|| glib::Quark::from_str("gtk-rs-subclass-input-stream"));
 
-unsafe extern "C" fn stream_get_input_stream<T: ObjectSubclass>(
-    ptr: *mut gio_sys::GIOStream,
-) -> *mut gio_sys::GInputStream
-where
-    T: IOStreamImpl,
-{
+unsafe extern "C" fn stream_get_input_stream<T: IOStreamImpl>(
+    ptr: *mut ffi::GIOStream,
+) -> *mut ffi::GInputStream {
     let instance = &*(ptr as *mut T::Instance);
-    let imp = instance.get_impl();
-    let wrap: IOStream = from_glib_borrow(ptr);
+    let imp = instance.imp();
+    let wrap: Borrowed<IOStream> = from_glib_borrow(ptr);
 
-    let ret = imp.get_input_stream(&wrap);
+    let ret = imp.input_stream(wrap.unsafe_cast_ref());
 
     // Ensure that a) the stream stays alive as long as the IO stream instance and
     // b) that the same stream is returned every time. This is a requirement by the
     // IO stream API.
-    let old_ptr = gobject_sys::g_object_get_qdata(ptr as *mut _, INPUT_STREAM_QUARK.to_glib());
-    if !old_ptr.is_null() {
+    if let Some(old_stream) = wrap.qdata::<InputStream>(*INPUT_STREAM_QUARK) {
         assert_eq!(
-            old_ptr as *mut _,
-            ret.as_ptr(),
+            old_stream.as_ref(),
+            &ret,
             "Did not return same input stream again"
         );
     }
-
-    unsafe extern "C" fn unref(ptr: glib_sys::gpointer) {
-        gobject_sys::g_object_unref(ptr as *mut _);
-    }
-    gobject_sys::g_object_set_qdata_full(
-        ptr as *mut _,
-        INPUT_STREAM_QUARK.to_glib(),
-        ret.as_ptr() as *mut _,
-        Some(unref),
-    );
-
+    wrap.set_qdata(*INPUT_STREAM_QUARK, ret.clone());
     ret.to_glib_none().0
 }
 
-unsafe extern "C" fn stream_get_output_stream<T: ObjectSubclass>(
-    ptr: *mut gio_sys::GIOStream,
-) -> *mut gio_sys::GOutputStream
-where
-    T: IOStreamImpl,
-{
+unsafe extern "C" fn stream_get_output_stream<T: IOStreamImpl>(
+    ptr: *mut ffi::GIOStream,
+) -> *mut ffi::GOutputStream {
     let instance = &*(ptr as *mut T::Instance);
-    let imp = instance.get_impl();
-    let wrap: IOStream = from_glib_borrow(ptr);
+    let imp = instance.imp();
+    let wrap: Borrowed<IOStream> = from_glib_borrow(ptr);
 
-    let ret = imp.get_output_stream(&wrap);
+    let ret = imp.output_stream(wrap.unsafe_cast_ref());
 
     // Ensure that a) the stream stays alive as long as the IO stream instance and
     // b) that the same stream is returned every time. This is a requirement by the
     // IO stream API.
-    let old_ptr = gobject_sys::g_object_get_qdata(ptr as *mut _, OUTPUT_STREAM_QUARK.to_glib());
-    if !old_ptr.is_null() {
+    if let Some(old_stream) = wrap.qdata::<OutputStream>(*OUTPUT_STREAM_QUARK) {
         assert_eq!(
-            old_ptr as *mut _,
-            ret.as_ptr(),
+            old_stream.as_ref(),
+            &ret,
             "Did not return same output stream again"
         );
     }
-
-    unsafe extern "C" fn unref(ptr: glib_sys::gpointer) {
-        gobject_sys::g_object_unref(ptr as *mut _);
-    }
-    gobject_sys::g_object_set_qdata_full(
-        ptr as *mut _,
-        OUTPUT_STREAM_QUARK.to_glib(),
-        ret.as_ptr() as *mut _,
-        Some(unref),
-    );
-
+    wrap.set_qdata(*OUTPUT_STREAM_QUARK, ret.clone());
     ret.to_glib_none().0
 }
 
-unsafe extern "C" fn stream_close<T: ObjectSubclass>(
-    ptr: *mut gio_sys::GIOStream,
-    cancellable: *mut gio_sys::GCancellable,
-    err: *mut *mut glib_sys::GError,
-) -> glib_sys::gboolean
-where
-    T: IOStreamImpl,
-{
+unsafe extern "C" fn stream_close<T: IOStreamImpl>(
+    ptr: *mut ffi::GIOStream,
+    cancellable: *mut ffi::GCancellable,
+    err: *mut *mut glib::ffi::GError,
+) -> glib::ffi::gboolean {
     let instance = &*(ptr as *mut T::Instance);
-    let imp = instance.get_impl();
-    let wrap: IOStream = from_glib_borrow(ptr);
+    let imp = instance.imp();
+    let wrap: Borrowed<IOStream> = from_glib_borrow(ptr);
 
     match imp.close(
-        &wrap,
-        Option::<Cancellable>::from_glib_borrow(cancellable).as_ref(),
+        wrap.unsafe_cast_ref(),
+        Option::<Cancellable>::from_glib_borrow(cancellable)
+            .as_ref()
+            .as_ref(),
     ) {
-        Ok(_) => glib_sys::GTRUE,
-        Err(mut e) => {
-            *err = e.to_glib_none_mut().0;
-            mem::forget(e);
-            glib_sys::GFALSE
+        Ok(_) => glib::ffi::GTRUE,
+        Err(e) => {
+            if !err.is_null() {
+                *err = e.into_raw();
+            }
+            glib::ffi::GFALSE
         }
     }
 }

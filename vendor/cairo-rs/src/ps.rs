@@ -1,6 +1,4 @@
-// Copyright 2018-2019, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 use std::convert::TryFrom;
 use std::ffi::{CStr, CString};
@@ -11,14 +9,12 @@ use std::ops::Deref;
 use std::path::Path;
 use std::ptr;
 
-use enums::{PsLevel, SurfaceType};
-use ffi;
-use surface::Surface;
+use crate::enums::{PsLevel, SurfaceType};
+use crate::error::Error;
+use crate::surface::Surface;
 
 #[cfg(feature = "use_glib")]
 use glib::translate::*;
-
-use Status;
 
 impl PsLevel {
     pub fn as_str(self) -> Option<&'static str> {
@@ -33,7 +29,8 @@ impl PsLevel {
 declare_surface!(PsSurface, SurfaceType::Ps);
 
 impl PsSurface {
-    pub fn new<P: AsRef<Path>>(width: f64, height: f64, path: P) -> Result<PsSurface, Status> {
+    #[doc(alias = "cairo_ps_surface_create")]
+    pub fn new<P: AsRef<Path>>(width: f64, height: f64, path: P) -> Result<PsSurface, Error> {
         let path = path.as_ref().to_string_lossy().into_owned();
         let path = CString::new(path).unwrap();
 
@@ -42,53 +39,68 @@ impl PsSurface {
 
     for_stream_constructors!(cairo_ps_surface_create_for_stream);
 
-    pub fn get_levels() -> impl Iterator<Item = PsLevel> {
+    #[doc(alias = "cairo_ps_get_levels")]
+    #[doc(alias = "get_levels")]
+    pub fn levels() -> impl Iterator<Item = PsLevel> {
         let lvls_slice = unsafe {
             let mut vers_ptr = ptr::null_mut();
             let mut num_vers = mem::MaybeUninit::uninit();
             ffi::cairo_ps_get_levels(&mut vers_ptr, num_vers.as_mut_ptr());
 
-            std::slice::from_raw_parts(vers_ptr, num_vers.assume_init() as _)
+            let num_vers = num_vers.assume_init();
+            if num_vers == 0 {
+                &[]
+            } else {
+                std::slice::from_raw_parts(vers_ptr, num_vers as _)
+            }
         };
 
         lvls_slice.iter().map(|v| PsLevel::from(*v))
     }
 
+    #[doc(alias = "cairo_ps_surface_restrict_to_level")]
     pub fn restrict(&self, level: PsLevel) {
         unsafe {
             ffi::cairo_ps_surface_restrict_to_level(self.0.to_raw_none(), level.into());
         }
     }
 
-    pub fn get_eps(&self) -> bool {
+    #[doc(alias = "cairo_ps_surface_get_eps")]
+    #[doc(alias = "get_eps")]
+    pub fn is_eps(&self) -> bool {
         unsafe { ffi::cairo_ps_surface_get_eps(self.0.to_raw_none()).as_bool() }
     }
 
+    #[doc(alias = "cairo_ps_surface_set_eps")]
     pub fn set_eps(&self, eps: bool) {
         unsafe {
             ffi::cairo_ps_surface_set_eps(self.0.to_raw_none(), eps.into());
         }
     }
 
+    #[doc(alias = "cairo_ps_surface_set_size")]
     pub fn set_size(&self, width: f64, height: f64) {
         unsafe {
             ffi::cairo_ps_surface_set_size(self.0.to_raw_none(), width, height);
         }
     }
 
-    pub fn cairo_ps_surface_dsc_begin_setup(&self) {
+    #[doc(alias = "cairo_ps_surface_dsc_begin_setup")]
+    pub fn dsc_begin_setup(&self) {
         unsafe {
             ffi::cairo_ps_surface_dsc_begin_setup(self.0.to_raw_none());
         }
     }
 
-    pub fn cairo_ps_surface_dsc_begin_page_setup(&self) {
+    #[doc(alias = "cairo_ps_surface_dsc_begin_page_setup")]
+    pub fn begin_page_setup(&self) {
         unsafe {
             ffi::cairo_ps_surface_dsc_begin_page_setup(self.0.to_raw_none());
         }
     }
 
-    pub fn cairo_ps_surface_dsc_comment(&self, comment: &str) {
+    #[doc(alias = "cairo_ps_surface_dsc_comment")]
+    pub fn dsc_comment(&self, comment: &str) {
         let comment = CString::new(comment).unwrap();
         unsafe {
             ffi::cairo_ps_surface_dsc_comment(self.0.to_raw_none(), comment.as_ptr());
@@ -99,11 +111,11 @@ impl PsSurface {
 #[cfg(test)]
 mod test {
     use super::*;
-    use context::*;
+    use crate::context::*;
     use tempfile::tempfile;
 
     fn draw(surface: &Surface) {
-        let cr = Context::new(surface);
+        let cr = Context::new(surface).expect("Can't create a Cairo context");
 
         // Note: Not using RGBA here as PS doesn't natively support
         // semi-transparency and Cairo would then embed a rasterized bitmap
@@ -113,12 +125,12 @@ mod test {
         cr.set_source_rgb(1.0, 0.0, 0.0);
         cr.line_to(0., 0.);
         cr.line_to(100., 100.);
-        cr.stroke();
+        cr.stroke().expect("Surface on an invalid state");
 
         cr.set_source_rgb(0.0, 0.0, 1.0);
         cr.line_to(0., 100.);
         cr.line_to(100., 0.);
-        cr.stroke();
+        cr.stroke().expect("Surface on an invalid state");
     }
 
     fn draw_in_buffer() -> Vec<u8> {
@@ -131,7 +143,7 @@ mod test {
 
     #[test]
     fn levels() {
-        assert!(PsSurface::get_levels().any(|v| v == PsLevel::_2));
+        assert!(PsSurface::levels().any(|v| v == PsLevel::_2));
     }
 
     #[test]
@@ -145,7 +157,7 @@ mod test {
         let buffer: Vec<u8> = vec![];
         let surface = PsSurface::for_stream(100., 100., buffer).unwrap();
         surface.set_eps(true);
-        assert_eq!(surface.get_eps(), true);
+        assert!(surface.is_eps());
     }
 
     #[test]

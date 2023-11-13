@@ -1,15 +1,15 @@
-// Copyright 2015-2016, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
-//! `IMPL` The `glib_wrapper!` macro and miscellaneous wrapper traits.
+// rustdoc-stripper-ignore-next
+//! `IMPL` The `wrapper!` macro and miscellaneous wrapper traits.
 
+// rustdoc-stripper-ignore-next
 /// Defines a wrapper type and implements the appropriate traits.
 ///
 /// The basic syntax is
 ///
 /// ```ignore
-/// glib_wrapper! {
+/// wrapper! {
 ///     /// Your documentation goes here
 ///     pub struct $name($kind<$foreign>);
 ///
@@ -37,14 +37,14 @@
 /// things like the class struct to wrap, plus any interfaces that the
 /// class implements.
 ///
-/// ### Boxed
+/// ### Boxed (heap allocated)
 ///
-/// Boxed records with single ownership.
+/// Boxed records with single ownership allocated on the heap.
 ///
 /// With no registered `glib_ffi::GType`:
 ///
 /// ```ignore
-/// glib_wrapper! {
+/// wrapper! {
 ///     /// Text buffer iterator
 ///     pub struct TextIter(Boxed<ffi::GtkTextIter>);
 ///
@@ -62,19 +62,58 @@
 /// With a registered `glib_ffi::GType`:
 ///
 /// ```ignore
-/// glib_wrapper! {
+/// wrapper! {
 ///     /// Text buffer iterator
 ///     pub struct TextIter(Boxed<ffi::GtkTextIter>);
 ///
 ///     match fn {
 ///         copy     => |ptr| ffi::gtk_text_iter_copy(ptr),
 ///         free     => |ptr| ffi::gtk_text_iter_free(ptr),
-///         get_type => ||    ffi::gtk_text_iter_get_type(),
+///         type_ => ||    ffi::gtk_text_iter_get_type(),
 ///     }
 /// }
 /// ```
 ///
-/// `get_type`: `|| -> glib_ffi::GType` (optional) returns the
+/// `type_`: `|| -> glib_ffi::GType` (optional) returns the
+/// `glib_ffi::GType` that corresponds to the foreign struct.
+///
+/// ### BoxedInline (inline, stack allocated)
+///
+/// Boxed records with single ownership allocated on the stack or otherwise inline.
+/// With no registered `glib_ffi::GType`:
+///
+/// ```ignore
+/// wrapper! {
+///     /// Text buffer iterator
+///     pub struct TextIter(BoxedInline<ffi::GtkTextIter>);
+///
+///     match fn {
+///         copy => |ptr| ffi::gtk_text_iter_copy(ptr),
+///         free => |ptr| ffi::gtk_text_iter_free(ptr),
+///     }
+/// }
+/// ```
+///
+/// `copy`: `|*const $foreign| -> *mut $foreign` (optional) creates a heap allocated copy of the value.
+///
+/// `free`: `|*mut $foreign|` (optional) frees the value.
+///
+/// With a registered `glib_ffi::GType`:
+///
+/// ```ignore
+/// wrapper! {
+///     /// Text buffer iterator
+///     pub struct TextIter(BoxedInline<ffi::GtkTextIter>);
+///
+///     match fn {
+///         copy     => |ptr| ffi::gtk_text_iter_copy(ptr),
+///         free     => |ptr| ffi::gtk_text_iter_free(ptr),
+///         type_ => ||    ffi::gtk_text_iter_get_type(),
+///     }
+/// }
+/// ```
+///
+/// `type_`: `|| -> glib_ffi::GType` (optional) returns the
 /// `glib_ffi::GType` that corresponds to the foreign struct.
 ///
 /// ### Shared
@@ -84,7 +123,7 @@
 /// With no registered `glib_ffi::GType`:
 ///
 /// ```ignore
-/// glib_wrapper! {
+/// wrapper! {
 ///     /// Object holding timing information for a single frame.
 ///     pub struct FrameTimings(Shared<ffi::GdkFrameTimings>);
 ///
@@ -102,19 +141,19 @@
 /// With a registered `glib_ffi::GType`:
 ///
 /// ```ignore
-/// glib_wrapper! {
+/// wrapper! {
 ///     /// Object holding timing information for a single frame.
 ///     pub struct FrameTimings(Shared<ffi::GdkFrameTimings>);
 ///
 ///     match fn {
 ///         ref      => |ptr| ffi::gdk_frame_timings_ref(ptr),
 ///         unref    => |ptr| ffi::gdk_frame_timings_unref(ptr),
-///         get_type => ||    ffi::gdk_frame_timings_get_type(),
+///         type_ => ||    ffi::gdk_frame_timings_get_type(),
 ///     }
 /// }
 /// ```
 ///
-/// `get_type`: `|| -> glib_ffi::GType` (optional) returns the
+/// `type_`: `|| -> glib_ffi::GType` (optional) returns the
 /// `glib_ffi::GType` that corresponds to the foreign struct.
 ///
 /// ### Object
@@ -125,19 +164,19 @@
 /// The basic syntax is this:
 ///
 /// ```ignore
-/// glib_wrapper! {
+/// wrapper! {
 ///     /// Your documentation goes here
-///     pub struct InstanceName(Object<ffi::InstanceStruct, ffi::ClassStruct, ClassName>)
+///     pub struct InstanceName(Object<ffi::InstanceStruct, ffi::ClassStruct>)
 ///         @extends ParentClass, GrandparentClass, ...,
 ///         @implements Interface1, Interface2, ...;
 ///
 ///     match fn {
-///         get_type => || ffi::instance_get_type(),
+///         type_ => || ffi::instance_get_type(),
 ///     }
 /// }
 /// ```
 ///
-/// `get_type`: `|| -> glib_ffi::GType` returns the `glib_ffi::GType`
+/// `type_`: `|| -> glib_ffi::GType` returns the `glib_ffi::GType`
 /// that corresponds to the foreign class.
 ///
 /// #### All parent classes must be specified
@@ -150,11 +189,11 @@
 /// `GObject`, so it can be simply wrapped as follows:
 ///
 /// ```ignore
-/// glib_wrapper! {
-///     pub struct WindowGroup(Object<ffi::GtkWindowGroup, ffi::GtkWindowGroupClass, WindowGroupClass>);
+/// wrapper! {
+///     pub struct WindowGroup(Object<ffi::GtkWindowGroup, ffi::GtkWindowGroupClass>);
 ///
 ///     match fn {
-///         get_type => || ffi::gtk_window_group_get_type(),
+///         type_ => || ffi::gtk_window_group_get_type(),
 ///     }
 /// }
 /// ```
@@ -162,12 +201,12 @@
 /// In contrast, `ffi::GtkButton` has a parent, grandparent, etc. classes, which must be specified:
 ///
 /// ```ignore
-/// glib_wrapper! {
-///     pub struct Button(Object<ffi::GtkButton, ButtonClass>) @extends Bin, Container, Widget;
+/// wrapper! {
+///     pub struct Button(Object<ffi::GtkButton>) @extends Bin, Container, Widget;
 ///         // see note on interfaces in the example below
 ///
 ///     match fn {
-///         get_type => || ffi::gtk_button_get_type(),
+///         type_ => || ffi::gtk_button_get_type(),
 ///     }
 /// }
 /// ```
@@ -179,13 +218,13 @@
 /// behind the `@implements` keyword:
 ///
 /// ```ignore
-/// glib_wrapper! {
-///     pub struct Button(Object<ffi::GtkButton, ButtonClass>)
+/// wrapper! {
+///     pub struct Button(Object<ffi::GtkButton>)
 ///         @extends Bin, Container, Widget, // parent classes
 ///         @implements Buildable, Actionable;  // interfaces
 ///
 ///     match fn {
-///         get_type => || ffi::gtk_button_get_type(),
+///         type_ => || ffi::gtk_button_get_type(),
 ///     }
 /// }
 /// ```
@@ -199,8 +238,8 @@
 /// specify a FFI class name at all in the `Object<>` part:
 ///
 /// ```ignore
-/// glib_wrapper! {
-///     pub struct Clipboard(Object<ffi::GtkClipboard, ClipboardClass>);
+/// wrapper! {
+///     pub struct Clipboard(Object<ffi::GtkClipboard>);
 ///     ...
 /// }
 /// ```
@@ -211,8 +250,8 @@
 /// `Object`, `Interface` has to be specified:
 ///
 /// ```ignore
-/// glib_wrapper! {
-///     pub struct TreeModel(Interface<ffi::GtkTreeModel, ffi::GtkTreeModelIface, TreeModelIface>);
+/// wrapper! {
+///     pub struct TreeModel(Interface<ffi::GtkTreeModel, ffi::GtkTreeModelIface>);
 ///     ...
 /// }
 /// ```
@@ -223,8 +262,8 @@
 /// interface have to inherit or interfaces that have to be implemented:
 ///
 /// ```ignore
-/// glib_wrapper! {
-///     pub struct TreeSortable(Interface<ffi::GtkTreeSortable, ffi::GtkTreeSortable, TreeSortableIface>) @requires TreeModel;
+/// wrapper! {
+///     pub struct TreeSortable(Interface<ffi::GtkTreeSortable, ffi::GtkTreeSortable>) @requires TreeModel;
 ///     ...
 /// }
 /// ```
@@ -235,223 +274,172 @@
 /// [#non-derivable-classes]: #non-derivable-classes
 
 #[macro_export]
-macro_rules! glib_wrapper {
+macro_rules! wrapper {
     // Boxed
-
     (
         $(#[$attr:meta])*
-        pub struct $name:ident(Boxed<$ffi_name:path>);
+        $visibility:vis struct $name:ident $(<$($generic:ident $(: $bound:tt $(+ $bound2:tt)*)?),+>)? (Boxed<$ffi_name:ty>);
 
         match fn {
             copy => |$copy_arg:ident| $copy_expr:expr,
             free => |$free_arg:ident| $free_expr:expr,
+            $(
+            type_ => || $get_type_expr:expr,
+            )?
         }
     ) => {
-        $crate::glib_boxed_wrapper!([$($attr)*] $name, $ffi_name, @copy $copy_arg $copy_expr,
-            @free $free_arg $free_expr);
+        $crate::glib_boxed_wrapper!(
+            [$($attr)*] $visibility $name $(<$($generic $(: $bound $(+ $bound2)*)?),+>)?, $ffi_name,
+            @copy $copy_arg $copy_expr, @free $free_arg $free_expr
+            $(, @type_ $get_type_expr)?
+        );
     };
 
+    // BoxedInline
     (
         $(#[$attr:meta])*
-        pub struct $name:ident(Boxed<$ffi_name:path>);
+        $visibility:vis struct $name:ident $(<$($generic:ident $(: $bound:tt $(+ $bound2:tt)*)?),+>)? (BoxedInline<$ffi_name:ty>);
 
         match fn {
+            $(
             copy => |$copy_arg:ident| $copy_expr:expr,
             free => |$free_arg:ident| $free_expr:expr,
-            get_type => || $get_type_expr:expr,
-        }
-    ) => {
-        $crate::glib_boxed_wrapper!([$($attr)*] $name, $ffi_name, @copy $copy_arg $copy_expr,
-            @free $free_arg $free_expr, @get_type $get_type_expr);
-    };
-
-    (
-        $(#[$attr:meta])*
-        pub struct $name:ident(Boxed<$ffi_name:path>);
-
-        match fn {
-            copy => |$copy_arg:ident| $copy_expr:expr,
-            free => |$free_arg:ident| $free_expr:expr,
+            )?
+            $(
             init => |$init_arg:ident| $init_expr:expr,
+            copy_into => |$copy_into_arg_dest:ident, $copy_into_arg_src:ident| $copy_into_expr:expr,
             clear => |$clear_arg:ident| $clear_expr:expr,
+            )?
+            $(
+            type_ => || $get_type_expr:expr,
+            )?
         }
     ) => {
-        $crate::glib_boxed_wrapper!([$($attr)*] $name, $ffi_name, @copy $copy_arg $copy_expr,
-            @free $free_arg $free_expr, @init $init_arg $init_expr, @clear $clear_arg $clear_expr);
+        $crate::glib_boxed_inline_wrapper!(
+            [$($attr)*] $visibility $name $(<$($generic $(: $bound $(+ $bound2)*)?),+>)?, $ffi_name
+            $(, @copy $copy_arg $copy_expr, @free $free_arg $free_expr)?
+            $(, @init $init_arg $init_expr, @copy_into $copy_into_arg_dest $copy_into_arg_src $copy_into_expr, @clear $clear_arg $clear_expr)?
+            $(, @type_ $get_type_expr)?
+        );
     };
 
+    // BoxedInline
     (
         $(#[$attr:meta])*
-        pub struct $name:ident(Boxed<$ffi_name:path>);
-
-        match fn {
-            copy => |$copy_arg:ident| $copy_expr:expr,
-            free => |$free_arg:ident| $free_expr:expr,
-            init => |$init_arg:ident| $init_expr:expr,
-            clear => |$clear_arg:ident| $clear_expr:expr,
-            get_type => || $get_type_expr:expr,
-        }
+        $visibility:vis struct $name:ident $(<$($generic:ident $(: $bound:tt $(+ $bound2:tt)*)?),+>)? (BoxedInline<$ffi_name:ty>);
     ) => {
-        $crate::glib_boxed_wrapper!([$($attr)*] $name, $ffi_name, @copy $copy_arg $copy_expr,
-            @free $free_arg $free_expr, @init $init_arg $init_expr, @clear $clear_arg $clear_expr,
-            @get_type $get_type_expr);
+        $crate::glib_boxed_inline_wrapper!(
+            [$($attr)*] $visibility $name $(<$($generic $(: $bound $(+ $bound2)*)?),+>)?, $ffi_name
+        );
     };
 
     // Shared
-
     (
         $(#[$attr:meta])*
-        pub struct $name:ident(Shared<$ffi_name:path>);
+        $visibility:vis struct $name:ident $(<$($generic:ident $(: $bound:tt $(+ $bound2:tt)*)?),+>)? (Shared<$ffi_name:ty>);
 
         match fn {
             ref => |$ref_arg:ident| $ref_expr:expr,
             unref => |$unref_arg:ident| $unref_expr:expr,
+            $(
+            type_ => || $get_type_expr:expr,
+            )?
         }
     ) => {
-        $crate::glib_shared_wrapper!([$($attr)*] $name, $ffi_name, @ref $ref_arg $ref_expr,
-            @unref $unref_arg $unref_expr);
+        $crate::glib_shared_wrapper!(
+            [$($attr)*] $visibility $name $(<$($generic $(: $bound $(+ $bound2)*)?),+>)?, $ffi_name,
+            @ref $ref_arg $ref_expr, @unref $unref_arg $unref_expr
+            $(, @type_ $get_type_expr)?
+        );
     };
 
+    // Object, no parents
     (
         $(#[$attr:meta])*
-        pub struct $name:ident(Shared<$ffi_name:path>);
+        $visibility:vis struct $name:ident $(<$($generic:ident $(: $bound:tt $(+ $bound2:tt)*)?),+>)? (Object<$ffi_name:ty $(, $ffi_class_name:ty)?>) $(@implements $($implements:path),+)?;
 
         match fn {
-            ref => |$ref_arg:ident| $ref_expr:expr,
-            unref => |$unref_arg:ident| $unref_expr:expr,
-            get_type => || $get_type_expr:expr,
+            type_ => || $get_type_expr:expr,
         }
     ) => {
-        $crate::glib_shared_wrapper!([$($attr)*] $name, $ffi_name, @ref $ref_arg $ref_expr,
-            @unref $unref_arg $unref_expr, @get_type $get_type_expr);
+        $crate::glib_object_wrapper!(
+            @object [$($attr)*] $visibility $name $(<$($generic $(: $bound $(+ $bound2)*)?),+>)?, $ffi_name,
+            $( @ffi_class $ffi_class_name ,)?
+            @type_ $get_type_expr,
+            @extends [],
+            @implements [$($($implements),+)?]
+        );
     };
 
-    // Object, no class struct, no parents or interfaces
+    // Object, parents
     (
         $(#[$attr:meta])*
-        pub struct $name:ident(Object<$ffi_name:path, $rust_class_name:ident>);
+        $visibility:vis struct $name:ident $(<$($generic:ident $(: $bound:tt $(+ $bound2:tt)*)?),+>)? (Object<$ffi_name:ty $(, $ffi_class_name:ty)?>) @extends $($extends:path),+ $(, @implements $($implements:path),+)?;
 
         match fn {
-            get_type => || $get_type_expr:expr,
+            type_ => || $get_type_expr:expr,
         }
     ) => {
-        $crate::glib_object_wrapper!(@object [$($attr)*] $name, $ffi_name, $crate::wrapper::Void, $rust_class_name, @get_type $get_type_expr, @extends [], @implements []);
+        $crate::glib_object_wrapper!(
+            @object [$($attr)*] $visibility $name $(<$($generic $(: $bound $(+ $bound2)*)?),+>)?, $ffi_name,
+            $( @ffi_class $ffi_class_name ,)?
+            @type_ $get_type_expr,
+            @extends [$($extends),+],
+            @implements [$($($implements),+)?]
+        );
     };
 
-    // Object, class struct, no parents or interfaces
+    // ObjectSubclass, no parents
     (
         $(#[$attr:meta])*
-        pub struct $name:ident(Object<$ffi_name:path, $ffi_class_name:path, $rust_class_name:ident>);
-
-        match fn {
-            get_type => || $get_type_expr:expr,
-        }
+        $visibility:vis struct $name:ident $(<$($generic:ident $(: $bound:tt $(+ $bound2:tt)*)?),+>)? (ObjectSubclass<$subclass:ty>) $(@implements $($implements:path),+)?;
     ) => {
-        $crate::glib_object_wrapper!(@object [$($attr)*] $name, $ffi_name, $ffi_class_name, $rust_class_name, @get_type $get_type_expr, @extends [], @implements []);
+        $crate::glib_object_wrapper!(
+            @object_subclass [$($attr)*] $visibility $name $(<$($generic $(: $bound $(+ $bound2)*)?),+>)?, $subclass,
+            @extends [],
+            @implements [$($($implements),+)?]
+        );
     };
 
-    // Object, no class struct, parents, no interfaces
+    // ObjectSubclass, parents
     (
         $(#[$attr:meta])*
-        pub struct $name:ident(Object<$ffi_name:path, $rust_class_name:ident>) @extends $($extends:path),+;
-
-        match fn {
-            get_type => || $get_type_expr:expr,
-        }
+        $visibility:vis struct $name:ident $(<$($generic:ident $(: $bound:tt $(+ $bound2:tt)*)?),+>)? (ObjectSubclass<$subclass:ty>) @extends $($extends:path),+ $(, @implements $($implements:path),+)?;
     ) => {
-        $crate::glib_object_wrapper!(@object [$($attr)*] $name, $ffi_name, $crate::wrapper::Void, $rust_class_name,
-            @get_type $get_type_expr, @extends [$($extends),+], @implements []);
+        $crate::glib_object_wrapper!(
+            @object_subclass [$($attr)*] $visibility $name $(<$($generic $(: $bound $(+ $bound2)*)?),+>)?, $subclass,
+            @extends [$($extends),+],
+            @implements [$($($implements),+)?]
+        );
     };
 
-    // Object, class struct, parents, no interfaces
+    // Interface
     (
         $(#[$attr:meta])*
-        pub struct $name:ident(Object<$ffi_name:path, $ffi_class_name:path, $rust_class_name:ident>) @extends $($extends:path),+;
+        $visibility:vis struct $name:ident $(<$($generic:ident $(: $bound:tt $(+ $bound2:tt)*)?),+>)? (Interface<$ffi_name:ty $(, $ffi_class_name:ty)?>) $(@requires $($requires:path),+)?;
 
         match fn {
-            get_type => || $get_type_expr:expr,
+            type_ => || $get_type_expr:expr,
         }
     ) => {
-        $crate::glib_object_wrapper!(@object [$($attr)*] $name, $ffi_name, $ffi_class_name, $rust_class_name,
-            @get_type $get_type_expr, @extends [$($extends),+], @implements []);
+        $crate::glib_object_wrapper!(
+            @interface [$($attr)*] $visibility $name $(<$($generic $(: $bound $(+ $bound2)*)?),+>)?, $ffi_name,
+            $( @ffi_class $ffi_class_name ,)?
+            @type_ $get_type_expr,
+            @requires [$( $($requires),+ )?]
+        );
     };
 
-    // Object, no class struct, no parents, interfaces
+    // ObjectInterface
     (
         $(#[$attr:meta])*
-        pub struct $name:ident(Object<$ffi_name:path, $rust_class_name:ident>) @implements $($implements:path),+;
-
-        match fn {
-            get_type => || $get_type_expr:expr,
-        }
+        $visibility:vis struct $name:ident $(<$($generic:ident $(: $bound:tt $(+ $bound2:tt)*)?),+>)? (ObjectInterface<$iface_name:ty>) $(@requires $($requires:path),+)?;
     ) => {
-        $crate::glib_object_wrapper!(@object [$($attr)*] $name, $ffi_name, $crate::wrapper::Void, $rust_class_name,
-            @get_type $get_type_expr, @extends [], @implements [$($implements),+]);
-    };
-
-    // Object, class struct, no parents, interfaces
-    (
-        $(#[$attr:meta])*
-        pub struct $name:ident(Object<$ffi_name:path, $ffi_class_name:path, $rust_class_name:ident>) @implements $($implements:path),+;
-
-        match fn {
-            get_type => || $get_type_expr:expr,
-        }
-    ) => {
-        $crate::glib_object_wrapper!(@object [$($attr)*] $name, $ffi_name, $ffi_class_name, $rust_class_name,
-            @get_type $get_type_expr, @extends [], @implements [$($implements),+]);
-    };
-
-    // Object, no class struct, parents and interfaces
-    (
-        $(#[$attr:meta])*
-        pub struct $name:ident(Object<$ffi_name:path, $rust_class_name:ident>) @extends $($extends:path),+, @implements $($implements:path),+;
-
-        match fn {
-            get_type => || $get_type_expr:expr,
-        }
-    ) => {
-        $crate::glib_object_wrapper!(@object [$($attr)*] $name, $ffi_name, $crate::wrapper::Void, $rust_class_name,
-            @get_type $get_type_expr, @extends [$($extends),+], @implements [$($implements),+]);
-    };
-
-    // Object, class struct, parents and interfaces
-    (
-        $(#[$attr:meta])*
-        pub struct $name:ident(Object<$ffi_name:path, $ffi_class_name:path, $rust_class_name:ident>) @extends $($extends:path),+, @implements $($implements:path),+;
-
-        match fn {
-            get_type => || $get_type_expr:expr,
-        }
-    ) => {
-        $crate::glib_object_wrapper!(@object [$($attr)*] $name, $ffi_name, $ffi_class_name, $rust_class_name,
-            @get_type $get_type_expr, @extends [$($extends),+], @implements [$($implements),+]);
-    };
-
-    // Interface, no prerequisites
-    (
-        $(#[$attr:meta])*
-        pub struct $name:ident(Interface<$ffi_name:path>);
-
-        match fn {
-            get_type => || $get_type_expr:expr,
-        }
-    ) => {
-        $crate::glib_object_wrapper!(@interface [$($attr)*] $name, $ffi_name, @get_type $get_type_expr, @requires []);
-    };
-
-    // Interface, prerequisites
-    (
-        $(#[$attr:meta])*
-        pub struct $name:ident(Interface<$ffi_name:path>) @requires $($requires:path),+;
-
-        match fn {
-            get_type => || $get_type_expr:expr,
-        }
-    ) => {
-        $crate::glib_object_wrapper!(@interface [$($attr)*] $name, $ffi_name, @get_type $get_type_expr, @requires [$($requires),+]);
+        $crate::glib_object_wrapper!(
+            @interface [$($attr)*] $visibility $name $(<$($generic $(: $bound $(+ $bound2)*)?),+>)?, std::os::raw::c_void,
+            @ffi_class $iface_name,
+            @type_ $crate::translate::IntoGlib::into_glib(<$iface_name as $crate::subclass::interface::ObjectInterfaceType>::type_()),
+            @requires [$( $($requires),+ )?]
+        );
     };
 }
-
-// So we can refer to the empty type by a path
-pub type Void = ();

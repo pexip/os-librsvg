@@ -1,7 +1,6 @@
-extern crate chrono;
-extern crate lopdf;
-
 use chrono::{DateTime, Utc};
+use float_cmp::approx_eq;
+use lopdf::{self, Dictionary, Object};
 use predicates::prelude::*;
 use predicates::reflection::{Case, Child, PredicateReflection, Product};
 use std::cmp;
@@ -19,14 +18,22 @@ impl PdfPredicate {
         }
     }
 
-    pub fn with_page_size(self: Self, width: i64, height: i64, dpi: f64) -> DetailPredicate<Self> {
+    pub fn with_page_size(
+        self: Self,
+        idx: usize,
+        width_in_points: f64,
+        height_in_points: f64,
+    ) -> DetailPredicate<Self> {
         DetailPredicate::<Self> {
             p: self,
-            d: Detail::PageSize(Dimensions {
-                w: width,
-                h: height,
-                unit: dpi / 72.0,
-            }),
+            d: Detail::PageSize(
+                Dimensions {
+                    w: width_in_points,
+                    h: height_in_points,
+                    unit: 1.0,
+                },
+                idx,
+            ),
         }
     }
 
@@ -34,6 +41,20 @@ impl PdfPredicate {
         DetailPredicate::<Self> {
             p: self,
             d: Detail::CreationDate(when),
+        }
+    }
+
+    pub fn with_link(self: Self, link: &str) -> DetailPredicate<Self> {
+        DetailPredicate::<Self> {
+            p: self,
+            d: Detail::Link(link.to_string()),
+        }
+    }
+
+    pub fn with_text(self: Self, text: &str) -> DetailPredicate<Self> {
+        DetailPredicate::<Self> {
+            p: self,
+            d: Detail::Text(text.to_string()),
         }
     }
 }
@@ -69,14 +90,19 @@ pub struct DetailPredicate<PdfPredicate> {
 #[derive(Debug)]
 enum Detail {
     PageCount(usize),
-    PageSize(Dimensions),
+    PageSize(Dimensions, usize),
     CreationDate(DateTime<Utc>),
+    Link(String),
+    Text(String),
 }
 
+/// A PDF page's dimensions from its `MediaBox`.
+///
+/// Note that `w` and `h` given in `UserUnit`, which is by default 1.0 = 1/72 inch.
 #[derive(Debug)]
 struct Dimensions {
-    w: i64,
-    h: i64,    //
+    w: f64,
+    h: f64,
     unit: f64, // UserUnit, in points (1/72 of an inch)
 }
 
@@ -84,31 +110,40 @@ impl Dimensions {
     pub fn from_media_box(obj: &lopdf::Object, unit: Option<f64>) -> lopdf::Result<Dimensions> {
         let a = obj.as_array()?;
         Ok(Dimensions {
-            w: a[2].as_i64()?,
-            h: a[3].as_i64()?,
+            w: a[2].as_float()?,
+            h: a[3].as_float()?,
             unit: unit.unwrap_or(1.0),
         })
     }
 
-    pub fn width_in_mm(self: &Self) -> f64 {
-        self.w as f64 * self.unit * 72.0 / 254.0
+    pub fn width_in_pt(self: &Self) -> f64 {
+        self.w * self.unit
     }
 
-    pub fn height_in_mm(self: &Self) -> f64 {
-        self.h as f64 * self.unit * 72.0 / 254.0
+    pub fn height_in_pt(self: &Self) -> f64 {
+        self.h * self.unit
     }
 }
 
 impl fmt::Display for Dimensions {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} mm x {} mm", self.width_in_mm(), self.height_in_mm())
+        write!(f, "{} pt x {} pt", self.width_in_pt(), self.height_in_pt())
     }
 }
 
 impl cmp::PartialEq for Dimensions {
     fn eq(&self, other: &Self) -> bool {
-        approx_eq!(f64, self.width_in_mm(), other.width_in_mm())
-            && approx_eq!(f64, self.height_in_mm(), other.height_in_mm())
+        approx_eq!(
+            f64,
+            self.width_in_pt(),
+            other.width_in_pt(),
+            epsilon = 0.000_001
+        ) && approx_eq!(
+            f64,
+            self.height_in_pt(),
+            other.height_in_pt(),
+            epsilon = 0.000_001
+        )
     }
 }
 
@@ -116,18 +151,24 @@ impl cmp::Eq for Dimensions {}
 
 trait Details {
     fn get_page_count(&self) -> usize;
-    fn get_page_size(&self) -> Option<Dimensions>;
+    fn get_page_size(&self, idx: usize) -> Option<Dimensions>;
     fn get_creation_date(&self) -> Option<DateTime<Utc>>;
     fn get_from_trailer<'a>(self: &'a Self, key: &[u8]) -> lopdf::Result<&'a lopdf::Object>;
-    fn get_from_first_page<'a>(self: &'a Self, key: &[u8]) -> lopdf::Result<&'a lopdf::Object>;
+    fn get_from_page<'a>(
+        self: &'a Self,
+        idx: usize,
+        key: &[u8],
+    ) -> lopdf::Result<&'a lopdf::Object>;
 }
 
 impl DetailPredicate<PdfPredicate> {
     fn eval_doc(&self, doc: &lopdf::Document) -> bool {
         match &self.d {
             Detail::PageCount(n) => doc.get_page_count() == *n,
-            Detail::PageSize(d) => doc.get_page_size().map_or(false, |dim| dim == *d),
+            Detail::PageSize(d, idx) => doc.get_page_size(*idx).map_or(false, |dim| dim == *d),
             Detail::CreationDate(d) => doc.get_creation_date().map_or(false, |date| date == *d),
+            Detail::Link(link) => document_has_link(doc, &link),
+            Detail::Text(text) => document_has_text(doc, &text),
         }
     }
 
@@ -146,9 +187,9 @@ impl DetailPredicate<PdfPredicate> {
                 "actual page count",
                 format!("{} page(s)", doc.get_page_count()),
             ),
-            Detail::PageSize(_) => Product::new(
+            Detail::PageSize(_, idx) => Product::new(
                 "actual page size",
-                match doc.get_page_size() {
+                match doc.get_page_size(*idx) {
                     Some(dim) => format!("{}", dim),
                     None => "None".to_string(),
                 },
@@ -157,6 +198,30 @@ impl DetailPredicate<PdfPredicate> {
                 "actual creation date",
                 format!("{:?}", doc.get_creation_date()),
             ),
+            Detail::Link(_) => Product::new(
+                "actual link contents",
+                "FIXME: who knows, but it's not what we expected".to_string(),
+            ),
+            Detail::Text(_) => {
+                Product::new("actual text contents", doc.extract_text(&[1]).unwrap())
+            }
+        }
+    }
+}
+
+// Extensions to lopdf::Object; can be removed after lopdf 0.26
+trait ObjExt {
+    /// Get the object value as a float.
+    /// Unlike as_f64() this will also cast an Integer to a Real.
+    fn as_float(&self) -> lopdf::Result<f64>;
+}
+
+impl ObjExt for lopdf::Object {
+    fn as_float(&self) -> lopdf::Result<f64> {
+        match *self {
+            lopdf::Object::Integer(ref value) => Ok(*value as f64),
+            lopdf::Object::Real(ref value) => Ok(*value),
+            _ => Err(lopdf::Error::Type),
         }
     }
 }
@@ -166,11 +231,13 @@ impl Details for lopdf::Document {
         self.get_pages().len()
     }
 
-    fn get_page_size(self: &Self) -> Option<Dimensions> {
-        let to_f64 = |obj: &lopdf::Object| obj.as_f64();
-        match self.get_from_first_page(b"MediaBox") {
+    fn get_page_size(self: &Self, idx: usize) -> Option<Dimensions> {
+        match self.get_from_page(idx, b"MediaBox") {
             Ok(obj) => {
-                let unit = self.get_from_first_page(b"UserUnit").and_then(to_f64).ok();
+                let unit = self
+                    .get_from_page(idx, b"UserUnit")
+                    .and_then(ObjExt::as_float)
+                    .ok();
                 Dimensions::from_media_box(obj, unit).ok()
             }
             Err(_) => None,
@@ -189,8 +256,16 @@ impl Details for lopdf::Document {
         self.get_object(id)?.as_dict()?.get(key)
     }
 
-    fn get_from_first_page<'a>(self: &'a Self, key: &[u8]) -> lopdf::Result<&'a lopdf::Object> {
-        match self.page_iter().next() {
+    fn get_from_page<'a>(
+        self: &'a Self,
+        idx: usize,
+        key: &[u8],
+    ) -> lopdf::Result<&'a lopdf::Object> {
+        let mut iter = self.page_iter();
+        for _ in 0..idx {
+            let _ = iter.next();
+        }
+        match iter.next() {
             Some(id) => self.get_object(id)?.as_dict()?.get(key),
             None => Err(lopdf::Error::ObjectNotFound),
         }
@@ -224,8 +299,60 @@ impl fmt::Display for DetailPredicate<PdfPredicate> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.d {
             Detail::PageCount(n) => write!(f, "is a PDF with {} page(s)", n),
-            Detail::PageSize(d) => write!(f, "is a PDF sized {}", d),
+            Detail::PageSize(d, _) => write!(f, "is a PDF sized {}", d),
             Detail::CreationDate(d) => write!(f, "is a PDF created {:?}", d),
+            Detail::Link(l) => write!(f, "is a PDF with a link to {}", l),
+            Detail::Text(t) => write!(f, "is a PDF with \"{}\" in its text content", t),
         }
     }
+}
+
+// This is an extremely trivial test for a string being present in the document's
+// text objects.
+fn document_has_text(document: &lopdf::Document, needle: &str) -> bool {
+    if let Ok(haystack) = text_from_first_page(document) {
+        haystack.contains(needle)
+    } else {
+        false
+    }
+}
+
+// We do a super simple test that a PDF actually contains an Annotation object
+// with a particular link.  We don't test that this annotation is actually linked
+// from a page; that would be nicer.
+fn document_has_link(document: &lopdf::Document, link_text: &str) -> bool {
+    document
+        .objects
+        .iter()
+        .map(|(_obj_id, object)| object)
+        .any(|obj| object_is_annotation_with_link(obj, link_text))
+}
+
+fn object_is_annotation_with_link(object: &Object, link_text: &str) -> bool {
+    object
+        .as_dict()
+        .map(|dict| dict_is_annotation(dict) && dict_has_a_with_link(dict, link_text))
+        .unwrap_or(false)
+}
+
+fn dict_is_annotation(dict: &Dictionary) -> bool {
+    dict.get(b"Type")
+        .and_then(|type_val| type_val.as_name_str())
+        .map(|name| name == "Annot")
+        .unwrap_or(false)
+}
+
+fn dict_has_a_with_link(dict: &Dictionary, link_text: &str) -> bool {
+    dict.get(b"A")
+        .and_then(|obj| obj.as_dict())
+        .and_then(|dict| dict.get(b"URI"))
+        .and_then(|obj| obj.as_str())
+        .map(|string| string == link_text.as_bytes())
+        .unwrap_or(false)
+}
+
+fn text_from_first_page(doc: &lopdf::Document) -> lopdf::Result<String> {
+    // This is extremely simplistic; lopdf just concatenates all the text in the page
+    // into a single string.
+    doc.extract_text(&[1])
 }

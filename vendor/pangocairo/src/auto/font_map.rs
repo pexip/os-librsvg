@@ -4,51 +4,50 @@
 
 use glib::object::IsA;
 use glib::translate::*;
-use pango;
-use pango_cairo_sys;
 use std::fmt;
 
-glib_wrapper! {
-    pub struct FontMap(Interface<pango_cairo_sys::PangoCairoFontMap>) @requires pango::FontMap;
+glib::wrapper! {
+    #[doc(alias = "PangoCairoFontMap")]
+    pub struct FontMap(Interface<ffi::PangoCairoFontMap>) @requires pango::FontMap;
 
     match fn {
-        get_type => || pango_cairo_sys::pango_cairo_font_map_get_type(),
+        type_ => || ffi::pango_cairo_font_map_get_type(),
     }
 }
 
 impl FontMap {
-    pub fn get_default() -> Option<pango::FontMap> {
-        unsafe { from_glib_none(pango_cairo_sys::pango_cairo_font_map_get_default()) }
+    pub const NONE: Option<&'static FontMap> = None;
+
+    #[doc(alias = "pango_cairo_font_map_get_default")]
+    #[doc(alias = "get_default")]
+    pub fn default() -> Option<pango::FontMap> {
+        unsafe { from_glib_none(ffi::pango_cairo_font_map_get_default()) }
     }
 }
 
-pub const NONE_FONT_MAP: Option<&FontMap> = None;
-
 pub trait FontMapExt: 'static {
-    fn get_resolution(&self) -> f64;
+    #[doc(alias = "pango_cairo_font_map_get_resolution")]
+    #[doc(alias = "get_resolution")]
+    fn resolution(&self) -> f64;
 
+    #[doc(alias = "pango_cairo_font_map_set_resolution")]
     fn set_resolution(&self, dpi: f64);
 }
 
 impl<O: IsA<FontMap>> FontMapExt for O {
-    fn get_resolution(&self) -> f64 {
-        unsafe {
-            pango_cairo_sys::pango_cairo_font_map_get_resolution(self.as_ref().to_glib_none().0)
-        }
+    fn resolution(&self) -> f64 {
+        unsafe { ffi::pango_cairo_font_map_get_resolution(self.as_ref().to_glib_none().0) }
     }
 
     fn set_resolution(&self, dpi: f64) {
         unsafe {
-            pango_cairo_sys::pango_cairo_font_map_set_resolution(
-                self.as_ref().to_glib_none().0,
-                dpi,
-            );
+            ffi::pango_cairo_font_map_set_resolution(self.as_ref().to_glib_none().0, dpi);
         }
     }
 }
 
 impl fmt::Display for FontMap {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "FontMap")
+        f.write_str("FontMap")
     }
 }

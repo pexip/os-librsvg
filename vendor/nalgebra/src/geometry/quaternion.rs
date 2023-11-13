@@ -1,20 +1,20 @@
 use approx::{AbsDiffEq, RelativeEq, UlpsEq};
 use num::Zero;
 use std::fmt;
-use std::hash;
+use std::hash::{Hash, Hasher};
 #[cfg(feature = "abomonation-serialize")]
 use std::io::{Result as IOResult, Write};
 
-#[cfg(feature = "serde-serialize")]
+#[cfg(feature = "serde-serialize-no-std")]
 use crate::base::storage::Owned;
-#[cfg(feature = "serde-serialize")]
+#[cfg(feature = "serde-serialize-no-std")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[cfg(feature = "abomonation-serialize")]
 use abomonation::Abomonation;
 
-use simba::scalar::RealField;
-use simba::simd::{SimdBool, SimdOption, SimdRealField, SimdValue};
+use simba::scalar::{ClosedNeg, RealField};
+use simba::simd::{SimdBool, SimdOption, SimdRealField};
 
 use crate::base::dimension::{U1, U3, U4};
 use crate::base::storage::{CStride, RStride};
@@ -27,13 +27,28 @@ use crate::geometry::{Point3, Rotation};
 /// A quaternion. See the type alias `UnitQuaternion = Unit<Quaternion>` for a quaternion
 /// that may be used as a rotation.
 #[repr(C)]
-#[derive(Debug)]
-pub struct Quaternion<N: Scalar + SimdValue> {
+#[derive(Debug, Copy, Clone)]
+pub struct Quaternion<T> {
     /// This quaternion as a 4D vector of coordinates in the `[ x, y, z, w ]` storage order.
-    pub coords: Vector4<N>,
+    pub coords: Vector4<T>,
 }
 
-impl<N: RealField> Default for Quaternion<N> {
+impl<T: Scalar + Hash> Hash for Quaternion<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.coords.hash(state)
+    }
+}
+
+impl<T: Scalar + Eq> Eq for Quaternion<T> {}
+
+impl<T: Scalar> PartialEq for Quaternion<T> {
+    #[inline]
+    fn eq(&self, right: &Self) -> bool {
+        self.coords == right.coords
+    }
+}
+
+impl<T: Scalar + Zero> Default for Quaternion<T> {
     fn default() -> Self {
         Quaternion {
             coords: Vector4::zeros(),
@@ -41,10 +56,21 @@ impl<N: RealField> Default for Quaternion<N> {
     }
 }
 
-#[cfg(feature = "abomonation-serialize")]
-impl<N: SimdRealField> Abomonation for Quaternion<N>
+#[cfg(feature = "bytemuck")]
+unsafe impl<T: Scalar> bytemuck::Zeroable for Quaternion<T> where Vector4<T>: bytemuck::Zeroable {}
+
+#[cfg(feature = "bytemuck")]
+unsafe impl<T: Scalar> bytemuck::Pod for Quaternion<T>
 where
-    Vector4<N>: Abomonation,
+    Vector4<T>: bytemuck::Pod,
+    T: Copy,
+{
+}
+
+#[cfg(feature = "abomonation-serialize")]
+impl<T: Scalar> Abomonation for Quaternion<T>
+where
+    Vector4<T>: Abomonation,
 {
     unsafe fn entomb<W: Write>(&self, writer: &mut W) -> IOResult<()> {
         self.coords.entomb(writer)
@@ -59,38 +85,10 @@ where
     }
 }
 
-impl<N: SimdRealField + Eq> Eq for Quaternion<N> where N::Element: SimdRealField {}
-
-impl<N: SimdRealField> PartialEq for Quaternion<N>
+#[cfg(feature = "serde-serialize-no-std")]
+impl<T: Scalar> Serialize for Quaternion<T>
 where
-    N::Element: SimdRealField,
-{
-    fn eq(&self, rhs: &Self) -> bool {
-        self.coords == rhs.coords ||
-        // Account for the double-covering of S², i.e. q = -q
-        self.as_vector().iter().zip(rhs.as_vector().iter()).all(|(a, b)| *a == -*b)
-    }
-}
-
-impl<N: SimdRealField + hash::Hash> hash::Hash for Quaternion<N> {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.coords.hash(state)
-    }
-}
-
-impl<N: Scalar + Copy + SimdValue> Copy for Quaternion<N> {}
-
-impl<N: Scalar + SimdValue> Clone for Quaternion<N> {
-    #[inline]
-    fn clone(&self) -> Self {
-        Self::from(self.coords.clone())
-    }
-}
-
-#[cfg(feature = "serde-serialize")]
-impl<N: SimdRealField> Serialize for Quaternion<N>
-where
-    Owned<N, U4>: Serialize,
+    Owned<T, U4>: Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -100,24 +98,66 @@ where
     }
 }
 
-#[cfg(feature = "serde-serialize")]
-impl<'a, N: SimdRealField> Deserialize<'a> for Quaternion<N>
+#[cfg(feature = "serde-serialize-no-std")]
+impl<'a, T: Scalar> Deserialize<'a> for Quaternion<T>
 where
-    Owned<N, U4>: Deserialize<'a>,
+    Owned<T, U4>: Deserialize<'a>,
 {
     fn deserialize<Des>(deserializer: Des) -> Result<Self, Des::Error>
     where
         Des: Deserializer<'a>,
     {
-        let coords = Vector4::<N>::deserialize(deserializer)?;
+        let coords = Vector4::<T>::deserialize(deserializer)?;
 
         Ok(Self::from(coords))
     }
 }
 
-impl<N: SimdRealField> Quaternion<N>
+#[cfg(feature = "rkyv-serialize-no-std")]
+mod rkyv_impl {
+    use super::Quaternion;
+    use crate::base::Vector4;
+    use rkyv::{offset_of, project_struct, Archive, Deserialize, Fallible, Serialize};
+
+    impl<T: Archive> Archive for Quaternion<T> {
+        type Archived = Quaternion<T::Archived>;
+        type Resolver = <Vector4<T> as Archive>::Resolver;
+
+        fn resolve(
+            &self,
+            pos: usize,
+            resolver: Self::Resolver,
+            out: &mut core::mem::MaybeUninit<Self::Archived>,
+        ) {
+            self.coords.resolve(
+                pos + offset_of!(Self::Archived, coords),
+                resolver,
+                project_struct!(out: Self::Archived => coords),
+            );
+        }
+    }
+
+    impl<T: Serialize<S>, S: Fallible + ?Sized> Serialize<S> for Quaternion<T> {
+        fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
+            self.coords.serialize(serializer)
+        }
+    }
+
+    impl<T: Archive, D: Fallible + ?Sized> Deserialize<Quaternion<T>, D> for Quaternion<T::Archived>
+    where
+        T::Archived: Deserialize<T, D>,
+    {
+        fn deserialize(&self, deserializer: &mut D) -> Result<Quaternion<T>, D::Error> {
+            Ok(Quaternion {
+                coords: self.coords.deserialize(deserializer)?,
+            })
+        }
+    }
+}
+
+impl<T: SimdRealField> Quaternion<T>
 where
-    N::Element: SimdRealField,
+    T::Element: SimdRealField,
 {
     /// Moves this unit quaternion into one that owns its data.
     #[inline]
@@ -151,7 +191,8 @@ where
 
     /// The imaginary part of this quaternion.
     #[inline]
-    pub fn imag(&self) -> Vector3<N> {
+    #[must_use]
+    pub fn imag(&self) -> Vector3<T> {
         self.coords.xyz()
     }
 
@@ -167,7 +208,7 @@ where
     #[inline]
     #[must_use = "Did you mean to use conjugate_mut()?"]
     pub fn conjugate(&self) -> Self {
-        Self::from_parts(self.w, -self.imag())
+        Self::from_parts(self.w.clone(), -self.imag())
     }
 
     /// Linear interpolation between two quaternion.
@@ -183,8 +224,9 @@ where
     /// assert_eq!(q1.lerp(&q2, 0.1), Quaternion::new(1.9, 3.8, 5.7, 7.6));
     /// ```
     #[inline]
-    pub fn lerp(&self, other: &Self, t: N) -> Self {
-        self * (N::one() - t) + other * t
+    #[must_use]
+    pub fn lerp(&self, other: &Self, t: T) -> Self {
+        self * (T::one() - t.clone()) + other * t
     }
 
     /// The vector part `(i, j, k)` of this quaternion.
@@ -198,8 +240,9 @@ where
     /// assert_eq!(q.vector()[2], 4.0);
     /// ```
     #[inline]
-    pub fn vector(&self) -> MatrixSlice<N, U3, U1, RStride<N, U4, U1>, CStride<N, U4, U1>> {
-        self.coords.fixed_rows::<U3>(0)
+    #[must_use]
+    pub fn vector(&self) -> MatrixSlice<'_, T, U3, U1, RStride<T, U4, U1>, CStride<T, U4, U1>> {
+        self.coords.fixed_rows::<3>(0)
     }
 
     /// The scalar part `w` of this quaternion.
@@ -211,8 +254,9 @@ where
     /// assert_eq!(q.scalar(), 1.0);
     /// ```
     #[inline]
-    pub fn scalar(&self) -> N {
-        self.coords[3]
+    #[must_use]
+    pub fn scalar(&self) -> T {
+        self.coords[3].clone()
     }
 
     /// Reinterprets this quaternion as a 4D vector.
@@ -226,7 +270,8 @@ where
     /// assert_eq!(*q.as_vector(), Vector4::new(2.0, 3.0, 4.0, 1.0));
     /// ```
     #[inline]
-    pub fn as_vector(&self) -> &Vector4<N> {
+    #[must_use]
+    pub fn as_vector(&self) -> &Vector4<T> {
         &self.coords
     }
 
@@ -240,7 +285,8 @@ where
     /// assert_relative_eq!(q.norm(), 5.47722557, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn norm(&self) -> N {
+    #[must_use]
+    pub fn norm(&self) -> T {
         self.coords.norm()
     }
 
@@ -257,7 +303,8 @@ where
     /// assert_relative_eq!(q.magnitude(), 5.47722557, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn magnitude(&self) -> N {
+    #[must_use]
+    pub fn magnitude(&self) -> T {
         self.norm()
     }
 
@@ -270,7 +317,8 @@ where
     /// assert_eq!(q.magnitude_squared(), 30.0);
     /// ```
     #[inline]
-    pub fn norm_squared(&self) -> N {
+    #[must_use]
+    pub fn norm_squared(&self) -> T {
         self.coords.norm_squared()
     }
 
@@ -286,7 +334,8 @@ where
     /// assert_eq!(q.magnitude_squared(), 30.0);
     /// ```
     #[inline]
-    pub fn magnitude_squared(&self) -> N {
+    #[must_use]
+    pub fn magnitude_squared(&self) -> T {
         self.norm_squared()
     }
 
@@ -300,14 +349,15 @@ where
     /// assert_eq!(q1.dot(&q2), 70.0);
     /// ```
     #[inline]
-    pub fn dot(&self, rhs: &Self) -> N {
+    #[must_use]
+    pub fn dot(&self, rhs: &Self) -> T {
         self.coords.dot(&rhs.coords)
     }
 }
 
-impl<N: SimdRealField> Quaternion<N>
+impl<T: SimdRealField> Quaternion<T>
 where
-    N::Element: SimdRealField,
+    T::Element: SimdRealField,
 {
     /// Inverts this quaternion if it is not zero.
     ///
@@ -333,7 +383,7 @@ where
     #[must_use = "Did you mean to use try_inverse_mut()?"]
     pub fn try_inverse(&self) -> Option<Self>
     where
-        N: RealField,
+        T: RealField,
     {
         let mut res = self.clone();
 
@@ -351,7 +401,7 @@ where
     #[must_use = "Did you mean to use try_inverse_mut()?"]
     pub fn simd_try_inverse(&self) -> SimdOption<Self> {
         let norm_squared = self.norm_squared();
-        let ge = norm_squared.simd_ge(N::simd_default_epsilon());
+        let ge = norm_squared.clone().simd_ge(T::simd_default_epsilon());
         SimdOption::new(self.conjugate() / norm_squared, ge)
     }
 
@@ -369,6 +419,7 @@ where
     /// let result = a.inner(&b);
     /// assert_relative_eq!(expected, result, epsilon = 1.0e-5);
     #[inline]
+    #[must_use]
     pub fn inner(&self, other: &Self) -> Self {
         (self * other + other * self).half()
     }
@@ -388,7 +439,9 @@ where
     /// assert_relative_eq!(expected, result, epsilon = 1.0e-5);
     /// ```
     #[inline]
+    #[must_use]
     pub fn outer(&self, other: &Self) -> Self {
+        #[allow(clippy::eq_op)]
         (self * other - other * self).half()
     }
 
@@ -407,9 +460,10 @@ where
     /// assert_relative_eq!(expected, result, epsilon = 1.0e-5);
     /// ```
     #[inline]
+    #[must_use]
     pub fn project(&self, other: &Self) -> Option<Self>
     where
-        N: RealField,
+        T: RealField,
     {
         self.inner(other).right_div(other)
     }
@@ -429,9 +483,10 @@ where
     /// assert_relative_eq!(expected, result, epsilon = 1.0e-5);
     /// ```
     #[inline]
+    #[must_use]
     pub fn reject(&self, other: &Self) -> Option<Self>
     where
-        N: RealField,
+        T: RealField,
     {
         self.outer(other).right_div(other)
     }
@@ -451,20 +506,21 @@ where
     /// assert_eq!(half_ang, f32::consts::FRAC_PI_2);
     /// assert_eq!(axis, Some(Vector3::x_axis()));
     /// ```
-    pub fn polar_decomposition(&self) -> (N, N, Option<Unit<Vector3<N>>>)
+    #[must_use]
+    pub fn polar_decomposition(&self) -> (T, T, Option<Unit<Vector3<T>>>)
     where
-        N: RealField,
+        T: RealField,
     {
-        if let Some((q, n)) = Unit::try_new_and_get(*self, N::zero()) {
-            if let Some(axis) = Unit::try_new(self.vector().clone_owned(), N::zero()) {
+        if let Some((q, n)) = Unit::try_new_and_get(self.clone(), T::zero()) {
+            if let Some(axis) = Unit::try_new(self.vector().clone_owned(), T::zero()) {
                 let angle = q.angle() / crate::convert(2.0f64);
 
                 (n, angle, Some(axis))
             } else {
-                (n, N::zero(), None)
+                (n, T::zero(), None)
             }
         } else {
-            (N::zero(), N::zero(), None)
+            (T::zero(), T::zero(), None)
         }
     }
 
@@ -478,12 +534,13 @@ where
     /// assert_relative_eq!(q.ln(), Quaternion::new(1.683647, 1.190289, 0.0, 0.0), epsilon = 1.0e-6)
     /// ```
     #[inline]
+    #[must_use]
     pub fn ln(&self) -> Self {
         let n = self.norm();
         let v = self.vector();
         let s = self.scalar();
 
-        Self::from_parts(n.simd_ln(), v.normalize() * (s / n).simd_acos())
+        Self::from_parts(n.clone().simd_ln(), v.normalize() * (s / n).simd_acos())
     }
 
     /// Compute the exponential of a quaternion.
@@ -496,8 +553,9 @@ where
     /// assert_relative_eq!(q.exp(), Quaternion::new(2.0, 5.0, 0.0, 0.0), epsilon = 1.0e-5)
     /// ```
     #[inline]
+    #[must_use]
     pub fn exp(&self) -> Self {
-        self.exp_eps(N::simd_default_epsilon())
+        self.exp_eps(T::simd_default_epsilon())
     }
 
     /// Compute the exponential of a quaternion. Returns the identity if the vector part of this quaternion
@@ -515,20 +573,18 @@ where
     /// assert_eq!(q.exp_eps(1.0e-6), Quaternion::identity());
     /// ```
     #[inline]
-    pub fn exp_eps(&self, eps: N) -> Self {
+    #[must_use]
+    pub fn exp_eps(&self, eps: T) -> Self {
         let v = self.vector();
         let nn = v.norm_squared();
-        let le = nn.simd_le(eps * eps);
-        le.if_else(
-            || Self::identity(),
-            || {
-                let w_exp = self.scalar().simd_exp();
-                let n = nn.simd_sqrt();
-                let nv = v * (w_exp * n.simd_sin() / n);
+        let le = nn.clone().simd_le(eps.clone() * eps);
+        le.if_else(Self::identity, || {
+            let w_exp = self.scalar().simd_exp();
+            let n = nn.simd_sqrt();
+            let nv = v * (w_exp.clone() * n.clone().simd_sin() / n.clone());
 
-                Self::from_parts(w_exp * n.simd_cos(), nv)
-            },
-        )
+            Self::from_parts(w_exp * n.simd_cos(), nv)
+        })
     }
 
     /// Raise the quaternion to a given floating power.
@@ -541,7 +597,8 @@ where
     /// assert_relative_eq!(q.powf(1.5), Quaternion::new( -6.2576659, 4.1549037, 6.2323556, 8.3098075), epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn powf(&self, n: N) -> Self {
+    #[must_use]
+    pub fn powf(&self, n: T) -> Self {
         (self.ln() * n).exp()
     }
 
@@ -555,7 +612,7 @@ where
     /// assert!(q.i == 1.0 && q.j == 2.0 && q.k == 3.0 && q.w == 4.0);
     /// ```
     #[inline]
-    pub fn as_vector_mut(&mut self) -> &mut Vector4<N> {
+    pub fn as_vector_mut(&mut self) -> &mut Vector4<T> {
         &mut self.coords
     }
 
@@ -576,8 +633,8 @@ where
     #[inline]
     pub fn vector_mut(
         &mut self,
-    ) -> MatrixSliceMut<N, U3, U1, RStride<N, U4, U1>, CStride<N, U4, U1>> {
-        self.coords.fixed_rows_mut::<U3>(0)
+    ) -> MatrixSliceMut<'_, T, U3, U1, RStride<T, U4, U1>, CStride<T, U4, U1>> {
+        self.coords.fixed_rows_mut::<3>(0)
     }
 
     /// Replaces this quaternion by its conjugate.
@@ -591,9 +648,9 @@ where
     /// ```
     #[inline]
     pub fn conjugate_mut(&mut self) {
-        self.coords[0] = -self.coords[0];
-        self.coords[1] = -self.coords[1];
-        self.coords[2] = -self.coords[2];
+        self.coords[0] = -self.coords[0].clone();
+        self.coords[1] = -self.coords[1].clone();
+        self.coords[2] = -self.coords[2].clone();
     }
 
     /// Inverts this quaternion in-place if it is not zero.
@@ -612,10 +669,10 @@ where
     /// assert!(!q.try_inverse_mut());
     /// ```
     #[inline]
-    pub fn try_inverse_mut(&mut self) -> N::SimdBool {
+    pub fn try_inverse_mut(&mut self) -> T::SimdBool {
         let norm_squared = self.norm_squared();
-        let ge = norm_squared.simd_ge(N::simd_default_epsilon());
-        *self = ge.if_else(|| self.conjugate() / norm_squared, || *self);
+        let ge = norm_squared.clone().simd_ge(T::simd_default_epsilon());
+        *self = ge.if_else(|| self.conjugate() / norm_squared, || self.clone());
         ge
     }
 
@@ -630,24 +687,27 @@ where
     /// assert_relative_eq!(q.norm(), 1.0);
     /// ```
     #[inline]
-    pub fn normalize_mut(&mut self) -> N {
+    pub fn normalize_mut(&mut self) -> T {
         self.coords.normalize_mut()
     }
 
     /// Calculates square of a quaternion.
     #[inline]
+    #[must_use]
     pub fn squared(&self) -> Self {
         self * self
     }
 
     /// Divides quaternion into two.
     #[inline]
+    #[must_use]
     pub fn half(&self) -> Self {
         self / crate::convert(2.0f64)
     }
 
     /// Calculates square root.
     #[inline]
+    #[must_use]
     pub fn sqrt(&self) -> Self {
         self.powf(crate::convert(0.5))
     }
@@ -656,12 +716,14 @@ where
     ///
     /// A quaternion is pure if it has no real part (`self.w == 0.0`).
     #[inline]
+    #[must_use]
     pub fn is_pure(&self) -> bool {
         self.w.is_zero()
     }
 
     /// Convert quaternion to pure quaternion.
     #[inline]
+    #[must_use]
     pub fn pure(&self) -> Self {
         Self::from_imag(self.imag())
     }
@@ -670,9 +732,10 @@ where
     ///
     /// Calculates B<sup>-1</sup> * A where A = self, B = other.
     #[inline]
+    #[must_use]
     pub fn left_div(&self, other: &Self) -> Option<Self>
     where
-        N: RealField,
+        T: RealField,
     {
         other.try_inverse().map(|inv| inv * self)
     }
@@ -692,9 +755,10 @@ where
     /// assert_relative_eq!(expected, result, epsilon = 1.0e-7);
     /// ```
     #[inline]
+    #[must_use]
     pub fn right_div(&self, other: &Self) -> Option<Self>
     where
-        N: RealField,
+        T: RealField,
     {
         other.try_inverse().map(|inv| self * inv)
     }
@@ -711,10 +775,11 @@ where
     /// assert_relative_eq!(expected, result, epsilon = 1.0e-7);
     /// ```
     #[inline]
+    #[must_use]
     pub fn cos(&self) -> Self {
         let z = self.imag().magnitude();
-        let w = -self.w.simd_sin() * z.simd_sinhc();
-        Self::from_parts(self.w.simd_cos() * z.simd_cosh(), self.imag() * w)
+        let w = -self.w.clone().simd_sin() * z.clone().simd_sinhc();
+        Self::from_parts(self.w.clone().simd_cos() * z.simd_cosh(), self.imag() * w)
     }
 
     /// Calculates the quaternionic arccosinus.
@@ -728,6 +793,7 @@ where
     /// assert_relative_eq!(input, result, epsilon = 1.0e-7);
     /// ```
     #[inline]
+    #[must_use]
     pub fn acos(&self) -> Self {
         let u = Self::from_imag(self.imag().normalize());
         let identity = Self::identity();
@@ -749,10 +815,11 @@ where
     /// assert_relative_eq!(expected, result, epsilon = 1.0e-7);
     /// ```
     #[inline]
+    #[must_use]
     pub fn sin(&self) -> Self {
         let z = self.imag().magnitude();
-        let w = self.w.simd_cos() * z.simd_sinhc();
-        Self::from_parts(self.w.simd_sin() * z.simd_cosh(), self.imag() * w)
+        let w = self.w.clone().simd_cos() * z.clone().simd_sinhc();
+        Self::from_parts(self.w.clone().simd_sin() * z.simd_cosh(), self.imag() * w)
     }
 
     /// Calculates the quaternionic arcsinus.
@@ -766,11 +833,12 @@ where
     /// assert_relative_eq!(input, result, epsilon = 1.0e-7);
     /// ```
     #[inline]
+    #[must_use]
     pub fn asin(&self) -> Self {
         let u = Self::from_imag(self.imag().normalize());
         let identity = Self::identity();
 
-        let z = ((u * self) + (identity - self.squared()).sqrt()).ln();
+        let z = ((u.clone() * self) + (identity - self.squared()).sqrt()).ln();
 
         -(u * z)
     }
@@ -787,9 +855,10 @@ where
     /// assert_relative_eq!(expected, result, epsilon = 1.0e-7);
     /// ```
     #[inline]
+    #[must_use]
     pub fn tan(&self) -> Self
     where
-        N: RealField,
+        T: RealField,
     {
         self.sin().right_div(&self.cos()).unwrap()
     }
@@ -805,13 +874,14 @@ where
     /// assert_relative_eq!(input, result, epsilon = 1.0e-7);
     /// ```
     #[inline]
+    #[must_use]
     pub fn atan(&self) -> Self
     where
-        N: RealField,
+        T: RealField,
     {
         let u = Self::from_imag(self.imag().normalize());
-        let num = u + self;
-        let den = u - self;
+        let num = u.clone() + self;
+        let den = u.clone() - self;
         let fr = num.right_div(&den).unwrap();
         let ln = fr.ln();
         (u.half()) * ln
@@ -829,6 +899,7 @@ where
     /// assert_relative_eq!(expected, result, epsilon = 1.0e-7);
     /// ```
     #[inline]
+    #[must_use]
     pub fn sinh(&self) -> Self {
         (self.exp() - (-self).exp()).half()
     }
@@ -845,6 +916,7 @@ where
     /// assert_relative_eq!(expected, result, epsilon = 1.0e-7);
     /// ```
     #[inline]
+    #[must_use]
     pub fn asinh(&self) -> Self {
         let identity = Self::identity();
         (self + (identity + self.squared()).sqrt()).ln()
@@ -862,6 +934,7 @@ where
     /// assert_relative_eq!(expected, result, epsilon = 1.0e-7);
     /// ```
     #[inline]
+    #[must_use]
     pub fn cosh(&self) -> Self {
         (self.exp() + (-self).exp()).half()
     }
@@ -878,9 +951,10 @@ where
     /// assert_relative_eq!(expected, result, epsilon = 1.0e-7);
     /// ```
     #[inline]
+    #[must_use]
     pub fn acosh(&self) -> Self {
         let identity = Self::identity();
-        (self + (self + identity).sqrt() * (self - identity).sqrt()).ln()
+        (self + (self + identity.clone()).sqrt() * (self - identity).sqrt()).ln()
     }
 
     /// Calculates the hyperbolic quaternionic tangent.
@@ -895,9 +969,10 @@ where
     /// assert_relative_eq!(expected, result, epsilon = 1.0e-7);
     /// ```
     #[inline]
+    #[must_use]
     pub fn tanh(&self) -> Self
     where
-        N: RealField,
+        T: RealField,
     {
         self.sinh().right_div(&self.cosh()).unwrap()
     }
@@ -914,32 +989,33 @@ where
     /// assert_relative_eq!(expected, result, epsilon = 1.0e-7);
     /// ```
     #[inline]
+    #[must_use]
     pub fn atanh(&self) -> Self {
         let identity = Self::identity();
-        ((identity + self).ln() - (identity - self).ln()).half()
+        ((identity.clone() + self).ln() - (identity - self).ln()).half()
     }
 }
 
-impl<N: RealField + AbsDiffEq<Epsilon = N>> AbsDiffEq for Quaternion<N> {
-    type Epsilon = N;
+impl<T: RealField + AbsDiffEq<Epsilon = T>> AbsDiffEq for Quaternion<T> {
+    type Epsilon = T;
 
     #[inline]
     fn default_epsilon() -> Self::Epsilon {
-        N::default_epsilon()
+        T::default_epsilon()
     }
 
     #[inline]
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        self.as_vector().abs_diff_eq(other.as_vector(), epsilon) ||
+        self.as_vector().abs_diff_eq(other.as_vector(), epsilon.clone()) ||
         // Account for the double-covering of S², i.e. q = -q
-        self.as_vector().iter().zip(other.as_vector().iter()).all(|(a, b)| a.abs_diff_eq(&-*b, epsilon))
+        self.as_vector().iter().zip(other.as_vector().iter()).all(|(a, b)| a.abs_diff_eq(&-b.clone(), epsilon.clone()))
     }
 }
 
-impl<N: RealField + RelativeEq<Epsilon = N>> RelativeEq for Quaternion<N> {
+impl<T: RealField + RelativeEq<Epsilon = T>> RelativeEq for Quaternion<T> {
     #[inline]
     fn default_max_relative() -> Self::Epsilon {
-        N::default_max_relative()
+        T::default_max_relative()
     }
 
     #[inline]
@@ -949,28 +1025,28 @@ impl<N: RealField + RelativeEq<Epsilon = N>> RelativeEq for Quaternion<N> {
         epsilon: Self::Epsilon,
         max_relative: Self::Epsilon,
     ) -> bool {
-        self.as_vector().relative_eq(other.as_vector(), epsilon, max_relative) ||
+        self.as_vector().relative_eq(other.as_vector(), epsilon.clone(), max_relative.clone()) ||
         // Account for the double-covering of S², i.e. q = -q
-        self.as_vector().iter().zip(other.as_vector().iter()).all(|(a, b)| a.relative_eq(&-*b, epsilon, max_relative))
+        self.as_vector().iter().zip(other.as_vector().iter()).all(|(a, b)| a.relative_eq(&-b.clone(), epsilon.clone(), max_relative.clone()))
     }
 }
 
-impl<N: RealField + UlpsEq<Epsilon = N>> UlpsEq for Quaternion<N> {
+impl<T: RealField + UlpsEq<Epsilon = T>> UlpsEq for Quaternion<T> {
     #[inline]
     fn default_max_ulps() -> u32 {
-        N::default_max_ulps()
+        T::default_max_ulps()
     }
 
     #[inline]
     fn ulps_eq(&self, other: &Self, epsilon: Self::Epsilon, max_ulps: u32) -> bool {
-        self.as_vector().ulps_eq(other.as_vector(), epsilon, max_ulps) ||
+        self.as_vector().ulps_eq(other.as_vector(), epsilon.clone(), max_ulps.clone()) ||
         // Account for the double-covering of S², i.e. q = -q.
-        self.as_vector().iter().zip(other.as_vector().iter()).all(|(a, b)| a.ulps_eq(&-*b, epsilon, max_ulps))
+        self.as_vector().iter().zip(other.as_vector().iter()).all(|(a, b)| a.ulps_eq(&-b.clone(), epsilon.clone(), max_ulps.clone()))
     }
 }
 
-impl<N: RealField + fmt::Display> fmt::Display for Quaternion<N> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl<T: RealField + fmt::Display> fmt::Display for Quaternion<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "Quaternion {} − ({}, {}, {})",
@@ -980,18 +1056,29 @@ impl<N: RealField + fmt::Display> fmt::Display for Quaternion<N> {
 }
 
 /// A unit quaternions. May be used to represent a rotation.
-pub type UnitQuaternion<N> = Unit<Quaternion<N>>;
+pub type UnitQuaternion<T> = Unit<Quaternion<T>>;
 
-impl<N: SimdRealField> Normed for Quaternion<N> {
-    type Norm = N::SimdRealField;
+impl<T: Scalar + ClosedNeg + PartialEq> PartialEq for UnitQuaternion<T> {
+    #[inline]
+    fn eq(&self, rhs: &Self) -> bool {
+        self.coords == rhs.coords ||
+        // Account for the double-covering of S², i.e. q = -q
+        self.coords.iter().zip(rhs.coords.iter()).all(|(a, b)| *a == -b.clone())
+    }
+}
+
+impl<T: Scalar + ClosedNeg + Eq> Eq for UnitQuaternion<T> {}
+
+impl<T: SimdRealField> Normed for Quaternion<T> {
+    type Norm = T::SimdRealField;
 
     #[inline]
-    fn norm(&self) -> N::SimdRealField {
+    fn norm(&self) -> T::SimdRealField {
         self.coords.norm()
     }
 
     #[inline]
-    fn norm_squared(&self) -> N::SimdRealField {
+    fn norm_squared(&self) -> T::SimdRealField {
         self.coords.norm_squared()
     }
 
@@ -1006,9 +1093,9 @@ impl<N: SimdRealField> Normed for Quaternion<N> {
     }
 }
 
-impl<N: SimdRealField> UnitQuaternion<N>
+impl<T: SimdRealField> UnitQuaternion<T>
 where
-    N::Element: SimdRealField,
+    T::Element: SimdRealField,
 {
     /// The rotation angle in [0; pi] of this unit quaternion.
     ///
@@ -1020,7 +1107,8 @@ where
     /// assert_eq!(rot.angle(), 1.78);
     /// ```
     #[inline]
-    pub fn angle(&self) -> N {
+    #[must_use]
+    pub fn angle(&self) -> T {
         let w = self.quaternion().scalar().simd_abs();
         self.quaternion().imag().norm().simd_atan2(w) * crate::convert(2.0f64)
     }
@@ -1036,7 +1124,8 @@ where
     /// assert_eq!(*axis.quaternion(), Quaternion::new(1.0, 0.0, 0.0, 0.0));
     /// ```
     #[inline]
-    pub fn quaternion(&self) -> &Quaternion<N> {
+    #[must_use]
+    pub fn quaternion(&self) -> &Quaternion<T> {
         self.as_ref()
     }
 
@@ -1084,7 +1173,8 @@ where
     /// assert_relative_eq!(rot1.angle_to(&rot2), 1.0045657, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn angle_to(&self, other: &Self) -> N {
+    #[must_use]
+    pub fn angle_to(&self, other: &Self) -> T {
         let delta = self.rotation_to(other);
         delta.angle()
     }
@@ -1103,6 +1193,7 @@ where
     /// assert_relative_eq!(rot_to * rot1, rot2, epsilon = 1.0e-6);
     /// ```
     #[inline]
+    #[must_use]
     pub fn rotation_to(&self, other: &Self) -> Self {
         other / self
     }
@@ -1119,7 +1210,8 @@ where
     /// assert_eq!(q1.lerp(&q2, 0.1), Quaternion::new(0.9, 0.1, 0.0, 0.0));
     /// ```
     #[inline]
-    pub fn lerp(&self, other: &Self, t: N) -> Quaternion<N> {
+    #[must_use]
+    pub fn lerp(&self, other: &Self, t: T) -> Quaternion<T> {
         self.as_ref().lerp(other.as_ref(), t)
     }
 
@@ -1135,7 +1227,8 @@ where
     /// assert_eq!(q1.nlerp(&q2, 0.1), UnitQuaternion::new_normalize(Quaternion::new(0.9, 0.1, 0.0, 0.0)));
     /// ```
     #[inline]
-    pub fn nlerp(&self, other: &Self, t: N) -> Self {
+    #[must_use]
+    pub fn nlerp(&self, other: &Self, t: T) -> Self {
         let mut res = self.lerp(other, t);
         let _ = res.normalize_mut();
 
@@ -1160,11 +1253,12 @@ where
     /// assert_eq!(q.euler_angles(), (std::f32::consts::FRAC_PI_2, 0.0, 0.0));
     /// ```
     #[inline]
-    pub fn slerp(&self, other: &Self, t: N) -> Self
+    #[must_use]
+    pub fn slerp(&self, other: &Self, t: T) -> Self
     where
-        N: RealField,
+        T: RealField,
     {
-        self.try_slerp(other, t, N::default_epsilon())
+        self.try_slerp(other, t, T::default_epsilon())
             .expect("Quaternion slerp: ambiguous configuration.")
     }
 
@@ -1179,19 +1273,20 @@ where
     /// * `epsilon`: the value below which the sinus of the angle separating both quaternion
     /// must be to return `None`.
     #[inline]
-    pub fn try_slerp(&self, other: &Self, t: N, epsilon: N) -> Option<Self>
+    #[must_use]
+    pub fn try_slerp(&self, other: &Self, t: T, epsilon: T) -> Option<Self>
     where
-        N: RealField,
+        T: RealField,
     {
-        let coords = if self.coords.dot(&other.coords) < N::zero() {
-            Unit::new_unchecked(self.coords).try_slerp(
-                &Unit::new_unchecked(-other.coords),
+        let coords = if self.coords.dot(&other.coords) < T::zero() {
+            Unit::new_unchecked(self.coords.clone()).try_slerp(
+                &Unit::new_unchecked(-other.coords.clone()),
                 t,
                 epsilon,
             )
         } else {
-            Unit::new_unchecked(self.coords).try_slerp(
-                &Unit::new_unchecked(other.coords),
+            Unit::new_unchecked(self.coords.clone()).try_slerp(
+                &Unit::new_unchecked(other.coords.clone()),
                 t,
                 epsilon,
             )
@@ -1238,17 +1333,18 @@ where
     /// assert!(rot.axis().is_none());
     /// ```
     #[inline]
-    pub fn axis(&self) -> Option<Unit<Vector3<N>>>
+    #[must_use]
+    pub fn axis(&self) -> Option<Unit<Vector3<T>>>
     where
-        N: RealField,
+        T: RealField,
     {
-        let v = if self.quaternion().scalar() >= N::zero() {
+        let v = if self.quaternion().scalar() >= T::zero() {
             self.as_ref().vector().clone_owned()
         } else {
             -self.as_ref().vector()
         };
 
-        Unit::try_new(v, N::zero())
+        Unit::try_new(v, T::zero())
     }
 
     /// The rotation axis of this unit quaternion multiplied by the rotation angle.
@@ -1262,9 +1358,10 @@ where
     /// assert_relative_eq!(rot.scaled_axis(), axisangle, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn scaled_axis(&self) -> Vector3<N>
+    #[must_use]
+    pub fn scaled_axis(&self) -> Vector3<T>
     where
-        N: RealField,
+        T: RealField,
     {
         if let Some(axis) = self.axis() {
             axis.into_inner() * self.angle()
@@ -1290,24 +1387,26 @@ where
     /// assert!(rot.axis_angle().is_none());
     /// ```
     #[inline]
-    pub fn axis_angle(&self) -> Option<(Unit<Vector3<N>>, N)>
+    #[must_use]
+    pub fn axis_angle(&self) -> Option<(Unit<Vector3<T>>, T)>
     where
-        N: RealField,
+        T: RealField,
     {
         self.axis().map(|axis| (axis, self.angle()))
     }
 
     /// Compute the exponential of a quaternion.
     ///
-    /// Note that this function yields a `Quaternion<N>` because it loses the unit property.
+    /// Note that this function yields a `Quaternion<T>` because it loses the unit property.
     #[inline]
-    pub fn exp(&self) -> Quaternion<N> {
+    #[must_use]
+    pub fn exp(&self) -> Quaternion<T> {
         self.as_ref().exp()
     }
 
     /// Compute the natural logarithm of a quaternion.
     ///
-    /// Note that this function yields a `Quaternion<N>` because it loses the unit property.
+    /// Note that this function yields a `Quaternion<T>` because it loses the unit property.
     /// The vector part of the return value corresponds to the axis-angle representation (divided
     /// by 2.0) of this unit quaternion.
     ///
@@ -1320,9 +1419,10 @@ where
     /// assert_relative_eq!(q.ln().vector().into_owned(), axisangle, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn ln(&self) -> Quaternion<N>
+    #[must_use]
+    pub fn ln(&self) -> Quaternion<T>
     where
-        N: RealField,
+        T: RealField,
     {
         if let Some(v) = self.axis() {
             Quaternion::from_imag(v.into_inner() * self.angle())
@@ -1348,9 +1448,10 @@ where
     /// assert_eq!(pow.angle(), 2.4);
     /// ```
     #[inline]
-    pub fn powf(&self, n: N) -> Self
+    #[must_use]
+    pub fn powf(&self, n: T) -> Self
     where
-        N: RealField,
+        T: RealField,
     {
         if let Some(v) = self.axis() {
             Self::from_axis_angle(&v, self.angle() * n)
@@ -1376,32 +1477,33 @@ where
     /// assert_relative_eq!(*rot.matrix(), expected, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn to_rotation_matrix(&self) -> Rotation<N, U3> {
-        let i = self.as_ref()[0];
-        let j = self.as_ref()[1];
-        let k = self.as_ref()[2];
-        let w = self.as_ref()[3];
+    #[must_use]
+    pub fn to_rotation_matrix(self) -> Rotation<T, 3> {
+        let i = self.as_ref()[0].clone();
+        let j = self.as_ref()[1].clone();
+        let k = self.as_ref()[2].clone();
+        let w = self.as_ref()[3].clone();
 
-        let ww = w * w;
-        let ii = i * i;
-        let jj = j * j;
-        let kk = k * k;
-        let ij = i * j * crate::convert(2.0f64);
-        let wk = w * k * crate::convert(2.0f64);
-        let wj = w * j * crate::convert(2.0f64);
-        let ik = i * k * crate::convert(2.0f64);
-        let jk = j * k * crate::convert(2.0f64);
-        let wi = w * i * crate::convert(2.0f64);
+        let ww = w.clone() * w.clone();
+        let ii = i.clone() * i.clone();
+        let jj = j.clone() * j.clone();
+        let kk = k.clone() * k.clone();
+        let ij = i.clone() * j.clone() * crate::convert(2.0f64);
+        let wk = w.clone() * k.clone() * crate::convert(2.0f64);
+        let wj = w.clone() * j.clone() * crate::convert(2.0f64);
+        let ik = i.clone() * k.clone() * crate::convert(2.0f64);
+        let jk = j.clone() * k.clone() * crate::convert(2.0f64);
+        let wi = w.clone() * i.clone() * crate::convert(2.0f64);
 
         Rotation::from_matrix_unchecked(Matrix3::new(
-            ww + ii - jj - kk,
-            ij - wk,
-            wj + ik,
-            wk + ij,
-            ww - ii + jj - kk,
-            jk - wi,
-            ik - wj,
-            wi + jk,
+            ww.clone() + ii.clone() - jj.clone() - kk.clone(),
+            ij.clone() - wk.clone(),
+            wj.clone() + ik.clone(),
+            wk.clone() + ij.clone(),
+            ww.clone() - ii.clone() + jj.clone() - kk.clone(),
+            jk.clone() - wi.clone(),
+            ik.clone() - wj.clone(),
+            wi.clone() + jk.clone(),
             ww - ii - jj + kk,
         ))
     }
@@ -1411,9 +1513,9 @@ where
     /// The angles are produced in the form (roll, pitch, yaw).
     #[inline]
     #[deprecated(note = "This is renamed to use `.euler_angles()`.")]
-    pub fn to_euler_angles(&self) -> (N, N, N)
+    pub fn to_euler_angles(self) -> (T, T, T)
     where
-        N: RealField,
+        T: RealField,
     {
         self.euler_angles()
     }
@@ -1433,11 +1535,12 @@ where
     /// assert_relative_eq!(euler.2, 0.3, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn euler_angles(&self) -> (N, N, N)
+    #[must_use]
+    pub fn euler_angles(&self) -> (T, T, T)
     where
-        N: RealField,
+        T: RealField,
     {
-        self.to_rotation_matrix().euler_angles()
+        self.clone().to_rotation_matrix().euler_angles()
     }
 
     /// Converts this unit quaternion into its equivalent homogeneous transformation matrix.
@@ -1457,7 +1560,8 @@ where
     /// assert_relative_eq!(rot.to_homogeneous(), expected, epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn to_homogeneous(&self) -> Matrix4<N> {
+    #[must_use]
+    pub fn to_homogeneous(self) -> Matrix4<T> {
         self.to_rotation_matrix().to_homogeneous()
     }
 
@@ -1477,7 +1581,8 @@ where
     /// assert_relative_eq!(transformed_point, Point3::new(3.0, 2.0, -1.0), epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn transform_point(&self, pt: &Point3<N>) -> Point3<N> {
+    #[must_use]
+    pub fn transform_point(&self, pt: &Point3<T>) -> Point3<T> {
         self * pt
     }
 
@@ -1497,7 +1602,8 @@ where
     /// assert_relative_eq!(transformed_vector, Vector3::new(3.0, 2.0, -1.0), epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn transform_vector(&self, v: &Vector3<N>) -> Vector3<N> {
+    #[must_use]
+    pub fn transform_vector(&self, v: &Vector3<T>) -> Vector3<T> {
         self * v
     }
 
@@ -1517,8 +1623,9 @@ where
     /// assert_relative_eq!(transformed_point, Point3::new(-3.0, 2.0, 1.0), epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn inverse_transform_point(&self, pt: &Point3<N>) -> Point3<N> {
-        // FIXME: would it be useful performancewise not to call inverse explicitly (i-e. implement
+    #[must_use]
+    pub fn inverse_transform_point(&self, pt: &Point3<T>) -> Point3<T> {
+        // TODO: would it be useful performancewise not to call inverse explicitly (i-e. implement
         // the inverse transformation explicitly here) ?
         self.inverse() * pt
     }
@@ -1539,19 +1646,53 @@ where
     /// assert_relative_eq!(transformed_vector, Vector3::new(-3.0, 2.0, 1.0), epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn inverse_transform_vector(&self, v: &Vector3<N>) -> Vector3<N> {
+    #[must_use]
+    pub fn inverse_transform_vector(&self, v: &Vector3<T>) -> Vector3<T> {
         self.inverse() * v
+    }
+
+    /// Rotate a vector by the inverse of this unit quaternion. This may be
+    /// cheaper than inverting the unit quaternion and transforming the
+    /// vector.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # #[macro_use] extern crate approx;
+    /// # use std::f32;
+    /// # use nalgebra::{UnitQuaternion, Vector3};
+    /// let rot = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), f32::consts::FRAC_PI_2);
+    /// let transformed_vector = rot.inverse_transform_unit_vector(&Vector3::x_axis());
+    ///
+    /// assert_relative_eq!(transformed_vector, -Vector3::y_axis(), epsilon = 1.0e-6);
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn inverse_transform_unit_vector(&self, v: &Unit<Vector3<T>>) -> Unit<Vector3<T>> {
+        self.inverse() * v
+    }
+
+    /// Appends to `self` a rotation given in the axis-angle form, using a linearized formulation.
+    ///
+    /// This is faster, but approximate, way to compute `UnitQuaternion::new(axisangle) * self`.
+    #[inline]
+    #[must_use]
+    pub fn append_axisangle_linearized(&self, axisangle: &Vector3<T>) -> Self {
+        let half: T = crate::convert(0.5);
+        let q1 = self.clone().into_inner();
+        let q2 = Quaternion::from_imag(axisangle * half);
+        Unit::new_normalize(&q1 + q2 * &q1)
     }
 }
 
-impl<N: RealField> Default for UnitQuaternion<N> {
+impl<T: RealField> Default for UnitQuaternion<T> {
     fn default() -> Self {
         Self::identity()
     }
 }
 
-impl<N: RealField + fmt::Display> fmt::Display for UnitQuaternion<N> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl<T: RealField + fmt::Display> fmt::Display for UnitQuaternion<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(axis) = self.axis() {
             let axis = axis.into_inner();
             write!(
@@ -1572,12 +1713,12 @@ impl<N: RealField + fmt::Display> fmt::Display for UnitQuaternion<N> {
     }
 }
 
-impl<N: RealField + AbsDiffEq<Epsilon = N>> AbsDiffEq for UnitQuaternion<N> {
-    type Epsilon = N;
+impl<T: RealField + AbsDiffEq<Epsilon = T>> AbsDiffEq for UnitQuaternion<T> {
+    type Epsilon = T;
 
     #[inline]
     fn default_epsilon() -> Self::Epsilon {
-        N::default_epsilon()
+        T::default_epsilon()
     }
 
     #[inline]
@@ -1586,10 +1727,10 @@ impl<N: RealField + AbsDiffEq<Epsilon = N>> AbsDiffEq for UnitQuaternion<N> {
     }
 }
 
-impl<N: RealField + RelativeEq<Epsilon = N>> RelativeEq for UnitQuaternion<N> {
+impl<T: RealField + RelativeEq<Epsilon = T>> RelativeEq for UnitQuaternion<T> {
     #[inline]
     fn default_max_relative() -> Self::Epsilon {
-        N::default_max_relative()
+        T::default_max_relative()
     }
 
     #[inline]
@@ -1604,10 +1745,10 @@ impl<N: RealField + RelativeEq<Epsilon = N>> RelativeEq for UnitQuaternion<N> {
     }
 }
 
-impl<N: RealField + UlpsEq<Epsilon = N>> UlpsEq for UnitQuaternion<N> {
+impl<T: RealField + UlpsEq<Epsilon = T>> UlpsEq for UnitQuaternion<T> {
     #[inline]
     fn default_max_ulps() -> u32 {
-        N::default_max_ulps()
+        T::default_max_ulps()
     }
 
     #[inline]

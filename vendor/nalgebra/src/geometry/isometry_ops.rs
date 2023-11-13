@@ -1,19 +1,20 @@
+// The macros break if the references are taken out, for some reason.
+#![allow(clippy::op_ref)]
+
 use num::{One, Zero};
 use std::ops::{Div, DivAssign, Mul, MulAssign};
 
 use simba::scalar::{ClosedAdd, ClosedMul};
 use simba::simd::SimdRealField;
 
-use crate::base::allocator::Allocator;
-use crate::base::dimension::{DimName, U1, U2, U3, U4};
-use crate::base::{DefaultAllocator, Unit, VectorN};
+use crate::base::{SVector, Unit};
 use crate::Scalar;
 
 use crate::geometry::{
     AbstractRotation, Isometry, Point, Rotation, Translation, UnitComplex, UnitQuaternion,
 };
 
-// FIXME: there are several cloning of rotations that we could probably get rid of (but we didn't
+// TODO: there are several cloning of rotations that we could probably get rid of (but we didn't
 // yet because that would require to add a bound like `where for<'a, 'b> &'a R: Mul<&'b R, Output = R>`
 // which is quite ugly.
 
@@ -68,10 +69,9 @@ macro_rules! isometry_binop_impl(
     ($Op: ident, $op: ident;
      $lhs: ident: $Lhs: ty, $rhs: ident: $Rhs: ty, Output = $Output: ty;
      $action: expr; $($lives: tt),*) => {
-        impl<$($lives ,)* N: SimdRealField, D: DimName, R> $Op<$Rhs> for $Lhs
-            where N::Element: SimdRealField,
-                  R: AbstractRotation<N, D>,
-                  DefaultAllocator: Allocator<N, D> {
+        impl<$($lives ,)* T: SimdRealField, R, const D: usize> $Op<$Rhs> for $Lhs
+            where T::Element: SimdRealField,
+                  R: AbstractRotation<T, D>, {
             type Output = $Output;
 
             #[inline]
@@ -116,20 +116,18 @@ macro_rules! isometry_binop_assign_impl_all(
      $lhs: ident: $Lhs: ty, $rhs: ident: $Rhs: ty;
      [val] => $action_val: expr;
      [ref] => $action_ref: expr;) => {
-        impl<N: SimdRealField, D: DimName, R> $OpAssign<$Rhs> for $Lhs
-            where N::Element: SimdRealField,
-                  R: AbstractRotation<N, D>,
-                  DefaultAllocator: Allocator<N, D> {
+        impl<T: SimdRealField, R, const D: usize> $OpAssign<$Rhs> for $Lhs
+            where T::Element: SimdRealField,
+                  R: AbstractRotation<T, D> {
             #[inline]
             fn $op_assign(&mut $lhs, $rhs: $Rhs) {
                 $action_val
             }
         }
 
-        impl<'b, N: SimdRealField, D: DimName, R> $OpAssign<&'b $Rhs> for $Lhs
-            where N::Element: SimdRealField,
-                  R: AbstractRotation<N, D>,
-                  DefaultAllocator: Allocator<N, D> {
+        impl<'b, T: SimdRealField, R, const D: usize> $OpAssign<&'b $Rhs> for $Lhs
+            where T::Element: SimdRealField,
+                  R: AbstractRotation<T, D> {
             #[inline]
             fn $op_assign(&mut $lhs, $rhs: &'b $Rhs) {
                 $action_ref
@@ -142,33 +140,34 @@ macro_rules! isometry_binop_assign_impl_all(
 // Isometry ÷ Isometry
 isometry_binop_impl_all!(
     Mul, mul;
-    self: Isometry<N, D, R>, rhs: Isometry<N, D, R>, Output = Isometry<N, D, R>;
+    self: Isometry<T, R, D>, rhs: Isometry<T, R, D>, Output = Isometry<T, R, D>;
     [val val] => &self * &rhs;
     [ref val] => self * &rhs;
     [val ref] => &self * rhs;
     [ref ref] => {
         let shift = self.rotation.transform_vector(&rhs.translation.vector);
 
+        #[allow(clippy::suspicious_arithmetic_impl)]
         Isometry::from_parts(Translation::from(&self.translation.vector + shift),
-                             self.rotation.clone() * rhs.rotation.clone()) // FIXME: too bad we have to clone.
+                             self.rotation.clone() * rhs.rotation.clone()) // TODO: too bad we have to clone.
     };
 );
 
 isometry_binop_impl_all!(
     Div, div;
-    self: Isometry<N, D, R>, rhs: Isometry<N, D, R>, Output = Isometry<N, D, R>;
-    [val val] => self * rhs.inverse();
-    [ref val] => self * rhs.inverse();
-    [val ref] => self * rhs.inverse();
-    [ref ref] => self * rhs.inverse();
+    self: Isometry<T, R, D>, rhs: Isometry<T, R, D>, Output = Isometry<T, R, D>;
+    [val val] => #[allow(clippy::suspicious_arithmetic_impl)] { self * rhs.inverse() };
+    [ref val] => #[allow(clippy::suspicious_arithmetic_impl)] { self * rhs.inverse() };
+    [val ref] => #[allow(clippy::suspicious_arithmetic_impl)] { self * rhs.inverse() };
+    [ref ref] => #[allow(clippy::suspicious_arithmetic_impl)] { self * rhs.inverse() };
 );
 
 // Isometry ×= Translation
 isometry_binop_assign_impl_all!(
     MulAssign, mul_assign;
-    self: Isometry<N, D, R>, rhs: Translation<N, D>;
+    self: Isometry<T, R, D>, rhs: Translation<T, D>;
     [val] => *self *= &rhs;
-    [ref] => {
+    [ref] => #[allow(clippy::suspicious_op_assign_impl)] {
         let shift = self.rotation.transform_vector(&rhs.vector);
         self.translation.vector += shift;
     };
@@ -178,7 +177,7 @@ isometry_binop_assign_impl_all!(
 // Isometry ÷= Isometry
 isometry_binop_assign_impl_all!(
     MulAssign, mul_assign;
-    self: Isometry<N, D, R>, rhs: Isometry<N, D, R>;
+    self: Isometry<T, R, D>, rhs: Isometry<T, R, D>;
     [val] => *self *= &rhs;
     [ref] => {
         let shift = self.rotation.transform_vector(&rhs.translation.vector);
@@ -189,68 +188,74 @@ isometry_binop_assign_impl_all!(
 
 isometry_binop_assign_impl_all!(
     DivAssign, div_assign;
-    self: Isometry<N, D, R>, rhs: Isometry<N, D, R>;
+    self: Isometry<T, R, D>, rhs: Isometry<T, R, D>;
     [val] => *self /= &rhs;
-    [ref] => *self *= rhs.inverse();
+    [ref] => #[allow(clippy::suspicious_op_assign_impl)] { *self *= rhs.inverse() };
 );
 
 // Isometry ×= R
 // Isometry ÷= R
 md_assign_impl_all!(
-    MulAssign, mul_assign where N: SimdRealField for N::Element: SimdRealField;
-    (D, U1), (D, D) for D: DimName;
-    self: Isometry<N, D, Rotation<N, D>>, rhs: Rotation<N, D>;
+    MulAssign, mul_assign where T: SimdRealField for T::Element: SimdRealField;
+    (Const<D>, U1), (Const<D>, Const<D>)
+    const D; for; where;
+    self: Isometry<T, Rotation<T, D>, D>, rhs: Rotation<T, D>;
     [val] => self.rotation *= rhs;
     [ref] => self.rotation *= rhs.clone();
 );
 
 md_assign_impl_all!(
-    DivAssign, div_assign where N: SimdRealField for N::Element: SimdRealField;
-    (D, U1), (D, D) for D: DimName;
-    self: Isometry<N, D, Rotation<N, D>>, rhs: Rotation<N, D>;
-    // FIXME: don't invert explicitly?
-    [val] => *self *= rhs.inverse();
-    [ref] => *self *= rhs.inverse();
+    DivAssign, div_assign where T: SimdRealField for T::Element: SimdRealField;
+    (Const<D>, U1), (Const<D>, Const<D>)
+    const D; for; where;
+    self: Isometry<T, Rotation<T, D>, D>, rhs: Rotation<T, D>;
+    // TODO: don't invert explicitly?
+    [val] => #[allow(clippy::suspicious_op_assign_impl)] { *self *= rhs.inverse() };
+    [ref] => #[allow(clippy::suspicious_op_assign_impl)] { *self *= rhs.inverse() };
 );
 
 md_assign_impl_all!(
-    MulAssign, mul_assign where N: SimdRealField for N::Element: SimdRealField;
-    (U3, U3), (U3, U3) for;
-    self: Isometry<N, U3, UnitQuaternion<N>>, rhs: UnitQuaternion<N>;
+    MulAssign, mul_assign where T: SimdRealField for T::Element: SimdRealField;
+    (U3, U3), (U3, U3)
+    const; for; where;
+    self: Isometry<T, UnitQuaternion<T>, 3>, rhs: UnitQuaternion<T>;
     [val] => self.rotation *= rhs;
     [ref] => self.rotation *= rhs.clone();
 );
 
 md_assign_impl_all!(
-    DivAssign, div_assign where N: SimdRealField for N::Element: SimdRealField;
-    (U3, U3), (U3, U3) for;
-    self: Isometry<N, U3, UnitQuaternion<N>>, rhs: UnitQuaternion<N>;
-    // FIXME: don't invert explicitly?
-    [val] => *self *= rhs.inverse();
-    [ref] => *self *= rhs.inverse();
+    DivAssign, div_assign where T: SimdRealField for T::Element: SimdRealField;
+    (U3, U3), (U3, U3)
+    const; for; where;
+    self: Isometry<T, UnitQuaternion<T>, 3>, rhs: UnitQuaternion<T>;
+    // TODO: don't invert explicitly?
+    [val] => #[allow(clippy::suspicious_op_assign_impl)] { *self *= rhs.inverse() };
+    [ref] => #[allow(clippy::suspicious_op_assign_impl)] { *self *= rhs.inverse() };
 );
 
 md_assign_impl_all!(
-    MulAssign, mul_assign where N: SimdRealField for N::Element: SimdRealField;
-    (U2, U2), (U2, U2) for;
-    self: Isometry<N, U2, UnitComplex<N>>, rhs: UnitComplex<N>;
+    MulAssign, mul_assign where T: SimdRealField for T::Element: SimdRealField;
+    (U2, U2), (U2, U2)
+    const; for; where;
+    self: Isometry<T, UnitComplex<T>, 2>, rhs: UnitComplex<T>;
     [val] => self.rotation *= rhs;
     [ref] => self.rotation *= rhs.clone();
 );
 
 md_assign_impl_all!(
-    DivAssign, div_assign where N: SimdRealField for N::Element: SimdRealField;
-    (U2, U2), (U2, U2) for;
-    self: Isometry<N, U2, UnitComplex<N>>, rhs: UnitComplex<N>;
-    // FIXME: don't invert explicitly?
-    [val] => *self *= rhs.inverse();
-    [ref] => *self *= rhs.inverse();
+    DivAssign, div_assign where T: SimdRealField for T::Element: SimdRealField;
+    (U2, U2), (U2, U2)
+    const; for; where;
+    self: Isometry<T, UnitComplex<T>, 2>, rhs: UnitComplex<T>;
+    // TODO: don't invert explicitly?
+    [val] => #[allow(clippy::suspicious_op_assign_impl)] { *self *= rhs.inverse() };
+    [ref] => #[allow(clippy::suspicious_op_assign_impl)] { *self *= rhs.inverse() };
 );
 
 // Isometry × Point
 isometry_binop_impl_all!(
     Mul, mul;
-    self: Isometry<N, D, R>, right: Point<N, D>, Output = Point<N, D>;
+    self: Isometry<T, R, D>, right: Point<T, D>, Output = Point<T, D>;
     [val val] => self.translation  * self.rotation.transform_point(&right);
     [ref val] => &self.translation * self.rotation.transform_point(&right);
     [val ref] => self.translation  * self.rotation.transform_point(right);
@@ -260,9 +265,9 @@ isometry_binop_impl_all!(
 // Isometry × Vector
 isometry_binop_impl_all!(
     Mul, mul;
-    // FIXME: because of `transform_vector`, we cant use a generic storage type for the rhs vector,
-    // i.e., right: Vector<N, D, S> where S: Storage<N, D>.
-    self: Isometry<N, D, R>, right: VectorN<N, D>, Output = VectorN<N, D>;
+    // TODO: because of `transform_vector`, we cant use a generic storage type for the rhs vector,
+    // i.e., right: Vector<T, D, S> where S: Storage<T, D>.
+    self: Isometry<T, R, D>, right: SVector<T, D>, Output = SVector<T, D>;
     [val val] => self.rotation.transform_vector(&right);
     [ref val] => self.rotation.transform_vector(&right);
     [val ref] => self.rotation.transform_vector(right);
@@ -272,9 +277,9 @@ isometry_binop_impl_all!(
 // Isometry × Unit<Vector>
 isometry_binop_impl_all!(
     Mul, mul;
-    // FIXME: because of `transform_vector`, we cant use a generic storage type for the rhs vector,
-    // i.e., right: Vector<N, D, S> where S: Storage<N, D>.
-    self: Isometry<N, D, R>, right: Unit<VectorN<N, D>>, Output = Unit<VectorN<N, D>>;
+    // TODO: because of `transform_vector`, we cant use a generic storage type for the rhs vector,
+    // i.e., right: Vector<T, D, S> where S: Storage<T, D>.
+    self: Isometry<T, R, D>, right: Unit<SVector<T, D>>, Output = Unit<SVector<T, D>>;
     [val val] => Unit::new_unchecked(self.rotation.transform_vector(right.as_ref()));
     [ref val] => Unit::new_unchecked(self.rotation.transform_vector(right.as_ref()));
     [val ref] => Unit::new_unchecked(self.rotation.transform_vector(right.as_ref()));
@@ -284,11 +289,12 @@ isometry_binop_impl_all!(
 // Isometry × Translation
 isometry_binop_impl_all!(
     Mul, mul;
-    self: Isometry<N, D, R>, right: Translation<N, D>, Output = Isometry<N, D, R>;
+    self: Isometry<T, R, D>, right: Translation<T, D>, Output = Isometry<T, R, D>;
     [val val] => &self * &right;
     [ref val] => self * &right;
     [val ref] => &self * right;
     [ref ref] => {
+        #[allow(clippy::suspicious_arithmetic_impl)]
         let new_tr = &self.translation.vector + self.rotation.transform_vector(&right.vector);
         Isometry::from_parts(Translation::from(new_tr), self.rotation.clone())
     };
@@ -297,7 +303,7 @@ isometry_binop_impl_all!(
 // Translation × Isometry
 isometry_binop_impl_all!(
     Mul, mul;
-    self: Translation<N, D>, right: Isometry<N, D, R>, Output = Isometry<N, D, R>;
+    self: Translation<T, D>, right: Isometry<T, R, D>, Output = Isometry<T, R, D>;
     [val val] => Isometry::from_parts(self * right.translation, right.rotation);
     [ref val] => Isometry::from_parts(self * &right.translation, right.rotation);
     [val ref] => Isometry::from_parts(self * &right.translation, right.rotation.clone());
@@ -306,13 +312,11 @@ isometry_binop_impl_all!(
 
 macro_rules! isometry_from_composition_impl(
     ($Op: ident, $op: ident;
-     ($R1: ty, $C1: ty),($R2: ty, $C2: ty) $(for $Dims: ident: $DimsBound: ident),*;
+     $($Dims: ident),*;
      $lhs: ident: $Lhs: ty, $rhs: ident: $Rhs: ty, Output = $Output: ty;
      $action: expr; $($lives: tt),*) => {
-        impl<$($lives ,)* N: SimdRealField $(, $Dims: $DimsBound)*> $Op<$Rhs> for $Lhs
-            where N::Element: SimdRealField,
-                  DefaultAllocator: Allocator<N, $R1, $C1> +
-                                    Allocator<N, $R2, $C2> {
+        impl<$($lives ,)* T: SimdRealField $(, const $Dims: usize)*> $Op<$Rhs> for $Lhs
+            where T::Element: SimdRealField {
             type Output = $Output;
 
             #[inline]
@@ -325,7 +329,7 @@ macro_rules! isometry_from_composition_impl(
 
 macro_rules! isometry_from_composition_impl_all(
     ($Op: ident, $op: ident;
-     ($R1: ty, $C1: ty),($R2: ty, $C2: ty) $(for $Dims: ident: $DimsBound: ident),*;
+     $($Dims: ident),*;
      $lhs: ident: $Lhs: ty, $rhs: ident: $Rhs: ty, Output = $Output: ty;
      [val val] => $action_val_val: expr;
      [ref val] => $action_ref_val: expr;
@@ -334,25 +338,25 @@ macro_rules! isometry_from_composition_impl_all(
 
         isometry_from_composition_impl!(
             $Op, $op;
-            ($R1, $C1),($R2, $C2) $(for $Dims: $DimsBound),*;
+            $($Dims),*;
             $lhs: $Lhs, $rhs: $Rhs, Output = $Output;
             $action_val_val; );
 
         isometry_from_composition_impl!(
             $Op, $op;
-            ($R1, $C1),($R2, $C2) $(for $Dims: $DimsBound),*;
+            $($Dims),*;
             $lhs: &'a $Lhs, $rhs: $Rhs, Output = $Output;
             $action_ref_val; 'a);
 
         isometry_from_composition_impl!(
             $Op, $op;
-            ($R1, $C1),($R2, $C2) $(for $Dims: $DimsBound),*;
+            $($Dims),*;
             $lhs: $Lhs, $rhs: &'b $Rhs, Output = $Output;
             $action_val_ref; 'b);
 
         isometry_from_composition_impl!(
             $Op, $op;
-            ($R1, $C1),($R2, $C2) $(for $Dims: $DimsBound),*;
+            $($Dims),*;
             $lhs: &'a $Lhs, $rhs: &'b $Rhs, Output = $Output;
             $action_ref_ref; 'a, 'b);
     }
@@ -361,8 +365,8 @@ macro_rules! isometry_from_composition_impl_all(
 // Rotation × Translation
 isometry_from_composition_impl_all!(
     Mul, mul;
-    (D, D), (D, U1) for D: DimName;
-    self: Rotation<N, D>, right: Translation<N, D>, Output = Isometry<N, D, Rotation<N, D>>;
+    D;
+    self: Rotation<T, D>, right: Translation<T, D>, Output = Isometry<T, Rotation<T, D>, D>;
     [val val] => Isometry::from_parts(Translation::from(&self * right.vector),  self);
     [ref val] => Isometry::from_parts(Translation::from(self * right.vector),   self.clone());
     [val ref] => Isometry::from_parts(Translation::from(&self * &right.vector), self);
@@ -372,9 +376,9 @@ isometry_from_composition_impl_all!(
 // UnitQuaternion × Translation
 isometry_from_composition_impl_all!(
     Mul, mul;
-    (U4, U1), (U3, U1);
-    self: UnitQuaternion<N>, right: Translation<N, U3>,
-    Output = Isometry<N, U3, UnitQuaternion<N>>;
+    ;
+    self: UnitQuaternion<T>, right: Translation<T, 3>,
+    Output = Isometry<T, UnitQuaternion<T>, 3>;
     [val val] => Isometry::from_parts(Translation::from(&self *  right.vector), self);
     [ref val] => Isometry::from_parts(Translation::from( self *  right.vector), self.clone());
     [val ref] => Isometry::from_parts(Translation::from(&self * &right.vector), self);
@@ -384,11 +388,11 @@ isometry_from_composition_impl_all!(
 // Isometry × Rotation
 isometry_from_composition_impl_all!(
     Mul, mul;
-    (D, D), (D, U1) for D: DimName;
-    self: Isometry<N, D, Rotation<N, D>>, rhs: Rotation<N, D>,
-    Output = Isometry<N, D, Rotation<N, D>>;
+    D;
+    self: Isometry<T, Rotation<T, D>, D>, rhs: Rotation<T, D>,
+    Output = Isometry<T, Rotation<T, D>, D>;
     [val val] => Isometry::from_parts(self.translation, self.rotation * rhs);
-    [ref val] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() * rhs); // FIXME: do not clone.
+    [ref val] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() * rhs);
     [val ref] => Isometry::from_parts(self.translation, self.rotation * rhs.clone());
     [ref ref] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() * rhs.clone());
 );
@@ -396,9 +400,9 @@ isometry_from_composition_impl_all!(
 // Rotation × Isometry
 isometry_from_composition_impl_all!(
     Mul, mul;
-    (D, D), (D, U1) for D: DimName;
-    self: Rotation<N, D>, right: Isometry<N, D, Rotation<N, D>>,
-    Output = Isometry<N, D, Rotation<N, D>>;
+    D;
+    self: Rotation<T, D>, right: Isometry<T, Rotation<T, D>, D>,
+    Output = Isometry<T, Rotation<T, D>, D>;
     [val val] => &self * &right;
     [ref val] =>  self * &right;
     [val ref] => &self * right;
@@ -411,11 +415,11 @@ isometry_from_composition_impl_all!(
 // Isometry ÷ Rotation
 isometry_from_composition_impl_all!(
     Div, div;
-    (D, D), (D, U1) for D: DimName;
-    self: Isometry<N, D, Rotation<N, D>>, rhs: Rotation<N, D>,
-    Output = Isometry<N, D, Rotation<N, D>>;
+    D;
+    self: Isometry<T, Rotation<T, D>, D>, rhs: Rotation<T, D>,
+    Output = Isometry<T, Rotation<T, D>, D>;
     [val val] => Isometry::from_parts(self.translation, self.rotation / rhs);
-    [ref val] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() / rhs); // FIXME: do not clone.
+    [ref val] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() / rhs);
     [val ref] => Isometry::from_parts(self.translation, self.rotation / rhs.clone());
     [ref ref] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() / rhs.clone());
 );
@@ -423,24 +427,24 @@ isometry_from_composition_impl_all!(
 // Rotation ÷ Isometry
 isometry_from_composition_impl_all!(
     Div, div;
-    (D, D), (D, U1) for D: DimName;
-    self: Rotation<N, D>, right: Isometry<N, D, Rotation<N, D>>,
-    Output = Isometry<N, D, Rotation<N, D>>;
-    // FIXME: don't call inverse explicitly?
-    [val val] => self * right.inverse();
-    [ref val] => self * right.inverse();
-    [val ref] => self * right.inverse();
-    [ref ref] => self * right.inverse();
+    D;
+    self: Rotation<T, D>, right: Isometry<T, Rotation<T, D>, D>,
+    Output = Isometry<T, Rotation<T, D>, D>;
+    // TODO: don't call inverse explicitly?
+    [val val] => #[allow(clippy::suspicious_arithmetic_impl)] { self * right.inverse() };
+    [ref val] => #[allow(clippy::suspicious_arithmetic_impl)] { self * right.inverse() };
+    [val ref] => #[allow(clippy::suspicious_arithmetic_impl)] { self * right.inverse() };
+    [ref ref] => #[allow(clippy::suspicious_arithmetic_impl)] { self * right.inverse() };
 );
 
 // Isometry × UnitQuaternion
 isometry_from_composition_impl_all!(
     Mul, mul;
-    (U4, U1), (U3, U1);
-    self: Isometry<N, U3, UnitQuaternion<N>>, rhs: UnitQuaternion<N>,
-    Output = Isometry<N, U3, UnitQuaternion<N>>;
+    ;
+    self: Isometry<T, UnitQuaternion<T>, 3>, rhs: UnitQuaternion<T>,
+    Output = Isometry<T, UnitQuaternion<T>, 3>;
     [val val] => Isometry::from_parts(self.translation, self.rotation * rhs);
-    [ref val] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() * rhs); // FIXME: do not clone.
+    [ref val] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() * rhs);
     [val ref] => Isometry::from_parts(self.translation, self.rotation * rhs.clone());
     [ref ref] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() * rhs.clone());
 );
@@ -448,9 +452,9 @@ isometry_from_composition_impl_all!(
 // UnitQuaternion × Isometry
 isometry_from_composition_impl_all!(
     Mul, mul;
-    (U4, U1), (U3, U1);
-    self: UnitQuaternion<N>, right: Isometry<N, U3, UnitQuaternion<N>>,
-    Output = Isometry<N, U3, UnitQuaternion<N>>;
+    ;
+    self: UnitQuaternion<T>, right: Isometry<T, UnitQuaternion<T>, 3>,
+    Output = Isometry<T, UnitQuaternion<T>, 3>;
     [val val] => &self * &right;
     [ref val] =>  self * &right;
     [val ref] => &self * right;
@@ -463,11 +467,11 @@ isometry_from_composition_impl_all!(
 // Isometry ÷ UnitQuaternion
 isometry_from_composition_impl_all!(
     Div, div;
-    (U4, U1), (U3, U1);
-    self: Isometry<N, U3, UnitQuaternion<N>>, rhs: UnitQuaternion<N>,
-    Output = Isometry<N, U3, UnitQuaternion<N>>;
+    ;
+    self: Isometry<T, UnitQuaternion<T>, 3>, rhs: UnitQuaternion<T>,
+    Output = Isometry<T, UnitQuaternion<T>, 3>;
     [val val] => Isometry::from_parts(self.translation, self.rotation / rhs);
-    [ref val] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() / rhs); // FIXME: do not clone.
+    [ref val] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() / rhs);
     [val ref] => Isometry::from_parts(self.translation, self.rotation / rhs.clone());
     [ref ref] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() / rhs.clone());
 );
@@ -475,21 +479,21 @@ isometry_from_composition_impl_all!(
 // UnitQuaternion ÷ Isometry
 isometry_from_composition_impl_all!(
     Div, div;
-    (U4, U1), (U3, U1);
-    self: UnitQuaternion<N>, right: Isometry<N, U3, UnitQuaternion<N>>,
-    Output = Isometry<N, U3, UnitQuaternion<N>>;
-    // FIXME: don't call inverse explicitly?
-    [val val] => self * right.inverse();
-    [ref val] => self * right.inverse();
-    [val ref] => self * right.inverse();
-    [ref ref] => self * right.inverse();
+    ;
+    self: UnitQuaternion<T>, right: Isometry<T, UnitQuaternion<T>, 3>,
+    Output = Isometry<T, UnitQuaternion<T>, 3>;
+    // TODO: don't call inverse explicitly?
+    [val val] => #[allow(clippy::suspicious_arithmetic_impl)] { self * right.inverse() };
+    [ref val] => #[allow(clippy::suspicious_arithmetic_impl)] { self * right.inverse() };
+    [val ref] => #[allow(clippy::suspicious_arithmetic_impl)] { self * right.inverse() };
+    [ref ref] => #[allow(clippy::suspicious_arithmetic_impl)] { self * right.inverse() };
 );
 
 // Translation × Rotation
 isometry_from_composition_impl_all!(
     Mul, mul;
-    (D, D), (D, U1) for D: DimName;
-    self: Translation<N, D>, right: Rotation<N, D>, Output = Isometry<N, D, Rotation<N, D>>;
+    D;
+    self: Translation<T, D>, right: Rotation<T, D>, Output = Isometry<T, Rotation<T, D>, D>;
     [val val] => Isometry::from_parts(self, right);
     [ref val] => Isometry::from_parts(self.clone(), right);
     [val ref] => Isometry::from_parts(self, right.clone());
@@ -499,8 +503,8 @@ isometry_from_composition_impl_all!(
 // Translation × UnitQuaternion
 isometry_from_composition_impl_all!(
     Mul, mul;
-    (U4, U1), (U3, U1);
-    self: Translation<N, U3>, right: UnitQuaternion<N>, Output = Isometry<N, U3, UnitQuaternion<N>>;
+    ;
+    self: Translation<T, 3>, right: UnitQuaternion<T>, Output = Isometry<T, UnitQuaternion<T>, 3>;
     [val val] => Isometry::from_parts(self, right);
     [ref val] => Isometry::from_parts(self.clone(), right);
     [val ref] => Isometry::from_parts(self, right.clone());
@@ -510,11 +514,11 @@ isometry_from_composition_impl_all!(
 // Isometry × UnitComplex
 isometry_from_composition_impl_all!(
     Mul, mul;
-    (U2, U1), (U2, U1);
-    self: Isometry<N, U2, UnitComplex<N>>, rhs: UnitComplex<N>,
-    Output = Isometry<N, U2, UnitComplex<N>>;
+    ;
+    self: Isometry<T, UnitComplex<T>, 2>, rhs: UnitComplex<T>,
+    Output = Isometry<T, UnitComplex<T>, 2>;
     [val val] => Isometry::from_parts(self.translation, self.rotation * rhs);
-    [ref val] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() * rhs); // FIXME: do not clone.
+    [ref val] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() * rhs);
     [val ref] => Isometry::from_parts(self.translation, self.rotation * rhs.clone());
     [ref ref] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() * rhs.clone());
 );
@@ -522,11 +526,11 @@ isometry_from_composition_impl_all!(
 // Isometry ÷ UnitComplex
 isometry_from_composition_impl_all!(
     Div, div;
-    (U2, U1), (U2, U1);
-    self: Isometry<N, U2, UnitComplex<N>>, rhs: UnitComplex<N>,
-    Output = Isometry<N, U2, UnitComplex<N>>;
+    ;
+    self: Isometry<T, UnitComplex<T>, 2>, rhs: UnitComplex<T>,
+    Output = Isometry<T, UnitComplex<T>, 2>;
     [val val] => Isometry::from_parts(self.translation, self.rotation / rhs);
-    [ref val] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() / rhs); // FIXME: do not clone.
+    [ref val] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() / rhs);
     [val ref] => Isometry::from_parts(self.translation, self.rotation / rhs.clone());
     [ref ref] => Isometry::from_parts(self.translation.clone(), self.rotation.clone() / rhs.clone());
 );

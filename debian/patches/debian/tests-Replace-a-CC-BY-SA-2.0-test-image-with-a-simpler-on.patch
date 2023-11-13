@@ -1,0 +1,30 @@
+From: Simon McVittie <smcv@debian.org>
+Date: Mon, 3 Jan 2022 14:30:38 +0000
+Subject: tests: Replace a CC-BY-SA-2.0 test image with a simpler one
+
+It isn't clear whether CC-BY-SA-2.0 is considered to be Free Software by
+Debian (version 1.0 isn't, version 3.0 is).
+
+Forwarded: no
+---
+ tests/src/cmdline/rsvg_convert.rs | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/tests/src/cmdline/rsvg_convert.rs b/tests/src/cmdline/rsvg_convert.rs
+index f5c85c8..2ae794c 100644
+--- a/tests/src/cmdline/rsvg_convert.rs
++++ b/tests/src/cmdline/rsvg_convert.rs
+@@ -856,11 +856,11 @@ fn background_color_option_invalid_color_yields_error() {
+ 
+ #[test]
+ fn background_color_is_rendered() {
+-    RsvgConvert::new_with_input("tests/fixtures/cmdline/gimp-wilber.svg")
++    RsvgConvert::new_with_input("tests/fixtures/cmdline/a-link.svg")
+         .arg("--background-color=purple")
+         .assert()
+         .success()
+-        .stdout(file::is_png().with_contents("tests/fixtures/cmdline/gimp-wilber-ref.png"));
++        .stdout(file::is_png().with_contents("tests/fixtures/cmdline/a-link-purple-bg.png"));
+ }
+ 
+ #[test]

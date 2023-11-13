@@ -1,8 +1,7 @@
+use core::cell;
 #[cfg(feature = "num-complex")]
 use num_complex::Complex;
-#[cfg(not(feature = "std"))]
-use num_traits::float::FloatCore;
-use std::{cell, mem};
+use num_traits::Signed;
 
 use AbsDiffEq;
 
@@ -14,13 +13,13 @@ where
 {
     /// The default ULPs to tolerate when testing values that are far-apart.
     ///
-    /// This is used when no `max_ulps` value is supplied to the `ulps_eq` macro.
+    /// This is used when no `max_ulps` value is supplied to the [`ulps_eq`] macro.
     fn default_max_ulps() -> u32;
 
     /// A test for equality that uses units in the last place (ULP) if the values are far apart.
     fn ulps_eq(&self, other: &Rhs, epsilon: Self::Epsilon, max_ulps: u32) -> bool;
 
-    /// The inverse of `ApproxEq::ulps_eq`.
+    /// The inverse of [`UlpsEq::ulps_eq`].
     fn ulps_ne(&self, other: &Rhs, epsilon: Self::Epsilon, max_ulps: u32) -> bool {
         !Self::ulps_eq(self, other, epsilon, max_ulps)
     }
@@ -53,17 +52,23 @@ macro_rules! impl_ulps_eq {
                 }
 
                 // ULPS difference comparison
-                let int_self: $U = unsafe { mem::transmute(*self) };
-                let int_other: $U = unsafe { mem::transmute(*other) };
+                let int_self: $U = self.to_bits();
+                let int_other: $U = other.to_bits();
 
-                $U::abs(int_self - int_other) <= max_ulps as $U
+                // To be replaced with `abs_sub`, if
+                // https://github.com/rust-lang/rust/issues/62111 lands.
+                if int_self <= int_other {
+                    int_other - int_self <= max_ulps as $U
+                } else {
+                    int_self - int_other <= max_ulps as $U
+                }
             }
         }
     };
 }
 
-impl_ulps_eq!(f32, i32);
-impl_ulps_eq!(f64, i64);
+impl_ulps_eq!(f32, u32);
+impl_ulps_eq!(f64, u64);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Derived implementations
@@ -131,7 +136,7 @@ where
     fn ulps_eq(&self, other: &[B], epsilon: A::Epsilon, max_ulps: u32) -> bool {
         self.len() == other.len()
             && Iterator::zip(self.iter(), other)
-                .all(|(x, y)| A::ulps_eq(x, y, epsilon.clone(), max_ulps.clone()))
+                .all(|(x, y)| A::ulps_eq(x, y, epsilon.clone(), max_ulps))
     }
 }
 
@@ -148,6 +153,6 @@ where
     #[inline]
     fn ulps_eq(&self, other: &Complex<T>, epsilon: T::Epsilon, max_ulps: u32) -> bool {
         T::ulps_eq(&self.re, &other.re, epsilon.clone(), max_ulps)
-            && T::ulps_eq(&self.im, &other.im, epsilon.clone(), max_ulps)
+            && T::ulps_eq(&self.im, &other.im, epsilon, max_ulps)
     }
 }

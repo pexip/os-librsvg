@@ -1,5 +1,5 @@
 use crate::simd::SimdValue;
-use std::ops::{BitAnd, BitOr, BitXor};
+use std::ops::{BitAnd, BitOr, BitXor, Not};
 
 /// Lane-wise generalization of `bool` for SIMD booleans.
 ///
@@ -7,8 +7,16 @@ use std::ops::{BitAnd, BitOr, BitXor};
 /// It is designed to abstract the behavior of booleans so it can work with multi-lane boolean
 /// values in an AoSoA setting.
 pub trait SimdBool:
-    Copy + BitAnd<Self, Output = Self> + BitOr<Self, Output = Self> + BitXor<Self, Output = Self>
+    Copy
+    + BitAnd<Self, Output = Self>
+    + BitOr<Self, Output = Self>
+    + BitXor<Self, Output = Self>
+    + Not<Output = Self>
 {
+    /// A bit mask representing the boolean state of each lanes of `self`.
+    ///
+    /// The `i-th` bit of the result is `1` iff. the `i-th` lane of `self` is `true`.
+    fn bitmask(self) -> u64;
     /// Lane-wise bitwise and of the vector elements.
     fn and(self) -> bool;
     /// Lane-wise bitwise or of the vector elements.
@@ -66,6 +74,11 @@ pub trait SimdBool:
 }
 
 impl SimdBool for bool {
+    #[inline(always)]
+    fn bitmask(self) -> u64 {
+        self as u64
+    }
+
     #[inline(always)]
     fn and(self) -> bool {
         self

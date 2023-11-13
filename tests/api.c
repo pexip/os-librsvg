@@ -1,6 +1,15 @@
 /* -*- Mode: C; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* vim: set ts=4 nowrap ai expandtab sw=4: */
 
+/* These are the C API tests for librsvg.  These test the complete C
+ * API, especially its historical peculiarities to ensure ABI
+ * compatibility.
+ *
+ * These tests are not meant to exhaustively test librsvg's features.
+ * For those, you should look at the Rust integration tests.  See
+ * tests/README.md for details.
+ */
+
 #include "config.h"
 
 #include <stdio.h>
@@ -8,7 +17,7 @@
 #include <cairo.h>
 
 #define RSVG_DISABLE_DEPRECATION_WARNINGS /* so we can test deprecated API */
-#include "librsvg/rsvg.h"
+#include <librsvg/rsvg.h>
 #include "test-utils.h"
 
 /*
@@ -17,24 +26,37 @@
 */
 
 static void
-handle_has_gtype (void)
+handle_has_correct_type_info (void)
 {
+    GTypeQuery q;
     RsvgHandle *handle;
 
+    g_type_query (RSVG_TYPE_HANDLE, &q);
+    g_assert (q.type == RSVG_TYPE_HANDLE);
+    g_assert (q.type == rsvg_handle_get_type ());
+
+    g_assert_cmpstr (q.type_name, ==, "RsvgHandle");
+
+    /* These test that the sizes of the structs in the header file actually match the
+     * sizes of structs and the glib-subclass machinery in the Rust side.
+     */
+    g_assert (sizeof (RsvgHandleClass) == (gsize) q.class_size);
+    g_assert (sizeof (RsvgHandle) == (gsize) q.instance_size);
+
     handle = rsvg_handle_new();
-    g_assert (G_OBJECT_TYPE (handle) == rsvg_handle_get_type ());
+    g_assert (G_OBJECT_TYPE (handle) == RSVG_TYPE_HANDLE);
     g_object_unref (handle);
 }
 
-static gboolean
-flags_value_matches (GFlagsValue *v,
-                     guint value,
-                     const char *value_name,
-                     const char *value_nick)
+static void
+assert_flags_value_matches (GFlagsValue *v,
+                            guint value,
+                            const char *value_name,
+                            const char *value_nick)
 {
-    return (v->value == value
-            && strcmp (v->value_name, value_name) == 0
-            && strcmp (v->value_nick, value_nick) == 0);
+    g_assert_cmpint(v->value, ==, value);
+    g_assert_cmpstr(v->value_name, ==, value_name);
+    g_assert_cmpstr(v->value_nick, ==, value_nick);
 }
 
 static void
@@ -61,33 +83,33 @@ flags_registration (void)
     flags_class = G_FLAGS_CLASS (type_class);
     g_assert_cmpint (flags_class->n_values, ==, 3);
 
-    g_assert (flags_value_matches(&flags_class->values[0],
-                                  RSVG_HANDLE_FLAGS_NONE,
-                                  "RSVG_HANDLE_FLAGS_NONE",
-                                  "flags-none"));
+    assert_flags_value_matches(&flags_class->values[0],
+                               RSVG_HANDLE_FLAGS_NONE,
+                               "RSVG_HANDLE_FLAGS_NONE",
+                               "flags-none");
 
-    g_assert (flags_value_matches(&flags_class->values[1],
-                                  RSVG_HANDLE_FLAG_UNLIMITED,
-                                  "RSVG_HANDLE_FLAG_UNLIMITED",
-                                  "flag-unlimited"));
+    assert_flags_value_matches(&flags_class->values[1],
+                               RSVG_HANDLE_FLAG_UNLIMITED,
+                               "RSVG_HANDLE_FLAG_UNLIMITED",
+                               "flag-unlimited");
 
-    g_assert (flags_value_matches(&flags_class->values[2],
-                                  RSVG_HANDLE_FLAG_KEEP_IMAGE_DATA,
-                                  "RSVG_HANDLE_FLAG_KEEP_IMAGE_DATA",
-                                  "flag-keep-image-data"));
+    assert_flags_value_matches(&flags_class->values[2],
+                               RSVG_HANDLE_FLAG_KEEP_IMAGE_DATA,
+                               "RSVG_HANDLE_FLAG_KEEP_IMAGE_DATA",
+                               "flag-keep-image-data");
 
     g_type_class_unref (type_class);
 }
 
-static gboolean
-enum_value_matches (GEnumValue *v,
-                    gint value,
-                    const char *value_name,
-                    const char *value_nick)
+static void
+assert_enum_value_matches (GEnumValue *v,
+                           gint value,
+                           const char *value_name,
+                           const char *value_nick)
 {
-    return (v->value == value
-            && strcmp (v->value_name, value_name) == 0
-            && strcmp (v->value_nick, value_nick) == 0);
+    g_assert_cmpint (v->value, ==, value);
+    g_assert_cmpstr (v->value_name, ==, value_name);
+    g_assert_cmpstr (v->value_nick, ==, value_nick);
 }
 
 static void
@@ -116,10 +138,10 @@ error_registration (void)
     enum_class = G_ENUM_CLASS (type_class);
     g_assert_cmpint (enum_class->n_values, ==, 1);
 
-    g_assert (enum_value_matches (&enum_class->values[0],
-                                  RSVG_ERROR_FAILED,
-                                  "RSVG_ERROR_FAILED",
-                                  "failed"));
+    assert_enum_value_matches (&enum_class->values[0],
+                               RSVG_ERROR_FAILED,
+                               "RSVG_ERROR_FAILED",
+                               "failed");
 
     g_type_class_unref (type_class);
 }
@@ -960,6 +982,53 @@ get_intrinsic_dimensions (void)
 }
 
 static void
+get_intrinsic_size_in_pixels_yes (void)
+{
+    char *filename = get_test_filename ("size.svg");
+    GError *error = NULL;
+    gdouble width, height;
+
+    RsvgHandle *handle = rsvg_handle_new_from_file (filename, &error);
+    g_free (filename);
+
+    g_assert_nonnull (handle);
+    g_assert_no_error (error);
+
+    rsvg_handle_set_dpi (handle, 96.0);
+
+    /* Test optional parameters */
+    g_assert (rsvg_handle_get_intrinsic_size_in_pixels (handle, NULL, NULL));
+
+    /* Test the actual result */
+    g_assert (rsvg_handle_get_intrinsic_size_in_pixels (handle, &width, &height));
+    g_assert_cmpfloat (width, ==, 192.0);
+    g_assert_cmpfloat (height, ==, 288.0);
+
+    g_object_unref (handle);
+}
+
+static void
+get_intrinsic_size_in_pixels_no (void)
+{
+    char *filename = get_test_filename ("no-size.svg");
+    GError *error = NULL;
+    gdouble width, height;
+
+    RsvgHandle *handle = rsvg_handle_new_from_file (filename, &error);
+    g_free (filename);
+
+    g_assert_nonnull (handle);
+    g_assert_no_error (error);
+
+    rsvg_handle_set_dpi (handle, 96.0);
+    g_assert (!rsvg_handle_get_intrinsic_size_in_pixels (handle, &width, &height));
+    g_assert_cmpfloat (width, ==, 0.0);
+    g_assert_cmpfloat (height, ==, 0.0);
+
+    g_object_unref (handle);
+}
+
+static void
 render_document (void)
 {
     char *filename = get_test_filename ("document.svg");
@@ -1199,32 +1268,25 @@ empty_write_close (void)
 static void
 cannot_request_external_elements (void)
 {
-    if (g_test_subprocess ()) {
-        /* We want to test that using one of the _sub() functions will fail
-         * if the element's id is within an external file.  First, ensure
-         * that the main file and the external file actually exist.
-         */
+    /* We want to test that using one of the _sub() functions will fail
+     * if the element's id is within an external file.
+     */
 
-        char *filename = get_test_filename ("example.svg");
+    char *filename = get_test_filename ("example.svg");
 
-        RsvgHandle *handle;
-        GError *error = NULL;
-        RsvgPositionData pos;
+    RsvgHandle *handle;
+    GError *error = NULL;
+    RsvgPositionData pos;
 
-        handle = rsvg_handle_new_from_file (filename, &error);
-        g_free (filename);
+    handle = rsvg_handle_new_from_file (filename, &error);
+    g_free (filename);
 
-        g_assert_nonnull (handle);
-        g_assert_no_error (error);
+    g_assert_nonnull (handle);
+    g_assert_no_error (error);
 
-        g_assert_false (rsvg_handle_get_position_sub (handle, &pos, "dpi.svg#one"));
+    g_assert_false (rsvg_handle_get_position_sub (handle, &pos, "dpi.svg#one"));
 
-        g_object_unref (handle);
-    }
-
-    g_test_trap_subprocess (NULL, 0, 0);
-    g_test_trap_assert_failed ();
-    g_test_trap_assert_stderr ("*WARNING*the public API is not allowed to look up external references*");
+    g_object_unref (handle);
 }
 
 static void
@@ -1400,20 +1462,203 @@ return_if_fail_type_check (void)
     g_test_trap_assert_stderr ("*rsvg_handle_get_base_uri*assertion*handle*failed*");
 }
 
-int
-main (int argc, char **argv)
+static void
+library_version_defines (void)
+{
+    gchar *version = g_strdup_printf ("%u.%u.%u",
+                                      LIBRSVG_MAJOR_VERSION, LIBRSVG_MINOR_VERSION, LIBRSVG_MICRO_VERSION);
+    g_assert_cmpstr (version, ==, LIBRSVG_VERSION);
+    g_free (version);
+}
+
+static void
+library_version_check (void)
+{
+    g_assert_true(LIBRSVG_CHECK_VERSION(1, 99, 9));
+    g_assert_true(LIBRSVG_CHECK_VERSION(2, 0, 0));
+    g_assert_true(LIBRSVG_CHECK_VERSION(2, 50, 7));
+    g_assert_false(LIBRSVG_CHECK_VERSION(2, 99, 0));
+    g_assert_false(LIBRSVG_CHECK_VERSION(3, 0, 0));
+}
+
+static void
+library_version_constants (void)
+{
+    g_assert_cmpuint (rsvg_major_version, ==, LIBRSVG_MAJOR_VERSION);
+    g_assert_cmpuint (rsvg_minor_version, ==, LIBRSVG_MINOR_VERSION);
+    g_assert_cmpuint (rsvg_micro_version, ==, LIBRSVG_MICRO_VERSION);
+}
+
+typedef struct
+{
+    const gchar *test_name;
+    const gchar *file_path;
+    const gchar *id;
+    gdouble x;
+    gdouble y;
+    gdouble width;
+    gdouble height;
+    gboolean has_position;
+    gboolean has_dimensions;
+} DimensionsFixtureData;
+
+static void
+test_dimensions (DimensionsFixtureData *fixture)
+{
+    RsvgHandle *handle;
+    RsvgPositionData position;
+    RsvgDimensionData dimension;
+    gchar *target_file;
+    GError *error = NULL;
+
+    target_file = g_build_filename (test_utils_get_test_data_path (),
+                                    fixture->file_path, NULL);
+    handle = rsvg_handle_new_from_file (target_file, &error);
+    g_free (target_file);
+    g_assert_no_error (error);
+
+    if (fixture->id) {
+        g_assert (rsvg_handle_has_sub (handle, fixture->id));
+        g_assert (rsvg_handle_get_position_sub (handle, &position, fixture->id));
+        g_assert (rsvg_handle_get_dimensions_sub (handle, &dimension, fixture->id));
+    } else {
+        rsvg_handle_get_dimensions (handle, &dimension);
+    }
+
+    if (fixture->has_position) {
+        g_assert_cmpint (fixture->x, ==, position.x);
+        g_assert_cmpint (fixture->y, ==, position.y);
+    }
+
+    if (fixture->has_dimensions) {
+        g_assert_cmpint (fixture->width,  ==, dimension.width);
+        g_assert_cmpint (fixture->height, ==, dimension.height);
+    }
+
+    g_object_unref (handle);
+}
+
+static DimensionsFixtureData dimensions_fixtures[] =
+{
+    {
+        "/dimensions/viewbox_only",
+        "dimensions/bug608102.svg",
+        NULL,
+        0, 0, 16, 16,
+        FALSE, TRUE
+    },
+    {
+        "/dimensions/hundred_percent_width_and_height",
+        "dimensions/bug612951.svg",
+        NULL,
+        0, 0, 47, 47.14,
+        FALSE, TRUE
+    },
+    {
+        "/dimensions/viewbox_only_2",
+        "dimensions/bug614018.svg",
+        NULL,
+        0, 0, 972, 546,
+        FALSE, TRUE
+    },
+    {
+        "/dimensions/sub/rect_no_unit",
+        "dimensions/sub-rect-no-unit.svg",
+        "#rect-no-unit",
+        0, 0, 44, 45,
+        FALSE, TRUE
+    },
+    {
+        "/dimensions/with_viewbox",
+        "dimensions/521-with-viewbox.svg",
+        "#foo",
+        50.0, 60.0, 70.0, 80.0,
+        TRUE, TRUE
+    },
+    {
+        "/dimensions/sub/823",
+        "dimensions/823-position-sub.svg",
+        "#pad_width",
+        444.0, 139.0, 0.0, 0.0,
+        TRUE, FALSE
+    },
+};
+
+typedef struct
+{
+    const char *test_name;
+    const char *fixture;
+    size_t buf_size;
+} LoadingTestData;
+
+static void
+load_n_bytes_at_a_time (gconstpointer data)
+{
+    const LoadingTestData *fixture_data = data;
+    char *filename = g_build_filename (test_utils_get_test_data_path (), fixture_data->fixture, NULL);
+    guchar *buf = g_new (guchar, fixture_data->buf_size);
+    gboolean done;
+
+    RsvgHandle *handle;
+    FILE *file;
+
+    file = fopen (filename, "rb");
+    g_assert_nonnull (file);
+
+    handle = rsvg_handle_new_with_flags (RSVG_HANDLE_FLAGS_NONE);
+
+    done = FALSE;
+
+    do {
+        size_t num_read;
+
+        num_read = fread (buf, 1, fixture_data->buf_size, file);
+
+        if (num_read > 0) {
+            g_assert_true (rsvg_handle_write (handle, buf, num_read, NULL));
+        } else {
+            g_assert_cmpint (ferror (file), ==, 0);
+
+            if (feof (file)) {
+                done = TRUE;
+            }
+        }
+    } while (!done);
+
+    fclose (file);
+    g_free (filename);
+
+    g_assert_true (rsvg_handle_close (handle, NULL));
+
+    g_object_unref (handle);
+
+    g_free (buf);
+}
+
+static LoadingTestData loading_tests[] = {
+    { "/loading/one-byte-at-a-time", "loading/gnome-cool.svg", 1 },
+    { "/loading/compressed-one-byte-at-a-time", "loading/gnome-cool.svgz", 1 },
+    { "/loading/compressed-two-bytes-at-a-time", "loading/gnome-cool.svgz", 2 } /* to test reading the entire gzip header */
+};
+
+/* Tests for the deprecated GdkPixbuf-based API */
+static void
+add_pixbuf_tests (void)
 {
     int i;
-
-    g_test_init (&argc, &argv, NULL);
 
     for (i = 0; i < G_N_ELEMENTS (pixbuf_tests); i++) {
         g_test_add_data_func (pixbuf_tests[i].test_name, &pixbuf_tests[i], test_pixbuf);
     }
 
     g_test_add_func ("/api/pixbuf_overflow", pixbuf_overflow);
+}
 
-    g_test_add_func ("/api/handle_has_gtype", handle_has_gtype);
+/* Tests for the C API of librsvg*/
+static void
+add_api_tests (void)
+{
+    g_test_add_func ("/api/handle_has_correct_type_info", handle_has_correct_type_info);
     g_test_add_func ("/api/flags_registration", flags_registration);
     g_test_add_func ("/api/error_registration", error_registration);
     g_test_add_func ("/api/noops", noops);
@@ -1438,6 +1683,8 @@ main (int argc, char **argv)
     g_test_add_func ("/api/can_draw_to_non_image_surface", can_draw_to_non_image_surface);
     g_test_add_func ("/api/render_cairo_sub", render_cairo_sub);
     g_test_add_func ("/api/get_intrinsic_dimensions", get_intrinsic_dimensions);
+    g_test_add_func ("/api/get_intrinsic_size_in_pixels/yes", get_intrinsic_size_in_pixels_yes);
+    g_test_add_func ("/api/get_intrinsic_size_in_pixels/no", get_intrinsic_size_in_pixels_no);
     g_test_add_func ("/api/render_document", render_document);
     g_test_add_func ("/api/get_geometry_for_layer", get_geometry_for_layer);
     g_test_add_func ("/api/render_layer", render_layer);
@@ -1453,6 +1700,43 @@ main (int argc, char **argv)
     g_test_add_func ("/api/return_if_fail", return_if_fail);
     g_test_add_func ("/api/return_if_fail_null_check", return_if_fail_null_check);
     g_test_add_func ("/api/return_if_fail_type_check", return_if_fail_type_check);
+    g_test_add_func ("/api/library_version_defines", library_version_defines);
+    g_test_add_func ("/api/library_version_check", library_version_check);
+    g_test_add_func ("/api/library_version_constants", library_version_constants);
+}
+
+/* Tests for the deprecated APIs to get geometries */
+static void
+add_geometry_tests (void)
+{
+    int i;
+
+    for (i = 0; i < G_N_ELEMENTS (dimensions_fixtures); i++)
+        g_test_add_data_func (dimensions_fixtures[i].test_name, &dimensions_fixtures[i], (void*)test_dimensions);
+}
+
+/* Tests for the deprecated API for loading bytes at a time */
+static void
+add_loading_tests (void)
+{
+    int i;
+
+    for (i = 0; i < G_N_ELEMENTS (loading_tests); i++) {
+        g_test_add_data_func (loading_tests[i].test_name, &loading_tests[i], load_n_bytes_at_a_time);
+    }
+}
+
+int
+main (int argc, char **argv)
+{
+    g_test_init (&argc, &argv, NULL);
+
+    test_utils_print_dependency_versions ();
+
+    add_pixbuf_tests ();
+    add_api_tests ();
+    add_geometry_tests ();
+    add_loading_tests ();
 
     return g_test_run ();
 }

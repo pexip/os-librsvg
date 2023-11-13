@@ -1,17 +1,15 @@
-// Copyright 2013-2015, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
-use enums::SurfaceType;
-use ffi;
+use crate::enums::SurfaceType;
 #[cfg(feature = "use_glib")]
 use glib::translate::*;
 use std::convert::TryFrom;
 use std::fmt;
 use std::ops::Deref;
+use std::ptr;
 
-use enums::Status;
-use surface::Surface;
+use crate::error::Error;
+use crate::surface::Surface;
 
 #[derive(Debug)]
 pub struct XCBDrawable(pub u32);
@@ -44,26 +42,27 @@ impl fmt::Display for XCBPixmap {
 }
 
 #[derive(Debug)]
-pub struct XCBConnection(pub *mut ffi::xcb_connection_t);
+#[doc(alias = "xcb_connection_t")]
+pub struct XCBConnection(pub ptr::NonNull<ffi::xcb_connection_t>);
 
 impl XCBConnection {
     pub fn to_raw_none(&self) -> *mut ffi::xcb_connection_t {
-        self.0
+        self.0.as_ptr()
     }
 
     pub unsafe fn from_raw_none(ptr: *mut ffi::xcb_connection_t) -> XCBConnection {
         assert!(!ptr.is_null());
-        XCBConnection(ptr)
+        XCBConnection(ptr::NonNull::new_unchecked(ptr))
     }
 
-    pub unsafe fn from_raw_borrow(ptr: *mut ffi::xcb_connection_t) -> XCBConnection {
+    pub unsafe fn from_raw_borrow(ptr: *mut ffi::xcb_connection_t) -> Borrowed<XCBConnection> {
         assert!(!ptr.is_null());
-        XCBConnection(ptr)
+        Borrowed::new(XCBConnection(ptr::NonNull::new_unchecked(ptr)))
     }
 
     pub unsafe fn from_raw_full(ptr: *mut ffi::xcb_connection_t) -> XCBConnection {
         assert!(!ptr.is_null());
-        XCBConnection(ptr)
+        XCBConnection(ptr::NonNull::new_unchecked(ptr))
     }
 }
 
@@ -88,7 +87,7 @@ impl FromGlibPtrNone<*mut ffi::xcb_connection_t> for XCBConnection {
 #[cfg(feature = "use_glib")]
 impl FromGlibPtrBorrow<*mut ffi::xcb_connection_t> for XCBConnection {
     #[inline]
-    unsafe fn from_glib_borrow(ptr: *mut ffi::xcb_connection_t) -> XCBConnection {
+    unsafe fn from_glib_borrow(ptr: *mut ffi::xcb_connection_t) -> Borrowed<XCBConnection> {
         Self::from_raw_borrow(ptr)
     }
 }
@@ -114,28 +113,29 @@ impl fmt::Display for XCBConnection {
 }
 
 #[derive(Debug)]
-pub struct XCBRenderPictFormInfo(pub *mut ffi::xcb_render_pictforminfo_t);
+#[doc(alias = "xcb_render_pictforminfo_t")]
+pub struct XCBRenderPictFormInfo(pub ptr::NonNull<ffi::xcb_render_pictforminfo_t>);
 
 impl XCBRenderPictFormInfo {
     pub fn to_raw_none(&self) -> *mut ffi::xcb_render_pictforminfo_t {
-        self.0
+        self.0.as_ptr()
     }
 
     pub unsafe fn from_raw_none(ptr: *mut ffi::xcb_render_pictforminfo_t) -> XCBRenderPictFormInfo {
         assert!(!ptr.is_null());
-        XCBRenderPictFormInfo(ptr)
+        XCBRenderPictFormInfo(ptr::NonNull::new_unchecked(ptr))
     }
 
     pub unsafe fn from_raw_borrow(
         ptr: *mut ffi::xcb_render_pictforminfo_t,
-    ) -> XCBRenderPictFormInfo {
+    ) -> Borrowed<XCBRenderPictFormInfo> {
         assert!(!ptr.is_null());
-        XCBRenderPictFormInfo(ptr)
+        Borrowed::new(XCBRenderPictFormInfo(ptr::NonNull::new_unchecked(ptr)))
     }
 
     pub unsafe fn from_raw_full(ptr: *mut ffi::xcb_render_pictforminfo_t) -> XCBRenderPictFormInfo {
         assert!(!ptr.is_null());
-        XCBRenderPictFormInfo(ptr)
+        XCBRenderPictFormInfo(ptr::NonNull::new_unchecked(ptr))
     }
 }
 
@@ -162,7 +162,9 @@ impl FromGlibPtrNone<*mut ffi::xcb_render_pictforminfo_t> for XCBRenderPictFormI
 #[cfg(feature = "use_glib")]
 impl FromGlibPtrBorrow<*mut ffi::xcb_render_pictforminfo_t> for XCBRenderPictFormInfo {
     #[inline]
-    unsafe fn from_glib_borrow(ptr: *mut ffi::xcb_render_pictforminfo_t) -> XCBRenderPictFormInfo {
+    unsafe fn from_glib_borrow(
+        ptr: *mut ffi::xcb_render_pictforminfo_t,
+    ) -> Borrowed<XCBRenderPictFormInfo> {
         Self::from_raw_borrow(ptr)
     }
 }
@@ -188,26 +190,27 @@ impl fmt::Display for XCBRenderPictFormInfo {
 }
 
 #[derive(Debug)]
-pub struct XCBScreen(pub *mut ffi::xcb_screen_t);
+#[doc(alias = "xcb_screen_t")]
+pub struct XCBScreen(pub ptr::NonNull<ffi::xcb_screen_t>);
 
 impl XCBScreen {
     pub fn to_raw_none(&self) -> *mut ffi::xcb_screen_t {
-        self.0
+        self.0.as_ptr()
     }
 
     pub unsafe fn from_raw_none(ptr: *mut ffi::xcb_screen_t) -> XCBScreen {
         assert!(!ptr.is_null());
-        XCBScreen(ptr)
+        XCBScreen(ptr::NonNull::new_unchecked(ptr))
     }
 
-    pub unsafe fn from_raw_borrow(ptr: *mut ffi::xcb_screen_t) -> XCBScreen {
+    pub unsafe fn from_raw_borrow(ptr: *mut ffi::xcb_screen_t) -> Borrowed<XCBScreen> {
         assert!(!ptr.is_null());
-        XCBScreen(ptr)
+        Borrowed::new(XCBScreen(ptr::NonNull::new_unchecked(ptr)))
     }
 
     pub unsafe fn from_raw_full(ptr: *mut ffi::xcb_screen_t) -> XCBScreen {
         assert!(!ptr.is_null());
-        XCBScreen(ptr)
+        XCBScreen(ptr::NonNull::new_unchecked(ptr))
     }
 }
 
@@ -232,7 +235,7 @@ impl FromGlibPtrNone<*mut ffi::xcb_screen_t> for XCBScreen {
 #[cfg(feature = "use_glib")]
 impl FromGlibPtrBorrow<*mut ffi::xcb_screen_t> for XCBScreen {
     #[inline]
-    unsafe fn from_glib_borrow(ptr: *mut ffi::xcb_screen_t) -> XCBScreen {
+    unsafe fn from_glib_borrow(ptr: *mut ffi::xcb_screen_t) -> Borrowed<XCBScreen> {
         Self::from_raw_borrow(ptr)
     }
 }
@@ -260,31 +263,33 @@ impl fmt::Display for XCBScreen {
 declare_surface!(XCBSurface, SurfaceType::Xcb);
 
 impl XCBSurface {
+    #[doc(alias = "cairo_xcb_surface_create")]
     pub fn create(
         connection: &XCBConnection,
         drawable: &XCBDrawable,
         visual: &XCBVisualType,
         width: i32,
         height: i32,
-    ) -> Result<Self, Status> {
+    ) -> Result<Self, Error> {
         unsafe {
-            Ok(Self::from_raw_full(ffi::cairo_xcb_surface_create(
+            Self::from_raw_full(ffi::cairo_xcb_surface_create(
                 connection.to_raw_none(),
                 drawable.to_raw_none(),
                 visual.to_raw_none(),
                 width,
                 height,
-            ))?)
+            ))
         }
     }
 
+    #[doc(alias = "cairo_xcb_surface_create_for_bitmap")]
     pub fn create_for_bitmap(
         connection: &XCBConnection,
         screen: &XCBScreen,
         bitmap: &XCBPixmap,
         width: i32,
         height: i32,
-    ) -> Result<Self, Status> {
+    ) -> Result<Self, Error> {
         unsafe {
             Ok(Self(Surface::from_raw_full(
                 ffi::cairo_xcb_surface_create_for_bitmap(
@@ -298,6 +303,7 @@ impl XCBSurface {
         }
     }
 
+    #[doc(alias = "cairo_xcb_surface_create_with_xrender_format")]
     pub fn create_with_xrender_format(
         connection: &XCBConnection,
         screen: &XCBScreen,
@@ -305,7 +311,7 @@ impl XCBSurface {
         format: &XCBRenderPictFormInfo,
         width: i32,
         height: i32,
-    ) -> Result<Self, Status> {
+    ) -> Result<Self, Error> {
         unsafe {
             Ok(Self(Surface::from_raw_full(
                 ffi::cairo_xcb_surface_create_with_xrender_format(
@@ -320,17 +326,19 @@ impl XCBSurface {
         }
     }
 
-    pub fn set_size(&self, width: i32, height: i32) -> Result<(), Status> {
+    #[doc(alias = "cairo_xcb_surface_set_size")]
+    pub fn set_size(&self, width: i32, height: i32) -> Result<(), Error> {
         unsafe { ffi::cairo_xcb_surface_set_size(self.to_raw_none(), width, height) }
-        self.status().to_result(())
+        self.status()
     }
 
+    #[doc(alias = "cairo_xcb_surface_set_drawable")]
     pub fn set_drawable(
         &self,
         drawable: &XCBDrawable,
         width: i32,
         height: i32,
-    ) -> Result<(), Status> {
+    ) -> Result<(), Error> {
         unsafe {
             ffi::cairo_xcb_surface_set_drawable(
                 self.to_raw_none(),
@@ -339,31 +347,32 @@ impl XCBSurface {
                 height,
             )
         }
-        self.status().to_result(())
+        self.status()
     }
 }
 
 #[derive(Debug)]
-pub struct XCBVisualType(pub *mut ffi::xcb_visualtype_t);
+#[doc(alias = "xcb_visualtype_t")]
+pub struct XCBVisualType(pub ptr::NonNull<ffi::xcb_visualtype_t>);
 
 impl XCBVisualType {
     pub fn to_raw_none(&self) -> *mut ffi::xcb_visualtype_t {
-        self.0
+        self.0.as_ptr()
     }
 
     pub unsafe fn from_raw_none(ptr: *mut ffi::xcb_visualtype_t) -> XCBVisualType {
         assert!(!ptr.is_null());
-        XCBVisualType(ptr)
+        XCBVisualType(ptr::NonNull::new_unchecked(ptr))
     }
 
-    pub unsafe fn from_raw_borrow(ptr: *mut ffi::xcb_visualtype_t) -> XCBVisualType {
+    pub unsafe fn from_raw_borrow(ptr: *mut ffi::xcb_visualtype_t) -> Borrowed<XCBVisualType> {
         assert!(!ptr.is_null());
-        XCBVisualType(ptr)
+        Borrowed::new(XCBVisualType(ptr::NonNull::new_unchecked(ptr)))
     }
 
     pub unsafe fn from_raw_full(ptr: *mut ffi::xcb_visualtype_t) -> XCBVisualType {
         assert!(!ptr.is_null());
-        XCBVisualType(ptr)
+        XCBVisualType(ptr::NonNull::new_unchecked(ptr))
     }
 }
 
@@ -388,7 +397,7 @@ impl FromGlibPtrNone<*mut ffi::xcb_visualtype_t> for XCBVisualType {
 #[cfg(feature = "use_glib")]
 impl FromGlibPtrBorrow<*mut ffi::xcb_visualtype_t> for XCBVisualType {
     #[inline]
-    unsafe fn from_glib_borrow(ptr: *mut ffi::xcb_visualtype_t) -> XCBVisualType {
+    unsafe fn from_glib_borrow(ptr: *mut ffi::xcb_visualtype_t) -> Borrowed<XCBVisualType> {
         Self::from_raw_borrow(ptr)
     }
 }
@@ -413,13 +422,16 @@ impl fmt::Display for XCBVisualType {
     }
 }
 
-impl ::device::Device {
-    pub fn get_connection(&self) -> XCBConnection {
+impl crate::device::Device {
+    #[doc(alias = "cairo_xcb_device_get_connection")]
+    #[doc(alias = "get_connection")]
+    pub fn connection(&self) -> XCBConnection {
         unsafe {
             XCBConnection::from_raw_full(ffi::cairo_xcb_device_get_connection(self.to_raw_none()))
         }
     }
 
+    #[doc(alias = "cairo_xcb_device_debug_cap_xshm_version")]
     pub fn debug_cap_xshm_version(&self, major_version: i32, minor_version: i32) {
         unsafe {
             ffi::cairo_xcb_device_debug_cap_xshm_version(

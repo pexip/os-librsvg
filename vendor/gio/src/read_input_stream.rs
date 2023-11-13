@@ -1,13 +1,8 @@
-// Copyright 2019, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 use crate::prelude::*;
 use crate::subclass::prelude::*;
 use crate::InputStream;
-use glib;
-use glib::subclass;
-use glib::translate::*;
 
 use std::any::Any;
 use std::io::{Read, Seek};
@@ -21,37 +16,25 @@ mod imp {
         ReadSeek(AnyReader),
     }
 
+    #[derive(Default)]
     pub struct ReadInputStream {
         pub(super) read: RefCell<Option<Reader>>,
     }
 
+    #[glib::object_subclass]
     impl ObjectSubclass for ReadInputStream {
         const NAME: &'static str = "ReadInputStream";
+        type Type = super::ReadInputStream;
         type ParentType = InputStream;
-        type Instance = subclass::simple::InstanceStruct<Self>;
-        type Class = subclass::simple::ClassStruct<Self>;
-
-        glib_object_subclass!();
-
-        fn new() -> Self {
-            Self {
-                read: RefCell::new(None),
-            }
-        }
-
-        fn type_init(type_: &mut subclass::InitializingType<Self>) {
-            type_.add_interface::<crate::Seekable>();
-        }
+        type Interfaces = (crate::Seekable,);
     }
 
-    impl ObjectImpl for ReadInputStream {
-        glib_object_impl!();
-    }
+    impl ObjectImpl for ReadInputStream {}
 
     impl InputStreamImpl for ReadInputStream {
         fn read(
             &self,
-            _stream: &InputStream,
+            _stream: &Self::Type,
             buffer: &mut [u8],
             _cancellable: Option<&crate::Cancellable>,
         ) -> Result<usize, glib::Error> {
@@ -77,16 +60,16 @@ mod imp {
 
         fn close(
             &self,
-            _stream: &InputStream,
+            _stream: &Self::Type,
             _cancellable: Option<&crate::Cancellable>,
         ) -> Result<(), glib::Error> {
-            let _ = self.read.borrow_mut().take();
+            let _ = self.read.take();
             Ok(())
         }
     }
 
     impl SeekableImpl for ReadInputStream {
-        fn tell(&self, _seekable: &crate::Seekable) -> i64 {
+        fn tell(&self, _seekable: &Self::Type) -> i64 {
             // XXX: stream_position is not stable yet
             // let mut read = self.read.borrow_mut();
             // match *read {
@@ -98,17 +81,14 @@ mod imp {
             -1
         }
 
-        fn can_seek(&self, _seekable: &crate::Seekable) -> bool {
+        fn can_seek(&self, _seekable: &Self::Type) -> bool {
             let read = self.read.borrow();
-            match *read {
-                Some(Reader::ReadSeek(_)) => true,
-                _ => false,
-            }
+            matches!(*read, Some(Reader::ReadSeek(_)))
         }
 
         fn seek(
             &self,
-            _seekable: &crate::Seekable,
+            _seekable: &Self::Type,
             offset: i64,
             type_: glib::SeekType,
             _cancellable: Option<&crate::Cancellable>,
@@ -148,13 +128,13 @@ mod imp {
             }
         }
 
-        fn can_truncate(&self, _seekable: &crate::Seekable) -> bool {
+        fn can_truncate(&self, _seekable: &Self::Type) -> bool {
             false
         }
 
         fn truncate(
             &self,
-            _seekable: &crate::Seekable,
+            _seekable: &Self::Type,
             _offset: i64,
             _cancellable: Option<&crate::Cancellable>,
         ) -> Result<(), glib::Error> {
@@ -166,42 +146,29 @@ mod imp {
     }
 }
 
-glib_wrapper! {
-    pub struct ReadInputStream(Object<subclass::simple::InstanceStruct<imp::ReadInputStream>, subclass::simple::ClassStruct<imp::ReadInputStream>, ReadInputStreamClass>) @extends crate::InputStream, @implements crate::Seekable;
-
-    match fn {
-        get_type => || imp::ReadInputStream::get_type().to_glib(),
-    }
+glib::wrapper! {
+    pub struct ReadInputStream(ObjectSubclass<imp::ReadInputStream>) @extends crate::InputStream, @implements crate::Seekable;
 }
 
 impl ReadInputStream {
     pub fn new<R: Read + Send + 'static>(read: R) -> ReadInputStream {
-        let obj = glib::Object::new(Self::static_type(), &[])
-            .expect("Failed to create read input stream")
-            .downcast()
-            .expect("Created read input stream is of wrong type");
+        let obj: Self = glib::Object::new(&[]).expect("Failed to create read input stream");
 
-        let imp = imp::ReadInputStream::from_instance(&obj);
-        *imp.read.borrow_mut() = Some(imp::Reader::Read(AnyReader::new(read)));
+        *obj.imp().read.borrow_mut() = Some(imp::Reader::Read(AnyReader::new(read)));
 
         obj
     }
 
     pub fn new_seekable<R: Read + Seek + Send + 'static>(read: R) -> ReadInputStream {
-        let obj = glib::Object::new(Self::static_type(), &[])
-            .expect("Failed to create read input stream")
-            .downcast()
-            .expect("Created read input stream is of wrong type");
+        let obj: Self = glib::Object::new(&[]).expect("Failed to create read input stream");
 
-        let imp = imp::ReadInputStream::from_instance(&obj);
-        *imp.read.borrow_mut() = Some(imp::Reader::ReadSeek(AnyReader::new_seekable(read)));
+        *obj.imp().read.borrow_mut() = Some(imp::Reader::ReadSeek(AnyReader::new_seekable(read)));
 
         obj
     }
 
     pub fn close_and_take(&self) -> Box<dyn Any + Send + 'static> {
-        let imp = imp::ReadInputStream::from_instance(self);
-        let inner = imp.read.borrow_mut().take();
+        let inner = self.imp().read.take();
 
         let ret = match inner {
             None => {
@@ -211,7 +178,7 @@ impl ReadInputStream {
             Some(imp::Reader::ReadSeek(read)) => read.reader,
         };
 
-        let _ = self.close(crate::NONE_CANCELLABLE);
+        let _ = self.close(crate::Cancellable::NONE);
 
         match ret {
             AnyOrPanic::Any(r) => r,
@@ -235,7 +202,7 @@ struct AnyReader {
 
 impl AnyReader {
     fn new<R: Read + Any + Send + 'static>(r: R) -> Self {
-        AnyReader {
+        Self {
             reader: AnyOrPanic::Any(Box::new(r)),
             read_fn: Self::read_fn::<R>,
             seek_fn: None,
@@ -243,7 +210,7 @@ impl AnyReader {
     }
 
     fn new_seekable<R: Read + Seek + Any + Send + 'static>(r: R) -> Self {
-        AnyReader {
+        Self {
             reader: AnyOrPanic::Any(Box::new(r)),
             read_fn: Self::read_fn::<R>,
             seek_fn: Some(Self::seek_fn::<R>),
@@ -304,6 +271,7 @@ pub(crate) fn std_error_to_gio_error<T>(
         Err(err) => {
             use std::io::ErrorKind;
 
+            #[allow(clippy::wildcard_in_or_patterns)]
             match err.kind() {
                 ErrorKind::NotFound => Some(Err(glib::Error::new(
                     crate::IOErrorEnum::NotFound,
@@ -372,10 +340,10 @@ mod tests {
         let stream = ReadInputStream::new(cursor);
 
         let mut buf = [0u8; 1024];
-        assert_eq!(stream.read(&mut buf[..], crate::NONE_CANCELLABLE), Ok(10));
+        assert_eq!(stream.read(&mut buf[..], crate::Cancellable::NONE), Ok(10));
         assert_eq!(&buf[..10], &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10][..]);
 
-        assert_eq!(stream.read(&mut buf[..], crate::NONE_CANCELLABLE), Ok(0));
+        assert_eq!(stream.read(&mut buf[..], crate::Cancellable::NONE), Ok(0));
 
         let inner = stream.close_and_take();
         assert!(inner.is::<Cursor<Vec<u8>>>());
@@ -389,17 +357,17 @@ mod tests {
         let stream = ReadInputStream::new_seekable(cursor);
 
         let mut buf = [0u8; 1024];
-        assert_eq!(stream.read(&mut buf[..], crate::NONE_CANCELLABLE), Ok(10));
+        assert_eq!(stream.read(&mut buf[..], crate::Cancellable::NONE), Ok(10));
         assert_eq!(&buf[..10], &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10][..]);
 
-        assert_eq!(stream.read(&mut buf[..], crate::NONE_CANCELLABLE), Ok(0));
+        assert_eq!(stream.read(&mut buf[..], crate::Cancellable::NONE), Ok(0));
 
         assert!(stream.can_seek());
         assert_eq!(
-            stream.seek(0, glib::SeekType::Set, crate::NONE_CANCELLABLE),
+            stream.seek(0, glib::SeekType::Set, crate::Cancellable::NONE),
             Ok(())
         );
-        assert_eq!(stream.read(&mut buf[..], crate::NONE_CANCELLABLE), Ok(10));
+        assert_eq!(stream.read(&mut buf[..], crate::Cancellable::NONE), Ok(10));
         assert_eq!(&buf[..10], &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10][..]);
 
         let inner = stream.close_and_take();

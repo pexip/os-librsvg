@@ -3,10 +3,16 @@ use std::ops::Deref;
 
 /// The trait that translates some customized object to the backend coordinate
 pub trait CoordTranslate {
+    /// Specifies the object to be translated from
     type From;
 
     /// Translate the guest coordinate to the guest coordinate
     fn translate(&self, from: &Self::From) -> BackendCoord;
+
+    /// Get the Z-value of current coordinate
+    fn depth(&self, _from: &Self::From) -> i32 {
+        0
+    }
 }
 
 impl<C, T> CoordTranslate for T

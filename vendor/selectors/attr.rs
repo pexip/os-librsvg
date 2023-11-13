@@ -130,7 +130,7 @@ impl AttrSelectorOperator {
 }
 
 /// The definition of whitespace per CSS Selectors Level 3 § 4.
-pub static SELECTOR_WHITESPACE: &'static [char] = &[' ', '\t', '\n', '\r', '\x0C'];
+pub static SELECTOR_WHITESPACE: &[char] = &[' ', '\t', '\n', '\r', '\x0C'];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ParsedCaseSensitivity {

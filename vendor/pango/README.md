@@ -1,14 +1,45 @@
-# pango [![Build Status](https://travis-ci.org/gtk-rs/pango.png?branch=master)](https://travis-ci.org/gtk-rs/pango) [![Build status](https://ci.appveyor.com/api/projects/status/9nyo0226rxvikdtm?svg=true)](https://ci.appveyor.com/project/GuillaumeGomez/pango) [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/gtk-rs/gtk)
+# Rust Pango bindings
 
-Pango bindings for Rust.
+__Rust__ bindings and wrappers for [Pango](https://docs.gtk.org/Pango/), part of [gtk-rs-core](https://github.com/gtk-rs/gtk-rs-core).
 
-- [Gtk-rs project site](http://gtk-rs.org/)
+Pango __1.38__ is the lowest supported version for the underlying library.
 
-- [Online documentation](http://gtk-rs.org/docs/)
+## Minimum supported Rust version
 
-- [Readme](https://github.com/gtk-rs/gtk/blob/master/README.md) in our
-  [main repo](https://github.com/gtk-rs/gtk)
+Currently, the minimum supported Rust version is `1.56.0`.
+
+## Documentation
+
+ * [Rust API - Stable](https://gtk-rs.org/gtk-rs-core/stable/latest/docs/pango/)
+ * [Rust API - Development](https://gtk-rs.org/gtk-rs-core/git/docs/pango)
+ * [C API](https://developer.gnome.org/platform-overview/unstable/tech-pango.html.en)
+ * [GTK Installation instructions](https://www.gtk.org/docs/installations/)
+
+## Using
+
+We recommend using [crates from crates.io](https://crates.io/keywords/gtk-rs),
+as [demonstrated here](https://gtk-rs.org/#using).
+
+If you want to track the bleeding edge, use the git dependency instead:
+
+```toml
+[dependencies]
+pango = { git = "https://github.com/gtk-rs/gtk-rs-core.git", package = "pango" }
+```
+
+Avoid mixing versioned and git crates like this:
+
+```toml
+# This will not compile
+[dependencies]
+pango = "0.13"
+pango = { git = "https://github.com/gtk-rs/gtk-rs-core.git", package = "pango" }
+```
+
+### See Also
+
+ * [glib](https://crates.io/crates/glib)
 
 ## License
 
-MIT
+__pango__ is available under the MIT License, please refer to it.

@@ -2,8 +2,11 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
-use glib;
+use crate::AsyncResult;
+use crate::Cancellable;
+use crate::FilterInputStream;
+use crate::InputStream;
+use crate::Seekable;
 use glib::object::Cast;
 use glib::object::IsA;
 use glib::signal::connect_raw;
@@ -11,49 +14,68 @@ use glib::signal::SignalHandlerId;
 use glib::translate::*;
 use glib::StaticType;
 use glib::ToValue;
-use glib_sys;
-use gobject_sys;
 use std::boxed::Box as Box_;
 use std::fmt;
 use std::mem;
 use std::mem::transmute;
 use std::pin::Pin;
 use std::ptr;
-use Cancellable;
-use FilterInputStream;
-use InputStream;
-use Seekable;
 
-glib_wrapper! {
-    pub struct BufferedInputStream(Object<gio_sys::GBufferedInputStream, gio_sys::GBufferedInputStreamClass, BufferedInputStreamClass>) @extends FilterInputStream, InputStream, @implements Seekable;
+glib::wrapper! {
+    #[doc(alias = "GBufferedInputStream")]
+    pub struct BufferedInputStream(Object<ffi::GBufferedInputStream, ffi::GBufferedInputStreamClass>) @extends FilterInputStream, InputStream, @implements Seekable;
 
     match fn {
-        get_type => || gio_sys::g_buffered_input_stream_get_type(),
+        type_ => || ffi::g_buffered_input_stream_get_type(),
     }
 }
 
 impl BufferedInputStream {
-    pub fn new<P: IsA<InputStream>>(base_stream: &P) -> BufferedInputStream {
+    pub const NONE: Option<&'static BufferedInputStream> = None;
+
+    #[doc(alias = "g_buffered_input_stream_new")]
+    pub fn new(base_stream: &impl IsA<InputStream>) -> BufferedInputStream {
         unsafe {
-            InputStream::from_glib_full(gio_sys::g_buffered_input_stream_new(
+            InputStream::from_glib_full(ffi::g_buffered_input_stream_new(
                 base_stream.as_ref().to_glib_none().0,
             ))
             .unsafe_cast()
         }
     }
 
-    pub fn new_sized<P: IsA<InputStream>>(base_stream: &P, size: usize) -> BufferedInputStream {
+    #[doc(alias = "g_buffered_input_stream_new_sized")]
+    pub fn new_sized(base_stream: &impl IsA<InputStream>, size: usize) -> BufferedInputStream {
         unsafe {
-            InputStream::from_glib_full(gio_sys::g_buffered_input_stream_new_sized(
+            InputStream::from_glib_full(ffi::g_buffered_input_stream_new_sized(
                 base_stream.as_ref().to_glib_none().0,
                 size,
             ))
             .unsafe_cast()
         }
     }
+
+    // rustdoc-stripper-ignore-next
+    /// Creates a new builder-pattern struct instance to construct [`BufferedInputStream`] objects.
+    ///
+    /// This method returns an instance of [`BufferedInputStreamBuilder`](crate::builders::BufferedInputStreamBuilder) which can be used to create [`BufferedInputStream`] objects.
+    pub fn builder() -> BufferedInputStreamBuilder {
+        BufferedInputStreamBuilder::default()
+    }
+}
+
+impl Default for BufferedInputStream {
+    fn default() -> Self {
+        glib::object::Object::new::<Self>(&[])
+            .expect("Can't construct BufferedInputStream object with default parameters")
+    }
 }
 
 #[derive(Clone, Default)]
+// rustdoc-stripper-ignore-next
+/// A [builder-pattern] type to construct [`BufferedInputStream`] objects.
+///
+/// [builder-pattern]: https://doc.rust-lang.org/1.0.0/style/ownership/builders.html
+#[must_use = "The builder must be built to be used"]
 pub struct BufferedInputStreamBuilder {
     buffer_size: Option<u32>,
     base_stream: Option<InputStream>,
@@ -61,10 +83,15 @@ pub struct BufferedInputStreamBuilder {
 }
 
 impl BufferedInputStreamBuilder {
+    // rustdoc-stripper-ignore-next
+    /// Create a new [`BufferedInputStreamBuilder`].
     pub fn new() -> Self {
         Self::default()
     }
 
+    // rustdoc-stripper-ignore-next
+    /// Build the [`BufferedInputStream`].
+    #[must_use = "Building the object from the builder is usually expensive and is not expected to have side effects"]
     pub fn build(self) -> BufferedInputStream {
         let mut properties: Vec<(&str, &dyn ToValue)> = vec![];
         if let Some(ref buffer_size) = self.buffer_size {
@@ -76,10 +103,8 @@ impl BufferedInputStreamBuilder {
         if let Some(ref close_base_stream) = self.close_base_stream {
             properties.push(("close-base-stream", close_base_stream));
         }
-        glib::Object::new(BufferedInputStream::static_type(), &properties)
-            .expect("object new")
-            .downcast()
-            .expect("downcast")
+        glib::Object::new::<BufferedInputStream>(&properties)
+            .expect("Failed to create an instance of BufferedInputStream")
     }
 
     pub fn buffer_size(mut self, buffer_size: u32) -> Self {
@@ -87,7 +112,7 @@ impl BufferedInputStreamBuilder {
         self
     }
 
-    pub fn base_stream<P: IsA<InputStream>>(mut self, base_stream: &P) -> Self {
+    pub fn base_stream(mut self, base_stream: &impl IsA<InputStream>) -> Self {
         self.base_stream = Some(base_stream.clone().upcast());
         self
     }
@@ -98,51 +123,59 @@ impl BufferedInputStreamBuilder {
     }
 }
 
-pub const NONE_BUFFERED_INPUT_STREAM: Option<&BufferedInputStream> = None;
-
 pub trait BufferedInputStreamExt: 'static {
-    fn fill<P: IsA<Cancellable>>(
+    #[doc(alias = "g_buffered_input_stream_fill")]
+    fn fill(
         &self,
         count: isize,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<isize, glib::Error>;
 
-    fn fill_async<P: IsA<Cancellable>, Q: FnOnce(Result<isize, glib::Error>) + Send + 'static>(
+    #[doc(alias = "g_buffered_input_stream_fill_async")]
+    fn fill_async<P: FnOnce(Result<isize, glib::Error>) + 'static>(
         &self,
         count: isize,
         io_priority: glib::Priority,
-        cancellable: Option<&P>,
-        callback: Q,
+        cancellable: Option<&impl IsA<Cancellable>>,
+        callback: P,
     );
 
-    fn fill_async_future(
+    fn fill_future(
         &self,
         count: isize,
         io_priority: glib::Priority,
     ) -> Pin<Box_<dyn std::future::Future<Output = Result<isize, glib::Error>> + 'static>>;
 
-    fn get_available(&self) -> usize;
+    #[doc(alias = "g_buffered_input_stream_get_available")]
+    #[doc(alias = "get_available")]
+    fn available(&self) -> usize;
 
-    fn get_buffer_size(&self) -> usize;
+    #[doc(alias = "g_buffered_input_stream_get_buffer_size")]
+    #[doc(alias = "get_buffer_size")]
+    fn buffer_size(&self) -> usize;
 
+    #[doc(alias = "g_buffered_input_stream_peek_buffer")]
     fn peek_buffer(&self) -> Vec<u8>;
 
-    fn read_byte<P: IsA<Cancellable>>(&self, cancellable: Option<&P>) -> Result<i32, glib::Error>;
+    #[doc(alias = "g_buffered_input_stream_read_byte")]
+    fn read_byte(&self, cancellable: Option<&impl IsA<Cancellable>>) -> Result<i32, glib::Error>;
 
+    #[doc(alias = "g_buffered_input_stream_set_buffer_size")]
     fn set_buffer_size(&self, size: usize);
 
-    fn connect_property_buffer_size_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
+    #[doc(alias = "buffer-size")]
+    fn connect_buffer_size_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
 }
 
 impl<O: IsA<BufferedInputStream>> BufferedInputStreamExt for O {
-    fn fill<P: IsA<Cancellable>>(
+    fn fill(
         &self,
         count: isize,
-        cancellable: Option<&P>,
+        cancellable: Option<&impl IsA<Cancellable>>,
     ) -> Result<isize, glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let ret = gio_sys::g_buffered_input_stream_fill(
+            let ret = ffi::g_buffered_input_stream_fill(
                 self.as_ref().to_glib_none().0,
                 count,
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
@@ -156,41 +189,51 @@ impl<O: IsA<BufferedInputStream>> BufferedInputStreamExt for O {
         }
     }
 
-    fn fill_async<P: IsA<Cancellable>, Q: FnOnce(Result<isize, glib::Error>) + Send + 'static>(
+    fn fill_async<P: FnOnce(Result<isize, glib::Error>) + 'static>(
         &self,
         count: isize,
         io_priority: glib::Priority,
-        cancellable: Option<&P>,
-        callback: Q,
+        cancellable: Option<&impl IsA<Cancellable>>,
+        callback: P,
     ) {
-        let user_data: Box_<Q> = Box_::new(callback);
+        let main_context = glib::MainContext::ref_thread_default();
+        let is_main_context_owner = main_context.is_owner();
+        let has_acquired_main_context = (!is_main_context_owner)
+            .then(|| main_context.acquire().ok())
+            .flatten();
+        assert!(
+            is_main_context_owner || has_acquired_main_context.is_some(),
+            "Async operations only allowed if the thread is owning the MainContext"
+        );
+
+        let user_data: Box_<glib::thread_guard::ThreadGuard<P>> =
+            Box_::new(glib::thread_guard::ThreadGuard::new(callback));
         unsafe extern "C" fn fill_async_trampoline<
-            Q: FnOnce(Result<isize, glib::Error>) + Send + 'static,
+            P: FnOnce(Result<isize, glib::Error>) + 'static,
         >(
-            _source_object: *mut gobject_sys::GObject,
-            res: *mut gio_sys::GAsyncResult,
-            user_data: glib_sys::gpointer,
+            _source_object: *mut glib::gobject_ffi::GObject,
+            res: *mut crate::ffi::GAsyncResult,
+            user_data: glib::ffi::gpointer,
         ) {
             let mut error = ptr::null_mut();
-            let ret = gio_sys::g_buffered_input_stream_fill_finish(
-                _source_object as *mut _,
-                res,
-                &mut error,
-            );
+            let ret =
+                ffi::g_buffered_input_stream_fill_finish(_source_object as *mut _, res, &mut error);
             let result = if error.is_null() {
                 Ok(ret)
             } else {
                 Err(from_glib_full(error))
             };
-            let callback: Box_<Q> = Box_::from_raw(user_data as *mut _);
+            let callback: Box_<glib::thread_guard::ThreadGuard<P>> =
+                Box_::from_raw(user_data as *mut _);
+            let callback: P = callback.into_inner();
             callback(result);
         }
-        let callback = fill_async_trampoline::<Q>;
+        let callback = fill_async_trampoline::<P>;
         unsafe {
-            gio_sys::g_buffered_input_stream_fill_async(
+            ffi::g_buffered_input_stream_fill_async(
                 self.as_ref().to_glib_none().0,
                 count,
-                io_priority.to_glib(),
+                io_priority.into_glib(),
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 Some(callback),
                 Box_::into_raw(user_data) as *mut _,
@@ -198,34 +241,34 @@ impl<O: IsA<BufferedInputStream>> BufferedInputStreamExt for O {
         }
     }
 
-    fn fill_async_future(
+    fn fill_future(
         &self,
         count: isize,
         io_priority: glib::Priority,
     ) -> Pin<Box_<dyn std::future::Future<Output = Result<isize, glib::Error>> + 'static>> {
-        Box_::pin(crate::GioFuture::new(self, move |obj, send| {
-            let cancellable = Cancellable::new();
-            obj.fill_async(count, io_priority, Some(&cancellable), move |res| {
-                send.resolve(res);
-            });
-
-            cancellable
-        }))
+        Box_::pin(crate::GioFuture::new(
+            self,
+            move |obj, cancellable, send| {
+                obj.fill_async(count, io_priority, Some(cancellable), move |res| {
+                    send.resolve(res);
+                });
+            },
+        ))
     }
 
-    fn get_available(&self) -> usize {
-        unsafe { gio_sys::g_buffered_input_stream_get_available(self.as_ref().to_glib_none().0) }
+    fn available(&self) -> usize {
+        unsafe { ffi::g_buffered_input_stream_get_available(self.as_ref().to_glib_none().0) }
     }
 
-    fn get_buffer_size(&self) -> usize {
-        unsafe { gio_sys::g_buffered_input_stream_get_buffer_size(self.as_ref().to_glib_none().0) }
+    fn buffer_size(&self) -> usize {
+        unsafe { ffi::g_buffered_input_stream_get_buffer_size(self.as_ref().to_glib_none().0) }
     }
 
     fn peek_buffer(&self) -> Vec<u8> {
         unsafe {
             let mut count = mem::MaybeUninit::uninit();
             let ret = FromGlibContainer::from_glib_none_num(
-                gio_sys::g_buffered_input_stream_peek_buffer(
+                ffi::g_buffered_input_stream_peek_buffer(
                     self.as_ref().to_glib_none().0,
                     count.as_mut_ptr(),
                 ),
@@ -235,10 +278,10 @@ impl<O: IsA<BufferedInputStream>> BufferedInputStreamExt for O {
         }
     }
 
-    fn read_byte<P: IsA<Cancellable>>(&self, cancellable: Option<&P>) -> Result<i32, glib::Error> {
+    fn read_byte(&self, cancellable: Option<&impl IsA<Cancellable>>) -> Result<i32, glib::Error> {
         unsafe {
             let mut error = ptr::null_mut();
-            let ret = gio_sys::g_buffered_input_stream_read_byte(
+            let ret = ffi::g_buffered_input_stream_read_byte(
                 self.as_ref().to_glib_none().0,
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
                 &mut error,
@@ -253,27 +296,30 @@ impl<O: IsA<BufferedInputStream>> BufferedInputStreamExt for O {
 
     fn set_buffer_size(&self, size: usize) {
         unsafe {
-            gio_sys::g_buffered_input_stream_set_buffer_size(self.as_ref().to_glib_none().0, size);
+            ffi::g_buffered_input_stream_set_buffer_size(self.as_ref().to_glib_none().0, size);
         }
     }
 
-    fn connect_property_buffer_size_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
-        unsafe extern "C" fn notify_buffer_size_trampoline<P, F: Fn(&P) + 'static>(
-            this: *mut gio_sys::GBufferedInputStream,
-            _param_spec: glib_sys::gpointer,
-            f: glib_sys::gpointer,
-        ) where
+    fn connect_buffer_size_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
+        unsafe extern "C" fn notify_buffer_size_trampoline<
             P: IsA<BufferedInputStream>,
-        {
+            F: Fn(&P) + 'static,
+        >(
+            this: *mut ffi::GBufferedInputStream,
+            _param_spec: glib::ffi::gpointer,
+            f: glib::ffi::gpointer,
+        ) {
             let f: &F = &*(f as *const F);
-            f(&BufferedInputStream::from_glib_borrow(this).unsafe_cast())
+            f(BufferedInputStream::from_glib_borrow(this).unsafe_cast_ref())
         }
         unsafe {
             let f: Box_<F> = Box_::new(f);
             connect_raw(
                 self.as_ptr() as *mut _,
                 b"notify::buffer-size\0".as_ptr() as *const _,
-                Some(transmute(notify_buffer_size_trampoline::<Self, F> as usize)),
+                Some(transmute::<_, unsafe extern "C" fn()>(
+                    notify_buffer_size_trampoline::<Self, F> as *const (),
+                )),
                 Box_::into_raw(f),
             )
         }
@@ -282,6 +328,6 @@ impl<O: IsA<BufferedInputStream>> BufferedInputStreamExt for O {
 
 impl fmt::Display for BufferedInputStream {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "BufferedInputStream")
+        f.write_str("BufferedInputStream")
     }
 }

@@ -213,8 +213,6 @@ ast_struct! {
 pub mod parsing {
     use super::*;
 
-    #[cfg(feature = "full")]
-    use crate::expr;
     use crate::ext::IdentExt;
     use crate::parse::{Parse, ParseStream, Result};
 
@@ -233,7 +231,38 @@ pub mod parsing {
             }
 
             if input.peek(Ident) && input.peek2(Token![=]) {
-                return Ok(GenericArgument::Binding(input.parse()?));
+                let ident: Ident = input.parse()?;
+                let eq_token: Token![=] = input.parse()?;
+
+                let ty = if input.peek(Lit) {
+                    let begin = input.fork();
+                    input.parse::<Lit>()?;
+                    Type::Verbatim(verbatim::between(begin, input))
+                } else if input.peek(token::Brace) {
+                    let begin = input.fork();
+
+                    #[cfg(feature = "full")]
+                    {
+                        input.parse::<ExprBlock>()?;
+                    }
+
+                    #[cfg(not(feature = "full"))]
+                    {
+                        let content;
+                        braced!(content in input);
+                        content.parse::<Expr>()?;
+                    }
+
+                    Type::Verbatim(verbatim::between(begin, input))
+                } else {
+                    input.parse()?
+                };
+
+                return Ok(GenericArgument::Binding(Binding {
+                    ident,
+                    eq_token,
+                    ty,
+                }));
             }
 
             #[cfg(feature = "full")]
@@ -243,31 +272,88 @@ pub mod parsing {
                 }
             }
 
-            if input.peek(Lit) {
-                let lit = input.parse()?;
-                return Ok(GenericArgument::Const(Expr::Lit(lit)));
+            if input.peek(Lit) || input.peek(token::Brace) {
+                return const_argument(input).map(GenericArgument::Const);
             }
 
-            if input.peek(token::Brace) {
-                #[cfg(feature = "full")]
-                {
-                    let block = input.call(expr::parsing::expr_block)?;
-                    return Ok(GenericArgument::Const(Expr::Block(block)));
-                }
+            #[cfg(feature = "full")]
+            let begin = input.fork();
 
-                #[cfg(not(feature = "full"))]
-                {
-                    let begin = input.fork();
-                    let content;
-                    braced!(content in input);
-                    content.parse::<Expr>()?;
+            let argument: Type = input.parse()?;
+
+            #[cfg(feature = "full")]
+            {
+                if match &argument {
+                    Type::Path(argument)
+                        if argument.qself.is_none()
+                            && argument.path.leading_colon.is_none()
+                            && argument.path.segments.len() == 1 =>
+                    {
+                        match argument.path.segments[0].arguments {
+                            PathArguments::AngleBracketed(_) => true,
+                            _ => false,
+                        }
+                    }
+                    _ => false,
+                } && if input.peek(Token![=]) {
+                    input.parse::<Token![=]>()?;
+                    input.parse::<Type>()?;
+                    true
+                } else if input.peek(Token![:]) {
+                    input.parse::<Token![:]>()?;
+                    input.call(constraint_bounds)?;
+                    true
+                } else {
+                    false
+                } {
                     let verbatim = verbatim::between(begin, input);
-                    return Ok(GenericArgument::Const(Expr::Verbatim(verbatim)));
+                    return Ok(GenericArgument::Type(Type::Verbatim(verbatim)));
                 }
             }
 
-            input.parse().map(GenericArgument::Type)
+            Ok(GenericArgument::Type(argument))
         }
+    }
+
+    pub fn const_argument(input: ParseStream) -> Result<Expr> {
+        let lookahead = input.lookahead1();
+
+        if input.peek(Lit) {
+            let lit = input.parse()?;
+            return Ok(Expr::Lit(lit));
+        }
+
+        #[cfg(feature = "full")]
+        {
+            if input.peek(Ident) {
+                let ident: Ident = input.parse()?;
+                return Ok(Expr::Path(ExprPath {
+                    attrs: Vec::new(),
+                    qself: None,
+                    path: Path::from(ident),
+                }));
+            }
+        }
+
+        if input.peek(token::Brace) {
+            #[cfg(feature = "full")]
+            {
+                let block: ExprBlock = input.parse()?;
+                return Ok(Expr::Block(block));
+            }
+
+            #[cfg(not(feature = "full"))]
+            {
+                let begin = input.fork();
+                let content;
+                braced!(content in input);
+                content.parse::<Expr>()?;
+                let verbatim = verbatim::between(begin, input);
+                return Ok(Expr::Verbatim(verbatim));
+            }
+        }
+
+        Err(lookahead.error())
     }
 
     #[cfg_attr(doc_cfg, doc(cfg(feature = "parsing")))]
@@ -360,24 +446,27 @@ pub mod parsing {
             Ok(Constraint {
                 ident: input.parse()?,
                 colon_token: input.parse()?,
-                bounds: {
-                    let mut bounds = Punctuated::new();
-                    loop {
-                        if input.peek(Token![,]) || input.peek(Token![>]) {
-                            break;
-                        }
-                        let value = input.parse()?;
-                        bounds.push_value(value);
-                        if !input.peek(Token![+]) {
-                            break;
-                        }
-                        let punct = input.parse()?;
-                        bounds.push_punct(punct);
-                    }
-                    bounds
-                },
+                bounds: constraint_bounds(input)?,
             })
         }
+    }
+
+    #[cfg(feature = "full")]
+    fn constraint_bounds(input: ParseStream) -> Result<Punctuated<TypeParamBound, Token![+]>> {
+        let mut bounds = Punctuated::new();
+        loop {
+            if input.peek(Token![,]) || input.peek(Token![>]) {
+                break;
+            }
+            let value = input.parse()?;
+            bounds.push_value(value);
+            if !input.peek(Token![+]) {
+                break;
+            }
+            let punct = input.parse()?;
+            bounds.push_punct(punct);
+        }
+        Ok(bounds)
     }
 
     impl Path {
@@ -531,7 +620,7 @@ pub mod parsing {
             path: &mut Self,
             expr_style: bool,
         ) -> Result<()> {
-            while input.peek(Token![::]) {
+            while input.peek(Token![::]) && !input.peek3(token::Paren) {
                 let punct: Token![::] = input.parse()?;
                 path.segments.push_punct(punct);
                 let value = PathSegment::parse_helper(input, expr_style)?;
@@ -595,7 +684,7 @@ pub mod parsing {
 }
 
 #[cfg(feature = "printing")]
-mod printing {
+pub(crate) mod printing {
     use super::*;
     use crate::print::TokensOrDefault;
     use proc_macro2::TokenStream;
@@ -746,39 +835,37 @@ mod printing {
         }
     }
 
-    impl private {
-        pub(crate) fn print_path(tokens: &mut TokenStream, qself: &Option<QSelf>, path: &Path) {
-            let qself = match qself {
-                Some(qself) => qself,
-                None => {
-                    path.to_tokens(tokens);
-                    return;
-                }
-            };
-            qself.lt_token.to_tokens(tokens);
-            qself.ty.to_tokens(tokens);
+    pub(crate) fn print_path(tokens: &mut TokenStream, qself: &Option<QSelf>, path: &Path) {
+        let qself = match qself {
+            Some(qself) => qself,
+            None => {
+                path.to_tokens(tokens);
+                return;
+            }
+        };
+        qself.lt_token.to_tokens(tokens);
+        qself.ty.to_tokens(tokens);
 
-            let pos = cmp::min(qself.position, path.segments.len());
-            let mut segments = path.segments.pairs();
-            if pos > 0 {
-                TokensOrDefault(&qself.as_token).to_tokens(tokens);
-                path.leading_colon.to_tokens(tokens);
-                for (i, segment) in segments.by_ref().take(pos).enumerate() {
-                    if i + 1 == pos {
-                        segment.value().to_tokens(tokens);
-                        qself.gt_token.to_tokens(tokens);
-                        segment.punct().to_tokens(tokens);
-                    } else {
-                        segment.to_tokens(tokens);
-                    }
+        let pos = cmp::min(qself.position, path.segments.len());
+        let mut segments = path.segments.pairs();
+        if pos > 0 {
+            TokensOrDefault(&qself.as_token).to_tokens(tokens);
+            path.leading_colon.to_tokens(tokens);
+            for (i, segment) in segments.by_ref().take(pos).enumerate() {
+                if i + 1 == pos {
+                    segment.value().to_tokens(tokens);
+                    qself.gt_token.to_tokens(tokens);
+                    segment.punct().to_tokens(tokens);
+                } else {
+                    segment.to_tokens(tokens);
                 }
-            } else {
-                qself.gt_token.to_tokens(tokens);
-                path.leading_colon.to_tokens(tokens);
             }
-            for segment in segments {
-                segment.to_tokens(tokens);
-            }
+        } else {
+            qself.gt_token.to_tokens(tokens);
+            path.leading_colon.to_tokens(tokens);
+        }
+        for segment in segments {
+            segment.to_tokens(tokens);
         }
     }
 }

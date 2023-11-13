@@ -1,16 +1,30 @@
-use crate::base::dimension::{U1, U2, U3, U4, U5, U6};
+use crate::geometry::OPoint;
+use crate::Const;
 
-use crate::geometry::Point;
+/// A point with `D` elements.
+pub type Point<T, const D: usize> = OPoint<T, Const<D>>;
 
 /// A statically sized 1-dimensional column point.
-pub type Point1<N> = Point<N, U1>;
+///
+/// **Because this is an alias, not all its methods are listed here. See the [`Point`](crate::Point) type too.**
+pub type Point1<T> = Point<T, 1>;
 /// A statically sized 2-dimensional column point.
-pub type Point2<N> = Point<N, U2>;
+///
+/// **Because this is an alias, not all its methods are listed here. See the [`Point`](crate::Point) type too.**
+pub type Point2<T> = Point<T, 2>;
 /// A statically sized 3-dimensional column point.
-pub type Point3<N> = Point<N, U3>;
+///
+/// **Because this is an alias, not all its methods are listed here. See the [`Point`](crate::Point) type too.**
+pub type Point3<T> = Point<T, 3>;
 /// A statically sized 4-dimensional column point.
-pub type Point4<N> = Point<N, U4>;
+///
+/// **Because this is an alias, not all its methods are listed here. See the [`Point`](crate::Point) type too.**
+pub type Point4<T> = Point<T, 4>;
 /// A statically sized 5-dimensional column point.
-pub type Point5<N> = Point<N, U5>;
+///
+/// **Because this is an alias, not all its methods are listed here. See the [`Point`](crate::Point) type too.**
+pub type Point5<T> = Point<T, 5>;
 /// A statically sized 6-dimensional column point.
-pub type Point6<N> = Point<N, U6>;
+///
+/// **Because this is an alias, not all its methods are listed here. See the [`Point`](crate::Point) type too.**
+pub type Point6<T> = Point<T, 6>;

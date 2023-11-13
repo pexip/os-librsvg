@@ -79,7 +79,12 @@ where
     }
 
     fn find_case<'a>(&'a self, expected: bool, variable: &T) -> Option<reflection::Case<'a>> {
-        utils::default_find_case(self, expected, variable)
+        utils::default_find_case(self, expected, variable).map(|case| {
+            case.add_product(reflection::Product::new(
+                "var",
+                utils::DebugAdapter::new(variable).to_string(),
+            ))
+        })
     }
 }
 
@@ -92,7 +97,12 @@ where
     }
 
     fn find_case<'b>(&'b self, expected: bool, variable: &T) -> Option<reflection::Case<'b>> {
-        utils::default_find_case(self, expected, variable)
+        utils::default_find_case(self, expected, variable).map(|case| {
+            case.add_product(reflection::Product::new(
+                "var",
+                utils::DebugAdapter::new(variable).to_string(),
+            ))
+        })
     }
 }
 
@@ -111,7 +121,14 @@ where
     T: PartialEq + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "var in values")
+        let palette = crate::Palette::current();
+        write!(
+            f,
+            "{} {} {}",
+            palette.var.paint("var"),
+            palette.description.paint("in"),
+            palette.expected.paint("values")
+        )
     }
 }
 
@@ -180,7 +197,12 @@ where
     }
 
     fn find_case<'a>(&'a self, expected: bool, variable: &T) -> Option<reflection::Case<'a>> {
-        utils::default_find_case(self, expected, variable)
+        utils::default_find_case(self, expected, variable).map(|case| {
+            case.add_product(reflection::Product::new(
+                "var",
+                utils::DebugAdapter::new(variable).to_string(),
+            ))
+        })
     }
 }
 
@@ -193,7 +215,12 @@ where
     }
 
     fn find_case<'b>(&'b self, expected: bool, variable: &T) -> Option<reflection::Case<'b>> {
-        utils::default_find_case(self, expected, variable)
+        utils::default_find_case(self, expected, variable).map(|case| {
+            case.add_product(reflection::Product::new(
+                "var",
+                utils::DebugAdapter::new(variable).to_string(),
+            ))
+        })
     }
 }
 
@@ -212,7 +239,14 @@ where
     T: Ord + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "var in values")
+        let palette = crate::Palette::current();
+        write!(
+            f,
+            "{} {} {}",
+            palette.var.paint("var"),
+            palette.description.paint("in"),
+            palette.expected.paint("values")
+        )
     }
 }
 
@@ -242,7 +276,12 @@ where
     }
 
     fn find_case<'a>(&'a self, expected: bool, variable: &T) -> Option<reflection::Case<'a>> {
-        utils::default_find_case(self, expected, variable)
+        utils::default_find_case(self, expected, variable).map(|case| {
+            case.add_product(reflection::Product::new(
+                "var",
+                utils::DebugAdapter::new(variable).to_string(),
+            ))
+        })
     }
 }
 
@@ -255,7 +294,12 @@ where
     }
 
     fn find_case<'b>(&'b self, expected: bool, variable: &T) -> Option<reflection::Case<'b>> {
-        utils::default_find_case(self, expected, variable)
+        utils::default_find_case(self, expected, variable).map(|case| {
+            case.add_product(reflection::Product::new(
+                "var",
+                utils::DebugAdapter::new(variable).to_string(),
+            ))
+        })
     }
 }
 
@@ -274,7 +318,14 @@ where
     T: Hash + Eq + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "var in values")
+        let palette = crate::Palette::current();
+        write!(
+            f,
+            "{} {} {}",
+            palette.var.paint("var"),
+            palette.description.paint("in"),
+            palette.expected.paint("values")
+        )
     }
 }
 

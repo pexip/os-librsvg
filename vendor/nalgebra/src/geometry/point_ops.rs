@@ -5,26 +5,27 @@ use std::ops::{
 
 use simba::scalar::{ClosedAdd, ClosedDiv, ClosedMul, ClosedNeg, ClosedSub};
 
-use crate::base::allocator::{Allocator, SameShapeAllocator};
 use crate::base::constraint::{
     AreMultipliable, SameNumberOfColumns, SameNumberOfRows, ShapeConstraint,
 };
 use crate::base::dimension::{Dim, DimName, U1};
 use crate::base::storage::Storage;
-use crate::base::{DefaultAllocator, Matrix, Scalar, Vector, VectorSum};
+use crate::base::{Const, Matrix, OVector, Scalar, Vector};
 
-use crate::geometry::Point;
+use crate::allocator::Allocator;
+use crate::geometry::{OPoint, Point};
+use crate::DefaultAllocator;
 
 /*
  *
  * Indexing.
  *
  */
-impl<N: Scalar, D: DimName> Index<usize> for Point<N, D>
+impl<T: Scalar, D: DimName> Index<usize> for OPoint<T, D>
 where
-    DefaultAllocator: Allocator<N, D>,
+    DefaultAllocator: Allocator<T, D>,
 {
-    type Output = N;
+    type Output = T;
 
     #[inline]
     fn index(&self, i: usize) -> &Self::Output {
@@ -32,9 +33,9 @@ where
     }
 }
 
-impl<N: Scalar, D: DimName> IndexMut<usize> for Point<N, D>
+impl<T: Scalar, D: DimName> IndexMut<usize> for OPoint<T, D>
 where
-    DefaultAllocator: Allocator<N, D>,
+    DefaultAllocator: Allocator<T, D>,
 {
     #[inline]
     fn index_mut(&mut self, i: usize) -> &mut Self::Output {
@@ -47,9 +48,9 @@ where
  * Neg.
  *
  */
-impl<N: Scalar + ClosedNeg, D: DimName> Neg for Point<N, D>
+impl<T: Scalar + ClosedNeg, D: DimName> Neg for OPoint<T, D>
 where
-    DefaultAllocator: Allocator<N, D>,
+    DefaultAllocator: Allocator<T, D>,
 {
     type Output = Self;
 
@@ -59,11 +60,11 @@ where
     }
 }
 
-impl<'a, N: Scalar + ClosedNeg, D: DimName> Neg for &'a Point<N, D>
+impl<'a, T: Scalar + ClosedNeg, D: DimName> Neg for &'a OPoint<T, D>
 where
-    DefaultAllocator: Allocator<N, D>,
+    DefaultAllocator: Allocator<T, D>,
 {
-    type Output = Point<N, D>;
+    type Output = OPoint<T, D>;
 
     #[inline]
     fn neg(self) -> Self::Output {
@@ -79,90 +80,118 @@ where
 
 // Point - Point
 add_sub_impl!(Sub, sub, ClosedSub;
-    (D, U1), (D, U1) for D: DimName;
-    self: &'a Point<N, D>, right: &'b Point<N, D>, Output = VectorSum<N, D, D>;
+    (D, U1), (D, U1) -> (D, U1)
+    const; for D; where D: DimName, DefaultAllocator: Allocator<T, D>;
+    self: &'a OPoint<T, D>, right: &'b OPoint<T, D>, Output = OVector<T, D>;
     &self.coords - &right.coords; 'a, 'b);
 
 add_sub_impl!(Sub, sub, ClosedSub;
-    (D, U1), (D, U1) for D: DimName;
-    self: &'a Point<N, D>, right: Point<N, D>, Output = VectorSum<N, D, D>;
+    (D, U1), (D, U1) -> (D, U1)
+    const; for D; where D: DimName, DefaultAllocator: Allocator<T, D>;
+    self: &'a OPoint<T, D>, right: OPoint<T, D>, Output = OVector<T, D>;
     &self.coords - right.coords; 'a);
 
 add_sub_impl!(Sub, sub, ClosedSub;
-    (D, U1), (D, U1) for D: DimName;
-    self: Point<N, D>, right: &'b Point<N, D>, Output = VectorSum<N, D, D>;
+    (D, U1), (D, U1) -> (D, U1)
+    const; for D; where D: DimName, DefaultAllocator: Allocator<T, D>;
+    self: OPoint<T, D>, right: &'b OPoint<T, D>, Output = OVector<T, D>;
     self.coords - &right.coords; 'b);
 
 add_sub_impl!(Sub, sub, ClosedSub;
-    (D, U1), (D, U1) for D: DimName;
-    self: Point<N, D>, right: Point<N, D>, Output = VectorSum<N, D, D>;
+    (D, U1), (D, U1) -> (D, U1)
+    const; for D; where D: DimName, DefaultAllocator: Allocator<T, D>;
+    self: OPoint<T, D>, right: OPoint<T, D>, Output = OVector<T, D>;
     self.coords - right.coords; );
 
 // Point - Vector
 add_sub_impl!(Sub, sub, ClosedSub;
-    (D1, U1), (D2, U1) -> (D1) for D1: DimName, D2: Dim, SB: Storage<N, D2>;
-    self: &'a Point<N, D1>, right: &'b Vector<N, D2, SB>, Output = Point<N, D1>;
+    (D1, U1), (D2, U1) -> (D1, U1)
+    const;
+    for D1, D2, SB;
+    where D1: DimName, D2: Dim, SB: Storage<T, D2>, DefaultAllocator: Allocator<T, D1>;
+    self: &'a OPoint<T, D1>, right: &'b Vector<T, D2, SB>, Output = OPoint<T, D1>;
     Self::Output::from(&self.coords - right); 'a, 'b);
 
 add_sub_impl!(Sub, sub, ClosedSub;
-    (D1, U1), (D2, U1) -> (D1) for D1: DimName, D2: Dim, SB: Storage<N, D2>;
-    self: &'a Point<N, D1>, right: Vector<N, D2, SB>, Output = Point<N, D1>;
-    Self::Output::from(&self.coords - &right); 'a); // FIXME: should not be a ref to `right`.
+    (D1, U1), (D2, U1) -> (D1, U1)
+    const;
+    for D1, D2, SB;
+    where D1: DimName, D2: Dim, SB: Storage<T, D2>, DefaultAllocator: Allocator<T, D1>;
+    self: &'a OPoint<T, D1>, right: Vector<T, D2, SB>, Output = OPoint<T, D1>;
+    Self::Output::from(&self.coords - &right); 'a); // TODO: should not be a ref to `right`.
 
 add_sub_impl!(Sub, sub, ClosedSub;
-    (D1, U1), (D2, U1) -> (D1) for D1: DimName, D2: Dim, SB: Storage<N, D2>;
-    self: Point<N, D1>, right: &'b Vector<N, D2, SB>, Output = Point<N, D1>;
+    (D1, U1), (D2, U1) -> (D1, U1)
+    const;
+    for D1, D2, SB;
+    where D1: DimName, D2: Dim, SB: Storage<T, D2>, DefaultAllocator: Allocator<T, D1>;
+    self: OPoint<T, D1>, right: &'b Vector<T, D2, SB>, Output = OPoint<T, D1>;
     Self::Output::from(self.coords - right); 'b);
 
 add_sub_impl!(Sub, sub, ClosedSub;
-    (D1, U1), (D2, U1) -> (D1) for D1: DimName, D2: Dim, SB: Storage<N, D2>;
-    self: Point<N, D1>, right: Vector<N, D2, SB>, Output = Point<N, D1>;
+    (D1, U1), (D2, U1) -> (D1, U1)
+    const;
+    for D1, D2, SB;
+    where D1: DimName, D2: Dim, SB: Storage<T, D2>, DefaultAllocator: Allocator<T, D1>;
+    self: OPoint<T, D1>, right: Vector<T, D2, SB>, Output = OPoint<T, D1>;
     Self::Output::from(self.coords - right); );
 
 // Point + Vector
 add_sub_impl!(Add, add, ClosedAdd;
-    (D1, U1), (D2, U1) -> (D1) for D1: DimName, D2: Dim, SB: Storage<N, D2>;
-    self: &'a Point<N, D1>, right: &'b Vector<N, D2, SB>, Output = Point<N, D1>;
+    (D1, U1), (D2, U1) -> (D1, U1)
+    const;
+    for D1, D2, SB;
+    where D1: DimName, D2: Dim, SB: Storage<T, D2>, DefaultAllocator: Allocator<T, D1>;
+    self: &'a OPoint<T, D1>, right: &'b Vector<T, D2, SB>, Output = OPoint<T, D1>;
     Self::Output::from(&self.coords + right); 'a, 'b);
 
 add_sub_impl!(Add, add, ClosedAdd;
-    (D1, U1), (D2, U1) -> (D1) for D1: DimName, D2: Dim, SB: Storage<N, D2>;
-    self: &'a Point<N, D1>, right: Vector<N, D2, SB>, Output = Point<N, D1>;
-    Self::Output::from(&self.coords + &right); 'a); // FIXME: should not be a ref to `right`.
+    (D1, U1), (D2, U1) -> (D1, U1)
+    const;
+    for D1, D2, SB;
+    where D1: DimName, D2: Dim, SB: Storage<T, D2>, DefaultAllocator: Allocator<T, D1>;
+    self: &'a OPoint<T, D1>, right: Vector<T, D2, SB>, Output = OPoint<T, D1>;
+    Self::Output::from(&self.coords + &right); 'a); // TODO: should not be a ref to `right`.
 
 add_sub_impl!(Add, add, ClosedAdd;
-    (D1, U1), (D2, U1) -> (D1) for D1: DimName, D2: Dim, SB: Storage<N, D2>;
-    self: Point<N, D1>, right: &'b Vector<N, D2, SB>, Output = Point<N, D1>;
+    (D1, U1), (D2, U1) -> (D1, U1)
+    const;
+    for D1, D2, SB;
+    where D1: DimName, D2: Dim, SB: Storage<T, D2>, DefaultAllocator: Allocator<T, D1>;
+    self: OPoint<T, D1>, right: &'b Vector<T, D2, SB>, Output = OPoint<T, D1>;
     Self::Output::from(self.coords + right); 'b);
 
 add_sub_impl!(Add, add, ClosedAdd;
-    (D1, U1), (D2, U1) -> (D1) for D1: DimName, D2: Dim, SB: Storage<N, D2>;
-    self: Point<N, D1>, right: Vector<N, D2, SB>, Output = Point<N, D1>;
+    (D1, U1), (D2, U1) -> (D1, U1)
+    const;
+    for D1, D2, SB;
+    where D1: DimName, D2: Dim, SB: Storage<T, D2>, DefaultAllocator: Allocator<T, D1>;
+    self: OPoint<T, D1>, right: Vector<T, D2, SB>, Output = OPoint<T, D1>;
     Self::Output::from(self.coords + right); );
 
-// XXX: replace by the shared macro: add_sub_assign_impl
+// TODO: replace by the shared macro: add_sub_assign_impl?
 macro_rules! op_assign_impl(
     ($($TraitAssign: ident, $method_assign: ident, $bound: ident);* $(;)*) => {$(
-        impl<'b, N, D1: DimName, D2: Dim, SB> $TraitAssign<&'b Vector<N, D2, SB>> for Point<N, D1>
-            where N: Scalar + $bound,
-                  SB: Storage<N, D2>,
-                  DefaultAllocator: Allocator<N, D1>,
-                  ShapeConstraint: SameNumberOfRows<D1, D2> {
+        impl<'b, T, D1: DimName, D2: Dim, SB> $TraitAssign<&'b Vector<T, D2, SB>> for OPoint<T, D1>
+            where T: Scalar + $bound,
+                  SB: Storage<T, D2>,
+                  ShapeConstraint: SameNumberOfRows<D1, D2>,
+                  DefaultAllocator: Allocator<T, D1> {
 
             #[inline]
-            fn $method_assign(&mut self, right: &'b Vector<N, D2, SB>) {
+            fn $method_assign(&mut self, right: &'b Vector<T, D2, SB>) {
                 self.coords.$method_assign(right)
             }
         }
 
-        impl<N, D1: DimName, D2: Dim, SB> $TraitAssign<Vector<N, D2, SB>> for Point<N, D1>
-            where N: Scalar + $bound,
-                  SB: Storage<N, D2>,
-                  DefaultAllocator: Allocator<N, D1>,
-                  ShapeConstraint: SameNumberOfRows<D1, D2> {
+        impl<T, D1: DimName, D2: Dim, SB> $TraitAssign<Vector<T, D2, SB>> for OPoint<T, D1>
+            where T: Scalar + $bound,
+                  SB: Storage<T, D2>,
+                  ShapeConstraint: SameNumberOfRows<D1, D2>,
+                  DefaultAllocator: Allocator<T, D1> {
 
             #[inline]
-            fn $method_assign(&mut self, right: Vector<N, D2, SB>) {
+            fn $method_assign(&mut self, right: Vector<T, D2, SB>) {
                 self.coords.$method_assign(right)
             }
         }
@@ -181,9 +210,12 @@ op_assign_impl!(
  */
 md_impl_all!(
     Mul, mul;
-    (R1, C1), (D2, U1) for R1: DimName, C1: Dim, D2: DimName, SA: Storage<N, R1, C1>
-    where ShapeConstraint: AreMultipliable<R1, C1, D2, U1>;
-    self: Matrix<N, R1, C1, SA>, right: Point<N, D2>, Output = Point<N, R1>;
+    (Const<R1>, Const<C1>), (Const<D2>, U1)
+    const D2, R1, C1;
+    for SA;
+    where SA: Storage<T, Const<R1>, Const<C1>>,
+          ShapeConstraint: AreMultipliable<Const<R1>, Const<C1>, Const<D2>, U1>;
+    self: Matrix<T, Const<R1>, Const<C1>, SA>, right: Point<T, D2>, Output = Point<T, R1>;
     [val val] => Point::from(self * right.coords);
     [ref val] => Point::from(self * right.coords);
     [val ref] => Point::from(self * &right.coords);
@@ -198,30 +230,33 @@ md_impl_all!(
 macro_rules! componentwise_scalarop_impl(
     ($Trait: ident, $method: ident, $bound: ident;
      $TraitAssign: ident, $method_assign: ident) => {
-        impl<N: Scalar + $bound, D: DimName> $Trait<N> for Point<N, D>
-            where DefaultAllocator: Allocator<N, D> {
-            type Output = Point<N, D>;
+        impl<T: Scalar + $bound, D: DimName> $Trait<T> for OPoint<T, D>
+        where DefaultAllocator: Allocator<T, D>
+        {
+            type Output = OPoint<T, D>;
 
             #[inline]
-            fn $method(self, right: N) -> Self::Output {
-                Point::from(self.coords.$method(right))
+            fn $method(self, right: T) -> Self::Output {
+                OPoint::from(self.coords.$method(right))
             }
         }
 
-        impl<'a, N: Scalar + $bound, D: DimName> $Trait<N> for &'a Point<N, D>
-            where DefaultAllocator: Allocator<N, D> {
-            type Output = Point<N, D>;
+        impl<'a, T: Scalar + $bound, D: DimName> $Trait<T> for &'a OPoint<T, D>
+        where DefaultAllocator: Allocator<T, D>
+        {
+            type Output = OPoint<T, D>;
 
             #[inline]
-            fn $method(self, right: N) -> Self::Output {
-                Point::from((&self.coords).$method(right))
+            fn $method(self, right: T) -> Self::Output {
+                OPoint::from((&self.coords).$method(right))
             }
         }
 
-        impl<N: Scalar + $bound, D: DimName> $TraitAssign<N> for Point<N, D>
-            where DefaultAllocator: Allocator<N, D> {
+        impl<T: Scalar + $bound, D: DimName> $TraitAssign<T> for OPoint<T, D>
+            where DefaultAllocator: Allocator<T, D>
+        {
             #[inline]
-            fn $method_assign(&mut self, right: N) {
+            fn $method_assign(&mut self, right: T) {
                 self.coords.$method_assign(right)
             }
         }
@@ -233,23 +268,25 @@ componentwise_scalarop_impl!(Div, div, ClosedDiv; DivAssign, div_assign);
 
 macro_rules! left_scalar_mul_impl(
     ($($T: ty),* $(,)*) => {$(
-        impl<D: DimName> Mul<Point<$T, D>> for $T
-            where DefaultAllocator: Allocator<$T, D> {
-            type Output = Point<$T, D>;
+        impl<D: DimName> Mul<OPoint<$T, D>> for $T
+        where DefaultAllocator: Allocator<$T, D>
+        {
+            type Output = OPoint<$T, D>;
 
             #[inline]
-            fn mul(self, right: Point<$T, D>) -> Self::Output {
-                Point::from(self * right.coords)
+            fn mul(self, right: OPoint<$T, D>) -> Self::Output {
+                OPoint::from(self * right.coords)
             }
         }
 
-        impl<'b, D: DimName> Mul<&'b Point<$T, D>> for $T
-            where DefaultAllocator: Allocator<$T, D> {
-            type Output = Point<$T, D>;
+        impl<'b, D: DimName> Mul<&'b OPoint<$T, D>> for $T
+        where DefaultAllocator: Allocator<$T, D>
+        {
+            type Output = OPoint<$T, D>;
 
             #[inline]
-            fn mul(self, right: &'b Point<$T, D>) -> Self::Output {
-                Point::from(self * &right.coords)
+            fn mul(self, right: &'b OPoint<$T, D>) -> Self::Output {
+                OPoint::from(self * &right.coords)
             }
         }
     )*}

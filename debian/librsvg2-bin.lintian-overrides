@@ -1,0 +1,2 @@
+# String manipulation is done in Rust
+hardening-no-fortify-functions [usr/bin/rsvg-convert]

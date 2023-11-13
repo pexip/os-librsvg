@@ -1,16 +1,33 @@
-// Copyright 2013-2018, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
-use ffi;
+use crate::error::Error;
 use std::ffi::CStr;
 use std::fmt;
 
+// rustdoc-stripper-ignore-next
+/// Resets all static data within cairo to its original state (i.e. identical to the state at program
+/// invocation). For example, all caches within cairo will be flushed empty.
+///
+/// # Safety
+/// It is only safe to call this function when there are no active cairo objects remaining (all
+/// cairo objects have been dropped).
+///
+/// This function is thread safe.
+#[doc(alias = "cairo_debug_reset_static_data")]
 pub unsafe fn debug_reset_static_data() {
     ffi::cairo_debug_reset_static_data()
 }
 
-pub fn get_version_string() -> &'static str {
+pub fn status_to_result(status: ffi::cairo_status_t) -> Result<(), Error> {
+    match status {
+        ffi::STATUS_SUCCESS => Ok(()),
+        err => Err(err.into()),
+    }
+}
+
+#[doc(alias = "cairo_version_string")]
+#[doc(alias = "get_version_string")]
+pub fn version_string() -> &'static str {
     unsafe {
         let ptr = ffi::cairo_version_string();
         CStr::from_ptr(ptr)
@@ -27,13 +44,21 @@ pub struct Version {
 }
 
 impl Version {
-    pub fn get_version() -> Version {
+    #[doc(alias = "cairo_version")]
+    #[doc(alias = "get_version")]
+    pub fn new() -> Version {
         let version = unsafe { ffi::cairo_version() };
         Version {
             major: (version / 10_000 % 100) as _,
             minor: (version / 100 % 100) as _,
             micro: (version % 100) as _,
         }
+    }
+}
+
+impl Default for Version {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -49,6 +74,6 @@ mod tests {
 
     #[test]
     fn check_versions() {
-        assert_eq!(get_version_string(), Version::get_version().to_string());
+        assert_eq!(version_string(), Version::new().to_string());
     }
 }

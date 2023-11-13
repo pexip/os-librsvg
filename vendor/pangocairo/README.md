@@ -1,14 +1,47 @@
-# pangocairo [![Build Status](https://travis-ci.org/gtk-rs/pangocairo.png?branch=master)](https://travis-ci.org/gtk-rs/pangocairo) [![Build status](https://ci.appveyor.com/api/projects/status/8pt381tk79kkuox0?svg=true)](https://ci.appveyor.com/project/GuillaumeGomez/pangocairo) [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/gtk-rs/gtk)
+# Rust PangoCairo bindings
 
-PangoCairo bindings for Rust.
+__Rust__ bindings and wrappers for [PangoCairo](https://docs.gtk.org/PangoCairo),
+part of [gtk-rs-core](https://github.com/gtk-rs/gtk-rs-core).
 
-- [Gtk-rs project site](http://gtk-rs.org/)
+PangoCairo __1.38__ is the lowest supported version for the underlying library.
 
-- [Online documentation](http://gtk-rs.org/docs/)
+## Minimum supported Rust version
 
-- [Readme](https://github.com/gtk-rs/gtk/blob/master/README.md) in our
-  [main repo](https://github.com/gtk-rs/gtk)
+Currently, the minimum supported Rust version is `1.56.0`.
+
+## Documentation
+
+ * [Rust API - Stable](https://gtk-rs.org/gtk-rs-core/stable/latest/docs/pangocairo/)
+ * [Rust API - Development](https://gtk-rs.org/gtk-rs-core/git/docs/pangocairo)
+ * [GTK Installation instructions](https://www.gtk.org/docs/installations/)
+
+## Using
+
+We recommend using [crates from crates.io](https://crates.io/keywords/gtk-rs),
+as [demonstrated here](https://gtk-rs.org/#using).
+
+If you want to track the bleeding edge, use the git dependency instead:
+
+```toml
+[dependencies]
+pangocairo = { git = "https://github.com/gtk-rs/gtk-rs-core.git", package = "pangocairo" }
+```
+
+Avoid mixing versioned and git crates like this:
+
+```toml
+# This will not compile
+[dependencies]
+pangocairo = "0.13"
+pangocairo = { git = "https://github.com/gtk-rs/gtk-rs-core.git", package = "pangocairo" }
+```
+
+### See Also
+
+ * [cairo](https://crates.io/crates/cairo-rs)
+ * [glib](https://crates.io/crates/glib)
+ * [pango](https://crates.io/crates/pango)
 
 ## License
 
-MIT
+__pangocairo__ is available under the MIT License, please refer to it.

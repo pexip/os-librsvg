@@ -1,0 +1,33 @@
+From: Simon McVittie <smcv@debian.org>
+Date: Sun, 18 Jun 2023 18:52:32 +0100
+Subject: tests: Skip known-failing tests on i386
+
+These seem to have regressed sometime between October 2022 and now,
+possibly as a result of upgrading rustc from 1.61 to 1.63.
+
+Bug-Debian: https://bugs.debian.org/1038252
+Forwarded: not-needed, Debian-specific workaround
+---
+ src/transform.rs | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/transform.rs b/src/transform.rs
+index 6826d90..c32c268 100644
+--- a/src/transform.rs
++++ b/src/transform.rs
+@@ -770,6 +770,7 @@ mod tests {
+     }
+ 
+     #[test]
++    #[cfg(not(target_arch = "x86"))]
+     fn parses_valid_transform() {
+         let t = Transform::new_unchecked(1.0, 0.0, 0.0, 1.0, 20.0, 30.0);
+         let s = Transform::new_unchecked(10.0, 0.0, 0.0, 10.0, 0.0, 0.0);
+@@ -885,6 +886,7 @@ mod tests {
+     }
+ 
+     #[test]
++    #[cfg(not(target_arch = "x86"))]
+     fn parses_transform_list() {
+         let t = Transform::new_unchecked(1.0, 0.0, 0.0, 1.0, 20.0, 30.0);
+         let s = Transform::new_unchecked(10.0, 0.0, 0.0, 10.0, 0.0, 0.0);

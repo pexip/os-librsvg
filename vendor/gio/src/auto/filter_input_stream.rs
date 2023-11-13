@@ -2,53 +2,57 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
+use crate::InputStream;
 use glib::object::Cast;
 use glib::object::IsA;
 use glib::signal::connect_raw;
 use glib::signal::SignalHandlerId;
 use glib::translate::*;
-use glib_sys;
 use std::boxed::Box as Box_;
 use std::fmt;
 use std::mem::transmute;
-use InputStream;
 
-glib_wrapper! {
-    pub struct FilterInputStream(Object<gio_sys::GFilterInputStream, gio_sys::GFilterInputStreamClass, FilterInputStreamClass>) @extends InputStream;
+glib::wrapper! {
+    #[doc(alias = "GFilterInputStream")]
+    pub struct FilterInputStream(Object<ffi::GFilterInputStream, ffi::GFilterInputStreamClass>) @extends InputStream;
 
     match fn {
-        get_type => || gio_sys::g_filter_input_stream_get_type(),
+        type_ => || ffi::g_filter_input_stream_get_type(),
     }
 }
 
-pub const NONE_FILTER_INPUT_STREAM: Option<&FilterInputStream> = None;
+impl FilterInputStream {
+    pub const NONE: Option<&'static FilterInputStream> = None;
+}
 
 pub trait FilterInputStreamExt: 'static {
-    fn get_base_stream(&self) -> Option<InputStream>;
+    #[doc(alias = "g_filter_input_stream_get_base_stream")]
+    #[doc(alias = "get_base_stream")]
+    fn base_stream(&self) -> InputStream;
 
-    fn get_close_base_stream(&self) -> bool;
+    #[doc(alias = "g_filter_input_stream_get_close_base_stream")]
+    #[doc(alias = "get_close_base_stream")]
+    fn closes_base_stream(&self) -> bool;
 
+    #[doc(alias = "g_filter_input_stream_set_close_base_stream")]
     fn set_close_base_stream(&self, close_base: bool);
 
-    fn connect_property_close_base_stream_notify<F: Fn(&Self) + 'static>(
-        &self,
-        f: F,
-    ) -> SignalHandlerId;
+    #[doc(alias = "close-base-stream")]
+    fn connect_close_base_stream_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId;
 }
 
 impl<O: IsA<FilterInputStream>> FilterInputStreamExt for O {
-    fn get_base_stream(&self) -> Option<InputStream> {
+    fn base_stream(&self) -> InputStream {
         unsafe {
-            from_glib_none(gio_sys::g_filter_input_stream_get_base_stream(
+            from_glib_none(ffi::g_filter_input_stream_get_base_stream(
                 self.as_ref().to_glib_none().0,
             ))
         }
     }
 
-    fn get_close_base_stream(&self) -> bool {
+    fn closes_base_stream(&self) -> bool {
         unsafe {
-            from_glib(gio_sys::g_filter_input_stream_get_close_base_stream(
+            from_glib(ffi::g_filter_input_stream_get_close_base_stream(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -56,34 +60,32 @@ impl<O: IsA<FilterInputStream>> FilterInputStreamExt for O {
 
     fn set_close_base_stream(&self, close_base: bool) {
         unsafe {
-            gio_sys::g_filter_input_stream_set_close_base_stream(
+            ffi::g_filter_input_stream_set_close_base_stream(
                 self.as_ref().to_glib_none().0,
-                close_base.to_glib(),
+                close_base.into_glib(),
             );
         }
     }
 
-    fn connect_property_close_base_stream_notify<F: Fn(&Self) + 'static>(
-        &self,
-        f: F,
-    ) -> SignalHandlerId {
-        unsafe extern "C" fn notify_close_base_stream_trampoline<P, F: Fn(&P) + 'static>(
-            this: *mut gio_sys::GFilterInputStream,
-            _param_spec: glib_sys::gpointer,
-            f: glib_sys::gpointer,
-        ) where
+    fn connect_close_base_stream_notify<F: Fn(&Self) + 'static>(&self, f: F) -> SignalHandlerId {
+        unsafe extern "C" fn notify_close_base_stream_trampoline<
             P: IsA<FilterInputStream>,
-        {
+            F: Fn(&P) + 'static,
+        >(
+            this: *mut ffi::GFilterInputStream,
+            _param_spec: glib::ffi::gpointer,
+            f: glib::ffi::gpointer,
+        ) {
             let f: &F = &*(f as *const F);
-            f(&FilterInputStream::from_glib_borrow(this).unsafe_cast())
+            f(FilterInputStream::from_glib_borrow(this).unsafe_cast_ref())
         }
         unsafe {
             let f: Box_<F> = Box_::new(f);
             connect_raw(
                 self.as_ptr() as *mut _,
                 b"notify::close-base-stream\0".as_ptr() as *const _,
-                Some(transmute(
-                    notify_close_base_stream_trampoline::<Self, F> as usize,
+                Some(transmute::<_, unsafe extern "C" fn()>(
+                    notify_close_base_stream_trampoline::<Self, F> as *const (),
                 )),
                 Box_::into_raw(f),
             )
@@ -93,6 +95,6 @@ impl<O: IsA<FilterInputStream>> FilterInputStreamExt for O {
 
 impl fmt::Display for FilterInputStream {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "FilterInputStream")
+        f.write_str("FilterInputStream")
     }
 }

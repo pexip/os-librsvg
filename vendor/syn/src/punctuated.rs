@@ -162,7 +162,11 @@ impl<T, P> Punctuated<T, P> {
     /// Panics if the sequence does not already have a trailing punctuation when
     /// this method is called.
     pub fn push_value(&mut self, value: T) {
-        assert!(self.empty_or_trailing());
+        assert!(
+            self.empty_or_trailing(),
+            "Punctuated::push_value: cannot push value if Punctuated is missing trailing punctuation",
+        );
+
         self.last = Some(Box::new(value));
     }
 
@@ -174,7 +178,11 @@ impl<T, P> Punctuated<T, P> {
     ///
     /// Panics if the sequence is empty or already has a trailing punctuation.
     pub fn push_punct(&mut self, punctuation: P) {
-        assert!(self.last.is_some());
+        assert!(
+            self.last.is_some(),
+            "Punctuated::push_punct: cannot push punctuation if Punctuated is empty or already has trailing punctuation",
+        );
+
         let last = self.last.take().unwrap();
         self.inner.push((*last, punctuation));
     }
@@ -185,7 +193,7 @@ impl<T, P> Punctuated<T, P> {
         if self.last.is_some() {
             self.last.take().map(|t| Pair::End(*t))
         } else {
-            self.inner.pop().map(|(t, d)| Pair::Punctuated(t, d))
+            self.inner.pop().map(|(t, p)| Pair::Punctuated(t, p))
         }
     }
 
@@ -228,7 +236,10 @@ impl<T, P> Punctuated<T, P> {
     where
         P: Default,
     {
-        assert!(index <= self.len());
+        assert!(
+            index <= self.len(),
+            "Punctuated::insert: index out of range",
+        );
 
         if index == self.len() {
             self.push(value);
@@ -454,7 +465,11 @@ impl<T, P> FromIterator<Pair<T, P>> for Punctuated<T, P> {
 
 impl<T, P> Extend<Pair<T, P>> for Punctuated<T, P> {
     fn extend<I: IntoIterator<Item = Pair<T, P>>>(&mut self, i: I) {
-        assert!(self.empty_or_trailing());
+        assert!(
+            self.empty_or_trailing(),
+            "Punctuated::extend: Punctuated is not empty or does not have a trailing punctuation",
+        );
+
         let mut nomore = false;
         for pair in i {
             if nomore {
@@ -795,9 +810,10 @@ impl<'a, T, P> Clone for PrivateIter<'a, T, P> {
     }
 }
 
-impl<'a, T: 'a, I: 'a> IterTrait<'a, T> for I
+impl<'a, T, I> IterTrait<'a, T> for I
 where
-    I: DoubleEndedIterator<Item = &'a T> + ExactSizeIterator<Item = &'a T> + Clone,
+    T: 'a,
+    I: DoubleEndedIterator<Item = &'a T> + ExactSizeIterator<Item = &'a T> + Clone + 'a,
 {
     fn clone_box(&self) -> Box<dyn IterTrait<'a, T, Item = &'a T> + 'a> {
         Box::new(self.clone())
@@ -879,8 +895,10 @@ impl<'a, T, P> ExactSizeIterator for PrivateIterMut<'a, T, P> {
     }
 }
 
-impl<'a, T: 'a, I: 'a> IterMutTrait<'a, T> for I where
-    I: DoubleEndedIterator<Item = &'a mut T> + ExactSizeIterator<Item = &'a mut T>
+impl<'a, T, I> IterMutTrait<'a, T> for I
+where
+    T: 'a,
+    I: DoubleEndedIterator<Item = &'a mut T> + ExactSizeIterator<Item = &'a mut T> + 'a,
 {
 }
 
@@ -922,16 +940,41 @@ impl<T, P> Pair<T, P> {
     /// the final one and there is no trailing punctuation.
     pub fn punct(&self) -> Option<&P> {
         match self {
-            Pair::Punctuated(_, d) => Some(d),
+            Pair::Punctuated(_, p) => Some(p),
+            Pair::End(_) => None,
+        }
+    }
+
+    /// Mutably borrows the punctuation from this punctuated pair, unless the
+    /// pair is the final one and there is no trailing punctuation.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use proc_macro2::Span;
+    /// # use syn::punctuated::Punctuated;
+    /// # use syn::{parse_quote, Token, TypeParamBound};
+    /// #
+    /// # let mut punctuated = Punctuated::<TypeParamBound, Token![+]>::new();
+    /// # let span = Span::call_site();
+    /// #
+    /// punctuated.insert(0, parse_quote!('lifetime));
+    /// if let Some(punct) = punctuated.pairs_mut().next().unwrap().punct_mut() {
+    ///     punct.span = span;
+    /// }
+    /// ```
+    pub fn punct_mut(&mut self) -> Option<&mut P> {
+        match self {
+            Pair::Punctuated(_, p) => Some(p),
             Pair::End(_) => None,
         }
     }
 
     /// Creates a punctuated pair out of a syntax tree node and an optional
     /// following punctuation.
-    pub fn new(t: T, d: Option<P>) -> Self {
-        match d {
-            Some(d) => Pair::Punctuated(t, d),
+    pub fn new(t: T, p: Option<P>) -> Self {
+        match p {
+            Some(p) => Pair::Punctuated(t, p),
             None => Pair::End(t),
         }
     }
@@ -940,7 +983,7 @@ impl<T, P> Pair<T, P> {
     /// optional following punctuation.
     pub fn into_tuple(self) -> (T, Option<P>) {
         match self {
-            Pair::Punctuated(t, d) => (t, Some(d)),
+            Pair::Punctuated(t, p) => (t, Some(p)),
             Pair::End(t) => (t, None),
         }
     }
@@ -1002,7 +1045,7 @@ mod printing {
         P: ToTokens,
     {
         fn to_tokens(&self, tokens: &mut TokenStream) {
-            tokens.append_all(self.pairs())
+            tokens.append_all(self.pairs());
         }
     }
 

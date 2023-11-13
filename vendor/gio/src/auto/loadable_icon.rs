@@ -2,68 +2,67 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
-use glib;
+use crate::AsyncResult;
+use crate::Cancellable;
+use crate::Icon;
+use crate::InputStream;
 use glib::object::IsA;
 use glib::translate::*;
-use glib::GString;
-use glib_sys;
-use gobject_sys;
 use std::boxed::Box as Box_;
 use std::fmt;
 use std::pin::Pin;
 use std::ptr;
-use Cancellable;
-use Icon;
-use InputStream;
 
-glib_wrapper! {
-    pub struct LoadableIcon(Interface<gio_sys::GLoadableIcon>) @requires Icon;
+glib::wrapper! {
+    #[doc(alias = "GLoadableIcon")]
+    pub struct LoadableIcon(Interface<ffi::GLoadableIcon, ffi::GLoadableIconIface>) @requires Icon;
 
     match fn {
-        get_type => || gio_sys::g_loadable_icon_get_type(),
+        type_ => || ffi::g_loadable_icon_get_type(),
     }
 }
 
-pub const NONE_LOADABLE_ICON: Option<&LoadableIcon> = None;
+impl LoadableIcon {
+    pub const NONE: Option<&'static LoadableIcon> = None;
+}
 
 pub trait LoadableIconExt: 'static {
-    fn load<P: IsA<Cancellable>>(
+    #[doc(alias = "g_loadable_icon_load")]
+    fn load(
         &self,
         size: i32,
-        cancellable: Option<&P>,
-    ) -> Result<(InputStream, GString), glib::Error>;
+        cancellable: Option<&impl IsA<Cancellable>>,
+    ) -> Result<(InputStream, glib::GString), glib::Error>;
 
-    fn load_async<
-        P: IsA<Cancellable>,
-        Q: FnOnce(Result<(InputStream, GString), glib::Error>) + Send + 'static,
-    >(
+    #[doc(alias = "g_loadable_icon_load_async")]
+    fn load_async<P: FnOnce(Result<(InputStream, glib::GString), glib::Error>) + 'static>(
         &self,
         size: i32,
-        cancellable: Option<&P>,
-        callback: Q,
+        cancellable: Option<&impl IsA<Cancellable>>,
+        callback: P,
     );
 
-    fn load_async_future(
+    fn load_future(
         &self,
         size: i32,
     ) -> Pin<
         Box_<
-            dyn std::future::Future<Output = Result<(InputStream, GString), glib::Error>> + 'static,
+            dyn std::future::Future<Output = Result<(InputStream, glib::GString), glib::Error>>
+                + 'static,
         >,
     >;
 }
 
 impl<O: IsA<LoadableIcon>> LoadableIconExt for O {
-    fn load<P: IsA<Cancellable>>(
+    fn load(
         &self,
         size: i32,
-        cancellable: Option<&P>,
-    ) -> Result<(InputStream, GString), glib::Error> {
+        cancellable: Option<&impl IsA<Cancellable>>,
+    ) -> Result<(InputStream, glib::GString), glib::Error> {
         unsafe {
             let mut type_ = ptr::null_mut();
             let mut error = ptr::null_mut();
-            let ret = gio_sys::g_loadable_icon_load(
+            let ret = ffi::g_loadable_icon_load(
                 self.as_ref().to_glib_none().0,
                 size,
                 &mut type_,
@@ -78,26 +77,34 @@ impl<O: IsA<LoadableIcon>> LoadableIconExt for O {
         }
     }
 
-    fn load_async<
-        P: IsA<Cancellable>,
-        Q: FnOnce(Result<(InputStream, GString), glib::Error>) + Send + 'static,
-    >(
+    fn load_async<P: FnOnce(Result<(InputStream, glib::GString), glib::Error>) + 'static>(
         &self,
         size: i32,
-        cancellable: Option<&P>,
-        callback: Q,
+        cancellable: Option<&impl IsA<Cancellable>>,
+        callback: P,
     ) {
-        let user_data: Box_<Q> = Box_::new(callback);
+        let main_context = glib::MainContext::ref_thread_default();
+        let is_main_context_owner = main_context.is_owner();
+        let has_acquired_main_context = (!is_main_context_owner)
+            .then(|| main_context.acquire().ok())
+            .flatten();
+        assert!(
+            is_main_context_owner || has_acquired_main_context.is_some(),
+            "Async operations only allowed if the thread is owning the MainContext"
+        );
+
+        let user_data: Box_<glib::thread_guard::ThreadGuard<P>> =
+            Box_::new(glib::thread_guard::ThreadGuard::new(callback));
         unsafe extern "C" fn load_async_trampoline<
-            Q: FnOnce(Result<(InputStream, GString), glib::Error>) + Send + 'static,
+            P: FnOnce(Result<(InputStream, glib::GString), glib::Error>) + 'static,
         >(
-            _source_object: *mut gobject_sys::GObject,
-            res: *mut gio_sys::GAsyncResult,
-            user_data: glib_sys::gpointer,
+            _source_object: *mut glib::gobject_ffi::GObject,
+            res: *mut crate::ffi::GAsyncResult,
+            user_data: glib::ffi::gpointer,
         ) {
             let mut error = ptr::null_mut();
             let mut type_ = ptr::null_mut();
-            let ret = gio_sys::g_loadable_icon_load_finish(
+            let ret = ffi::g_loadable_icon_load_finish(
                 _source_object as *mut _,
                 res,
                 &mut type_,
@@ -108,12 +115,14 @@ impl<O: IsA<LoadableIcon>> LoadableIconExt for O {
             } else {
                 Err(from_glib_full(error))
             };
-            let callback: Box_<Q> = Box_::from_raw(user_data as *mut _);
+            let callback: Box_<glib::thread_guard::ThreadGuard<P>> =
+                Box_::from_raw(user_data as *mut _);
+            let callback: P = callback.into_inner();
             callback(result);
         }
-        let callback = load_async_trampoline::<Q>;
+        let callback = load_async_trampoline::<P>;
         unsafe {
-            gio_sys::g_loadable_icon_load_async(
+            ffi::g_loadable_icon_load_async(
                 self.as_ref().to_glib_none().0,
                 size,
                 cancellable.map(|p| p.as_ref()).to_glib_none().0,
@@ -123,27 +132,28 @@ impl<O: IsA<LoadableIcon>> LoadableIconExt for O {
         }
     }
 
-    fn load_async_future(
+    fn load_future(
         &self,
         size: i32,
     ) -> Pin<
         Box_<
-            dyn std::future::Future<Output = Result<(InputStream, GString), glib::Error>> + 'static,
+            dyn std::future::Future<Output = Result<(InputStream, glib::GString), glib::Error>>
+                + 'static,
         >,
     > {
-        Box_::pin(crate::GioFuture::new(self, move |obj, send| {
-            let cancellable = Cancellable::new();
-            obj.load_async(size, Some(&cancellable), move |res| {
-                send.resolve(res);
-            });
-
-            cancellable
-        }))
+        Box_::pin(crate::GioFuture::new(
+            self,
+            move |obj, cancellable, send| {
+                obj.load_async(size, Some(cancellable), move |res| {
+                    send.resolve(res);
+                });
+            },
+        ))
     }
 }
 
 impl fmt::Display for LoadableIcon {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "LoadableIcon")
+        f.write_str("LoadableIcon")
     }
 }

@@ -2,32 +2,36 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
-use glib;
+use crate::InputStream;
+use crate::PollableInputStream;
+use crate::Seekable;
 use glib::object::Cast;
 use glib::object::IsA;
 use glib::translate::*;
 use std::fmt;
-use InputStream;
-use PollableInputStream;
-use Seekable;
 
-glib_wrapper! {
-    pub struct MemoryInputStream(Object<gio_sys::GMemoryInputStream, gio_sys::GMemoryInputStreamClass, MemoryInputStreamClass>) @extends InputStream, @implements PollableInputStream, Seekable;
+glib::wrapper! {
+    #[doc(alias = "GMemoryInputStream")]
+    pub struct MemoryInputStream(Object<ffi::GMemoryInputStream, ffi::GMemoryInputStreamClass>) @extends InputStream, @implements PollableInputStream, Seekable;
 
     match fn {
-        get_type => || gio_sys::g_memory_input_stream_get_type(),
+        type_ => || ffi::g_memory_input_stream_get_type(),
     }
 }
 
 impl MemoryInputStream {
+    pub const NONE: Option<&'static MemoryInputStream> = None;
+
+    #[doc(alias = "g_memory_input_stream_new")]
     pub fn new() -> MemoryInputStream {
-        unsafe { InputStream::from_glib_full(gio_sys::g_memory_input_stream_new()).unsafe_cast() }
+        unsafe { InputStream::from_glib_full(ffi::g_memory_input_stream_new()).unsafe_cast() }
     }
 
-    pub fn new_from_bytes(bytes: &glib::Bytes) -> MemoryInputStream {
+    #[doc(alias = "g_memory_input_stream_new_from_bytes")]
+    #[doc(alias = "new_from_bytes")]
+    pub fn from_bytes(bytes: &glib::Bytes) -> MemoryInputStream {
         unsafe {
-            InputStream::from_glib_full(gio_sys::g_memory_input_stream_new_from_bytes(
+            InputStream::from_glib_full(ffi::g_memory_input_stream_new_from_bytes(
                 bytes.to_glib_none().0,
             ))
             .unsafe_cast()
@@ -41,16 +45,15 @@ impl Default for MemoryInputStream {
     }
 }
 
-pub const NONE_MEMORY_INPUT_STREAM: Option<&MemoryInputStream> = None;
-
 pub trait MemoryInputStreamExt: 'static {
+    #[doc(alias = "g_memory_input_stream_add_bytes")]
     fn add_bytes(&self, bytes: &glib::Bytes);
 }
 
 impl<O: IsA<MemoryInputStream>> MemoryInputStreamExt for O {
     fn add_bytes(&self, bytes: &glib::Bytes) {
         unsafe {
-            gio_sys::g_memory_input_stream_add_bytes(
+            ffi::g_memory_input_stream_add_bytes(
                 self.as_ref().to_glib_none().0,
                 bytes.to_glib_none().0,
             );
@@ -60,6 +63,6 @@ impl<O: IsA<MemoryInputStream>> MemoryInputStreamExt for O {
 
 impl fmt::Display for MemoryInputStream {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "MemoryInputStream")
+        f.write_str("MemoryInputStream")
     }
 }

@@ -13,7 +13,7 @@
 [package]
 edition = "2018"
 name = "xml5ever"
-version = "0.16.1"
+version = "0.16.2"
 authors = ["The xml5ever project developers"]
 exclude = ["xml5lib-tests/*"]
 description = "Push based streaming parser for xml"

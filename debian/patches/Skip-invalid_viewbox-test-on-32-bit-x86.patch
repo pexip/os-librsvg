@@ -9,14 +9,14 @@ being 20 years old (in particular no SSE and no SSE2).
 
 Signed-off-by: Simon McVittie <smcv@debian.org>
 ---
- rsvg_internals/src/aspect_ratio.rs | 1 +
+ src/aspect_ratio.rs | 1 +
  1 file changed, 1 insertion(+)
 
-diff --git a/rsvg_internals/src/aspect_ratio.rs b/rsvg_internals/src/aspect_ratio.rs
-index 3dccfd9..3e902af 100644
---- a/rsvg_internals/src/aspect_ratio.rs
-+++ b/rsvg_internals/src/aspect_ratio.rs
-@@ -460,6 +460,7 @@ mod tests {
+diff --git a/src/aspect_ratio.rs b/src/aspect_ratio.rs
+index 8003f9f..0d35d30 100644
+--- a/src/aspect_ratio.rs
++++ b/src/aspect_ratio.rs
+@@ -451,6 +451,7 @@ mod tests {
      }
  
      #[test]

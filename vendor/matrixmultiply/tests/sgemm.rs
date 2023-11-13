@@ -2,7 +2,7 @@ extern crate core;
 extern crate itertools;
 extern crate matrixmultiply;
 
-use matrixmultiply::{sgemm, dgemm};
+include!("../testdefs/testdefs.rs");
 
 use itertools::Itertools;
 use itertools::{
@@ -10,100 +10,61 @@ use itertools::{
     enumerate,
     repeat_n,
 };
-use core::fmt::{Display, Debug};
+use core::fmt::Debug;
 
-trait Float : Copy + Display + Debug + PartialEq {
-    fn zero() -> Self;
-    fn one() -> Self;
-    fn from(x: i64) -> Self;
-    fn nan() -> Self;
-    fn is_nan(self) -> bool;
-}
-
-impl Float for f32 {
-    fn zero() -> Self { 0. }
-    fn one() -> Self { 1. }
-    fn from(x: i64) -> Self { x as Self }
-    fn nan() -> Self { 0./0. }
-    fn is_nan(self) -> bool { self.is_nan() }
-}
-
-impl Float for f64 {
-    fn zero() -> Self { 0. }
-    fn one() -> Self { 1. }
-    fn from(x: i64) -> Self { x as Self }
-    fn nan() -> Self { 0./0. }
-    fn is_nan(self) -> bool { self.is_nan() }
-}
-
-
-trait Gemm : Sized {
-    unsafe fn gemm(
-        m: usize, k: usize, n: usize,
-        alpha: Self,
-        a: *const Self, rsa: isize, csa: isize,
-        b: *const Self, rsb: isize, csb: isize,
-        beta: Self,
-        c: *mut Self, rsc: isize, csc: isize);
-}
-
-impl Gemm for f32 {
-    unsafe fn gemm(
-        m: usize, k: usize, n: usize,
-        alpha: Self,
-        a: *const Self, rsa: isize, csa: isize,
-        b: *const Self, rsb: isize, csb: isize,
-        beta: Self,
-        c: *mut Self, rsc: isize, csc: isize) {
-        sgemm(
-            m, k, n,
-            alpha,
-            a, rsa, csa,
-            b, rsb, csb,
-            beta,
-            c, rsc, csc)
-    }
-}
-
-impl Gemm for f64 {
-    unsafe fn gemm(
-        m: usize, k: usize, n: usize,
-        alpha: Self,
-        a: *const Self, rsa: isize, csa: isize,
-        b: *const Self, rsb: isize, csb: isize,
-        beta: Self,
-        c: *mut Self, rsc: isize, csc: isize) {
-        dgemm(
-            m, k, n,
-            alpha,
-            a, rsa, csa,
-            b, rsb, csb,
-            beta,
-            c, rsc, csc)
-    }
-}
+const FAST_TEST: Option<&'static str> = option_env!("MMTEST_FAST_TEST");
 
 #[test]
 fn test_sgemm() {
     test_gemm::<f32>();
 }
+
 #[test]
 fn test_dgemm() {
     test_gemm::<f64>();
 }
+
+#[cfg(feature="cgemm")]
+#[test]
+fn test_cgemm() {
+    test_gemm::<c32>();
+}
+
+#[cfg(feature="cgemm")]
+#[test]
+fn test_zgemm() {
+    test_gemm::<c64>();
+}
+
 #[test]
 fn test_sgemm_strides() {
     test_gemm_strides::<f32>();
 }
+
 #[test]
 fn test_dgemm_strides() {
     test_gemm_strides::<f64>();
 }
 
+#[cfg(feature="cgemm")]
+#[test]
+fn test_cgemm_strides() {
+    test_gemm_strides::<c32>();
+}
+
+#[cfg(feature="cgemm")]
+#[test]
+fn test_zgemm_strides() {
+    test_gemm_strides::<c64>();
+}
+
 fn test_gemm_strides<F>() where F: Gemm + Float {
+    if FAST_TEST.is_some() { return; }
+
     for n in 0..20 {
         test_strides::<F>(n, n, n);
     }
+
     for n in (3..12).map(|x| x * 7) {
         test_strides::<F>(n, n, n);
     }
@@ -115,7 +76,10 @@ fn test_gemm_strides<F>() where F: Gemm + Float {
 fn test_gemm<F>() where F: Gemm + Float {
     test_mul_with_id::<F>(4, 4, true);
     test_mul_with_id::<F>(8, 8, true);
-    test_mul_with_id::<F>(32, 32, false);
+    test_mul_with_id::<F>(32, 32, true);
+
+    if FAST_TEST.is_some() { return; }
+
     test_mul_with_id::<F>(128, 128, false);
     test_mul_with_id::<F>(17, 128, false);
     for i in 0..12 {
@@ -123,17 +87,19 @@ fn test_gemm<F>() where F: Gemm + Float {
             test_mul_with_id::<F>(i, j, true);
         }
     }
-    /*
-    */
+
     test_mul_with_id::<F>(17, 257, false);
     test_mul_with_id::<F>(24, 512, false);
+
     for i in 0..10 {
         for j in 0..10 {
             test_mul_with_id::<F>(i * 4, j * 4, true);
         }
     }
+    
     test_mul_with_id::<F>(266, 265, false);
     test_mul_id_with::<F>(4, 4, true);
+
     for i in 0..12 {
         for j in 0..12 {
             test_mul_id_with::<F>(i, j, true);
@@ -154,6 +120,10 @@ fn test_gemm<F>() where F: Gemm + Float {
 fn test_mul_with_id<F>(m: usize, n: usize, small: bool)
     where F: Gemm + Float
 {
+    if !small && FAST_TEST.is_some() {
+        return;
+    }
+
     let (m, k, n) = (m, n, n);
     let mut a = vec![F::zero(); m * k]; 
     let mut b = vec![F::zero(); k * n];
@@ -177,23 +147,7 @@ fn test_mul_with_id<F>(m: usize, n: usize, small: bool)
             c.as_mut_ptr(), n as isize, 1,
             )
     }
-    for (i, (x, y)) in a.iter().zip(&c).enumerate() {
-        if x != y {
-            if k != 0 && n != 0 && small {
-                for row in a.chunks(k) {
-                    println!("{:?}", row);
-                }
-                for row in b.chunks(n) {
-                    println!("{:?}", row);
-                }
-                for row in c.chunks(n) {
-                    println!("{:?}", row);
-                }
-            }
-            panic!("mismatch at index={}, x: {}, y: {} (matrix input M={}, N={})",
-                   i, x, y, m, n);
-        }
-    }
+    assert_matrix_equal(m, n, &a, k as isize, 1, &c, n as isize, 1, small);
     println!("passed matrix with id input M={}, N={}", m, n);
 }
 
@@ -202,6 +156,10 @@ fn test_mul_with_id<F>(m: usize, n: usize, small: bool)
 fn test_mul_id_with<F>(k: usize, n: usize, small: bool) 
     where F: Gemm + Float
 {
+    if !small && FAST_TEST.is_some() {
+        return;
+    }
+
     let (m, k, n) = (k, k, n);
     let mut a = vec![F::zero(); m * k]; 
     let mut b = vec![F::zero(); k * n];
@@ -224,23 +182,7 @@ fn test_mul_id_with<F>(k: usize, n: usize, small: bool)
             c.as_mut_ptr(), n as isize, 1,
             )
     }
-    for (i, (x, y)) in b.iter().zip(&c).enumerate() {
-        if x != y {
-            if k != 0 && n != 0 && small {
-                for row in a.chunks(k) {
-                    println!("{:?}", row);
-                }
-                for row in b.chunks(n) {
-                    println!("{:?}", row);
-                }
-                for row in c.chunks(n) {
-                    println!("{:?}", row);
-                }
-            }
-            panic!("mismatch at index={}, x: {}, y: {} (matrix input M={}, N={})",
-                   i, x, y, m, n);
-        }
-    }
+    assert_matrix_equal(m, n, &b, n as isize, 1, &c, n as isize, 1, small);
     println!("passed id with matrix input K={}, N={}", k, n);
 }
 
@@ -248,6 +190,10 @@ fn test_mul_id_with<F>(k: usize, n: usize, small: bool)
 fn test_scale<F>(m: usize, k: usize, n: usize, small: bool)
     where F: Gemm + Float
 {
+    if !small && FAST_TEST.is_some() {
+        return;
+    }
+
     let (m, k, n) = (m, k, n);
     let mut a = vec![F::zero(); m * k]; 
     let mut b = vec![F::zero(); k * n];
@@ -256,62 +202,77 @@ fn test_scale<F>(m: usize, k: usize, n: usize, small: bool)
     // init c2 with NaN to test the overwriting behavior when beta = 0.
 
     for (i, elt) in a.iter_mut().enumerate() {
-        *elt = F::from(i as i64);
+        *elt = F::from2(i as i64, i as i64);
     }
     for (i, elt) in b.iter_mut().enumerate() {
-        *elt = F::from(i as i64);
+        *elt = F::from2(i as i64, i as i64);
+    }
+
+    let alpha1;
+    let beta1 = F::zero();
+    let alpha21;
+    let beta21;
+    let alpha22;
+    let beta22;
+
+    if !F::is_complex() {
+        // 3 A B == C in this way:
+        // C <- A B
+        // C <- A B + 2 C
+        alpha1 = F::from(3);
+
+        alpha21 = F::one();
+        beta21 = F::zero();
+        alpha22 = F::one();
+        beta22 = F::from(2);
+    } else {
+        // Select constants in a way that makes the complex values
+        // significant for the complex case. Using i² = -1 to make sure.
+        //
+        // (2 + 3i) A B == C in this way:
+        // C <- (1 + i) A B
+        // C <- A B + (2 + i) C  == (3 + 3i - 1) A B
+        alpha1 = F::from2(2, 3);
+
+        alpha21 = F::from2(1, 1);
+        beta21 = F::zero();
+        alpha22 = F::one();
+        beta22 = F::from2(2, 1);
     }
 
     unsafe {
-        // C1 = 3 A B
+        // C1 = alpha1 A B
         F::gemm(
             m, k, n,
-            F::from(3),
+            alpha1,
             a.as_ptr(), k as isize, 1,
             b.as_ptr(), n as isize, 1,
-            F::zero(),
+            beta1,
             c1.as_mut_ptr(), n as isize, 1,
         );
 
-        // C2 = A B 
+        // C2 = alpha21 A B
         F::gemm(
             m, k, n,
-            F::one(),
+            alpha21,
             a.as_ptr(), k as isize, 1,
             b.as_ptr(), n as isize, 1,
-            F::zero(),
+            beta21,
             c2.as_mut_ptr(), n as isize, 1,
         );
-        // C2 = A B + 2 C2
+
+        // C2 = A B + beta22 C2
         F::gemm(
             m, k, n,
-            F::one(),
+            alpha22,
             a.as_ptr(), k as isize, 1,
             b.as_ptr(), n as isize, 1,
-            F::from(2),
+            beta22,
             c2.as_mut_ptr(), n as isize, 1,
         );
     }
-    for (i, (x, y)) in c1.iter().zip(&c2).enumerate() {
-        if x != y || x.is_nan() || y.is_nan() {
-            if k != 0 && n != 0 && small {
-                for row in a.chunks(k) {
-                    println!("{:?}", row);
-                }
-                for row in b.chunks(n) {
-                    println!("{:?}", row);
-                }
-                for row in c1.chunks(n) {
-                    println!("{:?}", row);
-                }
-                for row in c2.chunks(n) {
-                    println!("{:?}", row);
-                }
-            }
-            panic!("mismatch at index={}, x: {}, y: {} (matrix input M={}, N={})",
-                   i, x, y, m, n);
-        }
-    }
+
+    assert_matrix_equal(m, n, &c1, n as isize, 1, &c2, n as isize, 1, small);
     println!("passed matrix with id input M={}, N={}", m, n);
 }
 
@@ -366,6 +327,8 @@ fn test_strides_inner<F>(m: usize, k: usize, n: usize,
 {
     let (m, k, n) = (m, k, n);
 
+    let small = m < 8 && k < 8 && n < 8;
+
     // stride multipliers
     let mstridea = stride_multipliers[0];
     let mstrideb = stride_multipliers[1];
@@ -397,14 +360,6 @@ fn test_strides_inner<F>(m: usize, k: usize, n: usize,
     println!("Test matrix b : {} × {} layout: {:?} strides {}, {}", k, n, lb, rs_b, cs_b);
     println!("Test matrix c1: {} × {} layout: {:?} strides {}, {}", m, n, lc1, rs_c1, cs_c1);
     println!("Test matrix c2: {} × {} layout: {:?} strides {}, {}", m, n, lc2, rs_c2, cs_c2);
-
-    macro_rules! c1 {
-        ($i:expr, $j:expr) => (c1[(rs_c1 * $i as isize + cs_c1 * $j as isize) as usize]);
-    }
-
-    macro_rules! c2 {
-        ($i:expr, $j:expr) => (c2[(rs_c2 * $i as isize + cs_c2 * $j as isize) as usize]);
-    }
 
     unsafe {
         // Compute the same result in C1 and C2 in two different ways.
@@ -441,21 +396,9 @@ fn test_strides_inner<F>(m: usize, k: usize, n: usize,
             c2.as_mut_ptr(), rs_c2, cs_c2,
         );
     }
-    for i in 0..m {
-        for j in 0..n {
-            let c1_elt = c1![i, j];
-            let c2_elt = c2![i, j];
-            assert_eq!(c1_elt, c2_elt,
-                       "assertion failed for matrices, mismatch at {},{} \n\
-                       a:: {:?}\n\
-                       b:: {:?}\n\
-                       c1: {:?}\n\
-                       c2: {:?}\n",
-                       i, j,
-                       a, b,
-                       c1, c2);
-        }
-    }
+
+    assert_matrix_equal(m, n, &c1, rs_c1, cs_c1, &c2, rs_c2, cs_c2, small);
+
     // check we haven't overwritten the NaN values outside the passed output
     for (index, elt) in enumerate(&c1) {
         let i = index / rs_c1 as usize;
@@ -464,11 +407,75 @@ fn test_strides_inner<F>(m: usize, k: usize, n: usize,
         let jrem = index % cs_c1 as usize;
         if irem != 0 && jrem != 0 {
             assert!(elt.is_nan(),
-                "Element at index={} ({}, {}) should be NaN, but was {}\n\
+                "Element at index={} ({}, {}) should be NaN, but was {:?}\n\
                 c1: {:?}\n",
             index, i, j, elt,
             c1);
         }
     }
     println!("{}×{}×{} {:?} .. passed.", m, k, n, layouts);
+}
+
+
+/// Assert that matrix C1 == matrix C2
+///
+/// m, n: size of matrix C1 and C2
+///
+/// exact: if true, require == equality
+///        if false, use relative difference from zero
+fn assert_matrix_equal<F>(m: usize, n: usize, c1: &[F], rs_c1: isize, cs_c1: isize, c2: &[F], rs_c2: isize, cs_c2: isize, exact: bool)
+where
+    F: Gemm + Float
+{
+    macro_rules! c1 {
+        ($i:expr, $j:expr) => (c1[(rs_c1 * $i as isize + cs_c1 * $j as isize) as usize]);
+    }
+
+    macro_rules! c2 {
+        ($i:expr, $j:expr) => (c2[(rs_c2 * $i as isize + cs_c2 * $j as isize) as usize]);
+    }
+
+    let rel_tolerance = F::relative_error_scale();
+
+    let mut maximal = 0.;
+    let mut rel_diff_max = 0.;
+    let mut n_diffs = 0;
+    let mut first_diff_index = None;
+
+    for i in 0..m {
+        for j in 0..n {
+            let c1_elt = c1![i, j];
+            let c2_elt = c2![i, j];
+
+            let c1norm = c1_elt.abs_f64();
+            if c1norm > maximal { maximal = c1norm }
+            let c2norm = c2_elt.abs_f64();
+            if c2norm > maximal { maximal = c1norm }
+
+            let c_diff = c1_elt.diff(c2_elt);
+            if c_diff != F::zero() {
+                n_diffs += 1;
+                if first_diff_index.is_none() {
+                    first_diff_index = Some((i, j));
+                }
+            }
+
+            let largest_elt = f64::max(c1norm, c2norm);
+            let point_diff_rel = c_diff.abs_f64() / largest_elt;
+            rel_diff_max = f64::max(point_diff_rel, rel_diff_max);
+        }
+    }
+
+    if n_diffs > 0 {
+        println!("Matrix equality stats: maximal elt: {}, largest relative error={:.4e}, ndiffs={}",
+                 maximal, rel_diff_max, n_diffs);
+    }
+
+    if exact {
+        assert_eq!(0, n_diffs,
+                   "C1 == C2 assertion failed for matrix of size {}x{} with first failing element at index={:?}",
+                   m, n, first_diff_index);
+    } else {
+        assert!(rel_diff_max < rel_tolerance, "Assertion failed: largest relative diff < {:.2e}, was={:e}", rel_tolerance, rel_diff_max);
+    }
 }

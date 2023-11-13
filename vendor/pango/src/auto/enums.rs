@@ -2,21 +2,24 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
+use crate::Language;
+use crate::Matrix;
 use glib::translate::*;
 use glib::value::FromValue;
-use glib::value::FromValueOptional;
-use glib::value::SetValue;
-use glib::value::Value;
+use glib::value::ToValue;
 use glib::StaticType;
 use glib::Type;
-use gobject_sys;
-use pango_sys;
 use std::fmt;
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoAlignment")]
 pub enum Alignment {
+    #[doc(alias = "PANGO_ALIGN_LEFT")]
     Left,
+    #[doc(alias = "PANGO_ALIGN_CENTER")]
     Center,
+    #[doc(alias = "PANGO_ALIGN_RIGHT")]
     Right,
     #[doc(hidden)]
     __Unknown(i32),
@@ -28,9 +31,9 @@ impl fmt::Display for Alignment {
             f,
             "Alignment::{}",
             match *self {
-                Alignment::Left => "Left",
-                Alignment::Center => "Center",
-                Alignment::Right => "Right",
+                Self::Left => "Left",
+                Self::Center => "Center",
+                Self::Right => "Right",
                 _ => "Unknown",
             }
         )
@@ -38,85 +41,167 @@ impl fmt::Display for Alignment {
 }
 
 #[doc(hidden)]
-impl ToGlib for Alignment {
-    type GlibType = pango_sys::PangoAlignment;
+impl IntoGlib for Alignment {
+    type GlibType = ffi::PangoAlignment;
 
-    fn to_glib(&self) -> pango_sys::PangoAlignment {
-        match *self {
-            Alignment::Left => pango_sys::PANGO_ALIGN_LEFT,
-            Alignment::Center => pango_sys::PANGO_ALIGN_CENTER,
-            Alignment::Right => pango_sys::PANGO_ALIGN_RIGHT,
-            Alignment::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoAlignment {
+        match self {
+            Self::Left => ffi::PANGO_ALIGN_LEFT,
+            Self::Center => ffi::PANGO_ALIGN_CENTER,
+            Self::Right => ffi::PANGO_ALIGN_RIGHT,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoAlignment> for Alignment {
-    fn from_glib(value: pango_sys::PangoAlignment) -> Self {
+impl FromGlib<ffi::PangoAlignment> for Alignment {
+    unsafe fn from_glib(value: ffi::PangoAlignment) -> Self {
         match value {
-            0 => Alignment::Left,
-            1 => Alignment::Center,
-            2 => Alignment::Right,
-            value => Alignment::__Unknown(value),
+            ffi::PANGO_ALIGN_LEFT => Self::Left,
+            ffi::PANGO_ALIGN_CENTER => Self::Center,
+            ffi::PANGO_ALIGN_RIGHT => Self::Right,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for Alignment {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_alignment_get_type()) }
+        unsafe { from_glib(ffi::pango_alignment_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for Alignment {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for Alignment {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for Alignment {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for Alignment {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for Alignment {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for Alignment {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoAttrType")]
 pub enum AttrType {
+    #[doc(alias = "PANGO_ATTR_INVALID")]
     Invalid,
+    #[doc(alias = "PANGO_ATTR_LANGUAGE")]
     Language,
+    #[doc(alias = "PANGO_ATTR_FAMILY")]
     Family,
+    #[doc(alias = "PANGO_ATTR_STYLE")]
     Style,
+    #[doc(alias = "PANGO_ATTR_WEIGHT")]
     Weight,
+    #[doc(alias = "PANGO_ATTR_VARIANT")]
     Variant,
+    #[doc(alias = "PANGO_ATTR_STRETCH")]
     Stretch,
+    #[doc(alias = "PANGO_ATTR_SIZE")]
     Size,
+    #[doc(alias = "PANGO_ATTR_FONT_DESC")]
     FontDesc,
+    #[doc(alias = "PANGO_ATTR_FOREGROUND")]
     Foreground,
+    #[doc(alias = "PANGO_ATTR_BACKGROUND")]
     Background,
+    #[doc(alias = "PANGO_ATTR_UNDERLINE")]
     Underline,
+    #[doc(alias = "PANGO_ATTR_STRIKETHROUGH")]
     Strikethrough,
+    #[doc(alias = "PANGO_ATTR_RISE")]
     Rise,
+    #[doc(alias = "PANGO_ATTR_SHAPE")]
     Shape,
+    #[doc(alias = "PANGO_ATTR_SCALE")]
     Scale,
+    #[doc(alias = "PANGO_ATTR_FALLBACK")]
     Fallback,
+    #[doc(alias = "PANGO_ATTR_LETTER_SPACING")]
     LetterSpacing,
+    #[doc(alias = "PANGO_ATTR_UNDERLINE_COLOR")]
     UnderlineColor,
+    #[doc(alias = "PANGO_ATTR_STRIKETHROUGH_COLOR")]
     StrikethroughColor,
+    #[doc(alias = "PANGO_ATTR_ABSOLUTE_SIZE")]
     AbsoluteSize,
+    #[doc(alias = "PANGO_ATTR_GRAVITY")]
     Gravity,
+    #[doc(alias = "PANGO_ATTR_GRAVITY_HINT")]
     GravityHint,
+    #[doc(alias = "PANGO_ATTR_FONT_FEATURES")]
     FontFeatures,
+    #[doc(alias = "PANGO_ATTR_FOREGROUND_ALPHA")]
     ForegroundAlpha,
+    #[doc(alias = "PANGO_ATTR_BACKGROUND_ALPHA")]
     BackgroundAlpha,
+    #[doc(alias = "PANGO_ATTR_ALLOW_BREAKS")]
+    AllowBreaks,
+    #[doc(alias = "PANGO_ATTR_SHOW")]
+    Show,
+    #[doc(alias = "PANGO_ATTR_INSERT_HYPHENS")]
+    InsertHyphens,
+    #[doc(alias = "PANGO_ATTR_OVERLINE")]
+    Overline,
+    #[doc(alias = "PANGO_ATTR_OVERLINE_COLOR")]
+    OverlineColor,
+    #[cfg(any(feature = "v1_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PANGO_ATTR_LINE_HEIGHT")]
+    LineHeight,
+    #[cfg(any(feature = "v1_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PANGO_ATTR_ABSOLUTE_LINE_HEIGHT")]
+    AbsoluteLineHeight,
+    #[cfg(any(feature = "v1_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PANGO_ATTR_TEXT_TRANSFORM")]
+    TextTransform,
+    #[cfg(any(feature = "v1_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PANGO_ATTR_WORD")]
+    Word,
+    #[cfg(any(feature = "v1_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PANGO_ATTR_SENTENCE")]
+    Sentence,
+    #[cfg(any(feature = "v1_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PANGO_ATTR_BASELINE_SHIFT")]
+    BaselineShift,
+    #[cfg(any(feature = "v1_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PANGO_ATTR_FONT_SCALE")]
+    FontScale,
     #[doc(hidden)]
     __Unknown(i32),
+}
+
+impl AttrType {
+    #[doc(alias = "pango_attr_type_get_name")]
+    #[doc(alias = "get_name")]
+    pub fn name(self) -> Option<glib::GString> {
+        unsafe { from_glib_none(ffi::pango_attr_type_get_name(self.into_glib())) }
+    }
 }
 
 impl fmt::Display for AttrType {
@@ -125,32 +210,51 @@ impl fmt::Display for AttrType {
             f,
             "AttrType::{}",
             match *self {
-                AttrType::Invalid => "Invalid",
-                AttrType::Language => "Language",
-                AttrType::Family => "Family",
-                AttrType::Style => "Style",
-                AttrType::Weight => "Weight",
-                AttrType::Variant => "Variant",
-                AttrType::Stretch => "Stretch",
-                AttrType::Size => "Size",
-                AttrType::FontDesc => "FontDesc",
-                AttrType::Foreground => "Foreground",
-                AttrType::Background => "Background",
-                AttrType::Underline => "Underline",
-                AttrType::Strikethrough => "Strikethrough",
-                AttrType::Rise => "Rise",
-                AttrType::Shape => "Shape",
-                AttrType::Scale => "Scale",
-                AttrType::Fallback => "Fallback",
-                AttrType::LetterSpacing => "LetterSpacing",
-                AttrType::UnderlineColor => "UnderlineColor",
-                AttrType::StrikethroughColor => "StrikethroughColor",
-                AttrType::AbsoluteSize => "AbsoluteSize",
-                AttrType::Gravity => "Gravity",
-                AttrType::GravityHint => "GravityHint",
-                AttrType::FontFeatures => "FontFeatures",
-                AttrType::ForegroundAlpha => "ForegroundAlpha",
-                AttrType::BackgroundAlpha => "BackgroundAlpha",
+                Self::Invalid => "Invalid",
+                Self::Language => "Language",
+                Self::Family => "Family",
+                Self::Style => "Style",
+                Self::Weight => "Weight",
+                Self::Variant => "Variant",
+                Self::Stretch => "Stretch",
+                Self::Size => "Size",
+                Self::FontDesc => "FontDesc",
+                Self::Foreground => "Foreground",
+                Self::Background => "Background",
+                Self::Underline => "Underline",
+                Self::Strikethrough => "Strikethrough",
+                Self::Rise => "Rise",
+                Self::Shape => "Shape",
+                Self::Scale => "Scale",
+                Self::Fallback => "Fallback",
+                Self::LetterSpacing => "LetterSpacing",
+                Self::UnderlineColor => "UnderlineColor",
+                Self::StrikethroughColor => "StrikethroughColor",
+                Self::AbsoluteSize => "AbsoluteSize",
+                Self::Gravity => "Gravity",
+                Self::GravityHint => "GravityHint",
+                Self::FontFeatures => "FontFeatures",
+                Self::ForegroundAlpha => "ForegroundAlpha",
+                Self::BackgroundAlpha => "BackgroundAlpha",
+                Self::AllowBreaks => "AllowBreaks",
+                Self::Show => "Show",
+                Self::InsertHyphens => "InsertHyphens",
+                Self::Overline => "Overline",
+                Self::OverlineColor => "OverlineColor",
+                #[cfg(any(feature = "v1_50", feature = "dox"))]
+                Self::LineHeight => "LineHeight",
+                #[cfg(any(feature = "v1_50", feature = "dox"))]
+                Self::AbsoluteLineHeight => "AbsoluteLineHeight",
+                #[cfg(any(feature = "v1_50", feature = "dox"))]
+                Self::TextTransform => "TextTransform",
+                #[cfg(any(feature = "v1_50", feature = "dox"))]
+                Self::Word => "Word",
+                #[cfg(any(feature = "v1_50", feature = "dox"))]
+                Self::Sentence => "Sentence",
+                #[cfg(any(feature = "v1_50", feature = "dox"))]
+                Self::BaselineShift => "BaselineShift",
+                #[cfg(any(feature = "v1_50", feature = "dox"))]
+                Self::FontScale => "FontScale",
                 _ => "Unknown",
             }
         )
@@ -158,124 +262,310 @@ impl fmt::Display for AttrType {
 }
 
 #[doc(hidden)]
-impl ToGlib for AttrType {
-    type GlibType = pango_sys::PangoAttrType;
+impl IntoGlib for AttrType {
+    type GlibType = ffi::PangoAttrType;
 
-    fn to_glib(&self) -> pango_sys::PangoAttrType {
-        match *self {
-            AttrType::Invalid => pango_sys::PANGO_ATTR_INVALID,
-            AttrType::Language => pango_sys::PANGO_ATTR_LANGUAGE,
-            AttrType::Family => pango_sys::PANGO_ATTR_FAMILY,
-            AttrType::Style => pango_sys::PANGO_ATTR_STYLE,
-            AttrType::Weight => pango_sys::PANGO_ATTR_WEIGHT,
-            AttrType::Variant => pango_sys::PANGO_ATTR_VARIANT,
-            AttrType::Stretch => pango_sys::PANGO_ATTR_STRETCH,
-            AttrType::Size => pango_sys::PANGO_ATTR_SIZE,
-            AttrType::FontDesc => pango_sys::PANGO_ATTR_FONT_DESC,
-            AttrType::Foreground => pango_sys::PANGO_ATTR_FOREGROUND,
-            AttrType::Background => pango_sys::PANGO_ATTR_BACKGROUND,
-            AttrType::Underline => pango_sys::PANGO_ATTR_UNDERLINE,
-            AttrType::Strikethrough => pango_sys::PANGO_ATTR_STRIKETHROUGH,
-            AttrType::Rise => pango_sys::PANGO_ATTR_RISE,
-            AttrType::Shape => pango_sys::PANGO_ATTR_SHAPE,
-            AttrType::Scale => pango_sys::PANGO_ATTR_SCALE,
-            AttrType::Fallback => pango_sys::PANGO_ATTR_FALLBACK,
-            AttrType::LetterSpacing => pango_sys::PANGO_ATTR_LETTER_SPACING,
-            AttrType::UnderlineColor => pango_sys::PANGO_ATTR_UNDERLINE_COLOR,
-            AttrType::StrikethroughColor => pango_sys::PANGO_ATTR_STRIKETHROUGH_COLOR,
-            AttrType::AbsoluteSize => pango_sys::PANGO_ATTR_ABSOLUTE_SIZE,
-            AttrType::Gravity => pango_sys::PANGO_ATTR_GRAVITY,
-            AttrType::GravityHint => pango_sys::PANGO_ATTR_GRAVITY_HINT,
-            AttrType::FontFeatures => pango_sys::PANGO_ATTR_FONT_FEATURES,
-            AttrType::ForegroundAlpha => pango_sys::PANGO_ATTR_FOREGROUND_ALPHA,
-            AttrType::BackgroundAlpha => pango_sys::PANGO_ATTR_BACKGROUND_ALPHA,
-            AttrType::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoAttrType {
+        match self {
+            Self::Invalid => ffi::PANGO_ATTR_INVALID,
+            Self::Language => ffi::PANGO_ATTR_LANGUAGE,
+            Self::Family => ffi::PANGO_ATTR_FAMILY,
+            Self::Style => ffi::PANGO_ATTR_STYLE,
+            Self::Weight => ffi::PANGO_ATTR_WEIGHT,
+            Self::Variant => ffi::PANGO_ATTR_VARIANT,
+            Self::Stretch => ffi::PANGO_ATTR_STRETCH,
+            Self::Size => ffi::PANGO_ATTR_SIZE,
+            Self::FontDesc => ffi::PANGO_ATTR_FONT_DESC,
+            Self::Foreground => ffi::PANGO_ATTR_FOREGROUND,
+            Self::Background => ffi::PANGO_ATTR_BACKGROUND,
+            Self::Underline => ffi::PANGO_ATTR_UNDERLINE,
+            Self::Strikethrough => ffi::PANGO_ATTR_STRIKETHROUGH,
+            Self::Rise => ffi::PANGO_ATTR_RISE,
+            Self::Shape => ffi::PANGO_ATTR_SHAPE,
+            Self::Scale => ffi::PANGO_ATTR_SCALE,
+            Self::Fallback => ffi::PANGO_ATTR_FALLBACK,
+            Self::LetterSpacing => ffi::PANGO_ATTR_LETTER_SPACING,
+            Self::UnderlineColor => ffi::PANGO_ATTR_UNDERLINE_COLOR,
+            Self::StrikethroughColor => ffi::PANGO_ATTR_STRIKETHROUGH_COLOR,
+            Self::AbsoluteSize => ffi::PANGO_ATTR_ABSOLUTE_SIZE,
+            Self::Gravity => ffi::PANGO_ATTR_GRAVITY,
+            Self::GravityHint => ffi::PANGO_ATTR_GRAVITY_HINT,
+            Self::FontFeatures => ffi::PANGO_ATTR_FONT_FEATURES,
+            Self::ForegroundAlpha => ffi::PANGO_ATTR_FOREGROUND_ALPHA,
+            Self::BackgroundAlpha => ffi::PANGO_ATTR_BACKGROUND_ALPHA,
+            Self::AllowBreaks => ffi::PANGO_ATTR_ALLOW_BREAKS,
+            Self::Show => ffi::PANGO_ATTR_SHOW,
+            Self::InsertHyphens => ffi::PANGO_ATTR_INSERT_HYPHENS,
+            Self::Overline => ffi::PANGO_ATTR_OVERLINE,
+            Self::OverlineColor => ffi::PANGO_ATTR_OVERLINE_COLOR,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            Self::LineHeight => ffi::PANGO_ATTR_LINE_HEIGHT,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            Self::AbsoluteLineHeight => ffi::PANGO_ATTR_ABSOLUTE_LINE_HEIGHT,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            Self::TextTransform => ffi::PANGO_ATTR_TEXT_TRANSFORM,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            Self::Word => ffi::PANGO_ATTR_WORD,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            Self::Sentence => ffi::PANGO_ATTR_SENTENCE,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            Self::BaselineShift => ffi::PANGO_ATTR_BASELINE_SHIFT,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            Self::FontScale => ffi::PANGO_ATTR_FONT_SCALE,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoAttrType> for AttrType {
-    fn from_glib(value: pango_sys::PangoAttrType) -> Self {
+impl FromGlib<ffi::PangoAttrType> for AttrType {
+    unsafe fn from_glib(value: ffi::PangoAttrType) -> Self {
         match value {
-            0 => AttrType::Invalid,
-            1 => AttrType::Language,
-            2 => AttrType::Family,
-            3 => AttrType::Style,
-            4 => AttrType::Weight,
-            5 => AttrType::Variant,
-            6 => AttrType::Stretch,
-            7 => AttrType::Size,
-            8 => AttrType::FontDesc,
-            9 => AttrType::Foreground,
-            10 => AttrType::Background,
-            11 => AttrType::Underline,
-            12 => AttrType::Strikethrough,
-            13 => AttrType::Rise,
-            14 => AttrType::Shape,
-            15 => AttrType::Scale,
-            16 => AttrType::Fallback,
-            17 => AttrType::LetterSpacing,
-            18 => AttrType::UnderlineColor,
-            19 => AttrType::StrikethroughColor,
-            20 => AttrType::AbsoluteSize,
-            21 => AttrType::Gravity,
-            22 => AttrType::GravityHint,
-            23 => AttrType::FontFeatures,
-            24 => AttrType::ForegroundAlpha,
-            25 => AttrType::BackgroundAlpha,
-            value => AttrType::__Unknown(value),
+            ffi::PANGO_ATTR_INVALID => Self::Invalid,
+            ffi::PANGO_ATTR_LANGUAGE => Self::Language,
+            ffi::PANGO_ATTR_FAMILY => Self::Family,
+            ffi::PANGO_ATTR_STYLE => Self::Style,
+            ffi::PANGO_ATTR_WEIGHT => Self::Weight,
+            ffi::PANGO_ATTR_VARIANT => Self::Variant,
+            ffi::PANGO_ATTR_STRETCH => Self::Stretch,
+            ffi::PANGO_ATTR_SIZE => Self::Size,
+            ffi::PANGO_ATTR_FONT_DESC => Self::FontDesc,
+            ffi::PANGO_ATTR_FOREGROUND => Self::Foreground,
+            ffi::PANGO_ATTR_BACKGROUND => Self::Background,
+            ffi::PANGO_ATTR_UNDERLINE => Self::Underline,
+            ffi::PANGO_ATTR_STRIKETHROUGH => Self::Strikethrough,
+            ffi::PANGO_ATTR_RISE => Self::Rise,
+            ffi::PANGO_ATTR_SHAPE => Self::Shape,
+            ffi::PANGO_ATTR_SCALE => Self::Scale,
+            ffi::PANGO_ATTR_FALLBACK => Self::Fallback,
+            ffi::PANGO_ATTR_LETTER_SPACING => Self::LetterSpacing,
+            ffi::PANGO_ATTR_UNDERLINE_COLOR => Self::UnderlineColor,
+            ffi::PANGO_ATTR_STRIKETHROUGH_COLOR => Self::StrikethroughColor,
+            ffi::PANGO_ATTR_ABSOLUTE_SIZE => Self::AbsoluteSize,
+            ffi::PANGO_ATTR_GRAVITY => Self::Gravity,
+            ffi::PANGO_ATTR_GRAVITY_HINT => Self::GravityHint,
+            ffi::PANGO_ATTR_FONT_FEATURES => Self::FontFeatures,
+            ffi::PANGO_ATTR_FOREGROUND_ALPHA => Self::ForegroundAlpha,
+            ffi::PANGO_ATTR_BACKGROUND_ALPHA => Self::BackgroundAlpha,
+            ffi::PANGO_ATTR_ALLOW_BREAKS => Self::AllowBreaks,
+            ffi::PANGO_ATTR_SHOW => Self::Show,
+            ffi::PANGO_ATTR_INSERT_HYPHENS => Self::InsertHyphens,
+            ffi::PANGO_ATTR_OVERLINE => Self::Overline,
+            ffi::PANGO_ATTR_OVERLINE_COLOR => Self::OverlineColor,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            ffi::PANGO_ATTR_LINE_HEIGHT => Self::LineHeight,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            ffi::PANGO_ATTR_ABSOLUTE_LINE_HEIGHT => Self::AbsoluteLineHeight,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            ffi::PANGO_ATTR_TEXT_TRANSFORM => Self::TextTransform,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            ffi::PANGO_ATTR_WORD => Self::Word,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            ffi::PANGO_ATTR_SENTENCE => Self::Sentence,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            ffi::PANGO_ATTR_BASELINE_SHIFT => Self::BaselineShift,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            ffi::PANGO_ATTR_FONT_SCALE => Self::FontScale,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for AttrType {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_attr_type_get_type()) }
+        unsafe { from_glib(ffi::pango_attr_type_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for AttrType {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for AttrType {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for AttrType {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for AttrType {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for AttrType {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
+    }
+
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
-impl SetValue for AttrType {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
-    }
-}
-
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
-pub enum BidiType {
-    L,
-    Lre,
-    Lro,
-    R,
-    Al,
-    Rle,
-    Rlo,
-    Pdf,
-    En,
-    Es,
-    Et,
-    An,
-    Cs,
-    Nsm,
-    Bn,
-    B,
-    S,
-    Ws,
-    On,
+#[non_exhaustive]
+#[doc(alias = "PangoBaselineShift")]
+pub enum BaselineShift {
+    #[doc(alias = "PANGO_BASELINE_SHIFT_NONE")]
+    None,
+    #[doc(alias = "PANGO_BASELINE_SHIFT_SUPERSCRIPT")]
+    Superscript,
+    #[doc(alias = "PANGO_BASELINE_SHIFT_SUBSCRIPT")]
+    Subscript,
     #[doc(hidden)]
     __Unknown(i32),
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl fmt::Display for BaselineShift {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "BaselineShift::{}",
+            match *self {
+                Self::None => "None",
+                Self::Superscript => "Superscript",
+                Self::Subscript => "Subscript",
+                _ => "Unknown",
+            }
+        )
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+#[doc(hidden)]
+impl IntoGlib for BaselineShift {
+    type GlibType = ffi::PangoBaselineShift;
+
+    fn into_glib(self) -> ffi::PangoBaselineShift {
+        match self {
+            Self::None => ffi::PANGO_BASELINE_SHIFT_NONE,
+            Self::Superscript => ffi::PANGO_BASELINE_SHIFT_SUPERSCRIPT,
+            Self::Subscript => ffi::PANGO_BASELINE_SHIFT_SUBSCRIPT,
+            Self::__Unknown(value) => value,
+        }
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+#[doc(hidden)]
+impl FromGlib<ffi::PangoBaselineShift> for BaselineShift {
+    unsafe fn from_glib(value: ffi::PangoBaselineShift) -> Self {
+        match value {
+            ffi::PANGO_BASELINE_SHIFT_NONE => Self::None,
+            ffi::PANGO_BASELINE_SHIFT_SUPERSCRIPT => Self::Superscript,
+            ffi::PANGO_BASELINE_SHIFT_SUBSCRIPT => Self::Subscript,
+            value => Self::__Unknown(value),
+        }
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl StaticType for BaselineShift {
+    fn static_type() -> Type {
+        unsafe { from_glib(ffi::pango_baseline_shift_get_type()) }
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl glib::value::ValueType for BaselineShift {
+    type Type = Self;
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+unsafe impl<'a> FromValue<'a> for BaselineShift {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl ToValue for BaselineShift {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
+    }
+
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
+    }
+}
+
+#[cfg_attr(feature = "v1_44", deprecated = "Since 1.44")]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoBidiType")]
+pub enum BidiType {
+    #[doc(alias = "PANGO_BIDI_TYPE_L")]
+    L,
+    #[doc(alias = "PANGO_BIDI_TYPE_LRE")]
+    Lre,
+    #[doc(alias = "PANGO_BIDI_TYPE_LRO")]
+    Lro,
+    #[doc(alias = "PANGO_BIDI_TYPE_R")]
+    R,
+    #[doc(alias = "PANGO_BIDI_TYPE_AL")]
+    Al,
+    #[doc(alias = "PANGO_BIDI_TYPE_RLE")]
+    Rle,
+    #[doc(alias = "PANGO_BIDI_TYPE_RLO")]
+    Rlo,
+    #[doc(alias = "PANGO_BIDI_TYPE_PDF")]
+    Pdf,
+    #[doc(alias = "PANGO_BIDI_TYPE_EN")]
+    En,
+    #[doc(alias = "PANGO_BIDI_TYPE_ES")]
+    Es,
+    #[doc(alias = "PANGO_BIDI_TYPE_ET")]
+    Et,
+    #[doc(alias = "PANGO_BIDI_TYPE_AN")]
+    An,
+    #[doc(alias = "PANGO_BIDI_TYPE_CS")]
+    Cs,
+    #[doc(alias = "PANGO_BIDI_TYPE_NSM")]
+    Nsm,
+    #[doc(alias = "PANGO_BIDI_TYPE_BN")]
+    Bn,
+    #[doc(alias = "PANGO_BIDI_TYPE_B")]
+    B,
+    #[doc(alias = "PANGO_BIDI_TYPE_S")]
+    S,
+    #[doc(alias = "PANGO_BIDI_TYPE_WS")]
+    Ws,
+    #[doc(alias = "PANGO_BIDI_TYPE_ON")]
+    On,
+    #[doc(alias = "PANGO_BIDI_TYPE_LRI")]
+    Lri,
+    #[doc(alias = "PANGO_BIDI_TYPE_RLI")]
+    Rli,
+    #[doc(alias = "PANGO_BIDI_TYPE_FSI")]
+    Fsi,
+    #[doc(alias = "PANGO_BIDI_TYPE_PDI")]
+    Pdi,
+    #[doc(hidden)]
+    __Unknown(i32),
+}
+
+impl BidiType {
+    #[doc(alias = "pango_bidi_type_for_unichar")]
+    pub fn for_unichar(ch: char) -> BidiType {
+        unsafe { from_glib(ffi::pango_bidi_type_for_unichar(ch.into_glib())) }
+    }
 }
 
 impl fmt::Display for BidiType {
@@ -284,25 +574,29 @@ impl fmt::Display for BidiType {
             f,
             "BidiType::{}",
             match *self {
-                BidiType::L => "L",
-                BidiType::Lre => "Lre",
-                BidiType::Lro => "Lro",
-                BidiType::R => "R",
-                BidiType::Al => "Al",
-                BidiType::Rle => "Rle",
-                BidiType::Rlo => "Rlo",
-                BidiType::Pdf => "Pdf",
-                BidiType::En => "En",
-                BidiType::Es => "Es",
-                BidiType::Et => "Et",
-                BidiType::An => "An",
-                BidiType::Cs => "Cs",
-                BidiType::Nsm => "Nsm",
-                BidiType::Bn => "Bn",
-                BidiType::B => "B",
-                BidiType::S => "S",
-                BidiType::Ws => "Ws",
-                BidiType::On => "On",
+                Self::L => "L",
+                Self::Lre => "Lre",
+                Self::Lro => "Lro",
+                Self::R => "R",
+                Self::Al => "Al",
+                Self::Rle => "Rle",
+                Self::Rlo => "Rlo",
+                Self::Pdf => "Pdf",
+                Self::En => "En",
+                Self::Es => "Es",
+                Self::Et => "Et",
+                Self::An => "An",
+                Self::Cs => "Cs",
+                Self::Nsm => "Nsm",
+                Self::Bn => "Bn",
+                Self::B => "B",
+                Self::S => "S",
+                Self::Ws => "Ws",
+                Self::On => "On",
+                Self::Lri => "Lri",
+                Self::Rli => "Rli",
+                Self::Fsi => "Fsi",
+                Self::Pdi => "Pdi",
                 _ => "Unknown",
             }
         )
@@ -310,92 +604,114 @@ impl fmt::Display for BidiType {
 }
 
 #[doc(hidden)]
-impl ToGlib for BidiType {
-    type GlibType = pango_sys::PangoBidiType;
+impl IntoGlib for BidiType {
+    type GlibType = ffi::PangoBidiType;
 
-    fn to_glib(&self) -> pango_sys::PangoBidiType {
-        match *self {
-            BidiType::L => pango_sys::PANGO_BIDI_TYPE_L,
-            BidiType::Lre => pango_sys::PANGO_BIDI_TYPE_LRE,
-            BidiType::Lro => pango_sys::PANGO_BIDI_TYPE_LRO,
-            BidiType::R => pango_sys::PANGO_BIDI_TYPE_R,
-            BidiType::Al => pango_sys::PANGO_BIDI_TYPE_AL,
-            BidiType::Rle => pango_sys::PANGO_BIDI_TYPE_RLE,
-            BidiType::Rlo => pango_sys::PANGO_BIDI_TYPE_RLO,
-            BidiType::Pdf => pango_sys::PANGO_BIDI_TYPE_PDF,
-            BidiType::En => pango_sys::PANGO_BIDI_TYPE_EN,
-            BidiType::Es => pango_sys::PANGO_BIDI_TYPE_ES,
-            BidiType::Et => pango_sys::PANGO_BIDI_TYPE_ET,
-            BidiType::An => pango_sys::PANGO_BIDI_TYPE_AN,
-            BidiType::Cs => pango_sys::PANGO_BIDI_TYPE_CS,
-            BidiType::Nsm => pango_sys::PANGO_BIDI_TYPE_NSM,
-            BidiType::Bn => pango_sys::PANGO_BIDI_TYPE_BN,
-            BidiType::B => pango_sys::PANGO_BIDI_TYPE_B,
-            BidiType::S => pango_sys::PANGO_BIDI_TYPE_S,
-            BidiType::Ws => pango_sys::PANGO_BIDI_TYPE_WS,
-            BidiType::On => pango_sys::PANGO_BIDI_TYPE_ON,
-            BidiType::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoBidiType {
+        match self {
+            Self::L => ffi::PANGO_BIDI_TYPE_L,
+            Self::Lre => ffi::PANGO_BIDI_TYPE_LRE,
+            Self::Lro => ffi::PANGO_BIDI_TYPE_LRO,
+            Self::R => ffi::PANGO_BIDI_TYPE_R,
+            Self::Al => ffi::PANGO_BIDI_TYPE_AL,
+            Self::Rle => ffi::PANGO_BIDI_TYPE_RLE,
+            Self::Rlo => ffi::PANGO_BIDI_TYPE_RLO,
+            Self::Pdf => ffi::PANGO_BIDI_TYPE_PDF,
+            Self::En => ffi::PANGO_BIDI_TYPE_EN,
+            Self::Es => ffi::PANGO_BIDI_TYPE_ES,
+            Self::Et => ffi::PANGO_BIDI_TYPE_ET,
+            Self::An => ffi::PANGO_BIDI_TYPE_AN,
+            Self::Cs => ffi::PANGO_BIDI_TYPE_CS,
+            Self::Nsm => ffi::PANGO_BIDI_TYPE_NSM,
+            Self::Bn => ffi::PANGO_BIDI_TYPE_BN,
+            Self::B => ffi::PANGO_BIDI_TYPE_B,
+            Self::S => ffi::PANGO_BIDI_TYPE_S,
+            Self::Ws => ffi::PANGO_BIDI_TYPE_WS,
+            Self::On => ffi::PANGO_BIDI_TYPE_ON,
+            Self::Lri => ffi::PANGO_BIDI_TYPE_LRI,
+            Self::Rli => ffi::PANGO_BIDI_TYPE_RLI,
+            Self::Fsi => ffi::PANGO_BIDI_TYPE_FSI,
+            Self::Pdi => ffi::PANGO_BIDI_TYPE_PDI,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoBidiType> for BidiType {
-    fn from_glib(value: pango_sys::PangoBidiType) -> Self {
+impl FromGlib<ffi::PangoBidiType> for BidiType {
+    unsafe fn from_glib(value: ffi::PangoBidiType) -> Self {
         match value {
-            0 => BidiType::L,
-            1 => BidiType::Lre,
-            2 => BidiType::Lro,
-            3 => BidiType::R,
-            4 => BidiType::Al,
-            5 => BidiType::Rle,
-            6 => BidiType::Rlo,
-            7 => BidiType::Pdf,
-            8 => BidiType::En,
-            9 => BidiType::Es,
-            10 => BidiType::Et,
-            11 => BidiType::An,
-            12 => BidiType::Cs,
-            13 => BidiType::Nsm,
-            14 => BidiType::Bn,
-            15 => BidiType::B,
-            16 => BidiType::S,
-            17 => BidiType::Ws,
-            18 => BidiType::On,
-            value => BidiType::__Unknown(value),
+            ffi::PANGO_BIDI_TYPE_L => Self::L,
+            ffi::PANGO_BIDI_TYPE_LRE => Self::Lre,
+            ffi::PANGO_BIDI_TYPE_LRO => Self::Lro,
+            ffi::PANGO_BIDI_TYPE_R => Self::R,
+            ffi::PANGO_BIDI_TYPE_AL => Self::Al,
+            ffi::PANGO_BIDI_TYPE_RLE => Self::Rle,
+            ffi::PANGO_BIDI_TYPE_RLO => Self::Rlo,
+            ffi::PANGO_BIDI_TYPE_PDF => Self::Pdf,
+            ffi::PANGO_BIDI_TYPE_EN => Self::En,
+            ffi::PANGO_BIDI_TYPE_ES => Self::Es,
+            ffi::PANGO_BIDI_TYPE_ET => Self::Et,
+            ffi::PANGO_BIDI_TYPE_AN => Self::An,
+            ffi::PANGO_BIDI_TYPE_CS => Self::Cs,
+            ffi::PANGO_BIDI_TYPE_NSM => Self::Nsm,
+            ffi::PANGO_BIDI_TYPE_BN => Self::Bn,
+            ffi::PANGO_BIDI_TYPE_B => Self::B,
+            ffi::PANGO_BIDI_TYPE_S => Self::S,
+            ffi::PANGO_BIDI_TYPE_WS => Self::Ws,
+            ffi::PANGO_BIDI_TYPE_ON => Self::On,
+            ffi::PANGO_BIDI_TYPE_LRI => Self::Lri,
+            ffi::PANGO_BIDI_TYPE_RLI => Self::Rli,
+            ffi::PANGO_BIDI_TYPE_FSI => Self::Fsi,
+            ffi::PANGO_BIDI_TYPE_PDI => Self::Pdi,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for BidiType {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_bidi_type_get_type()) }
+        unsafe { from_glib(ffi::pango_bidi_type_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for BidiType {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for BidiType {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for BidiType {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for BidiType {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for BidiType {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for BidiType {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoCoverageLevel")]
 pub enum CoverageLevel {
+    #[doc(alias = "PANGO_COVERAGE_NONE")]
     None,
+    #[doc(alias = "PANGO_COVERAGE_FALLBACK")]
     Fallback,
+    #[doc(alias = "PANGO_COVERAGE_APPROXIMATE")]
     Approximate,
+    #[doc(alias = "PANGO_COVERAGE_EXACT")]
     Exact,
     #[doc(hidden)]
     __Unknown(i32),
@@ -407,10 +723,10 @@ impl fmt::Display for CoverageLevel {
             f,
             "CoverageLevel::{}",
             match *self {
-                CoverageLevel::None => "None",
-                CoverageLevel::Fallback => "Fallback",
-                CoverageLevel::Approximate => "Approximate",
-                CoverageLevel::Exact => "Exact",
+                Self::None => "None",
+                Self::Fallback => "Fallback",
+                Self::Approximate => "Approximate",
+                Self::Exact => "Exact",
                 _ => "Unknown",
             }
         )
@@ -418,65 +734,82 @@ impl fmt::Display for CoverageLevel {
 }
 
 #[doc(hidden)]
-impl ToGlib for CoverageLevel {
-    type GlibType = pango_sys::PangoCoverageLevel;
+impl IntoGlib for CoverageLevel {
+    type GlibType = ffi::PangoCoverageLevel;
 
-    fn to_glib(&self) -> pango_sys::PangoCoverageLevel {
-        match *self {
-            CoverageLevel::None => pango_sys::PANGO_COVERAGE_NONE,
-            CoverageLevel::Fallback => pango_sys::PANGO_COVERAGE_FALLBACK,
-            CoverageLevel::Approximate => pango_sys::PANGO_COVERAGE_APPROXIMATE,
-            CoverageLevel::Exact => pango_sys::PANGO_COVERAGE_EXACT,
-            CoverageLevel::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoCoverageLevel {
+        match self {
+            Self::None => ffi::PANGO_COVERAGE_NONE,
+            Self::Fallback => ffi::PANGO_COVERAGE_FALLBACK,
+            Self::Approximate => ffi::PANGO_COVERAGE_APPROXIMATE,
+            Self::Exact => ffi::PANGO_COVERAGE_EXACT,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoCoverageLevel> for CoverageLevel {
-    fn from_glib(value: pango_sys::PangoCoverageLevel) -> Self {
+impl FromGlib<ffi::PangoCoverageLevel> for CoverageLevel {
+    unsafe fn from_glib(value: ffi::PangoCoverageLevel) -> Self {
         match value {
-            0 => CoverageLevel::None,
-            1 => CoverageLevel::Fallback,
-            2 => CoverageLevel::Approximate,
-            3 => CoverageLevel::Exact,
-            value => CoverageLevel::__Unknown(value),
+            ffi::PANGO_COVERAGE_NONE => Self::None,
+            ffi::PANGO_COVERAGE_FALLBACK => Self::Fallback,
+            ffi::PANGO_COVERAGE_APPROXIMATE => Self::Approximate,
+            ffi::PANGO_COVERAGE_EXACT => Self::Exact,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for CoverageLevel {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_coverage_level_get_type()) }
+        unsafe { from_glib(ffi::pango_coverage_level_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for CoverageLevel {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for CoverageLevel {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for CoverageLevel {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for CoverageLevel {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for CoverageLevel {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for CoverageLevel {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoDirection")]
 pub enum Direction {
+    #[doc(alias = "PANGO_DIRECTION_LTR")]
     Ltr,
+    #[doc(alias = "PANGO_DIRECTION_RTL")]
     Rtl,
+    #[doc(alias = "PANGO_DIRECTION_TTB_LTR")]
     TtbLtr,
+    #[doc(alias = "PANGO_DIRECTION_TTB_RTL")]
     TtbRtl,
+    #[doc(alias = "PANGO_DIRECTION_WEAK_LTR")]
     WeakLtr,
+    #[doc(alias = "PANGO_DIRECTION_WEAK_RTL")]
     WeakRtl,
+    #[doc(alias = "PANGO_DIRECTION_NEUTRAL")]
     Neutral,
     #[doc(hidden)]
     __Unknown(i32),
@@ -488,13 +821,13 @@ impl fmt::Display for Direction {
             f,
             "Direction::{}",
             match *self {
-                Direction::Ltr => "Ltr",
-                Direction::Rtl => "Rtl",
-                Direction::TtbLtr => "TtbLtr",
-                Direction::TtbRtl => "TtbRtl",
-                Direction::WeakLtr => "WeakLtr",
-                Direction::WeakRtl => "WeakRtl",
-                Direction::Neutral => "Neutral",
+                Self::Ltr => "Ltr",
+                Self::Rtl => "Rtl",
+                Self::TtbLtr => "TtbLtr",
+                Self::TtbRtl => "TtbRtl",
+                Self::WeakLtr => "WeakLtr",
+                Self::WeakRtl => "WeakRtl",
+                Self::Neutral => "Neutral",
                 _ => "Unknown",
             }
         )
@@ -502,68 +835,82 @@ impl fmt::Display for Direction {
 }
 
 #[doc(hidden)]
-impl ToGlib for Direction {
-    type GlibType = pango_sys::PangoDirection;
+impl IntoGlib for Direction {
+    type GlibType = ffi::PangoDirection;
 
-    fn to_glib(&self) -> pango_sys::PangoDirection {
-        match *self {
-            Direction::Ltr => pango_sys::PANGO_DIRECTION_LTR,
-            Direction::Rtl => pango_sys::PANGO_DIRECTION_RTL,
-            Direction::TtbLtr => pango_sys::PANGO_DIRECTION_TTB_LTR,
-            Direction::TtbRtl => pango_sys::PANGO_DIRECTION_TTB_RTL,
-            Direction::WeakLtr => pango_sys::PANGO_DIRECTION_WEAK_LTR,
-            Direction::WeakRtl => pango_sys::PANGO_DIRECTION_WEAK_RTL,
-            Direction::Neutral => pango_sys::PANGO_DIRECTION_NEUTRAL,
-            Direction::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoDirection {
+        match self {
+            Self::Ltr => ffi::PANGO_DIRECTION_LTR,
+            Self::Rtl => ffi::PANGO_DIRECTION_RTL,
+            Self::TtbLtr => ffi::PANGO_DIRECTION_TTB_LTR,
+            Self::TtbRtl => ffi::PANGO_DIRECTION_TTB_RTL,
+            Self::WeakLtr => ffi::PANGO_DIRECTION_WEAK_LTR,
+            Self::WeakRtl => ffi::PANGO_DIRECTION_WEAK_RTL,
+            Self::Neutral => ffi::PANGO_DIRECTION_NEUTRAL,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoDirection> for Direction {
-    fn from_glib(value: pango_sys::PangoDirection) -> Self {
+impl FromGlib<ffi::PangoDirection> for Direction {
+    unsafe fn from_glib(value: ffi::PangoDirection) -> Self {
         match value {
-            0 => Direction::Ltr,
-            1 => Direction::Rtl,
-            2 => Direction::TtbLtr,
-            3 => Direction::TtbRtl,
-            4 => Direction::WeakLtr,
-            5 => Direction::WeakRtl,
-            6 => Direction::Neutral,
-            value => Direction::__Unknown(value),
+            ffi::PANGO_DIRECTION_LTR => Self::Ltr,
+            ffi::PANGO_DIRECTION_RTL => Self::Rtl,
+            ffi::PANGO_DIRECTION_TTB_LTR => Self::TtbLtr,
+            ffi::PANGO_DIRECTION_TTB_RTL => Self::TtbRtl,
+            ffi::PANGO_DIRECTION_WEAK_LTR => Self::WeakLtr,
+            ffi::PANGO_DIRECTION_WEAK_RTL => Self::WeakRtl,
+            ffi::PANGO_DIRECTION_NEUTRAL => Self::Neutral,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for Direction {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_direction_get_type()) }
+        unsafe { from_glib(ffi::pango_direction_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for Direction {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for Direction {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for Direction {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for Direction {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for Direction {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for Direction {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoEllipsizeMode")]
 pub enum EllipsizeMode {
+    #[doc(alias = "PANGO_ELLIPSIZE_NONE")]
     None,
+    #[doc(alias = "PANGO_ELLIPSIZE_START")]
     Start,
+    #[doc(alias = "PANGO_ELLIPSIZE_MIDDLE")]
     Middle,
+    #[doc(alias = "PANGO_ELLIPSIZE_END")]
     End,
     #[doc(hidden)]
     __Unknown(i32),
@@ -575,10 +922,10 @@ impl fmt::Display for EllipsizeMode {
             f,
             "EllipsizeMode::{}",
             match *self {
-                EllipsizeMode::None => "None",
-                EllipsizeMode::Start => "Start",
-                EllipsizeMode::Middle => "Middle",
-                EllipsizeMode::End => "End",
+                Self::None => "None",
+                Self::Start => "Start",
+                Self::Middle => "Middle",
+                Self::End => "End",
                 _ => "Unknown",
             }
         )
@@ -586,66 +933,232 @@ impl fmt::Display for EllipsizeMode {
 }
 
 #[doc(hidden)]
-impl ToGlib for EllipsizeMode {
-    type GlibType = pango_sys::PangoEllipsizeMode;
+impl IntoGlib for EllipsizeMode {
+    type GlibType = ffi::PangoEllipsizeMode;
 
-    fn to_glib(&self) -> pango_sys::PangoEllipsizeMode {
-        match *self {
-            EllipsizeMode::None => pango_sys::PANGO_ELLIPSIZE_NONE,
-            EllipsizeMode::Start => pango_sys::PANGO_ELLIPSIZE_START,
-            EllipsizeMode::Middle => pango_sys::PANGO_ELLIPSIZE_MIDDLE,
-            EllipsizeMode::End => pango_sys::PANGO_ELLIPSIZE_END,
-            EllipsizeMode::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoEllipsizeMode {
+        match self {
+            Self::None => ffi::PANGO_ELLIPSIZE_NONE,
+            Self::Start => ffi::PANGO_ELLIPSIZE_START,
+            Self::Middle => ffi::PANGO_ELLIPSIZE_MIDDLE,
+            Self::End => ffi::PANGO_ELLIPSIZE_END,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoEllipsizeMode> for EllipsizeMode {
-    fn from_glib(value: pango_sys::PangoEllipsizeMode) -> Self {
+impl FromGlib<ffi::PangoEllipsizeMode> for EllipsizeMode {
+    unsafe fn from_glib(value: ffi::PangoEllipsizeMode) -> Self {
         match value {
-            0 => EllipsizeMode::None,
-            1 => EllipsizeMode::Start,
-            2 => EllipsizeMode::Middle,
-            3 => EllipsizeMode::End,
-            value => EllipsizeMode::__Unknown(value),
+            ffi::PANGO_ELLIPSIZE_NONE => Self::None,
+            ffi::PANGO_ELLIPSIZE_START => Self::Start,
+            ffi::PANGO_ELLIPSIZE_MIDDLE => Self::Middle,
+            ffi::PANGO_ELLIPSIZE_END => Self::End,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for EllipsizeMode {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_ellipsize_mode_get_type()) }
+        unsafe { from_glib(ffi::pango_ellipsize_mode_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for EllipsizeMode {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for EllipsizeMode {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for EllipsizeMode {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for EllipsizeMode {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for EllipsizeMode {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
+    }
+
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
-impl SetValue for EllipsizeMode {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoFontScale")]
+pub enum FontScale {
+    #[doc(alias = "PANGO_FONT_SCALE_NONE")]
+    None,
+    #[doc(alias = "PANGO_FONT_SCALE_SUPERSCRIPT")]
+    Superscript,
+    #[doc(alias = "PANGO_FONT_SCALE_SUBSCRIPT")]
+    Subscript,
+    #[doc(alias = "PANGO_FONT_SCALE_SMALL_CAPS")]
+    SmallCaps,
+    #[doc(hidden)]
+    __Unknown(i32),
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl fmt::Display for FontScale {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "FontScale::{}",
+            match *self {
+                Self::None => "None",
+                Self::Superscript => "Superscript",
+                Self::Subscript => "Subscript",
+                Self::SmallCaps => "SmallCaps",
+                _ => "Unknown",
+            }
+        )
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+#[doc(hidden)]
+impl IntoGlib for FontScale {
+    type GlibType = ffi::PangoFontScale;
+
+    fn into_glib(self) -> ffi::PangoFontScale {
+        match self {
+            Self::None => ffi::PANGO_FONT_SCALE_NONE,
+            Self::Superscript => ffi::PANGO_FONT_SCALE_SUPERSCRIPT,
+            Self::Subscript => ffi::PANGO_FONT_SCALE_SUBSCRIPT,
+            Self::SmallCaps => ffi::PANGO_FONT_SCALE_SMALL_CAPS,
+            Self::__Unknown(value) => value,
+        }
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+#[doc(hidden)]
+impl FromGlib<ffi::PangoFontScale> for FontScale {
+    unsafe fn from_glib(value: ffi::PangoFontScale) -> Self {
+        match value {
+            ffi::PANGO_FONT_SCALE_NONE => Self::None,
+            ffi::PANGO_FONT_SCALE_SUPERSCRIPT => Self::Superscript,
+            ffi::PANGO_FONT_SCALE_SUBSCRIPT => Self::Subscript,
+            ffi::PANGO_FONT_SCALE_SMALL_CAPS => Self::SmallCaps,
+            value => Self::__Unknown(value),
+        }
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl StaticType for FontScale {
+    fn static_type() -> Type {
+        unsafe { from_glib(ffi::pango_font_scale_get_type()) }
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl glib::value::ValueType for FontScale {
+    type Type = Self;
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+unsafe impl<'a> FromValue<'a> for FontScale {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl ToValue for FontScale {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
+    }
+
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoGravity")]
 pub enum Gravity {
+    #[doc(alias = "PANGO_GRAVITY_SOUTH")]
     South,
+    #[doc(alias = "PANGO_GRAVITY_EAST")]
     East,
+    #[doc(alias = "PANGO_GRAVITY_NORTH")]
     North,
+    #[doc(alias = "PANGO_GRAVITY_WEST")]
     West,
+    #[doc(alias = "PANGO_GRAVITY_AUTO")]
     Auto,
     #[doc(hidden)]
     __Unknown(i32),
+}
+
+impl Gravity {
+    #[doc(alias = "pango_gravity_get_for_matrix")]
+    #[doc(alias = "get_for_matrix")]
+    pub fn for_matrix(matrix: Option<&Matrix>) -> Gravity {
+        unsafe { from_glib(ffi::pango_gravity_get_for_matrix(matrix.to_glib_none().0)) }
+    }
+
+    #[doc(alias = "pango_gravity_get_for_script")]
+    #[doc(alias = "get_for_script")]
+    pub fn for_script(script: Script, base_gravity: Gravity, hint: GravityHint) -> Gravity {
+        unsafe {
+            from_glib(ffi::pango_gravity_get_for_script(
+                script.into_glib(),
+                base_gravity.into_glib(),
+                hint.into_glib(),
+            ))
+        }
+    }
+
+    #[doc(alias = "pango_gravity_get_for_script_and_width")]
+    #[doc(alias = "get_for_script_and_width")]
+    pub fn for_script_and_width(
+        script: Script,
+        wide: bool,
+        base_gravity: Gravity,
+        hint: GravityHint,
+    ) -> Gravity {
+        unsafe {
+            from_glib(ffi::pango_gravity_get_for_script_and_width(
+                script.into_glib(),
+                wide.into_glib(),
+                base_gravity.into_glib(),
+                hint.into_glib(),
+            ))
+        }
+    }
+
+    #[doc(alias = "pango_gravity_to_rotation")]
+    pub fn to_rotation(self) -> f64 {
+        unsafe { ffi::pango_gravity_to_rotation(self.into_glib()) }
+    }
 }
 
 impl fmt::Display for Gravity {
@@ -654,11 +1167,11 @@ impl fmt::Display for Gravity {
             f,
             "Gravity::{}",
             match *self {
-                Gravity::South => "South",
-                Gravity::East => "East",
-                Gravity::North => "North",
-                Gravity::West => "West",
-                Gravity::Auto => "Auto",
+                Self::South => "South",
+                Self::East => "East",
+                Self::North => "North",
+                Self::West => "West",
+                Self::Auto => "Auto",
                 _ => "Unknown",
             }
         )
@@ -666,63 +1179,76 @@ impl fmt::Display for Gravity {
 }
 
 #[doc(hidden)]
-impl ToGlib for Gravity {
-    type GlibType = pango_sys::PangoGravity;
+impl IntoGlib for Gravity {
+    type GlibType = ffi::PangoGravity;
 
-    fn to_glib(&self) -> pango_sys::PangoGravity {
-        match *self {
-            Gravity::South => pango_sys::PANGO_GRAVITY_SOUTH,
-            Gravity::East => pango_sys::PANGO_GRAVITY_EAST,
-            Gravity::North => pango_sys::PANGO_GRAVITY_NORTH,
-            Gravity::West => pango_sys::PANGO_GRAVITY_WEST,
-            Gravity::Auto => pango_sys::PANGO_GRAVITY_AUTO,
-            Gravity::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoGravity {
+        match self {
+            Self::South => ffi::PANGO_GRAVITY_SOUTH,
+            Self::East => ffi::PANGO_GRAVITY_EAST,
+            Self::North => ffi::PANGO_GRAVITY_NORTH,
+            Self::West => ffi::PANGO_GRAVITY_WEST,
+            Self::Auto => ffi::PANGO_GRAVITY_AUTO,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoGravity> for Gravity {
-    fn from_glib(value: pango_sys::PangoGravity) -> Self {
+impl FromGlib<ffi::PangoGravity> for Gravity {
+    unsafe fn from_glib(value: ffi::PangoGravity) -> Self {
         match value {
-            0 => Gravity::South,
-            1 => Gravity::East,
-            2 => Gravity::North,
-            3 => Gravity::West,
-            4 => Gravity::Auto,
-            value => Gravity::__Unknown(value),
+            ffi::PANGO_GRAVITY_SOUTH => Self::South,
+            ffi::PANGO_GRAVITY_EAST => Self::East,
+            ffi::PANGO_GRAVITY_NORTH => Self::North,
+            ffi::PANGO_GRAVITY_WEST => Self::West,
+            ffi::PANGO_GRAVITY_AUTO => Self::Auto,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for Gravity {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_gravity_get_type()) }
+        unsafe { from_glib(ffi::pango_gravity_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for Gravity {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for Gravity {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for Gravity {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for Gravity {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for Gravity {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for Gravity {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoGravityHint")]
 pub enum GravityHint {
+    #[doc(alias = "PANGO_GRAVITY_HINT_NATURAL")]
     Natural,
+    #[doc(alias = "PANGO_GRAVITY_HINT_STRONG")]
     Strong,
+    #[doc(alias = "PANGO_GRAVITY_HINT_LINE")]
     Line,
     #[doc(hidden)]
     __Unknown(i32),
@@ -734,9 +1260,9 @@ impl fmt::Display for GravityHint {
             f,
             "GravityHint::{}",
             match *self {
-                GravityHint::Natural => "Natural",
-                GravityHint::Strong => "Strong",
-                GravityHint::Line => "Line",
+                Self::Natural => "Natural",
+                Self::Strong => "Strong",
+                Self::Line => "Line",
                 _ => "Unknown",
             }
         )
@@ -744,61 +1270,175 @@ impl fmt::Display for GravityHint {
 }
 
 #[doc(hidden)]
-impl ToGlib for GravityHint {
-    type GlibType = pango_sys::PangoGravityHint;
+impl IntoGlib for GravityHint {
+    type GlibType = ffi::PangoGravityHint;
 
-    fn to_glib(&self) -> pango_sys::PangoGravityHint {
-        match *self {
-            GravityHint::Natural => pango_sys::PANGO_GRAVITY_HINT_NATURAL,
-            GravityHint::Strong => pango_sys::PANGO_GRAVITY_HINT_STRONG,
-            GravityHint::Line => pango_sys::PANGO_GRAVITY_HINT_LINE,
-            GravityHint::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoGravityHint {
+        match self {
+            Self::Natural => ffi::PANGO_GRAVITY_HINT_NATURAL,
+            Self::Strong => ffi::PANGO_GRAVITY_HINT_STRONG,
+            Self::Line => ffi::PANGO_GRAVITY_HINT_LINE,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoGravityHint> for GravityHint {
-    fn from_glib(value: pango_sys::PangoGravityHint) -> Self {
+impl FromGlib<ffi::PangoGravityHint> for GravityHint {
+    unsafe fn from_glib(value: ffi::PangoGravityHint) -> Self {
         match value {
-            0 => GravityHint::Natural,
-            1 => GravityHint::Strong,
-            2 => GravityHint::Line,
-            value => GravityHint::__Unknown(value),
+            ffi::PANGO_GRAVITY_HINT_NATURAL => Self::Natural,
+            ffi::PANGO_GRAVITY_HINT_STRONG => Self::Strong,
+            ffi::PANGO_GRAVITY_HINT_LINE => Self::Line,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for GravityHint {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_gravity_hint_get_type()) }
+        unsafe { from_glib(ffi::pango_gravity_hint_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for GravityHint {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for GravityHint {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for GravityHint {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for GravityHint {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for GravityHint {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
+    }
+
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
-impl SetValue for GravityHint {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+#[cfg(any(feature = "v1_46", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_46")))]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoOverline")]
+pub enum Overline {
+    #[doc(alias = "PANGO_OVERLINE_NONE")]
+    None,
+    #[doc(alias = "PANGO_OVERLINE_SINGLE")]
+    Single,
+    #[doc(hidden)]
+    __Unknown(i32),
+}
+
+#[cfg(any(feature = "v1_46", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_46")))]
+impl fmt::Display for Overline {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Overline::{}",
+            match *self {
+                Self::None => "None",
+                Self::Single => "Single",
+                _ => "Unknown",
+            }
+        )
+    }
+}
+
+#[cfg(any(feature = "v1_46", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_46")))]
+#[doc(hidden)]
+impl IntoGlib for Overline {
+    type GlibType = ffi::PangoOverline;
+
+    fn into_glib(self) -> ffi::PangoOverline {
+        match self {
+            Self::None => ffi::PANGO_OVERLINE_NONE,
+            Self::Single => ffi::PANGO_OVERLINE_SINGLE,
+            Self::__Unknown(value) => value,
+        }
+    }
+}
+
+#[cfg(any(feature = "v1_46", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_46")))]
+#[doc(hidden)]
+impl FromGlib<ffi::PangoOverline> for Overline {
+    unsafe fn from_glib(value: ffi::PangoOverline) -> Self {
+        match value {
+            ffi::PANGO_OVERLINE_NONE => Self::None,
+            ffi::PANGO_OVERLINE_SINGLE => Self::Single,
+            value => Self::__Unknown(value),
+        }
+    }
+}
+
+#[cfg(any(feature = "v1_46", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_46")))]
+impl StaticType for Overline {
+    fn static_type() -> Type {
+        unsafe { from_glib(ffi::pango_overline_get_type()) }
+    }
+}
+
+#[cfg(any(feature = "v1_46", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_46")))]
+impl glib::value::ValueType for Overline {
+    type Type = Self;
+}
+
+#[cfg(any(feature = "v1_46", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_46")))]
+unsafe impl<'a> FromValue<'a> for Overline {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
+    }
+}
+
+#[cfg(any(feature = "v1_46", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_46")))]
+impl ToValue for Overline {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
+    }
+
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoRenderPart")]
 pub enum RenderPart {
+    #[doc(alias = "PANGO_RENDER_PART_FOREGROUND")]
     Foreground,
+    #[doc(alias = "PANGO_RENDER_PART_BACKGROUND")]
     Background,
+    #[doc(alias = "PANGO_RENDER_PART_UNDERLINE")]
     Underline,
+    #[doc(alias = "PANGO_RENDER_PART_STRIKETHROUGH")]
     Strikethrough,
+    #[doc(alias = "PANGO_RENDER_PART_OVERLINE")]
+    Overline,
     #[doc(hidden)]
     __Unknown(i32),
 }
@@ -809,10 +1449,11 @@ impl fmt::Display for RenderPart {
             f,
             "RenderPart::{}",
             match *self {
-                RenderPart::Foreground => "Foreground",
-                RenderPart::Background => "Background",
-                RenderPart::Underline => "Underline",
-                RenderPart::Strikethrough => "Strikethrough",
+                Self::Foreground => "Foreground",
+                Self::Background => "Background",
+                Self::Underline => "Underline",
+                Self::Strikethrough => "Strikethrough",
+                Self::Overline => "Overline",
                 _ => "Unknown",
             }
         )
@@ -820,179 +1461,323 @@ impl fmt::Display for RenderPart {
 }
 
 #[doc(hidden)]
-impl ToGlib for RenderPart {
-    type GlibType = pango_sys::PangoRenderPart;
+impl IntoGlib for RenderPart {
+    type GlibType = ffi::PangoRenderPart;
 
-    fn to_glib(&self) -> pango_sys::PangoRenderPart {
-        match *self {
-            RenderPart::Foreground => pango_sys::PANGO_RENDER_PART_FOREGROUND,
-            RenderPart::Background => pango_sys::PANGO_RENDER_PART_BACKGROUND,
-            RenderPart::Underline => pango_sys::PANGO_RENDER_PART_UNDERLINE,
-            RenderPart::Strikethrough => pango_sys::PANGO_RENDER_PART_STRIKETHROUGH,
-            RenderPart::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoRenderPart {
+        match self {
+            Self::Foreground => ffi::PANGO_RENDER_PART_FOREGROUND,
+            Self::Background => ffi::PANGO_RENDER_PART_BACKGROUND,
+            Self::Underline => ffi::PANGO_RENDER_PART_UNDERLINE,
+            Self::Strikethrough => ffi::PANGO_RENDER_PART_STRIKETHROUGH,
+            Self::Overline => ffi::PANGO_RENDER_PART_OVERLINE,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoRenderPart> for RenderPart {
-    fn from_glib(value: pango_sys::PangoRenderPart) -> Self {
+impl FromGlib<ffi::PangoRenderPart> for RenderPart {
+    unsafe fn from_glib(value: ffi::PangoRenderPart) -> Self {
         match value {
-            0 => RenderPart::Foreground,
-            1 => RenderPart::Background,
-            2 => RenderPart::Underline,
-            3 => RenderPart::Strikethrough,
-            value => RenderPart::__Unknown(value),
+            ffi::PANGO_RENDER_PART_FOREGROUND => Self::Foreground,
+            ffi::PANGO_RENDER_PART_BACKGROUND => Self::Background,
+            ffi::PANGO_RENDER_PART_UNDERLINE => Self::Underline,
+            ffi::PANGO_RENDER_PART_STRIKETHROUGH => Self::Strikethrough,
+            ffi::PANGO_RENDER_PART_OVERLINE => Self::Overline,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for RenderPart {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_render_part_get_type()) }
+        unsafe { from_glib(ffi::pango_render_part_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for RenderPart {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for RenderPart {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for RenderPart {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for RenderPart {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for RenderPart {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for RenderPart {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoScript")]
 pub enum Script {
+    #[doc(alias = "PANGO_SCRIPT_INVALID_CODE")]
     InvalidCode,
+    #[doc(alias = "PANGO_SCRIPT_COMMON")]
     Common,
+    #[doc(alias = "PANGO_SCRIPT_INHERITED")]
     Inherited,
+    #[doc(alias = "PANGO_SCRIPT_ARABIC")]
     Arabic,
+    #[doc(alias = "PANGO_SCRIPT_ARMENIAN")]
     Armenian,
+    #[doc(alias = "PANGO_SCRIPT_BENGALI")]
     Bengali,
+    #[doc(alias = "PANGO_SCRIPT_BOPOMOFO")]
     Bopomofo,
+    #[doc(alias = "PANGO_SCRIPT_CHEROKEE")]
     Cherokee,
+    #[doc(alias = "PANGO_SCRIPT_COPTIC")]
     Coptic,
+    #[doc(alias = "PANGO_SCRIPT_CYRILLIC")]
     Cyrillic,
+    #[doc(alias = "PANGO_SCRIPT_DESERET")]
     Deseret,
+    #[doc(alias = "PANGO_SCRIPT_DEVANAGARI")]
     Devanagari,
+    #[doc(alias = "PANGO_SCRIPT_ETHIOPIC")]
     Ethiopic,
+    #[doc(alias = "PANGO_SCRIPT_GEORGIAN")]
     Georgian,
+    #[doc(alias = "PANGO_SCRIPT_GOTHIC")]
     Gothic,
+    #[doc(alias = "PANGO_SCRIPT_GREEK")]
     Greek,
+    #[doc(alias = "PANGO_SCRIPT_GUJARATI")]
     Gujarati,
+    #[doc(alias = "PANGO_SCRIPT_GURMUKHI")]
     Gurmukhi,
+    #[doc(alias = "PANGO_SCRIPT_HAN")]
     Han,
+    #[doc(alias = "PANGO_SCRIPT_HANGUL")]
     Hangul,
+    #[doc(alias = "PANGO_SCRIPT_HEBREW")]
     Hebrew,
+    #[doc(alias = "PANGO_SCRIPT_HIRAGANA")]
     Hiragana,
+    #[doc(alias = "PANGO_SCRIPT_KANNADA")]
     Kannada,
+    #[doc(alias = "PANGO_SCRIPT_KATAKANA")]
     Katakana,
+    #[doc(alias = "PANGO_SCRIPT_KHMER")]
     Khmer,
+    #[doc(alias = "PANGO_SCRIPT_LAO")]
     Lao,
+    #[doc(alias = "PANGO_SCRIPT_LATIN")]
     Latin,
+    #[doc(alias = "PANGO_SCRIPT_MALAYALAM")]
     Malayalam,
+    #[doc(alias = "PANGO_SCRIPT_MONGOLIAN")]
     Mongolian,
+    #[doc(alias = "PANGO_SCRIPT_MYANMAR")]
     Myanmar,
+    #[doc(alias = "PANGO_SCRIPT_OGHAM")]
     Ogham,
+    #[doc(alias = "PANGO_SCRIPT_OLD_ITALIC")]
     OldItalic,
+    #[doc(alias = "PANGO_SCRIPT_ORIYA")]
     Oriya,
+    #[doc(alias = "PANGO_SCRIPT_RUNIC")]
     Runic,
+    #[doc(alias = "PANGO_SCRIPT_SINHALA")]
     Sinhala,
+    #[doc(alias = "PANGO_SCRIPT_SYRIAC")]
     Syriac,
+    #[doc(alias = "PANGO_SCRIPT_TAMIL")]
     Tamil,
+    #[doc(alias = "PANGO_SCRIPT_TELUGU")]
     Telugu,
+    #[doc(alias = "PANGO_SCRIPT_THAANA")]
     Thaana,
+    #[doc(alias = "PANGO_SCRIPT_THAI")]
     Thai,
+    #[doc(alias = "PANGO_SCRIPT_TIBETAN")]
     Tibetan,
+    #[doc(alias = "PANGO_SCRIPT_CANADIAN_ABORIGINAL")]
     CanadianAboriginal,
+    #[doc(alias = "PANGO_SCRIPT_YI")]
     Yi,
+    #[doc(alias = "PANGO_SCRIPT_TAGALOG")]
     Tagalog,
+    #[doc(alias = "PANGO_SCRIPT_HANUNOO")]
     Hanunoo,
+    #[doc(alias = "PANGO_SCRIPT_BUHID")]
     Buhid,
+    #[doc(alias = "PANGO_SCRIPT_TAGBANWA")]
     Tagbanwa,
+    #[doc(alias = "PANGO_SCRIPT_BRAILLE")]
     Braille,
+    #[doc(alias = "PANGO_SCRIPT_CYPRIOT")]
     Cypriot,
+    #[doc(alias = "PANGO_SCRIPT_LIMBU")]
     Limbu,
+    #[doc(alias = "PANGO_SCRIPT_OSMANYA")]
     Osmanya,
+    #[doc(alias = "PANGO_SCRIPT_SHAVIAN")]
     Shavian,
+    #[doc(alias = "PANGO_SCRIPT_LINEAR_B")]
     LinearB,
+    #[doc(alias = "PANGO_SCRIPT_TAI_LE")]
     TaiLe,
+    #[doc(alias = "PANGO_SCRIPT_UGARITIC")]
     Ugaritic,
+    #[doc(alias = "PANGO_SCRIPT_NEW_TAI_LUE")]
     NewTaiLue,
+    #[doc(alias = "PANGO_SCRIPT_BUGINESE")]
     Buginese,
+    #[doc(alias = "PANGO_SCRIPT_GLAGOLITIC")]
     Glagolitic,
+    #[doc(alias = "PANGO_SCRIPT_TIFINAGH")]
     Tifinagh,
+    #[doc(alias = "PANGO_SCRIPT_SYLOTI_NAGRI")]
     SylotiNagri,
+    #[doc(alias = "PANGO_SCRIPT_OLD_PERSIAN")]
     OldPersian,
+    #[doc(alias = "PANGO_SCRIPT_KHAROSHTHI")]
     Kharoshthi,
+    #[doc(alias = "PANGO_SCRIPT_UNKNOWN")]
     Unknown,
+    #[doc(alias = "PANGO_SCRIPT_BALINESE")]
     Balinese,
+    #[doc(alias = "PANGO_SCRIPT_CUNEIFORM")]
     Cuneiform,
+    #[doc(alias = "PANGO_SCRIPT_PHOENICIAN")]
     Phoenician,
+    #[doc(alias = "PANGO_SCRIPT_PHAGS_PA")]
     PhagsPa,
+    #[doc(alias = "PANGO_SCRIPT_NKO")]
     Nko,
+    #[doc(alias = "PANGO_SCRIPT_KAYAH_LI")]
     KayahLi,
+    #[doc(alias = "PANGO_SCRIPT_LEPCHA")]
     Lepcha,
+    #[doc(alias = "PANGO_SCRIPT_REJANG")]
     Rejang,
+    #[doc(alias = "PANGO_SCRIPT_SUNDANESE")]
     Sundanese,
+    #[doc(alias = "PANGO_SCRIPT_SAURASHTRA")]
     Saurashtra,
+    #[doc(alias = "PANGO_SCRIPT_CHAM")]
     Cham,
+    #[doc(alias = "PANGO_SCRIPT_OL_CHIKI")]
     OlChiki,
+    #[doc(alias = "PANGO_SCRIPT_VAI")]
     Vai,
+    #[doc(alias = "PANGO_SCRIPT_CARIAN")]
     Carian,
+    #[doc(alias = "PANGO_SCRIPT_LYCIAN")]
     Lycian,
+    #[doc(alias = "PANGO_SCRIPT_LYDIAN")]
     Lydian,
+    #[doc(alias = "PANGO_SCRIPT_BATAK")]
     Batak,
+    #[doc(alias = "PANGO_SCRIPT_BRAHMI")]
     Brahmi,
+    #[doc(alias = "PANGO_SCRIPT_MANDAIC")]
     Mandaic,
+    #[doc(alias = "PANGO_SCRIPT_CHAKMA")]
     Chakma,
+    #[doc(alias = "PANGO_SCRIPT_MEROITIC_CURSIVE")]
     MeroiticCursive,
+    #[doc(alias = "PANGO_SCRIPT_MEROITIC_HIEROGLYPHS")]
     MeroiticHieroglyphs,
+    #[doc(alias = "PANGO_SCRIPT_MIAO")]
     Miao,
+    #[doc(alias = "PANGO_SCRIPT_SHARADA")]
     Sharada,
+    #[doc(alias = "PANGO_SCRIPT_SORA_SOMPENG")]
     SoraSompeng,
+    #[doc(alias = "PANGO_SCRIPT_TAKRI")]
     Takri,
+    #[doc(alias = "PANGO_SCRIPT_BASSA_VAH")]
     BassaVah,
+    #[doc(alias = "PANGO_SCRIPT_CAUCASIAN_ALBANIAN")]
     CaucasianAlbanian,
+    #[doc(alias = "PANGO_SCRIPT_DUPLOYAN")]
     Duployan,
+    #[doc(alias = "PANGO_SCRIPT_ELBASAN")]
     Elbasan,
+    #[doc(alias = "PANGO_SCRIPT_GRANTHA")]
     Grantha,
+    #[doc(alias = "PANGO_SCRIPT_KHOJKI")]
     Khojki,
+    #[doc(alias = "PANGO_SCRIPT_KHUDAWADI")]
     Khudawadi,
+    #[doc(alias = "PANGO_SCRIPT_LINEAR_A")]
     LinearA,
+    #[doc(alias = "PANGO_SCRIPT_MAHAJANI")]
     Mahajani,
+    #[doc(alias = "PANGO_SCRIPT_MANICHAEAN")]
     Manichaean,
+    #[doc(alias = "PANGO_SCRIPT_MENDE_KIKAKUI")]
     MendeKikakui,
+    #[doc(alias = "PANGO_SCRIPT_MODI")]
     Modi,
+    #[doc(alias = "PANGO_SCRIPT_MRO")]
     Mro,
+    #[doc(alias = "PANGO_SCRIPT_NABATAEAN")]
     Nabataean,
+    #[doc(alias = "PANGO_SCRIPT_OLD_NORTH_ARABIAN")]
     OldNorthArabian,
+    #[doc(alias = "PANGO_SCRIPT_OLD_PERMIC")]
     OldPermic,
+    #[doc(alias = "PANGO_SCRIPT_PAHAWH_HMONG")]
     PahawhHmong,
+    #[doc(alias = "PANGO_SCRIPT_PALMYRENE")]
     Palmyrene,
+    #[doc(alias = "PANGO_SCRIPT_PAU_CIN_HAU")]
     PauCinHau,
+    #[doc(alias = "PANGO_SCRIPT_PSALTER_PAHLAVI")]
     PsalterPahlavi,
+    #[doc(alias = "PANGO_SCRIPT_SIDDHAM")]
     Siddham,
+    #[doc(alias = "PANGO_SCRIPT_TIRHUTA")]
     Tirhuta,
+    #[doc(alias = "PANGO_SCRIPT_WARANG_CITI")]
     WarangCiti,
+    #[doc(alias = "PANGO_SCRIPT_AHOM")]
     Ahom,
+    #[doc(alias = "PANGO_SCRIPT_ANATOLIAN_HIEROGLYPHS")]
     AnatolianHieroglyphs,
+    #[doc(alias = "PANGO_SCRIPT_HATRAN")]
     Hatran,
+    #[doc(alias = "PANGO_SCRIPT_MULTANI")]
     Multani,
+    #[doc(alias = "PANGO_SCRIPT_OLD_HUNGARIAN")]
     OldHungarian,
+    #[doc(alias = "PANGO_SCRIPT_SIGNWRITING")]
     Signwriting,
     #[doc(hidden)]
     __Unknown(i32),
+}
+
+impl Script {
+    #[cfg_attr(feature = "v1_44", deprecated = "Since 1.44")]
+    #[doc(alias = "pango_script_for_unichar")]
+    pub fn for_unichar(ch: char) -> Script {
+        unsafe { from_glib(ffi::pango_script_for_unichar(ch.into_glib())) }
+    }
+
+    #[doc(alias = "pango_script_get_sample_language")]
+    #[doc(alias = "get_sample_language")]
+    pub fn sample_language(self) -> Option<Language> {
+        unsafe { from_glib_full(ffi::pango_script_get_sample_language(self.into_glib())) }
+    }
 }
 
 impl fmt::Display for Script {
@@ -1001,124 +1786,124 @@ impl fmt::Display for Script {
             f,
             "Script::{}",
             match *self {
-                Script::InvalidCode => "InvalidCode",
-                Script::Common => "Common",
-                Script::Inherited => "Inherited",
-                Script::Arabic => "Arabic",
-                Script::Armenian => "Armenian",
-                Script::Bengali => "Bengali",
-                Script::Bopomofo => "Bopomofo",
-                Script::Cherokee => "Cherokee",
-                Script::Coptic => "Coptic",
-                Script::Cyrillic => "Cyrillic",
-                Script::Deseret => "Deseret",
-                Script::Devanagari => "Devanagari",
-                Script::Ethiopic => "Ethiopic",
-                Script::Georgian => "Georgian",
-                Script::Gothic => "Gothic",
-                Script::Greek => "Greek",
-                Script::Gujarati => "Gujarati",
-                Script::Gurmukhi => "Gurmukhi",
-                Script::Han => "Han",
-                Script::Hangul => "Hangul",
-                Script::Hebrew => "Hebrew",
-                Script::Hiragana => "Hiragana",
-                Script::Kannada => "Kannada",
-                Script::Katakana => "Katakana",
-                Script::Khmer => "Khmer",
-                Script::Lao => "Lao",
-                Script::Latin => "Latin",
-                Script::Malayalam => "Malayalam",
-                Script::Mongolian => "Mongolian",
-                Script::Myanmar => "Myanmar",
-                Script::Ogham => "Ogham",
-                Script::OldItalic => "OldItalic",
-                Script::Oriya => "Oriya",
-                Script::Runic => "Runic",
-                Script::Sinhala => "Sinhala",
-                Script::Syriac => "Syriac",
-                Script::Tamil => "Tamil",
-                Script::Telugu => "Telugu",
-                Script::Thaana => "Thaana",
-                Script::Thai => "Thai",
-                Script::Tibetan => "Tibetan",
-                Script::CanadianAboriginal => "CanadianAboriginal",
-                Script::Yi => "Yi",
-                Script::Tagalog => "Tagalog",
-                Script::Hanunoo => "Hanunoo",
-                Script::Buhid => "Buhid",
-                Script::Tagbanwa => "Tagbanwa",
-                Script::Braille => "Braille",
-                Script::Cypriot => "Cypriot",
-                Script::Limbu => "Limbu",
-                Script::Osmanya => "Osmanya",
-                Script::Shavian => "Shavian",
-                Script::LinearB => "LinearB",
-                Script::TaiLe => "TaiLe",
-                Script::Ugaritic => "Ugaritic",
-                Script::NewTaiLue => "NewTaiLue",
-                Script::Buginese => "Buginese",
-                Script::Glagolitic => "Glagolitic",
-                Script::Tifinagh => "Tifinagh",
-                Script::SylotiNagri => "SylotiNagri",
-                Script::OldPersian => "OldPersian",
-                Script::Kharoshthi => "Kharoshthi",
-                Script::Unknown => "Unknown",
-                Script::Balinese => "Balinese",
-                Script::Cuneiform => "Cuneiform",
-                Script::Phoenician => "Phoenician",
-                Script::PhagsPa => "PhagsPa",
-                Script::Nko => "Nko",
-                Script::KayahLi => "KayahLi",
-                Script::Lepcha => "Lepcha",
-                Script::Rejang => "Rejang",
-                Script::Sundanese => "Sundanese",
-                Script::Saurashtra => "Saurashtra",
-                Script::Cham => "Cham",
-                Script::OlChiki => "OlChiki",
-                Script::Vai => "Vai",
-                Script::Carian => "Carian",
-                Script::Lycian => "Lycian",
-                Script::Lydian => "Lydian",
-                Script::Batak => "Batak",
-                Script::Brahmi => "Brahmi",
-                Script::Mandaic => "Mandaic",
-                Script::Chakma => "Chakma",
-                Script::MeroiticCursive => "MeroiticCursive",
-                Script::MeroiticHieroglyphs => "MeroiticHieroglyphs",
-                Script::Miao => "Miao",
-                Script::Sharada => "Sharada",
-                Script::SoraSompeng => "SoraSompeng",
-                Script::Takri => "Takri",
-                Script::BassaVah => "BassaVah",
-                Script::CaucasianAlbanian => "CaucasianAlbanian",
-                Script::Duployan => "Duployan",
-                Script::Elbasan => "Elbasan",
-                Script::Grantha => "Grantha",
-                Script::Khojki => "Khojki",
-                Script::Khudawadi => "Khudawadi",
-                Script::LinearA => "LinearA",
-                Script::Mahajani => "Mahajani",
-                Script::Manichaean => "Manichaean",
-                Script::MendeKikakui => "MendeKikakui",
-                Script::Modi => "Modi",
-                Script::Mro => "Mro",
-                Script::Nabataean => "Nabataean",
-                Script::OldNorthArabian => "OldNorthArabian",
-                Script::OldPermic => "OldPermic",
-                Script::PahawhHmong => "PahawhHmong",
-                Script::Palmyrene => "Palmyrene",
-                Script::PauCinHau => "PauCinHau",
-                Script::PsalterPahlavi => "PsalterPahlavi",
-                Script::Siddham => "Siddham",
-                Script::Tirhuta => "Tirhuta",
-                Script::WarangCiti => "WarangCiti",
-                Script::Ahom => "Ahom",
-                Script::AnatolianHieroglyphs => "AnatolianHieroglyphs",
-                Script::Hatran => "Hatran",
-                Script::Multani => "Multani",
-                Script::OldHungarian => "OldHungarian",
-                Script::Signwriting => "Signwriting",
+                Self::InvalidCode => "InvalidCode",
+                Self::Common => "Common",
+                Self::Inherited => "Inherited",
+                Self::Arabic => "Arabic",
+                Self::Armenian => "Armenian",
+                Self::Bengali => "Bengali",
+                Self::Bopomofo => "Bopomofo",
+                Self::Cherokee => "Cherokee",
+                Self::Coptic => "Coptic",
+                Self::Cyrillic => "Cyrillic",
+                Self::Deseret => "Deseret",
+                Self::Devanagari => "Devanagari",
+                Self::Ethiopic => "Ethiopic",
+                Self::Georgian => "Georgian",
+                Self::Gothic => "Gothic",
+                Self::Greek => "Greek",
+                Self::Gujarati => "Gujarati",
+                Self::Gurmukhi => "Gurmukhi",
+                Self::Han => "Han",
+                Self::Hangul => "Hangul",
+                Self::Hebrew => "Hebrew",
+                Self::Hiragana => "Hiragana",
+                Self::Kannada => "Kannada",
+                Self::Katakana => "Katakana",
+                Self::Khmer => "Khmer",
+                Self::Lao => "Lao",
+                Self::Latin => "Latin",
+                Self::Malayalam => "Malayalam",
+                Self::Mongolian => "Mongolian",
+                Self::Myanmar => "Myanmar",
+                Self::Ogham => "Ogham",
+                Self::OldItalic => "OldItalic",
+                Self::Oriya => "Oriya",
+                Self::Runic => "Runic",
+                Self::Sinhala => "Sinhala",
+                Self::Syriac => "Syriac",
+                Self::Tamil => "Tamil",
+                Self::Telugu => "Telugu",
+                Self::Thaana => "Thaana",
+                Self::Thai => "Thai",
+                Self::Tibetan => "Tibetan",
+                Self::CanadianAboriginal => "CanadianAboriginal",
+                Self::Yi => "Yi",
+                Self::Tagalog => "Tagalog",
+                Self::Hanunoo => "Hanunoo",
+                Self::Buhid => "Buhid",
+                Self::Tagbanwa => "Tagbanwa",
+                Self::Braille => "Braille",
+                Self::Cypriot => "Cypriot",
+                Self::Limbu => "Limbu",
+                Self::Osmanya => "Osmanya",
+                Self::Shavian => "Shavian",
+                Self::LinearB => "LinearB",
+                Self::TaiLe => "TaiLe",
+                Self::Ugaritic => "Ugaritic",
+                Self::NewTaiLue => "NewTaiLue",
+                Self::Buginese => "Buginese",
+                Self::Glagolitic => "Glagolitic",
+                Self::Tifinagh => "Tifinagh",
+                Self::SylotiNagri => "SylotiNagri",
+                Self::OldPersian => "OldPersian",
+                Self::Kharoshthi => "Kharoshthi",
+                Self::Unknown => "Unknown",
+                Self::Balinese => "Balinese",
+                Self::Cuneiform => "Cuneiform",
+                Self::Phoenician => "Phoenician",
+                Self::PhagsPa => "PhagsPa",
+                Self::Nko => "Nko",
+                Self::KayahLi => "KayahLi",
+                Self::Lepcha => "Lepcha",
+                Self::Rejang => "Rejang",
+                Self::Sundanese => "Sundanese",
+                Self::Saurashtra => "Saurashtra",
+                Self::Cham => "Cham",
+                Self::OlChiki => "OlChiki",
+                Self::Vai => "Vai",
+                Self::Carian => "Carian",
+                Self::Lycian => "Lycian",
+                Self::Lydian => "Lydian",
+                Self::Batak => "Batak",
+                Self::Brahmi => "Brahmi",
+                Self::Mandaic => "Mandaic",
+                Self::Chakma => "Chakma",
+                Self::MeroiticCursive => "MeroiticCursive",
+                Self::MeroiticHieroglyphs => "MeroiticHieroglyphs",
+                Self::Miao => "Miao",
+                Self::Sharada => "Sharada",
+                Self::SoraSompeng => "SoraSompeng",
+                Self::Takri => "Takri",
+                Self::BassaVah => "BassaVah",
+                Self::CaucasianAlbanian => "CaucasianAlbanian",
+                Self::Duployan => "Duployan",
+                Self::Elbasan => "Elbasan",
+                Self::Grantha => "Grantha",
+                Self::Khojki => "Khojki",
+                Self::Khudawadi => "Khudawadi",
+                Self::LinearA => "LinearA",
+                Self::Mahajani => "Mahajani",
+                Self::Manichaean => "Manichaean",
+                Self::MendeKikakui => "MendeKikakui",
+                Self::Modi => "Modi",
+                Self::Mro => "Mro",
+                Self::Nabataean => "Nabataean",
+                Self::OldNorthArabian => "OldNorthArabian",
+                Self::OldPermic => "OldPermic",
+                Self::PahawhHmong => "PahawhHmong",
+                Self::Palmyrene => "Palmyrene",
+                Self::PauCinHau => "PauCinHau",
+                Self::PsalterPahlavi => "PsalterPahlavi",
+                Self::Siddham => "Siddham",
+                Self::Tirhuta => "Tirhuta",
+                Self::WarangCiti => "WarangCiti",
+                Self::Ahom => "Ahom",
+                Self::AnatolianHieroglyphs => "AnatolianHieroglyphs",
+                Self::Hatran => "Hatran",
+                Self::Multani => "Multani",
+                Self::OldHungarian => "OldHungarian",
+                Self::Signwriting => "Signwriting",
                 _ => "Unknown",
             }
         )
@@ -1126,295 +1911,314 @@ impl fmt::Display for Script {
 }
 
 #[doc(hidden)]
-impl ToGlib for Script {
-    type GlibType = pango_sys::PangoScript;
+impl IntoGlib for Script {
+    type GlibType = ffi::PangoScript;
 
-    fn to_glib(&self) -> pango_sys::PangoScript {
-        match *self {
-            Script::InvalidCode => pango_sys::PANGO_SCRIPT_INVALID_CODE,
-            Script::Common => pango_sys::PANGO_SCRIPT_COMMON,
-            Script::Inherited => pango_sys::PANGO_SCRIPT_INHERITED,
-            Script::Arabic => pango_sys::PANGO_SCRIPT_ARABIC,
-            Script::Armenian => pango_sys::PANGO_SCRIPT_ARMENIAN,
-            Script::Bengali => pango_sys::PANGO_SCRIPT_BENGALI,
-            Script::Bopomofo => pango_sys::PANGO_SCRIPT_BOPOMOFO,
-            Script::Cherokee => pango_sys::PANGO_SCRIPT_CHEROKEE,
-            Script::Coptic => pango_sys::PANGO_SCRIPT_COPTIC,
-            Script::Cyrillic => pango_sys::PANGO_SCRIPT_CYRILLIC,
-            Script::Deseret => pango_sys::PANGO_SCRIPT_DESERET,
-            Script::Devanagari => pango_sys::PANGO_SCRIPT_DEVANAGARI,
-            Script::Ethiopic => pango_sys::PANGO_SCRIPT_ETHIOPIC,
-            Script::Georgian => pango_sys::PANGO_SCRIPT_GEORGIAN,
-            Script::Gothic => pango_sys::PANGO_SCRIPT_GOTHIC,
-            Script::Greek => pango_sys::PANGO_SCRIPT_GREEK,
-            Script::Gujarati => pango_sys::PANGO_SCRIPT_GUJARATI,
-            Script::Gurmukhi => pango_sys::PANGO_SCRIPT_GURMUKHI,
-            Script::Han => pango_sys::PANGO_SCRIPT_HAN,
-            Script::Hangul => pango_sys::PANGO_SCRIPT_HANGUL,
-            Script::Hebrew => pango_sys::PANGO_SCRIPT_HEBREW,
-            Script::Hiragana => pango_sys::PANGO_SCRIPT_HIRAGANA,
-            Script::Kannada => pango_sys::PANGO_SCRIPT_KANNADA,
-            Script::Katakana => pango_sys::PANGO_SCRIPT_KATAKANA,
-            Script::Khmer => pango_sys::PANGO_SCRIPT_KHMER,
-            Script::Lao => pango_sys::PANGO_SCRIPT_LAO,
-            Script::Latin => pango_sys::PANGO_SCRIPT_LATIN,
-            Script::Malayalam => pango_sys::PANGO_SCRIPT_MALAYALAM,
-            Script::Mongolian => pango_sys::PANGO_SCRIPT_MONGOLIAN,
-            Script::Myanmar => pango_sys::PANGO_SCRIPT_MYANMAR,
-            Script::Ogham => pango_sys::PANGO_SCRIPT_OGHAM,
-            Script::OldItalic => pango_sys::PANGO_SCRIPT_OLD_ITALIC,
-            Script::Oriya => pango_sys::PANGO_SCRIPT_ORIYA,
-            Script::Runic => pango_sys::PANGO_SCRIPT_RUNIC,
-            Script::Sinhala => pango_sys::PANGO_SCRIPT_SINHALA,
-            Script::Syriac => pango_sys::PANGO_SCRIPT_SYRIAC,
-            Script::Tamil => pango_sys::PANGO_SCRIPT_TAMIL,
-            Script::Telugu => pango_sys::PANGO_SCRIPT_TELUGU,
-            Script::Thaana => pango_sys::PANGO_SCRIPT_THAANA,
-            Script::Thai => pango_sys::PANGO_SCRIPT_THAI,
-            Script::Tibetan => pango_sys::PANGO_SCRIPT_TIBETAN,
-            Script::CanadianAboriginal => pango_sys::PANGO_SCRIPT_CANADIAN_ABORIGINAL,
-            Script::Yi => pango_sys::PANGO_SCRIPT_YI,
-            Script::Tagalog => pango_sys::PANGO_SCRIPT_TAGALOG,
-            Script::Hanunoo => pango_sys::PANGO_SCRIPT_HANUNOO,
-            Script::Buhid => pango_sys::PANGO_SCRIPT_BUHID,
-            Script::Tagbanwa => pango_sys::PANGO_SCRIPT_TAGBANWA,
-            Script::Braille => pango_sys::PANGO_SCRIPT_BRAILLE,
-            Script::Cypriot => pango_sys::PANGO_SCRIPT_CYPRIOT,
-            Script::Limbu => pango_sys::PANGO_SCRIPT_LIMBU,
-            Script::Osmanya => pango_sys::PANGO_SCRIPT_OSMANYA,
-            Script::Shavian => pango_sys::PANGO_SCRIPT_SHAVIAN,
-            Script::LinearB => pango_sys::PANGO_SCRIPT_LINEAR_B,
-            Script::TaiLe => pango_sys::PANGO_SCRIPT_TAI_LE,
-            Script::Ugaritic => pango_sys::PANGO_SCRIPT_UGARITIC,
-            Script::NewTaiLue => pango_sys::PANGO_SCRIPT_NEW_TAI_LUE,
-            Script::Buginese => pango_sys::PANGO_SCRIPT_BUGINESE,
-            Script::Glagolitic => pango_sys::PANGO_SCRIPT_GLAGOLITIC,
-            Script::Tifinagh => pango_sys::PANGO_SCRIPT_TIFINAGH,
-            Script::SylotiNagri => pango_sys::PANGO_SCRIPT_SYLOTI_NAGRI,
-            Script::OldPersian => pango_sys::PANGO_SCRIPT_OLD_PERSIAN,
-            Script::Kharoshthi => pango_sys::PANGO_SCRIPT_KHAROSHTHI,
-            Script::Unknown => pango_sys::PANGO_SCRIPT_UNKNOWN,
-            Script::Balinese => pango_sys::PANGO_SCRIPT_BALINESE,
-            Script::Cuneiform => pango_sys::PANGO_SCRIPT_CUNEIFORM,
-            Script::Phoenician => pango_sys::PANGO_SCRIPT_PHOENICIAN,
-            Script::PhagsPa => pango_sys::PANGO_SCRIPT_PHAGS_PA,
-            Script::Nko => pango_sys::PANGO_SCRIPT_NKO,
-            Script::KayahLi => pango_sys::PANGO_SCRIPT_KAYAH_LI,
-            Script::Lepcha => pango_sys::PANGO_SCRIPT_LEPCHA,
-            Script::Rejang => pango_sys::PANGO_SCRIPT_REJANG,
-            Script::Sundanese => pango_sys::PANGO_SCRIPT_SUNDANESE,
-            Script::Saurashtra => pango_sys::PANGO_SCRIPT_SAURASHTRA,
-            Script::Cham => pango_sys::PANGO_SCRIPT_CHAM,
-            Script::OlChiki => pango_sys::PANGO_SCRIPT_OL_CHIKI,
-            Script::Vai => pango_sys::PANGO_SCRIPT_VAI,
-            Script::Carian => pango_sys::PANGO_SCRIPT_CARIAN,
-            Script::Lycian => pango_sys::PANGO_SCRIPT_LYCIAN,
-            Script::Lydian => pango_sys::PANGO_SCRIPT_LYDIAN,
-            Script::Batak => pango_sys::PANGO_SCRIPT_BATAK,
-            Script::Brahmi => pango_sys::PANGO_SCRIPT_BRAHMI,
-            Script::Mandaic => pango_sys::PANGO_SCRIPT_MANDAIC,
-            Script::Chakma => pango_sys::PANGO_SCRIPT_CHAKMA,
-            Script::MeroiticCursive => pango_sys::PANGO_SCRIPT_MEROITIC_CURSIVE,
-            Script::MeroiticHieroglyphs => pango_sys::PANGO_SCRIPT_MEROITIC_HIEROGLYPHS,
-            Script::Miao => pango_sys::PANGO_SCRIPT_MIAO,
-            Script::Sharada => pango_sys::PANGO_SCRIPT_SHARADA,
-            Script::SoraSompeng => pango_sys::PANGO_SCRIPT_SORA_SOMPENG,
-            Script::Takri => pango_sys::PANGO_SCRIPT_TAKRI,
-            Script::BassaVah => pango_sys::PANGO_SCRIPT_BASSA_VAH,
-            Script::CaucasianAlbanian => pango_sys::PANGO_SCRIPT_CAUCASIAN_ALBANIAN,
-            Script::Duployan => pango_sys::PANGO_SCRIPT_DUPLOYAN,
-            Script::Elbasan => pango_sys::PANGO_SCRIPT_ELBASAN,
-            Script::Grantha => pango_sys::PANGO_SCRIPT_GRANTHA,
-            Script::Khojki => pango_sys::PANGO_SCRIPT_KHOJKI,
-            Script::Khudawadi => pango_sys::PANGO_SCRIPT_KHUDAWADI,
-            Script::LinearA => pango_sys::PANGO_SCRIPT_LINEAR_A,
-            Script::Mahajani => pango_sys::PANGO_SCRIPT_MAHAJANI,
-            Script::Manichaean => pango_sys::PANGO_SCRIPT_MANICHAEAN,
-            Script::MendeKikakui => pango_sys::PANGO_SCRIPT_MENDE_KIKAKUI,
-            Script::Modi => pango_sys::PANGO_SCRIPT_MODI,
-            Script::Mro => pango_sys::PANGO_SCRIPT_MRO,
-            Script::Nabataean => pango_sys::PANGO_SCRIPT_NABATAEAN,
-            Script::OldNorthArabian => pango_sys::PANGO_SCRIPT_OLD_NORTH_ARABIAN,
-            Script::OldPermic => pango_sys::PANGO_SCRIPT_OLD_PERMIC,
-            Script::PahawhHmong => pango_sys::PANGO_SCRIPT_PAHAWH_HMONG,
-            Script::Palmyrene => pango_sys::PANGO_SCRIPT_PALMYRENE,
-            Script::PauCinHau => pango_sys::PANGO_SCRIPT_PAU_CIN_HAU,
-            Script::PsalterPahlavi => pango_sys::PANGO_SCRIPT_PSALTER_PAHLAVI,
-            Script::Siddham => pango_sys::PANGO_SCRIPT_SIDDHAM,
-            Script::Tirhuta => pango_sys::PANGO_SCRIPT_TIRHUTA,
-            Script::WarangCiti => pango_sys::PANGO_SCRIPT_WARANG_CITI,
-            Script::Ahom => pango_sys::PANGO_SCRIPT_AHOM,
-            Script::AnatolianHieroglyphs => pango_sys::PANGO_SCRIPT_ANATOLIAN_HIEROGLYPHS,
-            Script::Hatran => pango_sys::PANGO_SCRIPT_HATRAN,
-            Script::Multani => pango_sys::PANGO_SCRIPT_MULTANI,
-            Script::OldHungarian => pango_sys::PANGO_SCRIPT_OLD_HUNGARIAN,
-            Script::Signwriting => pango_sys::PANGO_SCRIPT_SIGNWRITING,
-            Script::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoScript {
+        match self {
+            Self::InvalidCode => ffi::PANGO_SCRIPT_INVALID_CODE,
+            Self::Common => ffi::PANGO_SCRIPT_COMMON,
+            Self::Inherited => ffi::PANGO_SCRIPT_INHERITED,
+            Self::Arabic => ffi::PANGO_SCRIPT_ARABIC,
+            Self::Armenian => ffi::PANGO_SCRIPT_ARMENIAN,
+            Self::Bengali => ffi::PANGO_SCRIPT_BENGALI,
+            Self::Bopomofo => ffi::PANGO_SCRIPT_BOPOMOFO,
+            Self::Cherokee => ffi::PANGO_SCRIPT_CHEROKEE,
+            Self::Coptic => ffi::PANGO_SCRIPT_COPTIC,
+            Self::Cyrillic => ffi::PANGO_SCRIPT_CYRILLIC,
+            Self::Deseret => ffi::PANGO_SCRIPT_DESERET,
+            Self::Devanagari => ffi::PANGO_SCRIPT_DEVANAGARI,
+            Self::Ethiopic => ffi::PANGO_SCRIPT_ETHIOPIC,
+            Self::Georgian => ffi::PANGO_SCRIPT_GEORGIAN,
+            Self::Gothic => ffi::PANGO_SCRIPT_GOTHIC,
+            Self::Greek => ffi::PANGO_SCRIPT_GREEK,
+            Self::Gujarati => ffi::PANGO_SCRIPT_GUJARATI,
+            Self::Gurmukhi => ffi::PANGO_SCRIPT_GURMUKHI,
+            Self::Han => ffi::PANGO_SCRIPT_HAN,
+            Self::Hangul => ffi::PANGO_SCRIPT_HANGUL,
+            Self::Hebrew => ffi::PANGO_SCRIPT_HEBREW,
+            Self::Hiragana => ffi::PANGO_SCRIPT_HIRAGANA,
+            Self::Kannada => ffi::PANGO_SCRIPT_KANNADA,
+            Self::Katakana => ffi::PANGO_SCRIPT_KATAKANA,
+            Self::Khmer => ffi::PANGO_SCRIPT_KHMER,
+            Self::Lao => ffi::PANGO_SCRIPT_LAO,
+            Self::Latin => ffi::PANGO_SCRIPT_LATIN,
+            Self::Malayalam => ffi::PANGO_SCRIPT_MALAYALAM,
+            Self::Mongolian => ffi::PANGO_SCRIPT_MONGOLIAN,
+            Self::Myanmar => ffi::PANGO_SCRIPT_MYANMAR,
+            Self::Ogham => ffi::PANGO_SCRIPT_OGHAM,
+            Self::OldItalic => ffi::PANGO_SCRIPT_OLD_ITALIC,
+            Self::Oriya => ffi::PANGO_SCRIPT_ORIYA,
+            Self::Runic => ffi::PANGO_SCRIPT_RUNIC,
+            Self::Sinhala => ffi::PANGO_SCRIPT_SINHALA,
+            Self::Syriac => ffi::PANGO_SCRIPT_SYRIAC,
+            Self::Tamil => ffi::PANGO_SCRIPT_TAMIL,
+            Self::Telugu => ffi::PANGO_SCRIPT_TELUGU,
+            Self::Thaana => ffi::PANGO_SCRIPT_THAANA,
+            Self::Thai => ffi::PANGO_SCRIPT_THAI,
+            Self::Tibetan => ffi::PANGO_SCRIPT_TIBETAN,
+            Self::CanadianAboriginal => ffi::PANGO_SCRIPT_CANADIAN_ABORIGINAL,
+            Self::Yi => ffi::PANGO_SCRIPT_YI,
+            Self::Tagalog => ffi::PANGO_SCRIPT_TAGALOG,
+            Self::Hanunoo => ffi::PANGO_SCRIPT_HANUNOO,
+            Self::Buhid => ffi::PANGO_SCRIPT_BUHID,
+            Self::Tagbanwa => ffi::PANGO_SCRIPT_TAGBANWA,
+            Self::Braille => ffi::PANGO_SCRIPT_BRAILLE,
+            Self::Cypriot => ffi::PANGO_SCRIPT_CYPRIOT,
+            Self::Limbu => ffi::PANGO_SCRIPT_LIMBU,
+            Self::Osmanya => ffi::PANGO_SCRIPT_OSMANYA,
+            Self::Shavian => ffi::PANGO_SCRIPT_SHAVIAN,
+            Self::LinearB => ffi::PANGO_SCRIPT_LINEAR_B,
+            Self::TaiLe => ffi::PANGO_SCRIPT_TAI_LE,
+            Self::Ugaritic => ffi::PANGO_SCRIPT_UGARITIC,
+            Self::NewTaiLue => ffi::PANGO_SCRIPT_NEW_TAI_LUE,
+            Self::Buginese => ffi::PANGO_SCRIPT_BUGINESE,
+            Self::Glagolitic => ffi::PANGO_SCRIPT_GLAGOLITIC,
+            Self::Tifinagh => ffi::PANGO_SCRIPT_TIFINAGH,
+            Self::SylotiNagri => ffi::PANGO_SCRIPT_SYLOTI_NAGRI,
+            Self::OldPersian => ffi::PANGO_SCRIPT_OLD_PERSIAN,
+            Self::Kharoshthi => ffi::PANGO_SCRIPT_KHAROSHTHI,
+            Self::Unknown => ffi::PANGO_SCRIPT_UNKNOWN,
+            Self::Balinese => ffi::PANGO_SCRIPT_BALINESE,
+            Self::Cuneiform => ffi::PANGO_SCRIPT_CUNEIFORM,
+            Self::Phoenician => ffi::PANGO_SCRIPT_PHOENICIAN,
+            Self::PhagsPa => ffi::PANGO_SCRIPT_PHAGS_PA,
+            Self::Nko => ffi::PANGO_SCRIPT_NKO,
+            Self::KayahLi => ffi::PANGO_SCRIPT_KAYAH_LI,
+            Self::Lepcha => ffi::PANGO_SCRIPT_LEPCHA,
+            Self::Rejang => ffi::PANGO_SCRIPT_REJANG,
+            Self::Sundanese => ffi::PANGO_SCRIPT_SUNDANESE,
+            Self::Saurashtra => ffi::PANGO_SCRIPT_SAURASHTRA,
+            Self::Cham => ffi::PANGO_SCRIPT_CHAM,
+            Self::OlChiki => ffi::PANGO_SCRIPT_OL_CHIKI,
+            Self::Vai => ffi::PANGO_SCRIPT_VAI,
+            Self::Carian => ffi::PANGO_SCRIPT_CARIAN,
+            Self::Lycian => ffi::PANGO_SCRIPT_LYCIAN,
+            Self::Lydian => ffi::PANGO_SCRIPT_LYDIAN,
+            Self::Batak => ffi::PANGO_SCRIPT_BATAK,
+            Self::Brahmi => ffi::PANGO_SCRIPT_BRAHMI,
+            Self::Mandaic => ffi::PANGO_SCRIPT_MANDAIC,
+            Self::Chakma => ffi::PANGO_SCRIPT_CHAKMA,
+            Self::MeroiticCursive => ffi::PANGO_SCRIPT_MEROITIC_CURSIVE,
+            Self::MeroiticHieroglyphs => ffi::PANGO_SCRIPT_MEROITIC_HIEROGLYPHS,
+            Self::Miao => ffi::PANGO_SCRIPT_MIAO,
+            Self::Sharada => ffi::PANGO_SCRIPT_SHARADA,
+            Self::SoraSompeng => ffi::PANGO_SCRIPT_SORA_SOMPENG,
+            Self::Takri => ffi::PANGO_SCRIPT_TAKRI,
+            Self::BassaVah => ffi::PANGO_SCRIPT_BASSA_VAH,
+            Self::CaucasianAlbanian => ffi::PANGO_SCRIPT_CAUCASIAN_ALBANIAN,
+            Self::Duployan => ffi::PANGO_SCRIPT_DUPLOYAN,
+            Self::Elbasan => ffi::PANGO_SCRIPT_ELBASAN,
+            Self::Grantha => ffi::PANGO_SCRIPT_GRANTHA,
+            Self::Khojki => ffi::PANGO_SCRIPT_KHOJKI,
+            Self::Khudawadi => ffi::PANGO_SCRIPT_KHUDAWADI,
+            Self::LinearA => ffi::PANGO_SCRIPT_LINEAR_A,
+            Self::Mahajani => ffi::PANGO_SCRIPT_MAHAJANI,
+            Self::Manichaean => ffi::PANGO_SCRIPT_MANICHAEAN,
+            Self::MendeKikakui => ffi::PANGO_SCRIPT_MENDE_KIKAKUI,
+            Self::Modi => ffi::PANGO_SCRIPT_MODI,
+            Self::Mro => ffi::PANGO_SCRIPT_MRO,
+            Self::Nabataean => ffi::PANGO_SCRIPT_NABATAEAN,
+            Self::OldNorthArabian => ffi::PANGO_SCRIPT_OLD_NORTH_ARABIAN,
+            Self::OldPermic => ffi::PANGO_SCRIPT_OLD_PERMIC,
+            Self::PahawhHmong => ffi::PANGO_SCRIPT_PAHAWH_HMONG,
+            Self::Palmyrene => ffi::PANGO_SCRIPT_PALMYRENE,
+            Self::PauCinHau => ffi::PANGO_SCRIPT_PAU_CIN_HAU,
+            Self::PsalterPahlavi => ffi::PANGO_SCRIPT_PSALTER_PAHLAVI,
+            Self::Siddham => ffi::PANGO_SCRIPT_SIDDHAM,
+            Self::Tirhuta => ffi::PANGO_SCRIPT_TIRHUTA,
+            Self::WarangCiti => ffi::PANGO_SCRIPT_WARANG_CITI,
+            Self::Ahom => ffi::PANGO_SCRIPT_AHOM,
+            Self::AnatolianHieroglyphs => ffi::PANGO_SCRIPT_ANATOLIAN_HIEROGLYPHS,
+            Self::Hatran => ffi::PANGO_SCRIPT_HATRAN,
+            Self::Multani => ffi::PANGO_SCRIPT_MULTANI,
+            Self::OldHungarian => ffi::PANGO_SCRIPT_OLD_HUNGARIAN,
+            Self::Signwriting => ffi::PANGO_SCRIPT_SIGNWRITING,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoScript> for Script {
-    fn from_glib(value: pango_sys::PangoScript) -> Self {
+impl FromGlib<ffi::PangoScript> for Script {
+    unsafe fn from_glib(value: ffi::PangoScript) -> Self {
         match value {
-            -1 => Script::InvalidCode,
-            0 => Script::Common,
-            1 => Script::Inherited,
-            2 => Script::Arabic,
-            3 => Script::Armenian,
-            4 => Script::Bengali,
-            5 => Script::Bopomofo,
-            6 => Script::Cherokee,
-            7 => Script::Coptic,
-            8 => Script::Cyrillic,
-            9 => Script::Deseret,
-            10 => Script::Devanagari,
-            11 => Script::Ethiopic,
-            12 => Script::Georgian,
-            13 => Script::Gothic,
-            14 => Script::Greek,
-            15 => Script::Gujarati,
-            16 => Script::Gurmukhi,
-            17 => Script::Han,
-            18 => Script::Hangul,
-            19 => Script::Hebrew,
-            20 => Script::Hiragana,
-            21 => Script::Kannada,
-            22 => Script::Katakana,
-            23 => Script::Khmer,
-            24 => Script::Lao,
-            25 => Script::Latin,
-            26 => Script::Malayalam,
-            27 => Script::Mongolian,
-            28 => Script::Myanmar,
-            29 => Script::Ogham,
-            30 => Script::OldItalic,
-            31 => Script::Oriya,
-            32 => Script::Runic,
-            33 => Script::Sinhala,
-            34 => Script::Syriac,
-            35 => Script::Tamil,
-            36 => Script::Telugu,
-            37 => Script::Thaana,
-            38 => Script::Thai,
-            39 => Script::Tibetan,
-            40 => Script::CanadianAboriginal,
-            41 => Script::Yi,
-            42 => Script::Tagalog,
-            43 => Script::Hanunoo,
-            44 => Script::Buhid,
-            45 => Script::Tagbanwa,
-            46 => Script::Braille,
-            47 => Script::Cypriot,
-            48 => Script::Limbu,
-            49 => Script::Osmanya,
-            50 => Script::Shavian,
-            51 => Script::LinearB,
-            52 => Script::TaiLe,
-            53 => Script::Ugaritic,
-            54 => Script::NewTaiLue,
-            55 => Script::Buginese,
-            56 => Script::Glagolitic,
-            57 => Script::Tifinagh,
-            58 => Script::SylotiNagri,
-            59 => Script::OldPersian,
-            60 => Script::Kharoshthi,
-            61 => Script::Unknown,
-            62 => Script::Balinese,
-            63 => Script::Cuneiform,
-            64 => Script::Phoenician,
-            65 => Script::PhagsPa,
-            66 => Script::Nko,
-            67 => Script::KayahLi,
-            68 => Script::Lepcha,
-            69 => Script::Rejang,
-            70 => Script::Sundanese,
-            71 => Script::Saurashtra,
-            72 => Script::Cham,
-            73 => Script::OlChiki,
-            74 => Script::Vai,
-            75 => Script::Carian,
-            76 => Script::Lycian,
-            77 => Script::Lydian,
-            78 => Script::Batak,
-            79 => Script::Brahmi,
-            80 => Script::Mandaic,
-            81 => Script::Chakma,
-            82 => Script::MeroiticCursive,
-            83 => Script::MeroiticHieroglyphs,
-            84 => Script::Miao,
-            85 => Script::Sharada,
-            86 => Script::SoraSompeng,
-            87 => Script::Takri,
-            88 => Script::BassaVah,
-            89 => Script::CaucasianAlbanian,
-            90 => Script::Duployan,
-            91 => Script::Elbasan,
-            92 => Script::Grantha,
-            93 => Script::Khojki,
-            94 => Script::Khudawadi,
-            95 => Script::LinearA,
-            96 => Script::Mahajani,
-            97 => Script::Manichaean,
-            98 => Script::MendeKikakui,
-            99 => Script::Modi,
-            100 => Script::Mro,
-            101 => Script::Nabataean,
-            102 => Script::OldNorthArabian,
-            103 => Script::OldPermic,
-            104 => Script::PahawhHmong,
-            105 => Script::Palmyrene,
-            106 => Script::PauCinHau,
-            107 => Script::PsalterPahlavi,
-            108 => Script::Siddham,
-            109 => Script::Tirhuta,
-            110 => Script::WarangCiti,
-            111 => Script::Ahom,
-            112 => Script::AnatolianHieroglyphs,
-            113 => Script::Hatran,
-            114 => Script::Multani,
-            115 => Script::OldHungarian,
-            116 => Script::Signwriting,
-            value => Script::__Unknown(value),
+            ffi::PANGO_SCRIPT_INVALID_CODE => Self::InvalidCode,
+            ffi::PANGO_SCRIPT_COMMON => Self::Common,
+            ffi::PANGO_SCRIPT_INHERITED => Self::Inherited,
+            ffi::PANGO_SCRIPT_ARABIC => Self::Arabic,
+            ffi::PANGO_SCRIPT_ARMENIAN => Self::Armenian,
+            ffi::PANGO_SCRIPT_BENGALI => Self::Bengali,
+            ffi::PANGO_SCRIPT_BOPOMOFO => Self::Bopomofo,
+            ffi::PANGO_SCRIPT_CHEROKEE => Self::Cherokee,
+            ffi::PANGO_SCRIPT_COPTIC => Self::Coptic,
+            ffi::PANGO_SCRIPT_CYRILLIC => Self::Cyrillic,
+            ffi::PANGO_SCRIPT_DESERET => Self::Deseret,
+            ffi::PANGO_SCRIPT_DEVANAGARI => Self::Devanagari,
+            ffi::PANGO_SCRIPT_ETHIOPIC => Self::Ethiopic,
+            ffi::PANGO_SCRIPT_GEORGIAN => Self::Georgian,
+            ffi::PANGO_SCRIPT_GOTHIC => Self::Gothic,
+            ffi::PANGO_SCRIPT_GREEK => Self::Greek,
+            ffi::PANGO_SCRIPT_GUJARATI => Self::Gujarati,
+            ffi::PANGO_SCRIPT_GURMUKHI => Self::Gurmukhi,
+            ffi::PANGO_SCRIPT_HAN => Self::Han,
+            ffi::PANGO_SCRIPT_HANGUL => Self::Hangul,
+            ffi::PANGO_SCRIPT_HEBREW => Self::Hebrew,
+            ffi::PANGO_SCRIPT_HIRAGANA => Self::Hiragana,
+            ffi::PANGO_SCRIPT_KANNADA => Self::Kannada,
+            ffi::PANGO_SCRIPT_KATAKANA => Self::Katakana,
+            ffi::PANGO_SCRIPT_KHMER => Self::Khmer,
+            ffi::PANGO_SCRIPT_LAO => Self::Lao,
+            ffi::PANGO_SCRIPT_LATIN => Self::Latin,
+            ffi::PANGO_SCRIPT_MALAYALAM => Self::Malayalam,
+            ffi::PANGO_SCRIPT_MONGOLIAN => Self::Mongolian,
+            ffi::PANGO_SCRIPT_MYANMAR => Self::Myanmar,
+            ffi::PANGO_SCRIPT_OGHAM => Self::Ogham,
+            ffi::PANGO_SCRIPT_OLD_ITALIC => Self::OldItalic,
+            ffi::PANGO_SCRIPT_ORIYA => Self::Oriya,
+            ffi::PANGO_SCRIPT_RUNIC => Self::Runic,
+            ffi::PANGO_SCRIPT_SINHALA => Self::Sinhala,
+            ffi::PANGO_SCRIPT_SYRIAC => Self::Syriac,
+            ffi::PANGO_SCRIPT_TAMIL => Self::Tamil,
+            ffi::PANGO_SCRIPT_TELUGU => Self::Telugu,
+            ffi::PANGO_SCRIPT_THAANA => Self::Thaana,
+            ffi::PANGO_SCRIPT_THAI => Self::Thai,
+            ffi::PANGO_SCRIPT_TIBETAN => Self::Tibetan,
+            ffi::PANGO_SCRIPT_CANADIAN_ABORIGINAL => Self::CanadianAboriginal,
+            ffi::PANGO_SCRIPT_YI => Self::Yi,
+            ffi::PANGO_SCRIPT_TAGALOG => Self::Tagalog,
+            ffi::PANGO_SCRIPT_HANUNOO => Self::Hanunoo,
+            ffi::PANGO_SCRIPT_BUHID => Self::Buhid,
+            ffi::PANGO_SCRIPT_TAGBANWA => Self::Tagbanwa,
+            ffi::PANGO_SCRIPT_BRAILLE => Self::Braille,
+            ffi::PANGO_SCRIPT_CYPRIOT => Self::Cypriot,
+            ffi::PANGO_SCRIPT_LIMBU => Self::Limbu,
+            ffi::PANGO_SCRIPT_OSMANYA => Self::Osmanya,
+            ffi::PANGO_SCRIPT_SHAVIAN => Self::Shavian,
+            ffi::PANGO_SCRIPT_LINEAR_B => Self::LinearB,
+            ffi::PANGO_SCRIPT_TAI_LE => Self::TaiLe,
+            ffi::PANGO_SCRIPT_UGARITIC => Self::Ugaritic,
+            ffi::PANGO_SCRIPT_NEW_TAI_LUE => Self::NewTaiLue,
+            ffi::PANGO_SCRIPT_BUGINESE => Self::Buginese,
+            ffi::PANGO_SCRIPT_GLAGOLITIC => Self::Glagolitic,
+            ffi::PANGO_SCRIPT_TIFINAGH => Self::Tifinagh,
+            ffi::PANGO_SCRIPT_SYLOTI_NAGRI => Self::SylotiNagri,
+            ffi::PANGO_SCRIPT_OLD_PERSIAN => Self::OldPersian,
+            ffi::PANGO_SCRIPT_KHAROSHTHI => Self::Kharoshthi,
+            ffi::PANGO_SCRIPT_UNKNOWN => Self::Unknown,
+            ffi::PANGO_SCRIPT_BALINESE => Self::Balinese,
+            ffi::PANGO_SCRIPT_CUNEIFORM => Self::Cuneiform,
+            ffi::PANGO_SCRIPT_PHOENICIAN => Self::Phoenician,
+            ffi::PANGO_SCRIPT_PHAGS_PA => Self::PhagsPa,
+            ffi::PANGO_SCRIPT_NKO => Self::Nko,
+            ffi::PANGO_SCRIPT_KAYAH_LI => Self::KayahLi,
+            ffi::PANGO_SCRIPT_LEPCHA => Self::Lepcha,
+            ffi::PANGO_SCRIPT_REJANG => Self::Rejang,
+            ffi::PANGO_SCRIPT_SUNDANESE => Self::Sundanese,
+            ffi::PANGO_SCRIPT_SAURASHTRA => Self::Saurashtra,
+            ffi::PANGO_SCRIPT_CHAM => Self::Cham,
+            ffi::PANGO_SCRIPT_OL_CHIKI => Self::OlChiki,
+            ffi::PANGO_SCRIPT_VAI => Self::Vai,
+            ffi::PANGO_SCRIPT_CARIAN => Self::Carian,
+            ffi::PANGO_SCRIPT_LYCIAN => Self::Lycian,
+            ffi::PANGO_SCRIPT_LYDIAN => Self::Lydian,
+            ffi::PANGO_SCRIPT_BATAK => Self::Batak,
+            ffi::PANGO_SCRIPT_BRAHMI => Self::Brahmi,
+            ffi::PANGO_SCRIPT_MANDAIC => Self::Mandaic,
+            ffi::PANGO_SCRIPT_CHAKMA => Self::Chakma,
+            ffi::PANGO_SCRIPT_MEROITIC_CURSIVE => Self::MeroiticCursive,
+            ffi::PANGO_SCRIPT_MEROITIC_HIEROGLYPHS => Self::MeroiticHieroglyphs,
+            ffi::PANGO_SCRIPT_MIAO => Self::Miao,
+            ffi::PANGO_SCRIPT_SHARADA => Self::Sharada,
+            ffi::PANGO_SCRIPT_SORA_SOMPENG => Self::SoraSompeng,
+            ffi::PANGO_SCRIPT_TAKRI => Self::Takri,
+            ffi::PANGO_SCRIPT_BASSA_VAH => Self::BassaVah,
+            ffi::PANGO_SCRIPT_CAUCASIAN_ALBANIAN => Self::CaucasianAlbanian,
+            ffi::PANGO_SCRIPT_DUPLOYAN => Self::Duployan,
+            ffi::PANGO_SCRIPT_ELBASAN => Self::Elbasan,
+            ffi::PANGO_SCRIPT_GRANTHA => Self::Grantha,
+            ffi::PANGO_SCRIPT_KHOJKI => Self::Khojki,
+            ffi::PANGO_SCRIPT_KHUDAWADI => Self::Khudawadi,
+            ffi::PANGO_SCRIPT_LINEAR_A => Self::LinearA,
+            ffi::PANGO_SCRIPT_MAHAJANI => Self::Mahajani,
+            ffi::PANGO_SCRIPT_MANICHAEAN => Self::Manichaean,
+            ffi::PANGO_SCRIPT_MENDE_KIKAKUI => Self::MendeKikakui,
+            ffi::PANGO_SCRIPT_MODI => Self::Modi,
+            ffi::PANGO_SCRIPT_MRO => Self::Mro,
+            ffi::PANGO_SCRIPT_NABATAEAN => Self::Nabataean,
+            ffi::PANGO_SCRIPT_OLD_NORTH_ARABIAN => Self::OldNorthArabian,
+            ffi::PANGO_SCRIPT_OLD_PERMIC => Self::OldPermic,
+            ffi::PANGO_SCRIPT_PAHAWH_HMONG => Self::PahawhHmong,
+            ffi::PANGO_SCRIPT_PALMYRENE => Self::Palmyrene,
+            ffi::PANGO_SCRIPT_PAU_CIN_HAU => Self::PauCinHau,
+            ffi::PANGO_SCRIPT_PSALTER_PAHLAVI => Self::PsalterPahlavi,
+            ffi::PANGO_SCRIPT_SIDDHAM => Self::Siddham,
+            ffi::PANGO_SCRIPT_TIRHUTA => Self::Tirhuta,
+            ffi::PANGO_SCRIPT_WARANG_CITI => Self::WarangCiti,
+            ffi::PANGO_SCRIPT_AHOM => Self::Ahom,
+            ffi::PANGO_SCRIPT_ANATOLIAN_HIEROGLYPHS => Self::AnatolianHieroglyphs,
+            ffi::PANGO_SCRIPT_HATRAN => Self::Hatran,
+            ffi::PANGO_SCRIPT_MULTANI => Self::Multani,
+            ffi::PANGO_SCRIPT_OLD_HUNGARIAN => Self::OldHungarian,
+            ffi::PANGO_SCRIPT_SIGNWRITING => Self::Signwriting,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for Script {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_script_get_type()) }
+        unsafe { from_glib(ffi::pango_script_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for Script {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for Script {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for Script {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for Script {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for Script {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for Script {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoStretch")]
 pub enum Stretch {
+    #[doc(alias = "PANGO_STRETCH_ULTRA_CONDENSED")]
     UltraCondensed,
+    #[doc(alias = "PANGO_STRETCH_EXTRA_CONDENSED")]
     ExtraCondensed,
+    #[doc(alias = "PANGO_STRETCH_CONDENSED")]
     Condensed,
+    #[doc(alias = "PANGO_STRETCH_SEMI_CONDENSED")]
     SemiCondensed,
+    #[doc(alias = "PANGO_STRETCH_NORMAL")]
     Normal,
+    #[doc(alias = "PANGO_STRETCH_SEMI_EXPANDED")]
     SemiExpanded,
+    #[doc(alias = "PANGO_STRETCH_EXPANDED")]
     Expanded,
+    #[doc(alias = "PANGO_STRETCH_EXTRA_EXPANDED")]
     ExtraExpanded,
+    #[doc(alias = "PANGO_STRETCH_ULTRA_EXPANDED")]
     UltraExpanded,
     #[doc(hidden)]
     __Unknown(i32),
@@ -1426,15 +2230,15 @@ impl fmt::Display for Stretch {
             f,
             "Stretch::{}",
             match *self {
-                Stretch::UltraCondensed => "UltraCondensed",
-                Stretch::ExtraCondensed => "ExtraCondensed",
-                Stretch::Condensed => "Condensed",
-                Stretch::SemiCondensed => "SemiCondensed",
-                Stretch::Normal => "Normal",
-                Stretch::SemiExpanded => "SemiExpanded",
-                Stretch::Expanded => "Expanded",
-                Stretch::ExtraExpanded => "ExtraExpanded",
-                Stretch::UltraExpanded => "UltraExpanded",
+                Self::UltraCondensed => "UltraCondensed",
+                Self::ExtraCondensed => "ExtraCondensed",
+                Self::Condensed => "Condensed",
+                Self::SemiCondensed => "SemiCondensed",
+                Self::Normal => "Normal",
+                Self::SemiExpanded => "SemiExpanded",
+                Self::Expanded => "Expanded",
+                Self::ExtraExpanded => "ExtraExpanded",
+                Self::UltraExpanded => "UltraExpanded",
                 _ => "Unknown",
             }
         )
@@ -1442,71 +2246,84 @@ impl fmt::Display for Stretch {
 }
 
 #[doc(hidden)]
-impl ToGlib for Stretch {
-    type GlibType = pango_sys::PangoStretch;
+impl IntoGlib for Stretch {
+    type GlibType = ffi::PangoStretch;
 
-    fn to_glib(&self) -> pango_sys::PangoStretch {
-        match *self {
-            Stretch::UltraCondensed => pango_sys::PANGO_STRETCH_ULTRA_CONDENSED,
-            Stretch::ExtraCondensed => pango_sys::PANGO_STRETCH_EXTRA_CONDENSED,
-            Stretch::Condensed => pango_sys::PANGO_STRETCH_CONDENSED,
-            Stretch::SemiCondensed => pango_sys::PANGO_STRETCH_SEMI_CONDENSED,
-            Stretch::Normal => pango_sys::PANGO_STRETCH_NORMAL,
-            Stretch::SemiExpanded => pango_sys::PANGO_STRETCH_SEMI_EXPANDED,
-            Stretch::Expanded => pango_sys::PANGO_STRETCH_EXPANDED,
-            Stretch::ExtraExpanded => pango_sys::PANGO_STRETCH_EXTRA_EXPANDED,
-            Stretch::UltraExpanded => pango_sys::PANGO_STRETCH_ULTRA_EXPANDED,
-            Stretch::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoStretch {
+        match self {
+            Self::UltraCondensed => ffi::PANGO_STRETCH_ULTRA_CONDENSED,
+            Self::ExtraCondensed => ffi::PANGO_STRETCH_EXTRA_CONDENSED,
+            Self::Condensed => ffi::PANGO_STRETCH_CONDENSED,
+            Self::SemiCondensed => ffi::PANGO_STRETCH_SEMI_CONDENSED,
+            Self::Normal => ffi::PANGO_STRETCH_NORMAL,
+            Self::SemiExpanded => ffi::PANGO_STRETCH_SEMI_EXPANDED,
+            Self::Expanded => ffi::PANGO_STRETCH_EXPANDED,
+            Self::ExtraExpanded => ffi::PANGO_STRETCH_EXTRA_EXPANDED,
+            Self::UltraExpanded => ffi::PANGO_STRETCH_ULTRA_EXPANDED,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoStretch> for Stretch {
-    fn from_glib(value: pango_sys::PangoStretch) -> Self {
+impl FromGlib<ffi::PangoStretch> for Stretch {
+    unsafe fn from_glib(value: ffi::PangoStretch) -> Self {
         match value {
-            0 => Stretch::UltraCondensed,
-            1 => Stretch::ExtraCondensed,
-            2 => Stretch::Condensed,
-            3 => Stretch::SemiCondensed,
-            4 => Stretch::Normal,
-            5 => Stretch::SemiExpanded,
-            6 => Stretch::Expanded,
-            7 => Stretch::ExtraExpanded,
-            8 => Stretch::UltraExpanded,
-            value => Stretch::__Unknown(value),
+            ffi::PANGO_STRETCH_ULTRA_CONDENSED => Self::UltraCondensed,
+            ffi::PANGO_STRETCH_EXTRA_CONDENSED => Self::ExtraCondensed,
+            ffi::PANGO_STRETCH_CONDENSED => Self::Condensed,
+            ffi::PANGO_STRETCH_SEMI_CONDENSED => Self::SemiCondensed,
+            ffi::PANGO_STRETCH_NORMAL => Self::Normal,
+            ffi::PANGO_STRETCH_SEMI_EXPANDED => Self::SemiExpanded,
+            ffi::PANGO_STRETCH_EXPANDED => Self::Expanded,
+            ffi::PANGO_STRETCH_EXTRA_EXPANDED => Self::ExtraExpanded,
+            ffi::PANGO_STRETCH_ULTRA_EXPANDED => Self::UltraExpanded,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for Stretch {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_stretch_get_type()) }
+        unsafe { from_glib(ffi::pango_stretch_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for Stretch {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for Stretch {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for Stretch {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for Stretch {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for Stretch {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for Stretch {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoStyle")]
 pub enum Style {
+    #[doc(alias = "PANGO_STYLE_NORMAL")]
     Normal,
+    #[doc(alias = "PANGO_STYLE_OBLIQUE")]
     Oblique,
+    #[doc(alias = "PANGO_STYLE_ITALIC")]
     Italic,
     #[doc(hidden)]
     __Unknown(i32),
@@ -1518,9 +2335,9 @@ impl fmt::Display for Style {
             f,
             "Style::{}",
             match *self {
-                Style::Normal => "Normal",
-                Style::Oblique => "Oblique",
-                Style::Italic => "Italic",
+                Self::Normal => "Normal",
+                Self::Oblique => "Oblique",
+                Self::Italic => "Italic",
                 _ => "Unknown",
             }
         )
@@ -1528,58 +2345,81 @@ impl fmt::Display for Style {
 }
 
 #[doc(hidden)]
-impl ToGlib for Style {
-    type GlibType = pango_sys::PangoStyle;
+impl IntoGlib for Style {
+    type GlibType = ffi::PangoStyle;
 
-    fn to_glib(&self) -> pango_sys::PangoStyle {
-        match *self {
-            Style::Normal => pango_sys::PANGO_STYLE_NORMAL,
-            Style::Oblique => pango_sys::PANGO_STYLE_OBLIQUE,
-            Style::Italic => pango_sys::PANGO_STYLE_ITALIC,
-            Style::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoStyle {
+        match self {
+            Self::Normal => ffi::PANGO_STYLE_NORMAL,
+            Self::Oblique => ffi::PANGO_STYLE_OBLIQUE,
+            Self::Italic => ffi::PANGO_STYLE_ITALIC,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoStyle> for Style {
-    fn from_glib(value: pango_sys::PangoStyle) -> Self {
+impl FromGlib<ffi::PangoStyle> for Style {
+    unsafe fn from_glib(value: ffi::PangoStyle) -> Self {
         match value {
-            0 => Style::Normal,
-            1 => Style::Oblique,
-            2 => Style::Italic,
-            value => Style::__Unknown(value),
+            ffi::PANGO_STYLE_NORMAL => Self::Normal,
+            ffi::PANGO_STYLE_OBLIQUE => Self::Oblique,
+            ffi::PANGO_STYLE_ITALIC => Self::Italic,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for Style {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_style_get_type()) }
+        unsafe { from_glib(ffi::pango_style_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for Style {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for Style {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for Style {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for Style {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for Style {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for Style {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoTabAlign")]
 pub enum TabAlign {
+    #[doc(alias = "PANGO_TAB_LEFT")]
     Left,
+    #[cfg(any(feature = "v1_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PANGO_TAB_RIGHT")]
+    Right,
+    #[cfg(any(feature = "v1_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PANGO_TAB_CENTER")]
+    Center,
+    #[cfg(any(feature = "v1_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PANGO_TAB_DECIMAL")]
+    Decimal,
     #[doc(hidden)]
     __Unknown(i32),
 }
@@ -1590,7 +2430,13 @@ impl fmt::Display for TabAlign {
             f,
             "TabAlign::{}",
             match *self {
-                TabAlign::Left => "Left",
+                Self::Left => "Left",
+                #[cfg(any(feature = "v1_50", feature = "dox"))]
+                Self::Right => "Right",
+                #[cfg(any(feature = "v1_50", feature = "dox"))]
+                Self::Center => "Center",
+                #[cfg(any(feature = "v1_50", feature = "dox"))]
+                Self::Decimal => "Decimal",
                 _ => "Unknown",
             }
         )
@@ -1598,58 +2444,199 @@ impl fmt::Display for TabAlign {
 }
 
 #[doc(hidden)]
-impl ToGlib for TabAlign {
-    type GlibType = pango_sys::PangoTabAlign;
+impl IntoGlib for TabAlign {
+    type GlibType = ffi::PangoTabAlign;
 
-    fn to_glib(&self) -> pango_sys::PangoTabAlign {
-        match *self {
-            TabAlign::Left => pango_sys::PANGO_TAB_LEFT,
-            TabAlign::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoTabAlign {
+        match self {
+            Self::Left => ffi::PANGO_TAB_LEFT,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            Self::Right => ffi::PANGO_TAB_RIGHT,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            Self::Center => ffi::PANGO_TAB_CENTER,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            Self::Decimal => ffi::PANGO_TAB_DECIMAL,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoTabAlign> for TabAlign {
-    fn from_glib(value: pango_sys::PangoTabAlign) -> Self {
+impl FromGlib<ffi::PangoTabAlign> for TabAlign {
+    unsafe fn from_glib(value: ffi::PangoTabAlign) -> Self {
         match value {
-            0 => TabAlign::Left,
-            value => TabAlign::__Unknown(value),
+            ffi::PANGO_TAB_LEFT => Self::Left,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            ffi::PANGO_TAB_RIGHT => Self::Right,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            ffi::PANGO_TAB_CENTER => Self::Center,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            ffi::PANGO_TAB_DECIMAL => Self::Decimal,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for TabAlign {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_tab_align_get_type()) }
+        unsafe { from_glib(ffi::pango_tab_align_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for TabAlign {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for TabAlign {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for TabAlign {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for TabAlign {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for TabAlign {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
+    }
+
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
-impl SetValue for TabAlign {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoTextTransform")]
+pub enum TextTransform {
+    #[doc(alias = "PANGO_TEXT_TRANSFORM_NONE")]
+    None,
+    #[doc(alias = "PANGO_TEXT_TRANSFORM_LOWERCASE")]
+    Lowercase,
+    #[doc(alias = "PANGO_TEXT_TRANSFORM_UPPERCASE")]
+    Uppercase,
+    #[doc(alias = "PANGO_TEXT_TRANSFORM_CAPITALIZE")]
+    Capitalize,
+    #[doc(hidden)]
+    __Unknown(i32),
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl fmt::Display for TextTransform {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "TextTransform::{}",
+            match *self {
+                Self::None => "None",
+                Self::Lowercase => "Lowercase",
+                Self::Uppercase => "Uppercase",
+                Self::Capitalize => "Capitalize",
+                _ => "Unknown",
+            }
+        )
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+#[doc(hidden)]
+impl IntoGlib for TextTransform {
+    type GlibType = ffi::PangoTextTransform;
+
+    fn into_glib(self) -> ffi::PangoTextTransform {
+        match self {
+            Self::None => ffi::PANGO_TEXT_TRANSFORM_NONE,
+            Self::Lowercase => ffi::PANGO_TEXT_TRANSFORM_LOWERCASE,
+            Self::Uppercase => ffi::PANGO_TEXT_TRANSFORM_UPPERCASE,
+            Self::Capitalize => ffi::PANGO_TEXT_TRANSFORM_CAPITALIZE,
+            Self::__Unknown(value) => value,
+        }
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+#[doc(hidden)]
+impl FromGlib<ffi::PangoTextTransform> for TextTransform {
+    unsafe fn from_glib(value: ffi::PangoTextTransform) -> Self {
+        match value {
+            ffi::PANGO_TEXT_TRANSFORM_NONE => Self::None,
+            ffi::PANGO_TEXT_TRANSFORM_LOWERCASE => Self::Lowercase,
+            ffi::PANGO_TEXT_TRANSFORM_UPPERCASE => Self::Uppercase,
+            ffi::PANGO_TEXT_TRANSFORM_CAPITALIZE => Self::Capitalize,
+            value => Self::__Unknown(value),
+        }
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl StaticType for TextTransform {
+    fn static_type() -> Type {
+        unsafe { from_glib(ffi::pango_text_transform_get_type()) }
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl glib::value::ValueType for TextTransform {
+    type Type = Self;
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+unsafe impl<'a> FromValue<'a> for TextTransform {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
+    }
+}
+
+#[cfg(any(feature = "v1_50", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+impl ToValue for TextTransform {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
+    }
+
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoUnderline")]
 pub enum Underline {
+    #[doc(alias = "PANGO_UNDERLINE_NONE")]
     None,
+    #[doc(alias = "PANGO_UNDERLINE_SINGLE")]
     Single,
+    #[doc(alias = "PANGO_UNDERLINE_DOUBLE")]
     Double,
+    #[doc(alias = "PANGO_UNDERLINE_LOW")]
     Low,
+    #[doc(alias = "PANGO_UNDERLINE_ERROR")]
     Error,
+    #[doc(alias = "PANGO_UNDERLINE_SINGLE_LINE")]
+    SingleLine,
+    #[doc(alias = "PANGO_UNDERLINE_DOUBLE_LINE")]
+    DoubleLine,
+    #[doc(alias = "PANGO_UNDERLINE_ERROR_LINE")]
+    ErrorLine,
     #[doc(hidden)]
     __Unknown(i32),
 }
@@ -1660,11 +2647,14 @@ impl fmt::Display for Underline {
             f,
             "Underline::{}",
             match *self {
-                Underline::None => "None",
-                Underline::Single => "Single",
-                Underline::Double => "Double",
-                Underline::Low => "Low",
-                Underline::Error => "Error",
+                Self::None => "None",
+                Self::Single => "Single",
+                Self::Double => "Double",
+                Self::Low => "Low",
+                Self::Error => "Error",
+                Self::SingleLine => "SingleLine",
+                Self::DoubleLine => "DoubleLine",
+                Self::ErrorLine => "ErrorLine",
                 _ => "Unknown",
             }
         )
@@ -1672,63 +2662,101 @@ impl fmt::Display for Underline {
 }
 
 #[doc(hidden)]
-impl ToGlib for Underline {
-    type GlibType = pango_sys::PangoUnderline;
+impl IntoGlib for Underline {
+    type GlibType = ffi::PangoUnderline;
 
-    fn to_glib(&self) -> pango_sys::PangoUnderline {
-        match *self {
-            Underline::None => pango_sys::PANGO_UNDERLINE_NONE,
-            Underline::Single => pango_sys::PANGO_UNDERLINE_SINGLE,
-            Underline::Double => pango_sys::PANGO_UNDERLINE_DOUBLE,
-            Underline::Low => pango_sys::PANGO_UNDERLINE_LOW,
-            Underline::Error => pango_sys::PANGO_UNDERLINE_ERROR,
-            Underline::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoUnderline {
+        match self {
+            Self::None => ffi::PANGO_UNDERLINE_NONE,
+            Self::Single => ffi::PANGO_UNDERLINE_SINGLE,
+            Self::Double => ffi::PANGO_UNDERLINE_DOUBLE,
+            Self::Low => ffi::PANGO_UNDERLINE_LOW,
+            Self::Error => ffi::PANGO_UNDERLINE_ERROR,
+            Self::SingleLine => ffi::PANGO_UNDERLINE_SINGLE_LINE,
+            Self::DoubleLine => ffi::PANGO_UNDERLINE_DOUBLE_LINE,
+            Self::ErrorLine => ffi::PANGO_UNDERLINE_ERROR_LINE,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoUnderline> for Underline {
-    fn from_glib(value: pango_sys::PangoUnderline) -> Self {
+impl FromGlib<ffi::PangoUnderline> for Underline {
+    unsafe fn from_glib(value: ffi::PangoUnderline) -> Self {
         match value {
-            0 => Underline::None,
-            1 => Underline::Single,
-            2 => Underline::Double,
-            3 => Underline::Low,
-            4 => Underline::Error,
-            value => Underline::__Unknown(value),
+            ffi::PANGO_UNDERLINE_NONE => Self::None,
+            ffi::PANGO_UNDERLINE_SINGLE => Self::Single,
+            ffi::PANGO_UNDERLINE_DOUBLE => Self::Double,
+            ffi::PANGO_UNDERLINE_LOW => Self::Low,
+            ffi::PANGO_UNDERLINE_ERROR => Self::Error,
+            ffi::PANGO_UNDERLINE_SINGLE_LINE => Self::SingleLine,
+            ffi::PANGO_UNDERLINE_DOUBLE_LINE => Self::DoubleLine,
+            ffi::PANGO_UNDERLINE_ERROR_LINE => Self::ErrorLine,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for Underline {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_underline_get_type()) }
+        unsafe { from_glib(ffi::pango_underline_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for Underline {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for Underline {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for Underline {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for Underline {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for Underline {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for Underline {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoVariant")]
 pub enum Variant {
+    #[doc(alias = "PANGO_VARIANT_NORMAL")]
     Normal,
+    #[doc(alias = "PANGO_VARIANT_SMALL_CAPS")]
     SmallCaps,
+    #[cfg(any(feature = "v1_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PANGO_VARIANT_ALL_SMALL_CAPS")]
+    AllSmallCaps,
+    #[cfg(any(feature = "v1_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PANGO_VARIANT_PETITE_CAPS")]
+    PetiteCaps,
+    #[cfg(any(feature = "v1_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PANGO_VARIANT_ALL_PETITE_CAPS")]
+    AllPetiteCaps,
+    #[cfg(any(feature = "v1_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PANGO_VARIANT_UNICASE")]
+    Unicase,
+    #[cfg(any(feature = "v1_50", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v1_50")))]
+    #[doc(alias = "PANGO_VARIANT_TITLE_CAPS")]
+    TitleCaps,
     #[doc(hidden)]
     __Unknown(i32),
 }
@@ -1739,8 +2767,18 @@ impl fmt::Display for Variant {
             f,
             "Variant::{}",
             match *self {
-                Variant::Normal => "Normal",
-                Variant::SmallCaps => "SmallCaps",
+                Self::Normal => "Normal",
+                Self::SmallCaps => "SmallCaps",
+                #[cfg(any(feature = "v1_50", feature = "dox"))]
+                Self::AllSmallCaps => "AllSmallCaps",
+                #[cfg(any(feature = "v1_50", feature = "dox"))]
+                Self::PetiteCaps => "PetiteCaps",
+                #[cfg(any(feature = "v1_50", feature = "dox"))]
+                Self::AllPetiteCaps => "AllPetiteCaps",
+                #[cfg(any(feature = "v1_50", feature = "dox"))]
+                Self::Unicase => "Unicase",
+                #[cfg(any(feature = "v1_50", feature = "dox"))]
+                Self::TitleCaps => "TitleCaps",
                 _ => "Unknown",
             }
         )
@@ -1748,66 +2786,108 @@ impl fmt::Display for Variant {
 }
 
 #[doc(hidden)]
-impl ToGlib for Variant {
-    type GlibType = pango_sys::PangoVariant;
+impl IntoGlib for Variant {
+    type GlibType = ffi::PangoVariant;
 
-    fn to_glib(&self) -> pango_sys::PangoVariant {
-        match *self {
-            Variant::Normal => pango_sys::PANGO_VARIANT_NORMAL,
-            Variant::SmallCaps => pango_sys::PANGO_VARIANT_SMALL_CAPS,
-            Variant::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoVariant {
+        match self {
+            Self::Normal => ffi::PANGO_VARIANT_NORMAL,
+            Self::SmallCaps => ffi::PANGO_VARIANT_SMALL_CAPS,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            Self::AllSmallCaps => ffi::PANGO_VARIANT_ALL_SMALL_CAPS,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            Self::PetiteCaps => ffi::PANGO_VARIANT_PETITE_CAPS,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            Self::AllPetiteCaps => ffi::PANGO_VARIANT_ALL_PETITE_CAPS,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            Self::Unicase => ffi::PANGO_VARIANT_UNICASE,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            Self::TitleCaps => ffi::PANGO_VARIANT_TITLE_CAPS,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoVariant> for Variant {
-    fn from_glib(value: pango_sys::PangoVariant) -> Self {
+impl FromGlib<ffi::PangoVariant> for Variant {
+    unsafe fn from_glib(value: ffi::PangoVariant) -> Self {
         match value {
-            0 => Variant::Normal,
-            1 => Variant::SmallCaps,
-            value => Variant::__Unknown(value),
+            ffi::PANGO_VARIANT_NORMAL => Self::Normal,
+            ffi::PANGO_VARIANT_SMALL_CAPS => Self::SmallCaps,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            ffi::PANGO_VARIANT_ALL_SMALL_CAPS => Self::AllSmallCaps,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            ffi::PANGO_VARIANT_PETITE_CAPS => Self::PetiteCaps,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            ffi::PANGO_VARIANT_ALL_PETITE_CAPS => Self::AllPetiteCaps,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            ffi::PANGO_VARIANT_UNICASE => Self::Unicase,
+            #[cfg(any(feature = "v1_50", feature = "dox"))]
+            ffi::PANGO_VARIANT_TITLE_CAPS => Self::TitleCaps,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for Variant {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_variant_get_type()) }
+        unsafe { from_glib(ffi::pango_variant_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for Variant {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for Variant {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for Variant {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for Variant {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for Variant {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for Variant {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoWeight")]
 pub enum Weight {
+    #[doc(alias = "PANGO_WEIGHT_THIN")]
     Thin,
+    #[doc(alias = "PANGO_WEIGHT_ULTRALIGHT")]
     Ultralight,
+    #[doc(alias = "PANGO_WEIGHT_LIGHT")]
     Light,
+    #[doc(alias = "PANGO_WEIGHT_SEMILIGHT")]
     Semilight,
+    #[doc(alias = "PANGO_WEIGHT_BOOK")]
     Book,
+    #[doc(alias = "PANGO_WEIGHT_NORMAL")]
     Normal,
+    #[doc(alias = "PANGO_WEIGHT_MEDIUM")]
     Medium,
+    #[doc(alias = "PANGO_WEIGHT_SEMIBOLD")]
     Semibold,
+    #[doc(alias = "PANGO_WEIGHT_BOLD")]
     Bold,
+    #[doc(alias = "PANGO_WEIGHT_ULTRABOLD")]
     Ultrabold,
+    #[doc(alias = "PANGO_WEIGHT_HEAVY")]
     Heavy,
+    #[doc(alias = "PANGO_WEIGHT_ULTRAHEAVY")]
     Ultraheavy,
     #[doc(hidden)]
     __Unknown(i32),
@@ -1819,18 +2899,18 @@ impl fmt::Display for Weight {
             f,
             "Weight::{}",
             match *self {
-                Weight::Thin => "Thin",
-                Weight::Ultralight => "Ultralight",
-                Weight::Light => "Light",
-                Weight::Semilight => "Semilight",
-                Weight::Book => "Book",
-                Weight::Normal => "Normal",
-                Weight::Medium => "Medium",
-                Weight::Semibold => "Semibold",
-                Weight::Bold => "Bold",
-                Weight::Ultrabold => "Ultrabold",
-                Weight::Heavy => "Heavy",
-                Weight::Ultraheavy => "Ultraheavy",
+                Self::Thin => "Thin",
+                Self::Ultralight => "Ultralight",
+                Self::Light => "Light",
+                Self::Semilight => "Semilight",
+                Self::Book => "Book",
+                Self::Normal => "Normal",
+                Self::Medium => "Medium",
+                Self::Semibold => "Semibold",
+                Self::Bold => "Bold",
+                Self::Ultrabold => "Ultrabold",
+                Self::Heavy => "Heavy",
+                Self::Ultraheavy => "Ultraheavy",
                 _ => "Unknown",
             }
         )
@@ -1838,77 +2918,90 @@ impl fmt::Display for Weight {
 }
 
 #[doc(hidden)]
-impl ToGlib for Weight {
-    type GlibType = pango_sys::PangoWeight;
+impl IntoGlib for Weight {
+    type GlibType = ffi::PangoWeight;
 
-    fn to_glib(&self) -> pango_sys::PangoWeight {
-        match *self {
-            Weight::Thin => pango_sys::PANGO_WEIGHT_THIN,
-            Weight::Ultralight => pango_sys::PANGO_WEIGHT_ULTRALIGHT,
-            Weight::Light => pango_sys::PANGO_WEIGHT_LIGHT,
-            Weight::Semilight => pango_sys::PANGO_WEIGHT_SEMILIGHT,
-            Weight::Book => pango_sys::PANGO_WEIGHT_BOOK,
-            Weight::Normal => pango_sys::PANGO_WEIGHT_NORMAL,
-            Weight::Medium => pango_sys::PANGO_WEIGHT_MEDIUM,
-            Weight::Semibold => pango_sys::PANGO_WEIGHT_SEMIBOLD,
-            Weight::Bold => pango_sys::PANGO_WEIGHT_BOLD,
-            Weight::Ultrabold => pango_sys::PANGO_WEIGHT_ULTRABOLD,
-            Weight::Heavy => pango_sys::PANGO_WEIGHT_HEAVY,
-            Weight::Ultraheavy => pango_sys::PANGO_WEIGHT_ULTRAHEAVY,
-            Weight::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoWeight {
+        match self {
+            Self::Thin => ffi::PANGO_WEIGHT_THIN,
+            Self::Ultralight => ffi::PANGO_WEIGHT_ULTRALIGHT,
+            Self::Light => ffi::PANGO_WEIGHT_LIGHT,
+            Self::Semilight => ffi::PANGO_WEIGHT_SEMILIGHT,
+            Self::Book => ffi::PANGO_WEIGHT_BOOK,
+            Self::Normal => ffi::PANGO_WEIGHT_NORMAL,
+            Self::Medium => ffi::PANGO_WEIGHT_MEDIUM,
+            Self::Semibold => ffi::PANGO_WEIGHT_SEMIBOLD,
+            Self::Bold => ffi::PANGO_WEIGHT_BOLD,
+            Self::Ultrabold => ffi::PANGO_WEIGHT_ULTRABOLD,
+            Self::Heavy => ffi::PANGO_WEIGHT_HEAVY,
+            Self::Ultraheavy => ffi::PANGO_WEIGHT_ULTRAHEAVY,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoWeight> for Weight {
-    fn from_glib(value: pango_sys::PangoWeight) -> Self {
+impl FromGlib<ffi::PangoWeight> for Weight {
+    unsafe fn from_glib(value: ffi::PangoWeight) -> Self {
         match value {
-            100 => Weight::Thin,
-            200 => Weight::Ultralight,
-            300 => Weight::Light,
-            350 => Weight::Semilight,
-            380 => Weight::Book,
-            400 => Weight::Normal,
-            500 => Weight::Medium,
-            600 => Weight::Semibold,
-            700 => Weight::Bold,
-            800 => Weight::Ultrabold,
-            900 => Weight::Heavy,
-            1000 => Weight::Ultraheavy,
-            value => Weight::__Unknown(value),
+            ffi::PANGO_WEIGHT_THIN => Self::Thin,
+            ffi::PANGO_WEIGHT_ULTRALIGHT => Self::Ultralight,
+            ffi::PANGO_WEIGHT_LIGHT => Self::Light,
+            ffi::PANGO_WEIGHT_SEMILIGHT => Self::Semilight,
+            ffi::PANGO_WEIGHT_BOOK => Self::Book,
+            ffi::PANGO_WEIGHT_NORMAL => Self::Normal,
+            ffi::PANGO_WEIGHT_MEDIUM => Self::Medium,
+            ffi::PANGO_WEIGHT_SEMIBOLD => Self::Semibold,
+            ffi::PANGO_WEIGHT_BOLD => Self::Bold,
+            ffi::PANGO_WEIGHT_ULTRABOLD => Self::Ultrabold,
+            ffi::PANGO_WEIGHT_HEAVY => Self::Heavy,
+            ffi::PANGO_WEIGHT_ULTRAHEAVY => Self::Ultraheavy,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for Weight {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_weight_get_type()) }
+        unsafe { from_glib(ffi::pango_weight_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for Weight {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for Weight {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for Weight {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for Weight {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for Weight {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for Weight {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+#[non_exhaustive]
+#[doc(alias = "PangoWrapMode")]
 pub enum WrapMode {
+    #[doc(alias = "PANGO_WRAP_WORD")]
     Word,
+    #[doc(alias = "PANGO_WRAP_CHAR")]
     Char,
+    #[doc(alias = "PANGO_WRAP_WORD_CHAR")]
     WordChar,
     #[doc(hidden)]
     __Unknown(i32),
@@ -1920,9 +3013,9 @@ impl fmt::Display for WrapMode {
             f,
             "WrapMode::{}",
             match *self {
-                WrapMode::Word => "Word",
-                WrapMode::Char => "Char",
-                WrapMode::WordChar => "WordChar",
+                Self::Word => "Word",
+                Self::Char => "Char",
+                Self::WordChar => "WordChar",
                 _ => "Unknown",
             }
         )
@@ -1930,51 +3023,59 @@ impl fmt::Display for WrapMode {
 }
 
 #[doc(hidden)]
-impl ToGlib for WrapMode {
-    type GlibType = pango_sys::PangoWrapMode;
+impl IntoGlib for WrapMode {
+    type GlibType = ffi::PangoWrapMode;
 
-    fn to_glib(&self) -> pango_sys::PangoWrapMode {
-        match *self {
-            WrapMode::Word => pango_sys::PANGO_WRAP_WORD,
-            WrapMode::Char => pango_sys::PANGO_WRAP_CHAR,
-            WrapMode::WordChar => pango_sys::PANGO_WRAP_WORD_CHAR,
-            WrapMode::__Unknown(value) => value,
+    fn into_glib(self) -> ffi::PangoWrapMode {
+        match self {
+            Self::Word => ffi::PANGO_WRAP_WORD,
+            Self::Char => ffi::PANGO_WRAP_CHAR,
+            Self::WordChar => ffi::PANGO_WRAP_WORD_CHAR,
+            Self::__Unknown(value) => value,
         }
     }
 }
 
 #[doc(hidden)]
-impl FromGlib<pango_sys::PangoWrapMode> for WrapMode {
-    fn from_glib(value: pango_sys::PangoWrapMode) -> Self {
+impl FromGlib<ffi::PangoWrapMode> for WrapMode {
+    unsafe fn from_glib(value: ffi::PangoWrapMode) -> Self {
         match value {
-            0 => WrapMode::Word,
-            1 => WrapMode::Char,
-            2 => WrapMode::WordChar,
-            value => WrapMode::__Unknown(value),
+            ffi::PANGO_WRAP_WORD => Self::Word,
+            ffi::PANGO_WRAP_CHAR => Self::Char,
+            ffi::PANGO_WRAP_WORD_CHAR => Self::WordChar,
+            value => Self::__Unknown(value),
         }
     }
 }
 
 impl StaticType for WrapMode {
     fn static_type() -> Type {
-        unsafe { from_glib(pango_sys::pango_wrap_mode_get_type()) }
+        unsafe { from_glib(ffi::pango_wrap_mode_get_type()) }
     }
 }
 
-impl<'a> FromValueOptional<'a> for WrapMode {
-    unsafe fn from_value_optional(value: &Value) -> Option<Self> {
-        Some(FromValue::from_value(value))
+impl glib::value::ValueType for WrapMode {
+    type Type = Self;
+}
+
+unsafe impl<'a> FromValue<'a> for WrapMode {
+    type Checker = glib::value::GenericValueTypeChecker<Self>;
+
+    unsafe fn from_value(value: &'a glib::Value) -> Self {
+        from_glib(glib::gobject_ffi::g_value_get_enum(value.to_glib_none().0))
     }
 }
 
-impl<'a> FromValue<'a> for WrapMode {
-    unsafe fn from_value(value: &Value) -> Self {
-        from_glib(gobject_sys::g_value_get_enum(value.to_glib_none().0))
+impl ToValue for WrapMode {
+    fn to_value(&self) -> glib::Value {
+        let mut value = glib::Value::for_value_type::<Self>();
+        unsafe {
+            glib::gobject_ffi::g_value_set_enum(value.to_glib_none_mut().0, self.into_glib());
+        }
+        value
     }
-}
 
-impl SetValue for WrapMode {
-    unsafe fn set_value(value: &mut Value, this: &Self) {
-        gobject_sys::g_value_set_enum(value.to_glib_none_mut().0, this.to_glib())
+    fn value_type(&self) -> glib::Type {
+        Self::static_type()
     }
 }

@@ -10,7 +10,7 @@
 mod types;
 
 use log::{debug, warn};
-use mac::{matches, _tt_as_expr_hack, unwrap_or_return};
+use mac::{_tt_as_expr_hack, matches, unwrap_or_return};
 use markup5ever::{local_name, namespace_prefix, namespace_url, ns};
 use std::borrow::Cow;
 use std::borrow::Cow::Borrowed;
@@ -31,8 +31,8 @@ use crate::{LocalName, Namespace, Prefix};
 
 use crate::tendril::{StrTendril, Tendril};
 
-static XML_URI: &'static str = "http://www.w3.org/XML/1998/namespace";
-static XMLNS_URI: &'static str = "http://www.w3.org/2000/xmlns/";
+static XML_URI: &str = "http://www.w3.org/XML/1998/namespace";
+static XMLNS_URI: &str = "http://www.w3.org/2000/xmlns/";
 
 type InsResult = Result<(), Cow<'static, str>>;
 
@@ -74,7 +74,7 @@ impl Debug for NamespaceMap {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "\nNamespaceMap[")?;
         for (key, value) in &self.scope {
-            write!(f, "   {:?} : {:?}\n", key, value)?;
+            writeln!(f, "   {:?} : {:?}", key, value)?;
         }
         write!(f, "]")
     }
@@ -229,8 +229,8 @@ where
         let doc_handle = sink.get_document();
         XmlTreeBuilder {
             _opts: opts,
-            sink: sink,
-            doc_handle: doc_handle,
+            sink,
+            doc_handle,
             next_tokenizer_state: None,
             open_elems: vec![],
             curr_elem: None,
@@ -248,7 +248,9 @@ where
         for e in self.open_elems.iter() {
             tracer.trace_handle(&e);
         }
-        self.curr_elem.as_ref().map(|h| tracer.trace_handle(&h));
+        if let Some(h) = self.curr_elem.as_ref() {
+            tracer.trace_handle(&h);
+        }
     }
 
     // Debug helper
@@ -360,7 +362,8 @@ where
                 new_attr.push(attr.clone());
             }
         }
-        mem::replace(&mut tag.attrs, new_attr);
+        tag.attrs = new_attr;
+
         // Then we bind the tags namespace.
         self.bind_qname(&mut tag.name);
 
@@ -383,6 +386,8 @@ where
 
         loop {
             let phase = self.phase;
+
+            #[allow(clippy::unused_unit)]
             match self.step(phase, token) {
                 Done => {
                     token = unwrap_or_return!(more_tokens.pop_front(), ());
@@ -497,7 +502,7 @@ where
                 Some(expr) => expr,
                 None => Tendril::new(),
             }
-        };
+        }
         self.sink.append_doctype_to_document(
             get_tendril(doctype.name),
             get_tendril(doctype.public_id),
@@ -622,8 +627,8 @@ where
                     let tag = {
                         let mut tag = Tag {
                             kind: StartTag,
-                            name: name,
-                            attrs: attrs,
+                            name,
+                            attrs,
                         };
                         self.process_namespaces(&mut tag);
                         tag
@@ -640,8 +645,8 @@ where
                     let tag = {
                         let mut tag = Tag {
                             kind: EmptyTag,
-                            name: name,
-                            attrs: attrs,
+                            name,
+                            attrs,
                         };
                         self.process_namespaces(&mut tag);
                         tag
@@ -679,8 +684,8 @@ where
                     let tag = {
                         let mut tag = Tag {
                             kind: StartTag,
-                            name: name,
-                            attrs: attrs,
+                            name,
+                            attrs,
                         };
                         self.process_namespaces(&mut tag);
                         tag
@@ -695,8 +700,8 @@ where
                     let tag = {
                         let mut tag = Tag {
                             kind: EmptyTag,
-                            name: name,
-                            attrs: attrs,
+                            name,
+                            attrs,
                         };
                         self.process_namespaces(&mut tag);
                         tag
@@ -717,8 +722,8 @@ where
                     let tag = {
                         let mut tag = Tag {
                             kind: EndTag,
-                            name: name,
-                            attrs: attrs,
+                            name,
+                            attrs,
                         };
                         self.process_namespaces(&mut tag);
                         tag

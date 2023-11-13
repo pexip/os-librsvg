@@ -6,16 +6,15 @@
 #![allow(
     clippy::approx_constant,
     clippy::type_complexity,
-    clippy::unreadable_literal
+    clippy::unreadable_literal,
+    clippy::upper_case_acronyms
 )]
-
-extern crate glib_sys as glib;
-extern crate libc;
+#![cfg_attr(feature = "dox", feature(doc_cfg))]
 
 #[allow(unused_imports)]
 use libc::{
     c_char, c_double, c_float, c_int, c_long, c_short, c_uchar, c_uint, c_ulong, c_ushort, c_void,
-    intptr_t, size_t, ssize_t, time_t, uintptr_t, FILE,
+    intptr_t, size_t, ssize_t, uintptr_t, FILE,
 };
 
 #[allow(unused_imports)]
@@ -61,6 +60,7 @@ pub const G_TYPE_RESERVED_BSE_LAST: c_int = 48;
 pub const G_TYPE_RESERVED_GLIB_FIRST: c_int = 22;
 pub const G_TYPE_RESERVED_GLIB_LAST: c_int = 31;
 pub const G_TYPE_RESERVED_USER_FIRST: c_int = 49;
+pub const G_VALUE_INTERNED_STRING: c_int = 268435456;
 pub const G_VALUE_NOCOPY_CONTENTS: c_int = 134217728;
 
 // Flags
@@ -98,6 +98,7 @@ pub const G_SIGNAL_ACTION: GSignalFlags = 32;
 pub const G_SIGNAL_NO_HOOKS: GSignalFlags = 64;
 pub const G_SIGNAL_MUST_COLLECT: GSignalFlags = 128;
 pub const G_SIGNAL_DEPRECATED: GSignalFlags = 256;
+pub const G_SIGNAL_ACCUMULATOR_FIRST_RUN: GSignalFlags = 131072;
 
 pub type GSignalMatchType = c_uint;
 pub const G_SIGNAL_MATCH_ID: GSignalMatchType = 1;
@@ -117,6 +118,7 @@ pub const G_TYPE_DEBUG_MASK: GTypeDebugFlags = 7;
 pub type GTypeFlags = c_uint;
 pub const G_TYPE_FLAG_ABSTRACT: GTypeFlags = 16;
 pub const G_TYPE_FLAG_VALUE_ABSTRACT: GTypeFlags = 32;
+pub const G_TYPE_FLAG_FINAL: GTypeFlags = 64;
 
 pub type GTypeFundamentalFlags = c_uint;
 pub const G_TYPE_FLAG_CLASSED: GTypeFundamentalFlags = 1;
@@ -126,17 +128,20 @@ pub const G_TYPE_FLAG_DEEP_DERIVABLE: GTypeFundamentalFlags = 8;
 
 // Unions
 #[repr(C)]
-pub struct GTypeCValue(c_void);
+pub struct GTypeCValue {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GTypeCValue {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTypeCValue @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTypeCValue @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub union GValue_data {
     pub v_int: c_int,
     pub v_uint: c_uint,
@@ -151,7 +156,7 @@ pub union GValue_data {
 
 impl ::std::fmt::Debug for GValue_data {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GValue_data @ {:?}", self as *const _))
+        f.debug_struct(&format!("GValue_data @ {:p}", self))
             .field("v_int", unsafe { &self.v_int })
             .field("v_uint", unsafe { &self.v_uint })
             .field("v_long", unsafe { &self.v_long })
@@ -165,15 +170,15 @@ impl ::std::fmt::Debug for GValue_data {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub union GWeakRef_priv {
     pub p: gpointer,
 }
 
 impl ::std::fmt::Debug for GWeakRef_priv {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GWeakRef_priv @ {:?}", self as *const _))
+        f.debug_struct(&format!("GWeakRef_priv @ {:p}", self))
             .field("p", unsafe { &self.p })
             .finish()
     }
@@ -234,8 +239,7 @@ pub struct GCClosure {
 
 impl ::std::fmt::Debug for GCClosure {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GCClosure @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GCClosure @ {:p}", self)).finish()
     }
 }
 
@@ -248,13 +252,12 @@ pub struct GClosure {
 
 impl ::std::fmt::Debug for GClosure {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GClosure @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GClosure @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GClosureNotifyData {
     pub data: gpointer,
     pub notify: GClosureNotify,
@@ -262,15 +265,15 @@ pub struct GClosureNotifyData {
 
 impl ::std::fmt::Debug for GClosureNotifyData {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GClosureNotifyData @ {:?}", self as *const _))
+        f.debug_struct(&format!("GClosureNotifyData @ {:p}", self))
             .field("data", &self.data)
             .field("notify", &self.notify)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GEnumClass {
     pub g_type_class: GTypeClass,
     pub minimum: c_int,
@@ -281,7 +284,7 @@ pub struct GEnumClass {
 
 impl ::std::fmt::Debug for GEnumClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GEnumClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GEnumClass @ {:p}", self))
             .field("g_type_class", &self.g_type_class)
             .field("minimum", &self.minimum)
             .field("maximum", &self.maximum)
@@ -291,8 +294,8 @@ impl ::std::fmt::Debug for GEnumClass {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GEnumValue {
     pub value: c_int,
     pub value_name: *const c_char,
@@ -301,7 +304,7 @@ pub struct GEnumValue {
 
 impl ::std::fmt::Debug for GEnumValue {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GEnumValue @ {:?}", self as *const _))
+        f.debug_struct(&format!("GEnumValue @ {:p}", self))
             .field("value", &self.value)
             .field("value_name", &self.value_name)
             .field("value_nick", &self.value_nick)
@@ -309,8 +312,8 @@ impl ::std::fmt::Debug for GEnumValue {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFlagsClass {
     pub g_type_class: GTypeClass,
     pub mask: c_uint,
@@ -320,7 +323,7 @@ pub struct GFlagsClass {
 
 impl ::std::fmt::Debug for GFlagsClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFlagsClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFlagsClass @ {:p}", self))
             .field("g_type_class", &self.g_type_class)
             .field("mask", &self.mask)
             .field("n_values", &self.n_values)
@@ -329,8 +332,8 @@ impl ::std::fmt::Debug for GFlagsClass {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GFlagsValue {
     pub value: c_uint,
     pub value_name: *const c_char,
@@ -339,7 +342,7 @@ pub struct GFlagsValue {
 
 impl ::std::fmt::Debug for GFlagsValue {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GFlagsValue @ {:?}", self as *const _))
+        f.debug_struct(&format!("GFlagsValue @ {:p}", self))
             .field("value", &self.value)
             .field("value_name", &self.value_name)
             .field("value_nick", &self.value_nick)
@@ -347,8 +350,8 @@ impl ::std::fmt::Debug for GFlagsValue {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GInitiallyUnownedClass {
     pub g_type_class: GTypeClass,
     pub construct_properties: *mut glib::GSList,
@@ -370,7 +373,7 @@ pub struct GInitiallyUnownedClass {
 
 impl ::std::fmt::Debug for GInitiallyUnownedClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GInitiallyUnownedClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GInitiallyUnownedClass @ {:p}", self))
             .field("g_type_class", &self.g_type_class)
             .field("constructor", &self.constructor)
             .field("set_property", &self.set_property)
@@ -387,8 +390,8 @@ impl ::std::fmt::Debug for GInitiallyUnownedClass {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GInterfaceInfo {
     pub interface_init: GInterfaceInitFunc,
     pub interface_finalize: GInterfaceFinalizeFunc,
@@ -397,7 +400,7 @@ pub struct GInterfaceInfo {
 
 impl ::std::fmt::Debug for GInterfaceInfo {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GInterfaceInfo @ {:?}", self as *const _))
+        f.debug_struct(&format!("GInterfaceInfo @ {:p}", self))
             .field("interface_init", &self.interface_init)
             .field("interface_finalize", &self.interface_finalize)
             .field("interface_data", &self.interface_data)
@@ -405,8 +408,8 @@ impl ::std::fmt::Debug for GInterfaceInfo {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GObjectClass {
     pub g_type_class: GTypeClass,
     pub construct_properties: *mut glib::GSList,
@@ -428,7 +431,7 @@ pub struct GObjectClass {
 
 impl ::std::fmt::Debug for GObjectClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GObjectClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GObjectClass @ {:p}", self))
             .field("g_type_class", &self.g_type_class)
             .field("constructor", &self.constructor)
             .field("set_property", &self.set_property)
@@ -445,8 +448,8 @@ impl ::std::fmt::Debug for GObjectClass {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GObjectConstructParam {
     pub pspec: *mut GParamSpec,
     pub value: *mut GValue,
@@ -454,15 +457,15 @@ pub struct GObjectConstructParam {
 
 impl ::std::fmt::Debug for GObjectConstructParam {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GObjectConstructParam @ {:?}", self as *const _))
+        f.debug_struct(&format!("GObjectConstructParam @ {:p}", self))
             .field("pspec", &self.pspec)
             .field("value", &self.value)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecClass {
     pub g_type_class: GTypeClass,
     pub value_type: GType,
@@ -476,7 +479,7 @@ pub struct GParamSpecClass {
 
 impl ::std::fmt::Debug for GParamSpecClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecClass @ {:p}", self))
             .field("g_type_class", &self.g_type_class)
             .field("value_type", &self.value_type)
             .field("finalize", &self.finalize)
@@ -488,12 +491,15 @@ impl ::std::fmt::Debug for GParamSpecClass {
 }
 
 #[repr(C)]
-pub struct _GParamSpecPool(c_void);
+pub struct _GParamSpecPool {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 pub type GParamSpecPool = *mut _GParamSpecPool;
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecTypeInfo {
     pub instance_size: u16,
     pub n_preallocs: u16,
@@ -508,7 +514,7 @@ pub struct GParamSpecTypeInfo {
 
 impl ::std::fmt::Debug for GParamSpecTypeInfo {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecTypeInfo @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecTypeInfo @ {:p}", self))
             .field("instance_size", &self.instance_size)
             .field("n_preallocs", &self.n_preallocs)
             .field("instance_init", &self.instance_init)
@@ -521,8 +527,8 @@ impl ::std::fmt::Debug for GParamSpecTypeInfo {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParameter {
     pub name: *const c_char,
     pub value: GValue,
@@ -530,15 +536,15 @@ pub struct GParameter {
 
 impl ::std::fmt::Debug for GParameter {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParameter @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParameter @ {:p}", self))
             .field("name", &self.name)
             .field("value", &self.value)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSignalInvocationHint {
     pub signal_id: c_uint,
     pub detail: glib::GQuark,
@@ -547,7 +553,7 @@ pub struct GSignalInvocationHint {
 
 impl ::std::fmt::Debug for GSignalInvocationHint {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSignalInvocationHint @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSignalInvocationHint @ {:p}", self))
             .field("signal_id", &self.signal_id)
             .field("detail", &self.detail)
             .field("run_type", &self.run_type)
@@ -555,8 +561,8 @@ impl ::std::fmt::Debug for GSignalInvocationHint {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GSignalQuery {
     pub signal_id: c_uint,
     pub signal_name: *const c_char,
@@ -569,7 +575,7 @@ pub struct GSignalQuery {
 
 impl ::std::fmt::Debug for GSignalQuery {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GSignalQuery @ {:?}", self as *const _))
+        f.debug_struct(&format!("GSignalQuery @ {:p}", self))
             .field("signal_id", &self.signal_id)
             .field("signal_name", &self.signal_name)
             .field("itype", &self.itype)
@@ -581,35 +587,34 @@ impl ::std::fmt::Debug for GSignalQuery {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTypeClass {
     pub g_type: GType,
 }
 
 impl ::std::fmt::Debug for GTypeClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTypeClass @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GTypeClass @ {:p}", self)).finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTypeFundamentalInfo {
     pub type_flags: GTypeFundamentalFlags,
 }
 
 impl ::std::fmt::Debug for GTypeFundamentalInfo {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTypeFundamentalInfo @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTypeFundamentalInfo @ {:p}", self))
             .field("type_flags", &self.type_flags)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTypeInfo {
     pub class_size: u16,
     pub base_init: GBaseInitFunc,
@@ -625,7 +630,7 @@ pub struct GTypeInfo {
 
 impl ::std::fmt::Debug for GTypeInfo {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTypeInfo @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTypeInfo @ {:p}", self))
             .field("class_size", &self.class_size)
             .field("base_init", &self.base_init)
             .field("base_finalize", &self.base_finalize)
@@ -640,21 +645,21 @@ impl ::std::fmt::Debug for GTypeInfo {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTypeInstance {
     pub g_class: *mut GTypeClass,
 }
 
 impl ::std::fmt::Debug for GTypeInstance {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTypeInstance @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTypeInstance @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTypeInterface {
     pub g_type: GType,
     pub g_instance_type: GType,
@@ -662,13 +667,13 @@ pub struct GTypeInterface {
 
 impl ::std::fmt::Debug for GTypeInterface {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTypeInterface @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTypeInterface @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTypeModuleClass {
     pub parent_class: GObjectClass,
     pub load: Option<unsafe extern "C" fn(*mut GTypeModule) -> gboolean>,
@@ -681,7 +686,7 @@ pub struct GTypeModuleClass {
 
 impl ::std::fmt::Debug for GTypeModuleClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTypeModuleClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTypeModuleClass @ {:p}", self))
             .field("parent_class", &self.parent_class)
             .field("load", &self.load)
             .field("unload", &self.unload)
@@ -693,8 +698,8 @@ impl ::std::fmt::Debug for GTypeModuleClass {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTypePluginClass {
     pub base_iface: GTypeInterface,
     pub use_plugin: GTypePluginUse,
@@ -705,7 +710,7 @@ pub struct GTypePluginClass {
 
 impl ::std::fmt::Debug for GTypePluginClass {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTypePluginClass @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTypePluginClass @ {:p}", self))
             .field("use_plugin", &self.use_plugin)
             .field("unuse_plugin", &self.unuse_plugin)
             .field("complete_type_info", &self.complete_type_info)
@@ -714,8 +719,8 @@ impl ::std::fmt::Debug for GTypePluginClass {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTypeQuery {
     pub type_: GType,
     pub type_name: *const c_char,
@@ -725,7 +730,7 @@ pub struct GTypeQuery {
 
 impl ::std::fmt::Debug for GTypeQuery {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTypeQuery @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTypeQuery @ {:p}", self))
             .field("type_", &self.type_)
             .field("type_name", &self.type_name)
             .field("class_size", &self.class_size)
@@ -734,8 +739,8 @@ impl ::std::fmt::Debug for GTypeQuery {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTypeValueTable {
     pub value_init: Option<unsafe extern "C" fn(*mut GValue)>,
     pub value_free: Option<unsafe extern "C" fn(*mut GValue)>,
@@ -753,7 +758,7 @@ pub struct GTypeValueTable {
 
 impl ::std::fmt::Debug for GTypeValueTable {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTypeValueTable @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTypeValueTable @ {:p}", self))
             .field("value_init", &self.value_init)
             .field("value_free", &self.value_free)
             .field("value_copy", &self.value_copy)
@@ -766,8 +771,8 @@ impl ::std::fmt::Debug for GTypeValueTable {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GValue {
     pub g_type: GType,
     pub data: [GValue_data; 2],
@@ -775,14 +780,14 @@ pub struct GValue {
 
 impl ::std::fmt::Debug for GValue {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GValue @ {:?}", self as *const _))
+        f.debug_struct(&format!("GValue @ {:p}", self))
             .field("data", &self.data)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GValueArray {
     pub n_values: c_uint,
     pub values: *mut GValue,
@@ -791,22 +796,22 @@ pub struct GValueArray {
 
 impl ::std::fmt::Debug for GValueArray {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GValueArray @ {:?}", self as *const _))
+        f.debug_struct(&format!("GValueArray @ {:p}", self))
             .field("n_values", &self.n_values)
             .field("values", &self.values)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GWeakRef {
     pub priv_: GWeakRef_priv,
 }
 
 impl ::std::fmt::Debug for GWeakRef {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GWeakRef @ {:?}", self as *const _))
+        f.debug_struct(&format!("GWeakRef @ {:p}", self))
             .field("priv_", &self.priv_)
             .finish()
     }
@@ -814,17 +819,32 @@ impl ::std::fmt::Debug for GWeakRef {
 
 // Classes
 #[repr(C)]
-pub struct GBinding(c_void);
+pub struct GBinding {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GBinding {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GBinding @ {:?}", self as *const _))
-            .finish()
+        f.debug_struct(&format!("GBinding @ {:p}", self)).finish()
     }
 }
 
 #[repr(C)]
+pub struct GBindingGroup {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
+
+impl ::std::fmt::Debug for GBindingGroup {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        f.debug_struct(&format!("GBindingGroup @ {:p}", self))
+            .finish()
+    }
+}
+
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GInitiallyUnowned {
     pub g_type_instance: GTypeInstance,
     pub ref_count: c_uint,
@@ -833,14 +853,14 @@ pub struct GInitiallyUnowned {
 
 impl ::std::fmt::Debug for GInitiallyUnowned {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GInitiallyUnowned @ {:?}", self as *const _))
+        f.debug_struct(&format!("GInitiallyUnowned @ {:p}", self))
             .field("g_type_instance", &self.g_type_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GObject {
     pub g_type_instance: GTypeInstance,
     pub ref_count: c_uint,
@@ -849,14 +869,14 @@ pub struct GObject {
 
 impl ::std::fmt::Debug for GObject {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GObject @ {:?}", self as *const _))
+        f.debug_struct(&format!("GObject @ {:p}", self))
             .field("g_type_instance", &self.g_type_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpec {
     pub g_type_instance: GTypeInstance,
     pub name: *const c_char,
@@ -872,7 +892,7 @@ pub struct GParamSpec {
 
 impl ::std::fmt::Debug for GParamSpec {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpec @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpec @ {:p}", self))
             .field("g_type_instance", &self.g_type_instance)
             .field("name", &self.name)
             .field("flags", &self.flags)
@@ -882,8 +902,8 @@ impl ::std::fmt::Debug for GParamSpec {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecBoolean {
     pub parent_instance: GParamSpec,
     pub default_value: gboolean,
@@ -891,29 +911,29 @@ pub struct GParamSpecBoolean {
 
 impl ::std::fmt::Debug for GParamSpecBoolean {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecBoolean @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecBoolean @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("default_value", &self.default_value)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecBoxed {
     pub parent_instance: GParamSpec,
 }
 
 impl ::std::fmt::Debug for GParamSpecBoxed {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecBoxed @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecBoxed @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecChar {
     pub parent_instance: GParamSpec,
     pub minimum: i8,
@@ -923,7 +943,7 @@ pub struct GParamSpecChar {
 
 impl ::std::fmt::Debug for GParamSpecChar {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecChar @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecChar @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("minimum", &self.minimum)
             .field("maximum", &self.maximum)
@@ -932,8 +952,8 @@ impl ::std::fmt::Debug for GParamSpecChar {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecDouble {
     pub parent_instance: GParamSpec,
     pub minimum: c_double,
@@ -944,7 +964,7 @@ pub struct GParamSpecDouble {
 
 impl ::std::fmt::Debug for GParamSpecDouble {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecDouble @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecDouble @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("minimum", &self.minimum)
             .field("maximum", &self.maximum)
@@ -954,8 +974,8 @@ impl ::std::fmt::Debug for GParamSpecDouble {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecEnum {
     pub parent_instance: GParamSpec,
     pub enum_class: *mut GEnumClass,
@@ -964,7 +984,7 @@ pub struct GParamSpecEnum {
 
 impl ::std::fmt::Debug for GParamSpecEnum {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecEnum @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecEnum @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("enum_class", &self.enum_class)
             .field("default_value", &self.default_value)
@@ -972,8 +992,8 @@ impl ::std::fmt::Debug for GParamSpecEnum {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecFlags {
     pub parent_instance: GParamSpec,
     pub flags_class: *mut GFlagsClass,
@@ -982,7 +1002,7 @@ pub struct GParamSpecFlags {
 
 impl ::std::fmt::Debug for GParamSpecFlags {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecFlags @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecFlags @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("flags_class", &self.flags_class)
             .field("default_value", &self.default_value)
@@ -990,8 +1010,8 @@ impl ::std::fmt::Debug for GParamSpecFlags {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecFloat {
     pub parent_instance: GParamSpec,
     pub minimum: c_float,
@@ -1002,7 +1022,7 @@ pub struct GParamSpecFloat {
 
 impl ::std::fmt::Debug for GParamSpecFloat {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecFloat @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecFloat @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("minimum", &self.minimum)
             .field("maximum", &self.maximum)
@@ -1012,8 +1032,8 @@ impl ::std::fmt::Debug for GParamSpecFloat {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecGType {
     pub parent_instance: GParamSpec,
     pub is_a_type: GType,
@@ -1021,15 +1041,15 @@ pub struct GParamSpecGType {
 
 impl ::std::fmt::Debug for GParamSpecGType {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecGType @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecGType @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("is_a_type", &self.is_a_type)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecInt {
     pub parent_instance: GParamSpec,
     pub minimum: c_int,
@@ -1039,7 +1059,7 @@ pub struct GParamSpecInt {
 
 impl ::std::fmt::Debug for GParamSpecInt {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecInt @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecInt @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("minimum", &self.minimum)
             .field("maximum", &self.maximum)
@@ -1048,8 +1068,8 @@ impl ::std::fmt::Debug for GParamSpecInt {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecInt64 {
     pub parent_instance: GParamSpec,
     pub minimum: i64,
@@ -1059,7 +1079,7 @@ pub struct GParamSpecInt64 {
 
 impl ::std::fmt::Debug for GParamSpecInt64 {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecInt64 @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecInt64 @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("minimum", &self.minimum)
             .field("maximum", &self.maximum)
@@ -1068,8 +1088,8 @@ impl ::std::fmt::Debug for GParamSpecInt64 {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecLong {
     pub parent_instance: GParamSpec,
     pub minimum: c_long,
@@ -1079,7 +1099,7 @@ pub struct GParamSpecLong {
 
 impl ::std::fmt::Debug for GParamSpecLong {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecLong @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecLong @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("minimum", &self.minimum)
             .field("maximum", &self.maximum)
@@ -1088,22 +1108,22 @@ impl ::std::fmt::Debug for GParamSpecLong {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecObject {
     pub parent_instance: GParamSpec,
 }
 
 impl ::std::fmt::Debug for GParamSpecObject {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecObject @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecObject @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecOverride {
     pub parent_instance: GParamSpec,
     pub overridden: *mut GParamSpec,
@@ -1111,34 +1131,34 @@ pub struct GParamSpecOverride {
 
 impl ::std::fmt::Debug for GParamSpecOverride {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecOverride @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecOverride @ {:p}", self))
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecParam {
     pub parent_instance: GParamSpec,
 }
 
 impl ::std::fmt::Debug for GParamSpecParam {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecParam @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecParam @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecPointer {
     pub parent_instance: GParamSpec,
 }
 
 impl ::std::fmt::Debug for GParamSpecPointer {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecPointer @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecPointer @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .finish()
     }
@@ -1158,7 +1178,7 @@ pub struct GParamSpecString {
 
 impl ::std::fmt::Debug for GParamSpecString {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecString @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecString @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("default_value", &self.default_value)
             .field("cset_first", &self.cset_first)
@@ -1169,8 +1189,8 @@ impl ::std::fmt::Debug for GParamSpecString {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecUChar {
     pub parent_instance: GParamSpec,
     pub minimum: u8,
@@ -1180,7 +1200,7 @@ pub struct GParamSpecUChar {
 
 impl ::std::fmt::Debug for GParamSpecUChar {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecUChar @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecUChar @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("minimum", &self.minimum)
             .field("maximum", &self.maximum)
@@ -1189,8 +1209,8 @@ impl ::std::fmt::Debug for GParamSpecUChar {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecUInt {
     pub parent_instance: GParamSpec,
     pub minimum: c_uint,
@@ -1200,7 +1220,7 @@ pub struct GParamSpecUInt {
 
 impl ::std::fmt::Debug for GParamSpecUInt {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecUInt @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecUInt @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("minimum", &self.minimum)
             .field("maximum", &self.maximum)
@@ -1209,8 +1229,8 @@ impl ::std::fmt::Debug for GParamSpecUInt {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecUInt64 {
     pub parent_instance: GParamSpec,
     pub minimum: u64,
@@ -1220,7 +1240,7 @@ pub struct GParamSpecUInt64 {
 
 impl ::std::fmt::Debug for GParamSpecUInt64 {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecUInt64 @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecUInt64 @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("minimum", &self.minimum)
             .field("maximum", &self.maximum)
@@ -1229,8 +1249,8 @@ impl ::std::fmt::Debug for GParamSpecUInt64 {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecULong {
     pub parent_instance: GParamSpec,
     pub minimum: c_ulong,
@@ -1240,7 +1260,7 @@ pub struct GParamSpecULong {
 
 impl ::std::fmt::Debug for GParamSpecULong {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecULong @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecULong @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("minimum", &self.minimum)
             .field("maximum", &self.maximum)
@@ -1249,8 +1269,8 @@ impl ::std::fmt::Debug for GParamSpecULong {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecUnichar {
     pub parent_instance: GParamSpec,
     pub default_value: u32,
@@ -1258,15 +1278,15 @@ pub struct GParamSpecUnichar {
 
 impl ::std::fmt::Debug for GParamSpecUnichar {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecUnichar @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecUnichar @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("default_value", &self.default_value)
             .finish()
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecValueArray {
     pub parent_instance: GParamSpec,
     pub element_spec: *mut GParamSpec,
@@ -1275,7 +1295,7 @@ pub struct GParamSpecValueArray {
 
 impl ::std::fmt::Debug for GParamSpecValueArray {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecValueArray @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecValueArray @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("element_spec", &self.element_spec)
             .field("fixed_n_elements", &self.fixed_n_elements)
@@ -1283,8 +1303,8 @@ impl ::std::fmt::Debug for GParamSpecValueArray {
     }
 }
 
-#[repr(C)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GParamSpecVariant {
     pub parent_instance: GParamSpec,
     pub type_: *mut glib::GVariantType,
@@ -1294,7 +1314,7 @@ pub struct GParamSpecVariant {
 
 impl ::std::fmt::Debug for GParamSpecVariant {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GParamSpecVariant @ {:?}", self as *const _))
+        f.debug_struct(&format!("GParamSpecVariant @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("type_", &self.type_)
             .field("default_value", &self.default_value)
@@ -1303,7 +1323,20 @@ impl ::std::fmt::Debug for GParamSpecVariant {
 }
 
 #[repr(C)]
+pub struct GSignalGroup {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
+
+impl ::std::fmt::Debug for GSignalGroup {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        f.debug_struct(&format!("GSignalGroup @ {:p}", self))
+            .finish()
+    }
+}
+
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct GTypeModule {
     pub parent_instance: GObject,
     pub use_count: c_uint,
@@ -1314,7 +1347,7 @@ pub struct GTypeModule {
 
 impl ::std::fmt::Debug for GTypeModule {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        f.debug_struct(&format!("GTypeModule @ {:?}", self as *const _))
+        f.debug_struct(&format!("GTypeModule @ {:p}", self))
             .field("parent_instance", &self.parent_instance)
             .field("use_count", &self.use_count)
             .field("type_infos", &self.type_infos)
@@ -1326,14 +1359,18 @@ impl ::std::fmt::Debug for GTypeModule {
 
 // Interfaces
 #[repr(C)]
-pub struct GTypePlugin(c_void);
+pub struct GTypePlugin {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for GTypePlugin {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "GTypePlugin @ {:?}", self as *const _)
+        write!(f, "GTypePlugin @ {:p}", self)
     }
 }
 
+#[link(name = "gobject-2.0")]
 extern "C" {
 
     //=========================================================================
@@ -1705,6 +1742,9 @@ extern "C" {
         instance_type: GType,
         interface_type: GType,
     ) -> *mut GTypePlugin;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_type_interface_instantiatable_prerequisite(interface_type: GType) -> GType;
     pub fn g_type_interface_peek(instance_class: gpointer, iface_type: GType) -> gpointer;
     pub fn g_type_interface_prerequisites(
         interface_type: GType,
@@ -1764,6 +1804,9 @@ extern "C" {
     pub fn g_value_set_instance(value: *mut GValue, instance: gpointer);
     pub fn g_value_set_int(value: *mut GValue, v_int: c_int);
     pub fn g_value_set_int64(value: *mut GValue, v_int64: i64);
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_value_set_interned_string(value: *mut GValue, v_string: *const c_char);
     pub fn g_value_set_long(value: *mut GValue, v_long: c_long);
     pub fn g_value_set_object(value: *mut GValue, v_object: *mut GObject);
     pub fn g_value_set_object_take_ownership(value: *mut GValue, v_object: gpointer);
@@ -1839,12 +1882,67 @@ extern "C" {
     // GBinding
     //=========================================================================
     pub fn g_binding_get_type() -> GType;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_binding_dup_source(binding: *mut GBinding) -> *mut GObject;
+    #[cfg(any(feature = "v2_68", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_68")))]
+    pub fn g_binding_dup_target(binding: *mut GBinding) -> *mut GObject;
     pub fn g_binding_get_flags(binding: *mut GBinding) -> GBindingFlags;
     pub fn g_binding_get_source(binding: *mut GBinding) -> *mut GObject;
     pub fn g_binding_get_source_property(binding: *mut GBinding) -> *const c_char;
     pub fn g_binding_get_target(binding: *mut GBinding) -> *mut GObject;
     pub fn g_binding_get_target_property(binding: *mut GBinding) -> *const c_char;
     pub fn g_binding_unbind(binding: *mut GBinding);
+
+    //=========================================================================
+    // GBindingGroup
+    //=========================================================================
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_binding_group_get_type() -> GType;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_binding_group_new() -> *mut GBindingGroup;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_binding_group_bind(
+        self_: *mut GBindingGroup,
+        source_property: *const c_char,
+        target: *mut GObject,
+        target_property: *const c_char,
+        flags: GBindingFlags,
+    );
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_binding_group_bind_full(
+        self_: *mut GBindingGroup,
+        source_property: *const c_char,
+        target: *mut GObject,
+        target_property: *const c_char,
+        flags: GBindingFlags,
+        transform_to: GBindingTransformFunc,
+        transform_from: GBindingTransformFunc,
+        user_data: gpointer,
+        user_data_destroy: glib::GDestroyNotify,
+    );
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_binding_group_bind_with_closures(
+        self_: *mut GBindingGroup,
+        source_property: *const c_char,
+        target: *mut GObject,
+        target_property: *const c_char,
+        flags: GBindingFlags,
+        transform_to: *mut GClosure,
+        transform_from: *mut GClosure,
+    );
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_binding_group_dup_source(self_: *mut GBindingGroup) -> *mut GObject;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_binding_group_set_source(self_: *mut GBindingGroup, source: *mut GObject);
 
     //=========================================================================
     // GInitiallyUnowned
@@ -1862,6 +1960,7 @@ extern "C" {
     ) -> *mut GObject;
     //pub fn g_object_new_valist(object_type: GType, first_property_name: *const c_char, var_args: /*Unimplemented*/va_list) -> *mut GObject;
     #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_54")))]
     pub fn g_object_new_with_properties(
         object_type: GType,
         n_properties: c_uint,
@@ -1938,6 +2037,7 @@ extern "C" {
     pub fn g_object_get_qdata(object: *mut GObject, quark: glib::GQuark) -> gpointer;
     //pub fn g_object_get_valist(object: *mut GObject, first_property_name: *const c_char, var_args: /*Unimplemented*/va_list);
     #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_54")))]
     pub fn g_object_getv(
         object: *mut GObject,
         n_properties: c_uint,
@@ -1990,6 +2090,7 @@ extern "C" {
     );
     //pub fn g_object_set_valist(object: *mut GObject, first_property_name: *const c_char, var_args: /*Unimplemented*/va_list);
     #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_54")))]
     pub fn g_object_setv(
         object: *mut GObject,
         n_properties: c_uint,
@@ -1998,6 +2099,9 @@ extern "C" {
     );
     pub fn g_object_steal_data(object: *mut GObject, key: *const c_char) -> gpointer;
     pub fn g_object_steal_qdata(object: *mut GObject, quark: glib::GQuark) -> gpointer;
+    #[cfg(any(feature = "v2_70", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_70")))]
+    pub fn g_object_take_ref(object: *mut GObject) -> *mut GObject;
     pub fn g_object_thaw_notify(object: *mut GObject);
     pub fn g_object_unref(object: *mut GObject);
     pub fn g_object_watch_closure(object: *mut GObject, closure: *mut GClosure);
@@ -2014,10 +2118,12 @@ extern "C" {
         blurb: *const c_char,
         flags: GParamFlags,
     ) -> *mut GParamSpec;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_param_spec_is_valid_name(name: *const c_char) -> gboolean;
     pub fn g_param_spec_get_blurb(pspec: *mut GParamSpec) -> *const c_char;
     pub fn g_param_spec_get_default_value(pspec: *mut GParamSpec) -> *const GValue;
     pub fn g_param_spec_get_name(pspec: *mut GParamSpec) -> *const c_char;
-    #[cfg(any(feature = "v2_46", feature = "dox"))]
     pub fn g_param_spec_get_name_quark(pspec: *mut GParamSpec) -> glib::GQuark;
     pub fn g_param_spec_get_nick(pspec: *mut GParamSpec) -> *const c_char;
     pub fn g_param_spec_get_qdata(pspec: *mut GParamSpec, quark: glib::GQuark) -> gpointer;
@@ -2034,6 +2140,71 @@ extern "C" {
     pub fn g_param_spec_sink(pspec: *mut GParamSpec);
     pub fn g_param_spec_steal_qdata(pspec: *mut GParamSpec, quark: glib::GQuark) -> gpointer;
     pub fn g_param_spec_unref(pspec: *mut GParamSpec);
+
+    //=========================================================================
+    // GSignalGroup
+    //=========================================================================
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_signal_group_get_type() -> GType;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_signal_group_new(target_type: GType) -> *mut GSignalGroup;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_signal_group_block(self_: *mut GSignalGroup);
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_signal_group_connect(
+        self_: *mut GSignalGroup,
+        detailed_signal: *const c_char,
+        c_handler: GCallback,
+        data: gpointer,
+    );
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_signal_group_connect_after(
+        self_: *mut GSignalGroup,
+        detailed_signal: *const c_char,
+        c_handler: GCallback,
+        data: gpointer,
+    );
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_signal_group_connect_data(
+        self_: *mut GSignalGroup,
+        detailed_signal: *const c_char,
+        c_handler: GCallback,
+        data: gpointer,
+        notify: GClosureNotify,
+        flags: GConnectFlags,
+    );
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_signal_group_connect_object(
+        self_: *mut GSignalGroup,
+        detailed_signal: *const c_char,
+        c_handler: GCallback,
+        object: gpointer,
+        flags: GConnectFlags,
+    );
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_signal_group_connect_swapped(
+        self_: *mut GSignalGroup,
+        detailed_signal: *const c_char,
+        c_handler: GCallback,
+        data: gpointer,
+    );
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_signal_group_dup_target(self_: *mut GSignalGroup) -> *mut GObject;
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_signal_group_set_target(self_: *mut GSignalGroup, target: *mut GObject);
+    #[cfg(any(feature = "v2_72", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_72")))]
+    pub fn g_signal_group_unblock(self_: *mut GSignalGroup);
 
     //=========================================================================
     // GTypeModule
@@ -2097,6 +2268,7 @@ extern "C" {
     ) -> GType;
     pub fn g_clear_object(object_ptr: *mut *mut GObject);
     #[cfg(any(feature = "v2_62", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_62")))]
     pub fn g_clear_signal_handler(handler_id_ptr: *mut c_ulong, instance: *mut GObject);
     pub fn g_enum_complete_type_info(
         g_enum_type: GType,
@@ -2117,6 +2289,7 @@ extern "C" {
         const_static_values: *const GEnumValue,
     ) -> GType;
     #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_54")))]
     pub fn g_enum_to_string(g_enum_type: GType, value: c_int) -> *mut c_char;
     pub fn g_flags_complete_type_info(
         g_flags_type: GType,
@@ -2140,6 +2313,7 @@ extern "C" {
         const_static_values: *const GFlagsValue,
     ) -> GType;
     #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_54")))]
     pub fn g_flags_to_string(flags_type: GType, value: c_uint) -> *mut c_char;
     pub fn g_gtype_get_type() -> GType;
     pub fn g_param_spec_boolean(
@@ -2332,7 +2506,7 @@ extern "C" {
         dest_value: *mut GValue,
         strict_validation: gboolean,
     ) -> gboolean;
-    pub fn g_param_value_defaults(pspec: *mut GParamSpec, value: *mut GValue) -> gboolean;
+    pub fn g_param_value_defaults(pspec: *mut GParamSpec, value: *const GValue) -> gboolean;
     pub fn g_param_value_set_default(pspec: *mut GParamSpec, value: *mut GValue);
     pub fn g_param_value_validate(pspec: *mut GParamSpec, value: *mut GValue) -> gboolean;
     pub fn g_param_values_cmp(
@@ -2450,6 +2624,9 @@ extern "C" {
         detail: glib::GQuark,
         may_be_blocked: gboolean,
     ) -> gboolean;
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    pub fn g_signal_is_valid_name(name: *const c_char) -> gboolean;
     pub fn g_signal_list_ids(itype: GType, n_ids: *mut c_uint) -> *mut c_uint;
     pub fn g_signal_lookup(name: *const c_char, itype: GType) -> c_uint;
     pub fn g_signal_name(signal_id: c_uint) -> *const c_char;
@@ -2556,7 +2733,6 @@ extern "C" {
     pub fn g_type_from_name(name: *const c_char) -> GType;
     pub fn g_type_fundamental(type_id: GType) -> GType;
     pub fn g_type_fundamental_next() -> GType;
-    #[cfg(any(feature = "v2_44", feature = "dox"))]
     pub fn g_type_get_instance_count(type_: GType) -> c_int;
     pub fn g_type_get_plugin(type_: GType) -> *mut GTypePlugin;
     pub fn g_type_get_qdata(type_: GType, quark: glib::GQuark) -> gpointer;

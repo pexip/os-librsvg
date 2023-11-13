@@ -4,23 +4,22 @@ use simba::scalar::RealField;
 use std::ops::{DivAssign, MulAssign};
 
 use crate::allocator::Allocator;
-use crate::base::dimension::{Dim, U1};
-use crate::base::storage::Storage;
-use crate::base::{DefaultAllocator, MatrixN, VectorN};
+use crate::base::dimension::Dim;
+use crate::base::{Const, DefaultAllocator, OMatrix, OVector};
 
-/// Applies in-place a modified Parlett and Reinsch matrix balancing with 2-norm to the matrix `m` and returns
+/// Applies in-place a modified Parlett and Reinsch matrix balancing with 2-norm to the matrix and returns
 /// the corresponding diagonal transformation.
 ///
-/// See https://arxiv.org/pdf/1401.5766.pdf
-pub fn balance_parlett_reinsch<N: RealField, D: Dim>(m: &mut MatrixN<N, D>) -> VectorN<N, D>
+/// See <https://arxiv.org/pdf/1401.5766.pdf>
+pub fn balance_parlett_reinsch<T: RealField, D: Dim>(matrix: &mut OMatrix<T, D, D>) -> OVector<T, D>
 where
-    DefaultAllocator: Allocator<N, D, D> + Allocator<N, D>,
+    DefaultAllocator: Allocator<T, D, D> + Allocator<T, D>,
 {
-    assert!(m.is_square(), "Unable to balance a non-square matrix.");
+    assert!(matrix.is_square(), "Unable to balance a non-square matrix.");
 
-    let dim = m.data.shape().0;
-    let radix: N = crate::convert(2.0f64);
-    let mut d = VectorN::from_element_generic(dim, U1, N::one());
+    let dim = matrix.shape_generic().0;
+    let radix: T = crate::convert(2.0f64);
+    let mut d = OVector::from_element_generic(dim, Const::<1>, T::one());
 
     let mut converged = false;
 
@@ -28,36 +27,37 @@ where
         converged = true;
 
         for i in 0..dim.value() {
-            let mut c = m.column(i).norm_squared();
-            let mut r = m.row(i).norm_squared();
-            let mut f = N::one();
+            let mut n_col = matrix.column(i).norm_squared();
+            let mut n_row = matrix.row(i).norm_squared();
+            let mut f = T::one();
 
-            let s = c + r;
-            c = c.sqrt();
-            r = r.sqrt();
+            let s = n_col.clone() + n_row.clone();
+            n_col = n_col.sqrt();
+            n_row = n_row.sqrt();
 
-            if c.is_zero() || r.is_zero() {
+            if n_col.clone().is_zero() || n_row.clone().is_zero() {
                 continue;
             }
 
-            while c < r / radix {
-                c *= radix;
-                r /= radix;
-                f *= radix;
+            while n_col.clone() < n_row.clone() / radix.clone() {
+                n_col *= radix.clone();
+                n_row /= radix.clone();
+                f *= radix.clone();
             }
 
-            while c >= r * radix {
-                c /= radix;
-                r *= radix;
-                f /= radix;
+            while n_col.clone() >= n_row.clone() * radix.clone() {
+                n_col /= radix.clone();
+                n_row *= radix.clone();
+                f /= radix.clone();
             }
 
-            let eps: N = crate::convert(0.95);
-            if c * c + r * r < eps * s {
+            let eps: T = crate::convert(0.95);
+            #[allow(clippy::suspicious_operation_groupings)]
+            if n_col.clone() * n_col + n_row.clone() * n_row < eps * s {
                 converged = false;
-                d[i] *= f;
-                m.column_mut(i).mul_assign(f);
-                m.row_mut(i).div_assign(f);
+                d[i] *= f.clone();
+                matrix.column_mut(i).mul_assign(f.clone());
+                matrix.row_mut(i).div_assign(f.clone());
             }
         }
     }
@@ -66,19 +66,19 @@ where
 }
 
 /// Computes in-place `D * m * D.inverse()`, where `D` is the matrix with diagonal `d`.
-pub fn unbalance<N: RealField, D: Dim>(m: &mut MatrixN<N, D>, d: &VectorN<N, D>)
+pub fn unbalance<T: RealField, D: Dim>(m: &mut OMatrix<T, D, D>, d: &OVector<T, D>)
 where
-    DefaultAllocator: Allocator<N, D, D> + Allocator<N, D>,
+    DefaultAllocator: Allocator<T, D, D> + Allocator<T, D>,
 {
     assert!(m.is_square(), "Unable to unbalance a non-square matrix.");
     assert_eq!(m.nrows(), d.len(), "Unbalancing: mismatched dimensions.");
 
     for j in 0..d.len() {
         let mut col = m.column_mut(j);
-        let denom = N::one() / d[j];
+        let denom = T::one() / d[j].clone();
 
         for i in 0..d.len() {
-            col[i] *= d[i] * denom;
+            col[i] *= d[i].clone() * denom.clone();
         }
     }
 }

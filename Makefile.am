@@ -1,4 +1,8 @@
-SUBDIRS = . gdk-pixbuf-loader tests tools doc win32 po
+if ENABLE_GTK_DOC
+RSVG_DOC = doc
+endif
+
+SUBDIRS = . gdk-pixbuf-loader tests $(RSVG_DOC) win32
 
 NULL =
 
@@ -14,133 +18,121 @@ _rsvg_dummy.c:
 	echo "static int __attribute__((unused)) __rsvg_dummy;" > _rsvg_dummy.c
 
 # Automake wants to have a C sources list for LTLIBRARIES.
-# See LIBRSVG_INTERNALS_SRC below for the real list of Rust
-# sources.
+# See LIBRSVG_SRC below for the real list of Rust sources.
 librsvg_c_api_la_SOURCES = _rsvg_dummy.c
 
-bin_PROGRAMS = rsvg-convert
+CLEANFILES = $(BUILT_SOURCES)
 
 include rsvg-c-srcs.mk
 
 librsvg_@RSVG_API_MAJOR_VERSION@_la_SOURCES =	\
-	$(librsvg_c_srcs)			\
+	$(librsvg_public_headers)		\
 	$(NULL)
 
-LIBRSVG_INTERNALS_SRC =						\
-	Cargo.toml						\
-	rsvg_internals/Cargo.toml				\
-	rsvg_internals/build.rs					\
-	rsvg_internals/src/allowed_url.rs			\
-	rsvg_internals/src/angle.rs				\
-	rsvg_internals/src/aspect_ratio.rs			\
-	rsvg_internals/src/attributes.rs			\
-	rsvg_internals/src/bbox.rs				\
-	rsvg_internals/src/color.rs				\
-	rsvg_internals/src/cond.rs				\
-	rsvg_internals/src/coord_units.rs			\
-	rsvg_internals/src/css.rs				\
-	rsvg_internals/src/dasharray.rs				\
-	rsvg_internals/src/document.rs				\
-	rsvg_internals/src/dpi.rs				\
-	rsvg_internals/src/drawing_ctx.rs			\
-	rsvg_internals/src/element.rs				\
-	rsvg_internals/src/error.rs				\
-	rsvg_internals/src/filter.rs				\
-	rsvg_internals/src/filters/bounds.rs			\
-	rsvg_internals/src/filters/blend.rs			\
-	rsvg_internals/src/filters/color_matrix.rs		\
-	rsvg_internals/src/filters/component_transfer.rs	\
-	rsvg_internals/src/filters/composite.rs			\
-	rsvg_internals/src/filters/convolve_matrix.rs		\
-	rsvg_internals/src/filters/context.rs			\
-	rsvg_internals/src/filters/displacement_map.rs		\
-	rsvg_internals/src/filters/error.rs			\
-	rsvg_internals/src/filters/flood.rs			\
-	rsvg_internals/src/filters/gaussian_blur.rs		\
-	rsvg_internals/src/filters/image.rs			\
-	rsvg_internals/src/filters/lighting.rs			\
-	rsvg_internals/src/filters/merge.rs			\
-	rsvg_internals/src/filters/morphology.rs		\
-	rsvg_internals/src/filters/mod.rs			\
-	rsvg_internals/src/filters/offset.rs			\
-	rsvg_internals/src/filters/tile.rs			\
-	rsvg_internals/src/filters/turbulence.rs		\
-	rsvg_internals/src/float_eq_cairo.rs			\
-	rsvg_internals/src/font_props.rs			\
-	rsvg_internals/src/gradient.rs				\
-	rsvg_internals/src/handle.rs				\
-	rsvg_internals/src/href.rs				\
-	rsvg_internals/src/image.rs				\
-	rsvg_internals/src/io.rs				\
-	rsvg_internals/src/iri.rs				\
-	rsvg_internals/src/length.rs				\
-	rsvg_internals/src/lib.rs				\
-	rsvg_internals/src/limits.rs				\
-	rsvg_internals/src/log.rs				\
-	rsvg_internals/src/marker.rs				\
-	rsvg_internals/src/node.rs				\
-	rsvg_internals/src/number_list.rs			\
-	rsvg_internals/src/paint_server.rs			\
-	rsvg_internals/src/parsers.rs				\
-	rsvg_internals/src/path_builder.rs			\
-	rsvg_internals/src/path_parser.rs			\
-	rsvg_internals/src/pattern.rs				\
-	rsvg_internals/src/properties.rs			\
-	rsvg_internals/src/property_defs.rs			\
-	rsvg_internals/src/property_macros.rs			\
-	rsvg_internals/src/rect.rs				\
-	rsvg_internals/src/shapes.rs				\
-	rsvg_internals/src/surface_utils/iterators.rs		\
-	rsvg_internals/src/surface_utils/mod.rs			\
-	rsvg_internals/src/surface_utils/shared_surface.rs	\
-	rsvg_internals/src/surface_utils/srgb.rs		\
-	rsvg_internals/src/space.rs				\
-	rsvg_internals/src/structure.rs				\
-	rsvg_internals/src/style.rs				\
-	rsvg_internals/src/text.rs				\
-	rsvg_internals/src/transform.rs				\
-	rsvg_internals/src/unit_interval.rs			\
-	rsvg_internals/src/util.rs				\
-	rsvg_internals/src/viewbox.rs				\
-	rsvg_internals/src/xml.rs				\
-	rsvg_internals/src/xml2.rs				\
-	rsvg_internals/src/xml2_load.rs				\
+LIBRSVG_SRC =					\
+	Cargo.toml				\
+	build.rs				\
+	src/accept_language.rs			\
+	src/angle.rs				\
+	src/api.rs				\
+	src/aspect_ratio.rs			\
+	src/bbox.rs				\
+	src/c_api/dpi.rs			\
+	src/c_api/handle.rs			\
+	src/c_api/messages.rs			\
+	src/c_api/mod.rs			\
+	src/c_api/pixbuf_utils.rs		\
+	src/c_api/sizing.rs			\
+	src/color.rs				\
+	src/cond.rs				\
+	src/coord_units.rs			\
+	src/css.rs				\
+	src/dasharray.rs			\
+	src/document.rs				\
+	src/dpi.rs				\
+	src/drawing_ctx.rs			\
+	src/element.rs				\
+	src/error.rs				\
+	src/filter_func.rs			\
+	src/filter.rs				\
+	src/filters/blend.rs			\
+	src/filters/bounds.rs			\
+	src/filters/color_matrix.rs		\
+	src/filters/component_transfer.rs	\
+	src/filters/composite.rs		\
+	src/filters/context.rs			\
+	src/filters/convolve_matrix.rs		\
+	src/filters/displacement_map.rs		\
+	src/filters/error.rs			\
+	src/filters/flood.rs			\
+	src/filters/gaussian_blur.rs		\
+	src/filters/image.rs			\
+	src/filters/lighting.rs			\
+	src/filters/merge.rs			\
+	src/filters/mod.rs			\
+	src/filters/morphology.rs		\
+	src/filters/offset.rs			\
+	src/filters/tile.rs			\
+	src/filters/turbulence.rs		\
+	src/float_eq_cairo.rs			\
+	src/font_props.rs			\
+	src/gradient.rs				\
+	src/handle.rs				\
+	src/href.rs				\
+	src/image.rs				\
+	src/io.rs				\
+	src/iri.rs				\
+	src/layout.rs				\
+	src/length.rs				\
+	src/lib.rs				\
+	src/limits.rs				\
+	src/log.rs				\
+	src/marker.rs				\
+	src/node.rs				\
+	src/paint_server.rs			\
+	src/parsers.rs				\
+	src/path_builder.rs			\
+	src/path_parser.rs			\
+	src/pattern.rs				\
+	src/properties.rs			\
+	src/property_defs.rs			\
+	src/property_macros.rs			\
+	src/rect.rs				\
+	src/shapes.rs				\
+	src/space.rs				\
+	src/structure.rs			\
+	src/style.rs				\
+	src/surface_utils/iterators.rs		\
+	src/surface_utils/mod.rs		\
+	src/surface_utils/shared_surface.rs	\
+	src/surface_utils/srgb.rs		\
+	src/text.rs				\
+	src/transform.rs			\
+	src/ua.css				\
+	src/unit_interval.rs			\
+	src/url_resolver.rs			\
+	src/util.rs				\
+	src/viewbox.rs				\
+	src/ua.css				\
+	src/xml/attributes.rs			\
+	src/xml/mod.rs				\
+	src/xml/xml2_load.rs			\
+	src/xml/xml2.rs				\
 	$(NULL)
 
-LIBRSVG_CRATE_SRC = 						\
-	librsvg_crate/Cargo.toml				\
-	librsvg_crate/example.svg				\
-	librsvg_crate/examples/proportional.rs			\
-	librsvg_crate/src/lib.rs				\
-	librsvg_crate/tests/api.rs				\
-	librsvg_crate/tests/bugs.rs				\
-	librsvg_crate/tests/intrinsic_dimensions.rs		\
-	librsvg_crate/tests/primitives.rs			\
-	librsvg_crate/tests/utils/mod.rs			\
-	librsvg_crate/tests/utils/compare_surfaces.rs		\
-	$(NULL)
-
-LIBRSVG_C_API_SRC =						\
-	librsvg/Cargo.toml					\
-	librsvg/c_api.rs					\
-	librsvg/color_utils.rs					\
-	librsvg/dpi.rs						\
-	librsvg/lib.rs						\
-	librsvg/messages.rs					\
-	librsvg/pixbuf_utils.rs					\
-	librsvg/benches/pixbuf_from_surface.rs			\
-	$(NULL)
-
-RUST_EXTRA = 						\
-	Cargo.lock					\
-	cargo-vendor-config				\
-	rsvg_internals/benches/box_blur.rs		\
-	rsvg_internals/benches/composite.rs		\
-	rsvg_internals/benches/lighting.rs		\
-	rsvg_internals/benches/path_parser.rs           \
-	rsvg_internals/benches/pixel_iterators.rs	\
-	rsvg_internals/benches/srgb.rs			\
-	rsvg_internals/src/ua.css			\
+RUST_EXTRA =					\
+	Cargo.lock				\
+	cargo-vendor-config			\
+	example.svg				\
+	benches/box_blur.rs			\
+	benches/composite.rs			\
+	benches/lighting.rs			\
+	benches/path_parser.rs			\
+	benches/pixbuf_from_surface.rs		\
+	benches/pixel_iterators.rs		\
+	benches/pixel_ops.rs			\
+	benches/srgb.rs				\
+	benches/surface_from_pixbuf.rs		\
 	$(NULL)
 
 if DEBUG_RELEASE
@@ -161,20 +153,14 @@ cargo_verbose_1 = --verbose
 LIBRSVG_BUILD_DIR=@abs_top_builddir@
 CARGO_TARGET_DIR=$(LIBRSVG_BUILD_DIR)/target
 
-if LIB_NAME_WORKAROUND
-# Workaround for https://github.com/rust-lang/rust/issues/69904
-# can be removed when our minimum Rust version is at least 1.44.
-RUST_LIB=$(CARGO_TARGET_DIR)/$(RUST_TARGET_SUBDIR)/rsvg_c_api.lib
-else
-RUST_LIB=$(CARGO_TARGET_DIR)/$(RUST_TARGET_SUBDIR)/librsvg_c_api.a
-endif
+RUST_LIB=$(CARGO_TARGET_DIR)/$(RUST_TARGET_SUBDIR)/liblibrsvg.a
 
 check-local:
 	cd $(srcdir) &&					\
 	CARGO_TARGET_DIR=$(CARGO_TARGET_DIR)		\
 	LIBRSVG_BUILD_DIR=$(LIBRSVG_BUILD_DIR)		\
 	OUT_DIR=$(LIBRSVG_BUILD_DIR)/tests/output	\
-	$(CARGO) --locked test $(CARGO_VERBOSE) $(CARGO_TARGET_ARGS) $(CARGO_RELEASE_ARGS)
+	$(CARGO) --locked test $(CARGO_VERBOSE) $(CARGO_TARGET_ARGS) $(CARGO_RELEASE_ARGS) -- --include-ignored -Z unstable-options
 
 clean-local:
 	cd $(top_srcdir) &&			\
@@ -194,28 +180,17 @@ dist-hook:
 	mkdir .cargo &&								\
 	cp cargo-vendor-config .cargo/config)
 
-librsvg_c_api.la: $(librsvg_c_api_la_OBJECTS) $(LIBRSVG_INTERNALS_SRC) $(LIBRSVG_C_API_SRC)
-	+cd $(top_srcdir)/librsvg &&						\
+librsvg_c_api.la: $(librsvg_c_api_la_OBJECTS) $(LIBRSVG_SRC)
+	+cd $(top_srcdir) &&							\
 	PKG_CONFIG_ALLOW_CROSS=1						\
 	PKG_CONFIG='$(PKG_CONFIG)'						\
 	CARGO_TARGET_DIR=$(CARGO_TARGET_DIR)					\
-	$(CARGO) --locked build $(CARGO_VERBOSE) $(CARGO_TARGET_ARGS) $(CARGO_RELEASE_ARGS) \
+	$(CARGO) --locked build $(CARGO_VERBOSE) $(CARGO_TARGET_ARGS) $(CARGO_RELEASE_ARGS) --lib \
 	&& cd $(LIBRSVG_BUILD_DIR) && $(LINK) $< && mv $(RUST_LIB) .libs/librsvg_c_api.a
 
-librsvg_@RSVG_API_MAJOR_VERSION@_la_CPPFLAGS = \
-	-I$(top_srcdir) 			\
-	-I$(top_builddir) 			\
-	-I$(top_builddir)/librsvg 		\
-	-DG_LOG_DOMAIN=\"librsvg\" 		\
-	-DLIBRSVG_DATADIR="\"$(datadir)\""	\
-	-DSRCDIR=\""${abs_top_srcdir}"\"	\
-	-DRSVG_DISABLE_DEPRECATION_WARNINGS	\
-	$(AM_CPPFLAGS)
+librsvg_@RSVG_API_MAJOR_VERSION@_la_CPPFLAGS = $(AM_CPPFLAGS)
 
-librsvg_@RSVG_API_MAJOR_VERSION@_la_CFLAGS = \
-	-DRSVG_COMPILATION	\
-	$(LIBRSVG_CFLAGS) 	\
-	$(AM_CFLAGS)
+librsvg_@RSVG_API_MAJOR_VERSION@_la_CFLAGS = $(AM_CFLAGS)
 
 librsvg_@RSVG_API_MAJOR_VERSION@_la_LDFLAGS = \
 	$(BSYMBOLIC_LDFLAG) \
@@ -230,39 +205,48 @@ librsvg_@RSVG_API_MAJOR_VERSION@_la_LDFLAGS += -framework Foundation
 endif
 
 librsvg_@RSVG_API_MAJOR_VERSION@_la_LIBADD = \
-	librsvg_c_api.la \
+	librsvg_c_api.la	\
 	$(LIBRSVG_LIBS) 	\
 	$(LIBM)			\
 	$(DLOPEN_LIBS)
 
 librsvgincdir = $(includedir)/librsvg-$(RSVG_API_VERSION)/librsvg
-librsvginc_HEADERS =			\
-	$(headers)			\
-	$(extra_inc_headers)
+librsvginc_HEADERS = $(librsvg_public_headers)
 
-dist_man_MANS = rsvg-convert.1
+# Use SCRIPTS instead of PROGRAMS since we build it on our own
+bin_SCRIPTS = rsvg-convert$(EXEEXT)
 
-rsvg_convert_SOURCES =			\
-	$(rsvg_convert_srcs)		\
-	$(NULL)
+CLEANFILES += $(bin_SCRIPTS)
 
-rsvg_convert_CPPFLAGS = \
-	-I$(top_srcdir) 			\
-	-I$(top_builddir) 			\
-	-I$(top_builddir)/librsvg 		\
-	-DLIBRSVG_DATADIR="\"$(datadir)\""	\
-	$(AM_CPPFLAGS)
+RSVG_CONVERT_BIN=$(CARGO_TARGET_DIR)/$(RUST_TARGET_SUBDIR)/rsvg-convert$(EXEEXT)
 
-rsvg_convert_CFLAGS =\
-	$(RSVG_CONVERT_CFLAGS) \
-	$(AM_CFLAGS)
+RSVG_CONVERT_SRC = src/bin/rsvg-convert.rs
 
-rsvg_convert_LDFLAGS = $(AM_LDFLAGS)
+$(RSVG_CONVERT_BIN): $(RSVG_CONVERT_SRC)
+	+cd $(top_srcdir) &&							\
+	PKG_CONFIG_ALLOW_CROSS=1						\
+	PKG_CONFIG='$(PKG_CONFIG)'						\
+	CARGO_TARGET_DIR=$(CARGO_TARGET_DIR)					\
+	$(CARGO) --locked build $(CARGO_VERBOSE) $(CARGO_TARGET_ARGS) $(CARGO_RELEASE_ARGS) --bin rsvg-convert
 
-rsvg_convert_LDADD = \
-	$(top_builddir)/librsvg-@RSVG_API_MAJOR_VERSION@.la	\
-	$(RSVG_CONVERT_LIBS) \
-	$(LIBM)
+rsvg-convert$(EXEEXT): $(RSVG_CONVERT_BIN)
+	cd $(LIBRSVG_BUILD_DIR) && mv $(RSVG_CONVERT_BIN) rsvg-convert$(EXEEXT)
+
+rsvg-convert.1: rsvg-convert.rst
+if HAVE_RST2MAN
+	$(RST2MAN) $(top_srcdir)/rsvg-convert.rst rsvg-convert.1
+else
+	@echo "========================================"
+	@echo "You need rst2man installed to make dist"
+	@echo "========================================"
+	@false
+endif
+
+if HAVE_RST2MAN
+man1_MANS = rsvg-convert.1
+
+CLEANFILES += rsvg-convert.1
+endif
 
 dist_doc_DATA =				\
 	COMPILING.md			\
@@ -271,45 +255,38 @@ dist_doc_DATA =				\
 	code-of-conduct.md
 
 EXTRA_DIST =				\
-	$(LIBRSVG_INTERNALS_SRC)	\
-	$(LIBRSVG_C_API_SRC)		\
+	$(LIBRSVG_SRC)			\
 	$(RUST_EXTRA)			\
-	$(LIBRSVG_CRATE_SRC)		\
-	librsvg.doap			\
+	$(RSVG_CONVERT_SRC)		\
 	AUTHORS				\
-	NEWS				\
 	COPYING.LIB 			\
-	librsvg-zip.in 			\
-	gtk-doc.make			\
+	NEWS				\
+	SECURITY.md			\
 	Rsvg-2.0-custom.vala		\
 	Rsvg-2.0.metadata		\
 	glib-tap.mk			\
+	librsvg-zip.in 			\
+	librsvg.doap			\
+	rsvg-convert.rst		\
 	tap-driver.sh			\
-	tap-test
-
-## Put `exec' in the name because this should be installed by
-## `install-exec', not `install-data'.
+	tap-test			\
+	$(NULL)
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = librsvg-$(RSVG_API_VERSION).pc
-
-DISTCHECK_CONFIGURE_FLAGS = --enable-gtk-doc
 
 if HAVE_INTROSPECTION
 -include $(INTROSPECTION_MAKEFILE)
 
 INTROSPECTION_GIRS = Rsvg-@RSVG_API_VERSION@.gir
-INTROSPECTION_SCANNER_ARGS = --add-include-path=$(srcdir) --symbol-prefix=rsvg --symbol-prefix=librsvg
+INTROSPECTION_SCANNER_ARGS = --add-include-path=$(srcdir) --symbol-prefix=rsvg --symbol-prefix=librsvg --warn-all
 INTROSPECTION_COMPILER_ARGS = --includedir=$(srcdir)
 
 Rsvg-@RSVG_API_VERSION@.gir: librsvg-@RSVG_API_MAJOR_VERSION@.la
 
 Rsvg_@RSVG_API_VERSION_U@_gir_NAMESPACE = Rsvg
 Rsvg_@RSVG_API_VERSION_U@_gir_EXPORT_PACKAGES = librsvg-$(RSVG_API_VERSION)
-Rsvg_@RSVG_API_VERSION_U@_gir_FILES = \
-	$(librsvginc_HEADERS) \
-	$(filter-out %.h,$(librsvg_@RSVG_API_MAJOR_VERSION@_la_SOURCES)) \
-	$(NULL)
+Rsvg_@RSVG_API_VERSION_U@_gir_FILES = $(librsvginc_HEADERS)
 Rsvg_@RSVG_API_VERSION_U@_gir_INCLUDES = \
 	GLib-2.0 \
 	GObject-2.0 \
@@ -321,7 +298,7 @@ Rsvg_@RSVG_API_VERSION_U@_gir_PACKAGES = \
 	pango \
 	libxml-2.0 \
 	$(NULL)
-Rsvg_@RSVG_API_VERSION_U@_gir_CFLAGS = -I$(top_builddir) -I$(top_builddir)/librsvg -DRSVG_COMPILATION
+Rsvg_@RSVG_API_VERSION_U@_gir_CFLAGS = -I$(top_srcdir)/include -I$(top_builddir) -I$(top_builddir)/include -DRSVG_COMPILATION
 Rsvg_@RSVG_API_VERSION_U@_gir_LIBS = librsvg-@RSVG_API_MAJOR_VERSION@.la
 Rsvg_@RSVG_API_VERSION_U@_gir_SCANNERFLAGS = --c-include="librsvg/rsvg.h"
 
@@ -331,7 +308,7 @@ nodist_gir_DATA = $(INTROSPECTION_GIRS)
 typelibsdir = $(libdir)/girepository-1.0
 nodist_typelibs_DATA = $(INTROSPECTION_GIRS:.gir=.typelib)
 
-CLEANFILES = $(BUILT_SOURCES) $(nodist_gir_DATA) $(nodist_typelibs_DATA)
+CLEANFILES += $(nodist_gir_DATA) $(nodist_typelibs_DATA)
 
 if ENABLE_VAPIGEN
 include $(VAPIGEN_MAKEFILE)
@@ -340,7 +317,7 @@ librsvg-$(RSVG_API_VERSION).vapi: Rsvg-$(RSVG_API_VERSION).gir
 
 VAPIGEN_VAPIS = librsvg-$(RSVG_API_VERSION).vapi
 
-librsvg_@RSVG_API_VERSION_U@_vapi_DEPS = gio-2.0 cairo
+librsvg_@RSVG_API_VERSION_U@_vapi_DEPS = gio-2.0 cairo gdk-pixbuf-2.0
 librsvg_@RSVG_API_VERSION_U@_vapi_METADATADIRS = $(srcdir)
 librsvg_@RSVG_API_VERSION_U@_vapi_FILES = Rsvg-$(RSVG_API_VERSION).gir $(srcdir)/Rsvg-$(RSVG_API_VERSION)-custom.vala
 

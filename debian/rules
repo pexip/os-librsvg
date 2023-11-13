@@ -1,30 +1,49 @@
 #!/usr/bin/make -f
--include /usr/share/gnome-pkg-tools/1/rules/gnome-get-source.mk
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
-export DEB_LDFLAGS_MAINT_APPEND = -Wl,-O1 -Wl,-z,defs -Wl,--as-needed
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,-O1 -Wl,-z,defs
+export DPKG_GENSYMBOLS_CHECK_LEVEL = 4
 export CARGO_HOME = $(CURDIR)/debian/cargo-home
 NULL =
+built_binaries := $(shell dh_listpackages)
+configure_flags :=
+
+# Increase reftest tolerance a bit to account for different harfbuzz,
+# pango, etc.
+export RSVG_TEST_TOLERANCE=20
+
+ifeq ($(filter %-doc,$(built_binaries)),)
+configure_flags += GI_DOCGEN=no
+endif
+
+ifneq (,$(filter nodoc,$(DEB_BUILD_PROFILES)))
+configure_flags += RST2MAN=no
+endif
 
 %:
-	dh $@ --with gnome,gir
+	dh $@
 
 override_dh_autoreconf:
 	dh_autoreconf --as-needed
 
 override_dh_auto_configure:
 	mkdir -p $(CARGO_HOME)
+	cp -a debian/a-link-purple-bg.png tests/fixtures/cmdline/a-link-purple-bg.png
+	# We removed the source code of these packages to reduce the amount
+	# of vendored code to review, but cargo will report errors if there
+	# isn't at least a stub there
+	set -e; for package in js-sys web-sys windows-sys; do \
+		mkdir -p vendor/$$package/src; \
+		touch vendor/$$package/src/lib.rs; \
+	done
 	dh_auto_configure -- \
 		--enable-pixbuf-loader \
 		--enable-installed-tests \
 		--enable-introspection \
 		--enable-vala \
-		--enable-gtk-doc \
 		GDK_PIXBUF_QUERYLOADERS=/usr/lib/$(DEB_HOST_MULTIARCH)/gdk-pixbuf-2.0/gdk-pixbuf-query-loaders \
+		$(configure_flags) \
 		$(NULL)
-
-override_dh_makeshlibs:
-	dh_makeshlibs -- -c4
 
 override_dh_install:
 	find debian/tmp -name '*.a' -print -delete
@@ -37,20 +56,48 @@ override_dh_install:
 override_dh_installchangelogs:
 	dh_installchangelogs -XChangeLog
 
-override_dh_missing:
-	dh_missing --fail-missing
-
 override_dh_clean:
-	dh_clean
+	dh_clean -X.bak
 	rm -fr $(CARGO_HOME)
-
-# Skip rsvg-tests which contain the reftests; they are tightly coupled to
-# specific versions of pixman, cairo, pango, and freetype. This list of
-# tests comes from the test_programs variable in tests/Makefile.am.
-# See also https://gitlab.gnome.org/GNOME/librsvg/issues/511 and
-# https://gitlab.gnome.org/GNOME/librsvg/issues/512 for an attempt to
-# mitigate this problem upstream.
-export TESTS = "api loading crash render-crash dimensions errors infinite-loop"
+ifneq ($(filter i386,$(DEB_HOST_ARCH_CPU)),)
+	rm -f tests/fixtures/reftests/svg1.1/filters-composite-02-b.svg
+	rm -f tests/fixtures/reftests/svg1.1/filters-composite-02-b-ref.png
+endif
+ifeq ($(DEB_HOST_ARCH_ENDIAN),big)
+	# Several tests regressed on big-endian architectures sometime between
+	# September 2022 and June 2023 as a result of changes in some other
+	# package.
+	# https://bugs.debian.org/1038447, GNOME/librsvg#972
+	rm -f tests/fixtures/reftests/svg1.1/coords-viewattr-02-b.svg
+	# https://bugs.debian.org/1038447, GNOME/librsvg#973
+	rm -f tests/fixtures/reftests/filter-kernel-unit-length.svg
+	# https://bugs.debian.org/1038447, GNOME/librsvg#974
+	rm -f tests/fixtures/reftests/svg1.1/filters-composite-04-f.svg
+	# https://bugs.debian.org/1038447, GNOME/librsvg#975
+	rm -f tests/fixtures/reftests/svg1.1/filters-conv-02-f.svg
+	# https://bugs.debian.org/1038447, GNOME/librsvg#976
+	rm -f tests/fixtures/reftests/svg1.1/filters-conv-03-f.svg
+	# https://bugs.debian.org/1038447, GNOME/librsvg#977
+	rm -f tests/fixtures/reftests/svg1.1/filters-conv-04-f.svg
+	# https://bugs.debian.org/1038447, GNOME/librsvg#978
+	rm -f tests/fixtures/reftests/svg1.1/filters-image-01-b.svg
+	# https://bugs.debian.org/1038447, GNOME/librsvg#979
+	rm -f tests/fixtures/reftests/svg1.1/filters-image-02-b.svg
+	# https://bugs.debian.org/1038447, GNOME/librsvg#980
+	rm -f tests/fixtures/reftests/svg1.1/filters-image-03-f.svg
+	# https://bugs.debian.org/1038447, GNOME/librsvg#981
+	rm -f tests/fixtures/reftests/svg1.1/filters-image-05-f.svg
+	# https://bugs.debian.org/1038447, GNOME/librsvg#982
+	rm -f tests/fixtures/reftests/svg1.1/pservers-grad-05-b.svg
+	# https://bugs.debian.org/1038447, GNOME/librsvg#983
+	rm -f tests/fixtures/reftests/svg1.1/pservers-grad-06-b.svg
+	# https://bugs.debian.org/1038447, GNOME/librsvg#984
+	rm -f tests/fixtures/reftests/svg1.1/struct-symbol-01-b.svg
+endif
+	rm -f tests/fixtures/reftests/bugs/730-font-scaling-ref.png
+	rm -f tests/fixtures/reftests/bugs/730-font-scaling.svg
+	rm -f tests/fixtures/reftests/svg1.1/text-text-03-b-ref.png
+	rm -f tests/fixtures/reftests/svg1.1/text-text-03-b.svg
 
 override_dh_auto_test-arch:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
@@ -58,11 +105,14 @@ ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 	localedef -i en_US -f UTF-8 $(CURDIR)/debian/locales/en
 	localedef -i en_US -f UTF-8 $(CURDIR)/debian/locales/en_US
 	localedef -i de_DE -f UTF-8 $(CURDIR)/debian/locales/de
-	LOCPATH=$(CURDIR)/debian/locales dh_auto_test -- TESTS=$(TESTS)
+	failed=0; \
+	LOCPATH=$(CURDIR)/debian/locales dh_auto_test || failed=1; \
 	find debian -name '*.log' \
 		-not -name config.log \
 		-not -name test-suite.log \
-		-print0 | xargs -0 tail -v -c1M
+		-print0 | xargs -0 tail -v -c1M; \
+	debian/log-reftests.py; \
+	exit $$failed
 endif
 
 override_dh_auto_test-indep:

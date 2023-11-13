@@ -1,40 +1,37 @@
-// Copyright 2019, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 use std::convert::TryFrom;
 use std::fmt;
 use std::ops::Deref;
 
-use enums::{Content, Status, SurfaceType};
-use ffi;
+use crate::enums::{Content, SurfaceType};
+use crate::error::Error;
+use crate::rectangle::Rectangle;
 #[cfg(feature = "use_glib")]
 use glib::translate::*;
-use rectangle::Rectangle;
 
-use surface::Surface;
+use crate::surface::Surface;
 
 declare_surface!(RecordingSurface, SurfaceType::Recording);
 impl RecordingSurface {
-    pub fn create<T: Into<Option<Rectangle>>>(
-        content: Content,
-        extends: T,
-    ) -> Result<RecordingSurface, Status> {
+    #[doc(alias = "cairo_recording_surface_create")]
+    pub fn create(content: Content, extends: Option<Rectangle>) -> Result<RecordingSurface, Error> {
         unsafe {
-            let extends = extends.into();
-            let extends = match extends {
-                Some(c) => c.to_raw_none(),
+            let extends_ptr = match extends {
+                Some(ref c) => c.to_raw_none(),
                 None => ::std::ptr::null(),
             };
 
-            Ok(Self::from_raw_full(ffi::cairo_recording_surface_create(
+            Self::from_raw_full(ffi::cairo_recording_surface_create(
                 content.into(),
-                extends,
-            ))?)
+                extends_ptr,
+            ))
         }
     }
 
-    pub fn get_extents(&self) -> Option<Rectangle> {
+    #[doc(alias = "cairo_recording_surface_get_extents")]
+    #[doc(alias = "get_extents")]
+    pub fn extents(&self) -> Option<Rectangle> {
         unsafe {
             let rectangle: Rectangle = ::std::mem::zeroed();
             if ffi::cairo_recording_surface_get_extents(self.to_raw_none(), rectangle.to_raw_none())
@@ -47,6 +44,7 @@ impl RecordingSurface {
         }
     }
 
+    #[doc(alias = "cairo_recording_surface_ink_extents")]
     pub fn ink_extents(&self) -> (f64, f64, f64, f64) {
         let mut x0 = 0.;
         let mut y0 = 0.;

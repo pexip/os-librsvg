@@ -56,7 +56,7 @@ where
     P: Predicate<[u8]>,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.p)
+        self.p.fmt(f)
     }
 }
 
@@ -75,13 +75,19 @@ where
     ) -> Option<reflection::Case<'a>> {
         let buffer = read_file(variable);
         match (expected, buffer) {
-            (_, Ok(buffer)) => self
-                .p
-                .find_case(expected, &buffer)
-                .map(|child| reflection::Case::new(Some(self), expected).add_child(child)),
+            (_, Ok(buffer)) => self.p.find_case(expected, &buffer).map(|case| {
+                case.add_product(reflection::Product::new(
+                    "var",
+                    variable.display().to_string(),
+                ))
+            }),
             (true, Err(_)) => None,
             (false, Err(err)) => Some(
                 reflection::Case::new(Some(self), false)
+                    .add_product(reflection::Product::new(
+                        "var",
+                        variable.display().to_string(),
+                    ))
                     .add_product(reflection::Product::new("error", err)),
             ),
         }
@@ -106,6 +112,7 @@ where
     /// assert_eq!(true, predicate_fn.eval(Path::new("./tests/hello_world")));
     /// assert_eq!(false, predicate_fn.eval(Path::new("./tests/empty_file")));
     /// ```
+    #[allow(clippy::wrong_self_convention)]
     fn from_file_path(self) -> FileContentPredicate<Self> {
         FileContentPredicate { p: self }
     }

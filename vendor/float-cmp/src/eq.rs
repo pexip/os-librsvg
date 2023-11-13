@@ -66,13 +66,13 @@ impl F32Margin {
     }
     pub fn epsilon(self, epsilon: f32) -> Self {
         F32Margin {
-            epsilon: epsilon,
+            epsilon,
             ..self
         }
     }
     pub fn ulps(self, ulps: i32) -> Self {
         F32Margin {
-            ulps: ulps,
+            ulps,
             ..self
         }
     }
@@ -192,13 +192,13 @@ impl F64Margin {
     }
     pub fn epsilon(self, epsilon: f64) -> Self {
         F64Margin {
-            epsilon: epsilon,
+            epsilon,
             ..self
         }
     }
     pub fn ulps(self, ulps: i64) -> Self {
         F64Margin {
-            ulps: ulps,
+            ulps,
             ..self
         }
     }
@@ -280,3 +280,25 @@ fn f64_approx_eq_test6() {
 fn f64_code_triggering_issue_20() {
     assert_eq!((-25.0f64).approx_eq(25.0, (0.00390625, 1)), false);
 }
+
+impl<T> ApproxEq for &[T]
+where T: Copy + ApproxEq {
+    type Margin = <T as ApproxEq>::Margin;
+
+    fn approx_eq<M: Into<Self::Margin>>(self, other: Self, margin: M) -> bool {
+        let margin = margin.into();
+        if self.len() != other.len() { return false; }
+        self.iter().zip(other.iter()).all(|(a,b)| {
+            a.approx_eq(*b, margin)
+        })
+    }
+}
+
+#[test]
+fn test_slices() {
+    assert!( [1.33, 2.4, 2.5].approx_eq(&[1.33, 2.4, 2.5], (0.0, 0_i64)) );
+    assert!( !  [1.33, 2.4, 2.6].approx_eq(&[1.33, 2.4, 2.5], (0.0, 0_i64)) );
+    assert!( !  [1.33, 2.4].approx_eq(&[1.33, 2.4, 2.5], (0.0, 0_i64)) );
+    assert!( !  [1.33, 2.4, 2.5].approx_eq(&[1.33, 2.4], (0.0, 0_i64)) );
+}
+

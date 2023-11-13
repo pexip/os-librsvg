@@ -1,7 +1,9 @@
+AC_PREREQ([2.69])
+
 # Package version, the "human readable" version
 m4_define([rsvg_major_version],[2])
-m4_define([rsvg_minor_version],[50])
-m4_define([rsvg_micro_version],[3]) # Keep this in sync with librsvg_crate/Cargo.toml
+m4_define([rsvg_minor_version],[54])
+m4_define([rsvg_micro_version],[7]) # Keep this in sync with Cargo.toml and doc/librsvg.toml
 m4_define([rsvg_version],[rsvg_major_version.rsvg_minor_version.rsvg_micro_version])
 
 # Library version information.  To make a release:
@@ -18,15 +20,15 @@ m4_define([rsvg_version],[rsvg_major_version.rsvg_minor_version.rsvg_micro_versi
 #     rsvg_lt_current += 1
 #     rsvg_lt_revision = 0
 #     rsvg_lt_age = 0
-m4_define([rsvg_lt_current],[49])
+m4_define([rsvg_lt_current],[50])
 m4_define([rsvg_lt_revision],[0])
-m4_define([rsvg_lt_age],[47])
+m4_define([rsvg_lt_age],[48])
 m4_define([rsvg_lt_version_info],rsvg_lt_current:rsvg_lt_revision:rsvg_lt_age)
 
 AC_INIT([RSVG],[rsvg_version],[https://gitlab.gnome.org/GNOME/librsvg/issues],[librsvg])
 
 AC_CONFIG_HEADERS([config.h])
-AC_CONFIG_SRCDIR([librsvg/rsvg.h])
+AC_CONFIG_SRCDIR([include/librsvg/rsvg.h])
 AC_CONFIG_MACRO_DIR([m4])
 
 AM_INIT_AUTOMAKE([1.9 foreign no-dist-gzip dist-xz tar-ustar subdir-objects])
@@ -55,18 +57,6 @@ AC_SUBST([LIBRSVG_MINOR_VERSION],[rsvg_minor_version])
 AC_SUBST([LIBRSVG_MICRO_VERSION],[rsvg_micro_version])
 
 dnl ===========================================================================
-dnl Gettext stuff
-dnl ===========================================================================
-
-# FIXME: Remove AM_GNU_GETTEXT_VERSION once autoreconf supports REQUIRE_VERSION
-AM_GNU_GETTEXT_VERSION([0.19.8])
-AM_GNU_GETTEXT_REQUIRE_VERSION([0.19.8])
-AM_GNU_GETTEXT([external])
-
-AC_SUBST([GETTEXT_PACKAGE], [librsvg])
-AC_DEFINE_UNQUOTED([GETTEXT_PACKAGE], "$GETTEXT_PACKAGE", [Define to the gettext package name.])
-
-dnl ===========================================================================
 dnl Please update COMPILING.md with version numbers if these change
 CAIRO_REQUIRED=1.16.0
 dnl This corresponds to Freetype2 2.8
@@ -76,21 +66,25 @@ GIO_REQUIRED=2.24.0
 GLIB_REQUIRED=2.50.0
 HARFBUZZ_REQUIRED=2.0.0
 LIBXML_REQUIRED=2.9.0
-PANGO_REQUIRED=1.38.0
+PANGO_REQUIRED=1.46.0
 
 dnl ===========================================================================
 
+AC_PROG_MKDIR_P
 AC_PROG_LN_S
-AC_ISC_POSIX
 AC_PROG_CC
 AC_PROG_CPP
 AC_PROG_AWK
-AC_STDC_HEADERS
 AM_PROG_CC_C_O
+# Check if -lcposix is required (for ISC UNIX)
+AC_SEARCH_LIBS([strerror], [cposix])
 
 AC_C_BIGENDIAN
 
 PKG_PROG_PKG_CONFIG
+AS_IF([test -z "$PKG_CONFIG"],
+  [AC_MSG_WARN([pkg-config is needed for auto-configuration of dependencies])
+   PKG_CONFIG=false])
 
 LT_INIT([win32-dll])
 LT_LIB_M
@@ -102,78 +96,66 @@ AC_SUBST(DLOPEN_LIBS)
 
 dnl ===========================================================================
 
-AC_CHECK_PROGS(CARGO, [cargo], [no])
+AC_CHECK_TOOL(CARGO, [cargo], [no])
 AS_IF(test x$CARGO = xno,
     AC_MSG_ERROR([cargo is required.  Please install the Rust toolchain from https://www.rust-lang.org/])
 )
-AC_CHECK_PROGS(RUSTC, [rustc], [no])
+AC_CHECK_TOOL(RUSTC, [rustc], [no])
 AS_IF(test x$RUSTC = xno,
     AC_MSG_ERROR([rustc is required.  Please install the Rust toolchain from https://www.rust-lang.org/])
 )
 
-dnl Minimum version of rustc that we support
+dnl MSRV - Minimum Supported Rust Version
 dnl If you change this, please update COMPILING.md
-MINIMUM_RUST_MAJOR=1
-MINIMUM_RUST_MINOR=40
+MINIMUM_RUST_VER=1.56
+rust_version=`$RUSTC --version | sed -e 's/^rustc //g'`
+AX_COMPARE_VERSION([$rust_version],[lt],[$MINIMUM_RUST_VER], [
+    AC_MSG_ERROR([librsvg needs at least rustc version $MINIMUM_RUST_VER])
+])
 
-rust_version=`$RUSTC --version`
-version=`echo "$rust_version" | sed -e 's/^rustc //g'`
-major=`echo "$version" | cut -d. -f1`
-minor=`echo "$version" | cut -d. -f2`
+dnl Man page generator
 
-AS_IF(test "$major" -lt "$MINIMUM_RUST_MAJOR" -o "$minor" -lt "$MINIMUM_RUST_MINOR",
-    AC_MSG_ERROR([librsvg needs at rustc version at least $MINIMUM_RUST_MAJOR.$MINIMUM_RUST_MINOR])
+AC_CHECK_PROGS(RST2MAN, [rst2man rst2man.py], [no])
+AS_IF(test x$RST2MAN = xno,
+    AC_MSG_WARN([rst2man not found - not building man pages])
 )
+AM_CONDITIONAL(HAVE_RST2MAN, [test "x$RST2MAN" != "xno"])
+
+dnl Gi-docgen
+
+AC_ARG_ENABLE([gtk-doc],
+              [AS_HELP_STRING([--disable-gtk-doc],[Disable building documentation (requires introspection)])],
+              [enable_gtk_doc=$enableval],[enable_gtk_doc=auto])
+
+AS_IF([test "x$enable_gtk_doc" != xno],
+      [AC_CHECK_TOOL(GI_DOCGEN, [gi-docgen], [no])
+       AS_IF([test "x$GI_DOCGEN" = xno],
+             [AS_CASE(["$enable_gtk_doc"],
+                      [yes], [AC_MSG_ERROR([gi-docgen not found - cannot build docs])],
+                      [auto], [AC_MSG_WARN([gi-docgen not found - not building docs])])
+              enable_gtk_doc=no],
+             [enable_gtk_doc=yes])])
+AM_CONDITIONAL(ENABLE_GTK_DOC, [test "x$enable_gtk_doc" = xyes])
 
 dnl ===========================================================================
 
 #AC_CANONICAL_HOST
 
-AC_MSG_CHECKING([for some Win32 platform])
-case "$host" in
-  *-*-mingw*|*-*-cygwin*)
-    platform_win32=yes
-    ;;
-  *)
-    platform_win32=no
-    ;;
-esac
-AC_MSG_RESULT([$platform_win32])
-AM_CONDITIONAL(PLATFORM_WIN32, test "$platform_win32" = "yes")
-AM_CONDITIONAL(LIB_NAME_WORKAROUND, test "$platform_win32" = "yes" -a \( "$major" -lt 1 -o "$minor" -lt 44 \))
-
-AC_MSG_CHECKING([for native Win32])
-case "$host" in
-  *-*-mingw*)
-    native_win32=yes
-    ;;
-  *)
-    native_win32=no
-    ;;
-esac
-AC_MSG_RESULT([$native_win32])
-AM_CONDITIONAL(OS_WIN32, test "$native_win32" = "yes")
+AC_MSG_CHECKING([platform])
+platform=POSIX
+gio_backend=unix
+AS_CASE(["$host"],
+  [*-*-mingw*],  [platform=Windows gio_backend=windows],
+  [*-*-cygwin*], [platform=Cygwin],
+  [*-*-darwin*], [platform=Darwin],
+)
+AC_MSG_RESULT([$platform])
+AM_CONDITIONAL(PLATFORM_WIN32,
+    [test x"$platform" = xWindows || test x"$platform" = xCygwin])
+AM_CONDITIONAL(OS_WIN32,  [test x"$platform" = xWindows])
+AM_CONDITIONAL(OS_DARWIN, [test x"$platform" = xDarwin])
 
 dnl ===========================================================================
-
-#AC_CANONICAL_HOST
-
-AC_MSG_CHECKING([for darwin])
-case "$host" in
-  *-*-darwin*)
-    native_darwin=yes
-    ;;
-  *)
-    native_darwin=no
-    ;;
-esac
-AC_MSG_RESULT([$native_darwin])
-AM_CONDITIONAL(OS_DARWIN, test "$native_darwin" = "yes")
-
-dnl ===========================================================================
-
-GLIB_MKENUMS=`$PKG_CONFIG --variable=glib_mkenums glib-2.0`
-AC_SUBST(GLIB_MKENUMS)
 
 PKG_CHECK_MODULES(LIBRSVG,                     \
 	cairo >= $CAIRO_REQUIRED               \
@@ -198,16 +180,21 @@ PKG_CHECK_MODULES([GTHREAD],[gthread-2.0 >= $GLIB_REQUIRED])
 
 PKG_CHECK_MODULES([GMODULE],[gmodule-2.0])
 
-case "$host" in
-  *-*-mingw*)
-    PKG_CHECK_MODULES([RSVG_CONVERT],[gio-2.0 gio-windows-2.0 gdk-pixbuf-2.0 cairo pangocairo])
-    ;;
-  *)
-    PKG_CHECK_MODULES([RSVG_CONVERT],[gio-2.0 gio-unix-2.0 gdk-pixbuf-2.0 cairo pangocairo])
-    ;;
-esac
+PKG_CHECK_MODULES([RSVG_CONVERT],[gio-2.0 "gio-${gio_backend}-2.0" gdk-pixbuf-2.0 cairo pangocairo])
 
 GLIB_TESTS
+
+AS_IF([test x"$platform" = xWindows], [
+  ## Cannot use AC_CHECK_LIB to check for function with __stdcall
+  ## calling convention.  Instead just check for the header and add the
+  ## corresponding library to the linker flags.
+  AC_CHECK_HEADER([winsock2.h], [WS2_32_LIBS=-lws2_32], [], [#include <windows.h>])
+  LIBS="$LIBS $WS2_32_LIBS"
+  AC_CHECK_HEADER([userenv.h], [USERENV_LIBS=-luserenv], [], [#include <windows.h>])
+  LIBS="$LIBS $USERENV_LIBS"
+  AC_CHECK_HEADER([bcrypt.h], [BCRYPT_LIBS=-lbcrypt], [], [#include <windows.h>])
+  LIBS="$LIBS $BCRYPT_LIBS"
+])
 
 dnl ===========================================================================
 dnl GDK-Pixbuf SVG loader
@@ -220,21 +207,21 @@ AC_ARG_ENABLE([pixbuf-loader],
 AC_MSG_RESULT([$enable_pixbuf_loader])
 
 gdk_pixbuf_moduledir=
-if test "$enable_pixbuf_loader" = "yes"; then
+AS_IF([test "x$enable_pixbuf_loader" = "xyes"], [
   PKG_CHECK_MODULES([GDK_PIXBUF],[gdk-pixbuf-2.0 >= $GDK_PIXBUF_REQUIRED])
 
   AC_PATH_PROGS([GDK_PIXBUF_QUERYLOADERS],[gdk-pixbuf-query-loaders gdk-pixbuf-query-loaders-64 gdk-pixbuf-query-loaders-32],[none])
 
-  if test "x$GDK_PIXBUF_QUERYLOADERS" = "xnone"; then
+  AS_IF([test "x$GDK_PIXBUF_QUERYLOADERS" = "xnone"], [
     AC_MSG_ERROR([gdk-pixbuf-query-loaders not found in path])
-  fi
+  ])
 
   # First try the standalone gdk-pixbuf
   gdk_pixbuf_binary_version="`$PKG_CONFIG --variable=gdk_pixbuf_binary_version gdk-pixbuf-2.0`"
   gdk_pixbuf_binarydir="`$PKG_CONFIG --variable=gdk_pixbuf_binarydir gdk-pixbuf-2.0`"
   gdk_pixbuf_moduledir=`$PKG_CONFIG --variable gdk_pixbuf_moduledir gdk-pixbuf-2.0`
   gdk_pixbuf_cache_file=`$PKG_CONFIG --variable gdk_pixbuf_cache_file gdk-pixbuf-2.0`
-fi
+])
 
 AC_SUBST([gdk_pixbuf_binary_version])
 AC_SUBST([gdk_pixbuf_binarydir])
@@ -254,24 +241,18 @@ AC_ARG_ENABLE([Bsymbolic],
   [enable_Bsymbolic=no],[enable_Bsymbolic=auto])
 
 BSYMBOLIC_LDFLAG=
-if test "$enable_Bsymbolic" != "no"; then
+AS_IF([test "x$enable_Bsymbolic" != "xno"], [
   CC_CHECK_LDFLAGS(["-Wl,-Bsymbolic-functions"],
     [BSYMBOLIC_LDFLAG="-Wl,-Bsymbolic-functions"],
-    [if test "$enable_Bsymbolic" = "auto"; then
+    [AS_IF([test "x$enable_Bsymbolic" = "xauto"], [
        AC_MSG_WARN([-Bsymbolic not supported by ld; disabling])
        enable_Bsymbolic=no
-     else
+     ], [
        AC_MSG_ERROR([-Bsymbolic requested but not supported by ld. Use --disable-Bsymbolic to disable])
-     fi])
-fi
+     ])])
+])
 
 AC_SUBST([BSYMBOLIC_LDFLAG])
-
-##################################################
-# Checks for gtk-doc and docbook-tools
-##################################################
-
-GTK_DOC_CHECK([1.13],[--flavour no-tmpl])
 
 AC_SUBST([GLIB_PREFIX],[$($PKG_CONFIG --variable=prefix glib-2.0)])
 AC_SUBST([GDK_PIXBUF_PREFIX],[$($PKG_CONFIG --variable=prefix gdk-pixbuf-2.0)])
@@ -279,68 +260,42 @@ AC_SUBST([GTK_PREFIX],[$($PKG_CONFIG --variable=prefix gdk-pixbuf-2.0)])
 AC_SUBST([CAIRO_PREFIX],[$($PKG_CONFIG --variable=prefix cairo)])
 
 dnl ===========================================================================
-dnl Do we build the miscellaneous tools provided with librsvg ?
-
-AC_ARG_ENABLE(tools,
-              AC_HELP_STRING([--disable-tools],
-                             [do not build miscellaneous tools [default=no]]),
-              [build_misc_tools=$enableval],
-              [build_misc_tools=yes])
-
-AC_MSG_CHECKING(whether to build miscellaneous tools)
-if test "x$build_misc_tools" = "xyes" ; then
-	AC_MSG_RESULT(yes)
-else
-	AC_MSG_RESULT(no)
-fi
-AM_CONDITIONAL([BUILD_MISC_TOOLS], [test "x$build_misc_tools" = "xyes"])
-
-dnl ===========================================================================
 dnl Specify --enable-debug to make a development release.  By default,
 dnl we build in public release mode.
 
 AC_ARG_ENABLE(debug,
-              AC_HELP_STRING([--enable-debug],
+              AS_HELP_STRING([--enable-debug],
                              [Build Rust code with debugging information [default=no]]),
               [debug_release=$enableval],
-	      [
-	        if test "x$LIBRSVG_DEBUG" = "x"; then
-		  debug_release="no"
-		elif test "x$LIBRSVG_DEBUG" = "xyes"; then
-		  debug_release="yes"
-		elif test "x$LIBRSVG_DEBUG" = "xno"; then
-		  debug_release="no"
-		fi
+	      [AS_CASE(["$LIBRSVG_DEBUG"],
+		[yes], [debug_release=yes],
+		[no|''], [debug_release=no])
 	      ])
 
 AC_MSG_CHECKING(whether to build Rust code with debugging information)
-if test "x$debug_release" = "xyes" ; then
+AS_IF([test "x$debug_release" = "xyes"], [
 	AC_MSG_RESULT(yes)
 	RUST_TARGET_SUBDIR=debug
-else
+], [
 	AC_MSG_RESULT(no)
 	RUST_TARGET_SUBDIR=release
-fi
+])
 AM_CONDITIONAL([DEBUG_RELEASE], [test "x$debug_release" = "xyes"])
 
 AC_ARG_VAR(RUST_TARGET, [Set rust target (default=$host)])
-if test "x$RUST_TARGET" = x; then
-	RUST_TARGET=$host
-fi
+: ${RUST_TARGET:=$host}
 
-AM_CONDITIONAL(CROSS_COMPILING, test $cross_compiling = yes)
-if test "x$cross_compiling" = "xyes" ; then
+AM_CONDITIONAL([CROSS_COMPILING], [test "x$cross_compiling" = xyes])
+AS_IF([test "x$cross_compiling" = "xyes"], [
 	RUST_TARGET_SUBDIR="$RUST_TARGET/$RUST_TARGET_SUBDIR"
-fi
+])
 AC_SUBST([RUST_TARGET_SUBDIR])
 
 dnl ===========================================================================
 dnl Build introspectable bindings
 
 # No automagic please!
-if test -z "$enable_introspection"; then
-  enable_introspection=yes
-fi
+: ${enable_introspection:=yes}
 
 GOBJECT_INTROSPECTION_CHECK([0.10.8])
 
@@ -352,34 +307,18 @@ dnl ===========================================================================
 m4_copy([AC_DEFUN],[glib_DEFUN])
 glib_DEFUN([GLIB_LC_MESSAGES],
   [AC_CHECK_HEADERS([locale.h])
-    if test $ac_cv_header_locale_h = yes; then
+  AS_IF([test "x$ac_cv_header_locale_h" = xyes], [
     AC_CACHE_CHECK([for LC_MESSAGES], am_cv_val_LC_MESSAGES,
-      [AC_TRY_LINK([#include <locale.h>], [return LC_MESSAGES],
-       am_cv_val_LC_MESSAGES=yes, am_cv_val_LC_MESSAGES=no)])
-    if test $am_cv_val_LC_MESSAGES = yes; then
+      [AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <locale.h>]],
+          [[return LC_MESSAGES]])],
+	[am_cv_val_LC_MESSAGES=yes],
+	[am_cv_val_LC_MESSAGES=no])])
+    AS_IF([test "x$am_cv_val_LC_MESSAGES" = xyes], [
       AC_DEFINE(HAVE_LC_MESSAGES, 1,
         [Define if your <locale.h> file defines LC_MESSAGES.])
-    fi
-  fi])
+  ])])])
 
 GLIB_LC_MESSAGES
-
-dnl ===========================================================================
-
-# Check for pangoft2 and fontconfig, which is optional on Windows
-
-PKG_CHECK_MODULES([PANGOFT2],[pangoft2 >= $PANGO_REQUIRED],[have_pangoft2=yes],[have_pangoft2=no])
-PKG_CHECK_MODULES([FONTCONFIG],[fontconfig],[have_fontconfig=yes],[have_fontconfig=no])
-
-if test "x$native_win32" != "xyes"; then
-  if test "x$have_pangoft2" != "xyes" -o "x$have_fontconfig" != "xyes"; then
-    AC_MSG_ERROR([pangoft2 and fontconfig are required for non-Windows platforms.])
-  fi
-fi
-
-if test "x$have_pangoft2" = "xyes" -a "x$have_fontconfig" = "xyes"; then
-  AC_DEFINE(HAVE_PANGOFT2, 1, [Have the pangoft2 library])
-fi
 
 dnl ===========================================================================
 
@@ -395,18 +334,15 @@ AC_SUBST([AM_CFLAGS])
 AC_SUBST([AM_LDFLAGS])
 
 AC_CONFIG_FILES([
-librsvg/librsvg-features.h
+include/librsvg/rsvg-version.h
 Makefile
 librsvg-zip
 gdk-pixbuf-loader/Makefile
 tests/Makefile
-tools/Makefile
 doc/Makefile
-doc/version.xml
 win32/Makefile
 win32/config.h.win32
 win32/config-msvc.mak
-po/Makefile.in
 ])
 
 AC_CONFIG_FILES([librsvg-${RSVG_API_VERSION}.pc:librsvg.pc.in],[],[RSVG_API_VERSION=$RSVG_API_VERSION])
@@ -419,7 +355,7 @@ librsvg-$VERSION
 
 	prefix:                         ${prefix}
 	C compiler:                     ${CC}
-	rustc:                          ${rust_version}
+	rustc:                          rustc ${rust_version}
 
 	Cairo version:                  ${CAIRO_VERSION}
 	Pango version:                  ${PANGO_VERSION}
@@ -431,6 +367,5 @@ librsvg-$VERSION
 	Build introspectable bindings:  ${found_introspection}
 	Build Vala bindings:            ${enable_vala}
 	Build GdkPixbuf loader:         ${enable_pixbuf_loader}
-	Build miscellaneous tools:      ${build_misc_tools}
-	Build HTML documentation:       ${enable_gtk_doc}
+	Build developer documentation:  ${enable_gtk_doc}
 "

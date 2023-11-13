@@ -1,5 +1,5 @@
 # PNG Decoder/Encoder
-[![Build Status](https://travis-ci.org/image-rs/image-png.svg?branch=master)](https://travis-ci.org/image-rs/image-png)
+[![Build Status](https://github.com/image-rs/image-png/workflows/Rust%20CI/badge.svg)](https://github.com/image-rs/image-png/actions)
 [![Documentation](https://docs.rs/png/badge.svg)](https://docs.rs/png)
 [![Crates.io](https://img.shields.io/crates/v/png.svg)](https://crates.io/crates/png)
 ![Lines of Code](https://tokei.rs/b1/github/image-rs/image-png)
@@ -27,8 +27,8 @@ cargo run --release --example pngcheck ./tests/pngsuite/*
 
 Licensed under either of
 
- * Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
- * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+ * Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or https://www.apache.org/licenses/LICENSE-2.0)
+ * MIT license ([LICENSE-MIT](LICENSE-MIT) or https://opensource.org/licenses/MIT)
 
 at your option.
 

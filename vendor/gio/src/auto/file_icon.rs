@@ -2,34 +2,37 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
+use crate::File;
+use crate::Icon;
+use crate::LoadableIcon;
 use glib::object::IsA;
 use glib::translate::*;
 use std::fmt;
-use File;
-use Icon;
-use LoadableIcon;
 
-glib_wrapper! {
-    pub struct FileIcon(Object<gio_sys::GFileIcon, gio_sys::GFileIconClass, FileIconClass>) @implements Icon, LoadableIcon;
+glib::wrapper! {
+    #[doc(alias = "GFileIcon")]
+    pub struct FileIcon(Object<ffi::GFileIcon, ffi::GFileIconClass>) @implements Icon, LoadableIcon;
 
     match fn {
-        get_type => || gio_sys::g_file_icon_get_type(),
+        type_ => || ffi::g_file_icon_get_type(),
     }
 }
 
 impl FileIcon {
-    pub fn new<P: IsA<File>>(file: &P) -> FileIcon {
-        unsafe { from_glib_full(gio_sys::g_file_icon_new(file.as_ref().to_glib_none().0)) }
+    #[doc(alias = "g_file_icon_new")]
+    pub fn new(file: &impl IsA<File>) -> FileIcon {
+        unsafe { from_glib_full(ffi::g_file_icon_new(file.as_ref().to_glib_none().0)) }
     }
 
-    pub fn get_file(&self) -> Option<File> {
-        unsafe { from_glib_none(gio_sys::g_file_icon_get_file(self.to_glib_none().0)) }
+    #[doc(alias = "g_file_icon_get_file")]
+    #[doc(alias = "get_file")]
+    pub fn file(&self) -> File {
+        unsafe { from_glib_none(ffi::g_file_icon_get_file(self.to_glib_none().0)) }
     }
 }
 
 impl fmt::Display for FileIcon {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "FileIcon")
+        f.write_str("FileIcon")
     }
 }

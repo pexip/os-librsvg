@@ -2,42 +2,65 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
+use crate::Converter;
+use crate::FilterInputStream;
+use crate::InputStream;
+use crate::PollableInputStream;
 use glib::object::Cast;
 use glib::object::IsA;
 use glib::translate::*;
 use glib::StaticType;
 use glib::ToValue;
 use std::fmt;
-use Converter;
-use FilterInputStream;
-use InputStream;
-use PollableInputStream;
 
-glib_wrapper! {
-    pub struct ConverterInputStream(Object<gio_sys::GConverterInputStream, gio_sys::GConverterInputStreamClass, ConverterInputStreamClass>) @extends FilterInputStream, InputStream, @implements PollableInputStream;
+glib::wrapper! {
+    #[doc(alias = "GConverterInputStream")]
+    pub struct ConverterInputStream(Object<ffi::GConverterInputStream, ffi::GConverterInputStreamClass>) @extends FilterInputStream, InputStream, @implements PollableInputStream;
 
     match fn {
-        get_type => || gio_sys::g_converter_input_stream_get_type(),
+        type_ => || ffi::g_converter_input_stream_get_type(),
     }
 }
 
 impl ConverterInputStream {
-    pub fn new<P: IsA<InputStream>, Q: IsA<Converter>>(
-        base_stream: &P,
-        converter: &Q,
+    pub const NONE: Option<&'static ConverterInputStream> = None;
+
+    #[doc(alias = "g_converter_input_stream_new")]
+    pub fn new(
+        base_stream: &impl IsA<InputStream>,
+        converter: &impl IsA<Converter>,
     ) -> ConverterInputStream {
         unsafe {
-            InputStream::from_glib_full(gio_sys::g_converter_input_stream_new(
+            InputStream::from_glib_full(ffi::g_converter_input_stream_new(
                 base_stream.as_ref().to_glib_none().0,
                 converter.as_ref().to_glib_none().0,
             ))
             .unsafe_cast()
         }
     }
+
+    // rustdoc-stripper-ignore-next
+    /// Creates a new builder-pattern struct instance to construct [`ConverterInputStream`] objects.
+    ///
+    /// This method returns an instance of [`ConverterInputStreamBuilder`](crate::builders::ConverterInputStreamBuilder) which can be used to create [`ConverterInputStream`] objects.
+    pub fn builder() -> ConverterInputStreamBuilder {
+        ConverterInputStreamBuilder::default()
+    }
+}
+
+impl Default for ConverterInputStream {
+    fn default() -> Self {
+        glib::object::Object::new::<Self>(&[])
+            .expect("Can't construct ConverterInputStream object with default parameters")
+    }
 }
 
 #[derive(Clone, Default)]
+// rustdoc-stripper-ignore-next
+/// A [builder-pattern] type to construct [`ConverterInputStream`] objects.
+///
+/// [builder-pattern]: https://doc.rust-lang.org/1.0.0/style/ownership/builders.html
+#[must_use = "The builder must be built to be used"]
 pub struct ConverterInputStreamBuilder {
     converter: Option<Converter>,
     base_stream: Option<InputStream>,
@@ -45,10 +68,15 @@ pub struct ConverterInputStreamBuilder {
 }
 
 impl ConverterInputStreamBuilder {
+    // rustdoc-stripper-ignore-next
+    /// Create a new [`ConverterInputStreamBuilder`].
     pub fn new() -> Self {
         Self::default()
     }
 
+    // rustdoc-stripper-ignore-next
+    /// Build the [`ConverterInputStream`].
+    #[must_use = "Building the object from the builder is usually expensive and is not expected to have side effects"]
     pub fn build(self) -> ConverterInputStream {
         let mut properties: Vec<(&str, &dyn ToValue)> = vec![];
         if let Some(ref converter) = self.converter {
@@ -60,18 +88,16 @@ impl ConverterInputStreamBuilder {
         if let Some(ref close_base_stream) = self.close_base_stream {
             properties.push(("close-base-stream", close_base_stream));
         }
-        glib::Object::new(ConverterInputStream::static_type(), &properties)
-            .expect("object new")
-            .downcast()
-            .expect("downcast")
+        glib::Object::new::<ConverterInputStream>(&properties)
+            .expect("Failed to create an instance of ConverterInputStream")
     }
 
-    pub fn converter<P: IsA<Converter>>(mut self, converter: &P) -> Self {
+    pub fn converter(mut self, converter: &impl IsA<Converter>) -> Self {
         self.converter = Some(converter.clone().upcast());
         self
     }
 
-    pub fn base_stream<P: IsA<InputStream>>(mut self, base_stream: &P) -> Self {
+    pub fn base_stream(mut self, base_stream: &impl IsA<InputStream>) -> Self {
         self.base_stream = Some(base_stream.clone().upcast());
         self
     }
@@ -82,16 +108,16 @@ impl ConverterInputStreamBuilder {
     }
 }
 
-pub const NONE_CONVERTER_INPUT_STREAM: Option<&ConverterInputStream> = None;
-
 pub trait ConverterInputStreamExt: 'static {
-    fn get_converter(&self) -> Option<Converter>;
+    #[doc(alias = "g_converter_input_stream_get_converter")]
+    #[doc(alias = "get_converter")]
+    fn converter(&self) -> Converter;
 }
 
 impl<O: IsA<ConverterInputStream>> ConverterInputStreamExt for O {
-    fn get_converter(&self) -> Option<Converter> {
+    fn converter(&self) -> Converter {
         unsafe {
-            from_glib_none(gio_sys::g_converter_input_stream_get_converter(
+            from_glib_none(ffi::g_converter_input_stream_get_converter(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -100,6 +126,6 @@ impl<O: IsA<ConverterInputStream>> ConverterInputStreamExt for O {
 
 impl fmt::Display for ConverterInputStream {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ConverterInputStream")
+        f.write_str("ConverterInputStream")
     }
 }

@@ -136,7 +136,7 @@ pub type GRAYA16 = GrayAlpha<u16>;
 impl<T> Gray<T> {
     /// New grayscale pixel
     #[inline(always)]
-    pub fn new(brightness: T) -> Self {
+    pub const fn new(brightness: T) -> Self {
         Self(brightness)
     }
 }
@@ -167,7 +167,7 @@ impl<T: Clone, A> GrayAlpha<T, A> {
 impl<T, A> GrayAlpha<T, A> {
     /// New grayscale+alpha pixel
     #[inline(always)]
-    pub fn new(brightness: T, alpha: A) -> Self {
+    pub const fn new(brightness: T, alpha: A) -> Self {
         Self(brightness, alpha)
     }
 
@@ -181,7 +181,6 @@ impl<T, A> GrayAlpha<T, A> {
 }
 
 impl<T: Copy, A: Clone> GrayAlpha<T, A> {
-    #[inline(always)]
     /// Create a new `GrayAlpha` with the new alpha value, but same gray value
     #[inline(always)]
     pub fn alpha(&self, a: A) -> Self {
@@ -211,6 +210,13 @@ impl<T: Copy, B> ComponentMap<Gray<B>, T, B> for Gray<T> {
     }
 }
 
+impl<T: Copy, B> ColorComponentMap<Gray<B>, T, B> for Gray<T> {
+    #[inline(always)]
+    fn map_c<F>(&self, mut f: F) -> Gray<B> where F: FnMut(T) -> B {
+        Gray(f(self.0))
+    }
+}
+
 impl<T: Copy, B> ComponentMap<GrayAlpha<B>, T, B> for GrayAlpha<T> {
     #[inline(always)]
     fn map<F>(&self, mut f: F) -> GrayAlpha<B>
@@ -218,6 +224,16 @@ impl<T: Copy, B> ComponentMap<GrayAlpha<B>, T, B> for GrayAlpha<T> {
         F: FnMut(T) -> B,
     {
         GrayAlpha(f(self.0), f(self.1))
+    }
+}
+
+impl<T: Copy, A: Copy, B> ColorComponentMap<GrayAlpha<B, A>, T, B> for GrayAlpha<T, A> {
+    #[inline(always)]
+    fn map_c<F>(&self, mut f: F) -> GrayAlpha<B, A>
+    where
+        F: FnMut(T) -> B,
+    {
+        GrayAlpha(f(self.0), self.1)
     }
 }
 
@@ -309,6 +325,12 @@ fn gray() {
     assert_eq!(rgb.r, 1);
     assert_eq!(rgb.g, 1);
     assert_eq!(rgb.b, 1);
+
+    let rgba: crate::RGBA<_> = Gray(1u8).into();
+    assert_eq!(rgba.r, 1);
+    assert_eq!(rgba.g, 1);
+    assert_eq!(rgba.b, 1);
+    assert_eq!(rgba.a, 255);
 
     let g: GRAY8 = 200.into();
     let g = g.map(|c| c/2);

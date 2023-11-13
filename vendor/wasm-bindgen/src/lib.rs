@@ -8,12 +8,15 @@
 #![no_std]
 #![allow(coherence_leak_check)]
 #![doc(html_root_url = "https://docs.rs/wasm-bindgen/0.2")]
-#![cfg_attr(feature = "nightly", feature(unsize))]
 
+use core::convert::TryFrom;
 use core::fmt;
 use core::marker;
 use core::mem;
-use core::ops::{Deref, DerefMut};
+use core::ops::{
+    Add, BitAnd, BitOr, BitXor, Deref, DerefMut, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub,
+};
+use core::u32;
 
 use crate::convert::{FromWasmAbi, WasmOptionalF64, WasmSlice};
 
@@ -56,13 +59,15 @@ pub mod prelude {
     if_std! {
         pub use crate::closure::Closure;
     }
+
+    pub use crate::JsError;
 }
 
 pub mod convert;
 pub mod describe;
 
 mod cast;
-pub use crate::cast::JsCast;
+pub use crate::cast::{JsCast, JsObject};
 
 if_std! {
     extern crate std;
@@ -141,6 +146,15 @@ impl JsValue {
     #[inline]
     pub fn from_f64(n: f64) -> JsValue {
         unsafe { JsValue::_new(__wbindgen_number_new(n)) }
+    }
+
+    /// Creates a new JS value which is a bigint from a string representing a number.
+    ///
+    /// This function creates a JS value representing a bigint (a heap
+    /// allocated large integer) and returns a handle to the JS version of it.
+    #[inline]
+    pub fn bigint_from_str(s: &str) -> JsValue {
+        unsafe { JsValue::_new(__wbindgen_bigint_new(s.as_ptr(), s.len())) }
     }
 
     /// Creates a new JS value which is a boolean.
@@ -238,11 +252,13 @@ impl JsValue {
     ///
     /// If this JS value is not an instance of a number then this returns
     /// `None`.
+    #[inline]
     pub fn as_f64(&self) -> Option<f64> {
         unsafe { FromWasmAbi::from_abi(__wbindgen_number_get(self.idx)) }
     }
 
     /// Tests whether this JS value is a JS string.
+    #[inline]
     pub fn is_string(&self) -> bool {
         unsafe { __wbindgen_is_string(self.idx) == 1 }
     }
@@ -268,6 +284,7 @@ impl JsValue {
     ///
     /// [caveats]: https://rustwasm.github.io/docs/wasm-bindgen/reference/types/str.html
     #[cfg(feature = "std")]
+    #[inline]
     pub fn as_string(&self) -> Option<String> {
         unsafe { FromWasmAbi::from_abi(__wbindgen_string_get(self.idx)) }
     }
@@ -277,6 +294,7 @@ impl JsValue {
     ///
     /// If this JS value is not an instance of a boolean then this returns
     /// `None`.
+    #[inline]
     pub fn as_bool(&self) -> Option<bool> {
         unsafe {
             match __wbindgen_boolean_get(self.idx) {
@@ -317,6 +335,28 @@ impl JsValue {
         unsafe { __wbindgen_is_function(self.idx) == 1 }
     }
 
+    /// Tests whether the type of this JS value is `bigint`.
+    #[inline]
+    pub fn is_bigint(&self) -> bool {
+        unsafe { __wbindgen_is_bigint(self.idx) == 1 }
+    }
+
+    /// Applies the unary `typeof` JS operator on a `JsValue`.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/typeof)
+    #[inline]
+    pub fn js_typeof(&self) -> JsValue {
+        unsafe { JsValue::_new(__wbindgen_typeof(self.idx)) }
+    }
+
+    /// Applies the binary `in` JS operator on the two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/in)
+    #[inline]
+    pub fn js_in(&self, obj: &JsValue) -> bool {
+        unsafe { __wbindgen_in(self.idx, obj.idx) == 1 }
+    }
+
     /// Tests whether the value is ["truthy"].
     ///
     /// ["truthy"]: https://developer.mozilla.org/en-US/docs/Glossary/Truthy
@@ -333,7 +373,7 @@ impl JsValue {
         unsafe { __wbindgen_is_falsy(self.idx) == 1 }
     }
 
-    /// Get a string representation of the JavaScript object for debugging
+    /// Get a string representation of the JavaScript object for debugging.
     #[cfg(feature = "std")]
     fn as_debug_string(&self) -> String {
         unsafe {
@@ -343,11 +383,94 @@ impl JsValue {
             String::from_utf8_unchecked(data)
         }
     }
+
+    /// Compare two `JsValue`s for equality, using the `==` operator in JS.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Equality)
+    #[inline]
+    pub fn loose_eq(&self, other: &Self) -> bool {
+        unsafe { __wbindgen_jsval_loose_eq(self.idx, other.idx) != 0 }
+    }
+
+    /// Applies the unary `~` JS operator on a `JsValue`.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Bitwise_NOT)
+    #[inline]
+    pub fn bit_not(&self) -> JsValue {
+        unsafe { JsValue::_new(__wbindgen_bit_not(self.idx)) }
+    }
+
+    /// Applies the binary `>>>` JS operator on the two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Unsigned_right_shift)
+    #[inline]
+    pub fn unsigned_shr(&self, rhs: &Self) -> u32 {
+        unsafe { __wbindgen_unsigned_shr(self.idx, rhs.idx) }
+    }
+
+    /// Applies the binary `/` JS operator on two `JsValue`s, catching and returning any `RangeError` thrown.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Division)
+    #[inline]
+    pub fn checked_div(&self, rhs: &Self) -> Self {
+        unsafe { JsValue::_new(__wbindgen_checked_div(self.idx, rhs.idx)) }
+    }
+
+    /// Applies the binary `**` JS operator on the two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Exponentiation)
+    #[inline]
+    pub fn pow(&self, rhs: &Self) -> Self {
+        unsafe { JsValue::_new(__wbindgen_pow(self.idx, rhs.idx)) }
+    }
+
+    /// Applies the binary `<` JS operator on the two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Less_than)
+    #[inline]
+    pub fn lt(&self, other: &Self) -> bool {
+        unsafe { __wbindgen_lt(self.idx, other.idx) == 1 }
+    }
+
+    /// Applies the binary `<=` JS operator on the two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Less_than_or_equal)
+    #[inline]
+    pub fn le(&self, other: &Self) -> bool {
+        unsafe { __wbindgen_le(self.idx, other.idx) == 1 }
+    }
+
+    /// Applies the binary `>=` JS operator on the two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Greater_than_or_equal)
+    #[inline]
+    pub fn ge(&self, other: &Self) -> bool {
+        unsafe { __wbindgen_ge(self.idx, other.idx) == 1 }
+    }
+
+    /// Applies the binary `>` JS operator on the two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Greater_than)
+    #[inline]
+    pub fn gt(&self, other: &Self) -> bool {
+        unsafe { __wbindgen_gt(self.idx, other.idx) == 1 }
+    }
+
+    /// Applies the unary `+` JS operator on a `JsValue`. Can throw.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Unary_plus)
+    #[inline]
+    pub fn unchecked_into_f64(&self) -> f64 {
+        unsafe { __wbindgen_as_number(self.idx) }
+    }
 }
 
 impl PartialEq for JsValue {
+    /// Compares two `JsValue`s for equality, using the `===` operator in JS.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Strict_equality)
     #[inline]
-    fn eq(&self, other: &JsValue) -> bool {
+    fn eq(&self, other: &Self) -> bool {
         unsafe { __wbindgen_jsval_eq(self.idx, other.idx) != 0 }
     }
 }
@@ -387,6 +510,248 @@ if_std! {
         }
     }
 }
+
+macro_rules! forward_deref_unop {
+    (impl $imp:ident, $method:ident for $t:ty) => {
+        impl $imp for $t {
+            type Output = <&'static $t as $imp>::Output;
+
+            #[inline]
+            fn $method(self) -> <&'static $t as $imp>::Output {
+                $imp::$method(&self)
+            }
+        }
+    };
+}
+
+macro_rules! forward_deref_binop {
+    (impl $imp:ident, $method:ident for $t:ty) => {
+        impl<'a> $imp<$t> for &'a $t {
+            type Output = <&'static $t as $imp<&'static $t>>::Output;
+
+            #[inline]
+            fn $method(self, other: $t) -> <&'static $t as $imp<&'static $t>>::Output {
+                $imp::$method(self, &other)
+            }
+        }
+
+        impl $imp<&$t> for $t {
+            type Output = <&'static $t as $imp<&'static $t>>::Output;
+
+            #[inline]
+            fn $method(self, other: &$t) -> <&'static $t as $imp<&'static $t>>::Output {
+                $imp::$method(&self, other)
+            }
+        }
+
+        impl $imp<$t> for $t {
+            type Output = <&'static $t as $imp<&'static $t>>::Output;
+
+            #[inline]
+            fn $method(self, other: $t) -> <&'static $t as $imp<&'static $t>>::Output {
+                $imp::$method(&self, &other)
+            }
+        }
+    };
+}
+
+impl Not for &JsValue {
+    type Output = bool;
+
+    /// Applies the `!` JS operator on a `JsValue`.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Logical_NOT)
+    #[inline]
+    fn not(self) -> Self::Output {
+        JsValue::is_falsy(self)
+    }
+}
+
+forward_deref_unop!(impl Not, not for JsValue);
+
+impl TryFrom<JsValue> for f64 {
+    type Error = JsValue;
+
+    /// Applies the unary `+` JS operator on a `JsValue`.
+    /// Returns the numeric result on success, or the JS error value on error.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Unary_plus)
+    #[inline]
+    fn try_from(val: JsValue) -> Result<Self, Self::Error> {
+        f64::try_from(&val)
+    }
+}
+
+impl TryFrom<&JsValue> for f64 {
+    type Error = JsValue;
+
+    /// Applies the unary `+` JS operator on a `JsValue`.
+    /// Returns the numeric result on success, or the JS error value on error.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Unary_plus)
+    #[inline]
+    fn try_from(val: &JsValue) -> Result<Self, Self::Error> {
+        let jsval = unsafe { JsValue::_new(__wbindgen_try_into_number(val.idx)) };
+        return match jsval.as_f64() {
+            Some(num) => Ok(num),
+            None => Err(jsval),
+        };
+    }
+}
+
+impl Neg for &JsValue {
+    type Output = JsValue;
+
+    /// Applies the unary `-` JS operator on a `JsValue`.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Unary_negation)
+    #[inline]
+    fn neg(self) -> Self::Output {
+        unsafe { JsValue::_new(__wbindgen_neg(self.idx)) }
+    }
+}
+
+forward_deref_unop!(impl Neg, neg for JsValue);
+
+impl BitAnd for &JsValue {
+    type Output = JsValue;
+
+    /// Applies the binary `&` JS operator on two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Bitwise_AND)
+    #[inline]
+    fn bitand(self, rhs: Self) -> Self::Output {
+        unsafe { JsValue::_new(__wbindgen_bit_and(self.idx, rhs.idx)) }
+    }
+}
+
+forward_deref_binop!(impl BitAnd, bitand for JsValue);
+
+impl BitOr for &JsValue {
+    type Output = JsValue;
+
+    /// Applies the binary `|` JS operator on two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Bitwise_OR)
+    #[inline]
+    fn bitor(self, rhs: Self) -> Self::Output {
+        unsafe { JsValue::_new(__wbindgen_bit_or(self.idx, rhs.idx)) }
+    }
+}
+
+forward_deref_binop!(impl BitOr, bitor for JsValue);
+
+impl BitXor for &JsValue {
+    type Output = JsValue;
+
+    /// Applies the binary `^` JS operator on two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Bitwise_XOR)
+    #[inline]
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        unsafe { JsValue::_new(__wbindgen_bit_xor(self.idx, rhs.idx)) }
+    }
+}
+
+forward_deref_binop!(impl BitXor, bitxor for JsValue);
+
+impl Shl for &JsValue {
+    type Output = JsValue;
+
+    /// Applies the binary `<<` JS operator on two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Left_shift)
+    #[inline]
+    fn shl(self, rhs: Self) -> Self::Output {
+        unsafe { JsValue::_new(__wbindgen_shl(self.idx, rhs.idx)) }
+    }
+}
+
+forward_deref_binop!(impl Shl, shl for JsValue);
+
+impl Shr for &JsValue {
+    type Output = JsValue;
+
+    /// Applies the binary `>>` JS operator on two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Right_shift)
+    #[inline]
+    fn shr(self, rhs: Self) -> Self::Output {
+        unsafe { JsValue::_new(__wbindgen_shr(self.idx, rhs.idx)) }
+    }
+}
+
+forward_deref_binop!(impl Shr, shr for JsValue);
+
+impl Add for &JsValue {
+    type Output = JsValue;
+
+    /// Applies the binary `+` JS operator on two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Addition)
+    #[inline]
+    fn add(self, rhs: Self) -> Self::Output {
+        unsafe { JsValue::_new(__wbindgen_add(self.idx, rhs.idx)) }
+    }
+}
+
+forward_deref_binop!(impl Add, add for JsValue);
+
+impl Sub for &JsValue {
+    type Output = JsValue;
+
+    /// Applies the binary `-` JS operator on two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Subtraction)
+    #[inline]
+    fn sub(self, rhs: Self) -> Self::Output {
+        unsafe { JsValue::_new(__wbindgen_sub(self.idx, rhs.idx)) }
+    }
+}
+
+forward_deref_binop!(impl Sub, sub for JsValue);
+
+impl Div for &JsValue {
+    type Output = JsValue;
+
+    /// Applies the binary `/` JS operator on two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Division)
+    #[inline]
+    fn div(self, rhs: Self) -> Self::Output {
+        unsafe { JsValue::_new(__wbindgen_div(self.idx, rhs.idx)) }
+    }
+}
+
+forward_deref_binop!(impl Div, div for JsValue);
+
+impl Mul for &JsValue {
+    type Output = JsValue;
+
+    /// Applies the binary `*` JS operator on two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Multiplication)
+    #[inline]
+    fn mul(self, rhs: Self) -> Self::Output {
+        unsafe { JsValue::_new(__wbindgen_mul(self.idx, rhs.idx)) }
+    }
+}
+
+forward_deref_binop!(impl Mul, mul for JsValue);
+
+impl Rem for &JsValue {
+    type Output = JsValue;
+
+    /// Applies the binary `%` JS operator on two `JsValue`s.
+    ///
+    /// [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Remainder)
+    #[inline]
+    fn rem(self, rhs: Self) -> Self::Output {
+        unsafe { JsValue::_new(__wbindgen_rem(self.idx, rhs.idx)) }
+    }
+}
+
+forward_deref_binop!(impl Rem, rem for JsValue);
 
 impl<'a> From<&'a str> for JsValue {
     #[inline]
@@ -484,6 +849,57 @@ macro_rules! numbers {
 
 numbers! { i8 u8 i16 u16 i32 u32 f32 f64 }
 
+macro_rules! big_numbers {
+    ($($n:ident)*) => ($(
+        impl PartialEq<$n> for JsValue {
+            #[inline]
+            fn eq(&self, other: &$n) -> bool {
+                self == &JsValue::from(*other)
+            }
+        }
+
+        impl From<$n> for JsValue {
+            #[inline]
+            fn from(n: $n) -> JsValue {
+                JsValue::bigint_from_str(&n.to_string())
+            }
+        }
+    )*)
+}
+
+big_numbers! { i64 u64 i128 u128 }
+
+// `usize` and `isize` have to be treated a bit specially, because we know that
+// they're 32-bit but the compiler conservatively assumes they might be bigger.
+// So, we have to manually forward to the `u32`/`i32` versions.
+impl PartialEq<usize> for JsValue {
+    #[inline]
+    fn eq(&self, other: &usize) -> bool {
+        *self == (*other as u32)
+    }
+}
+
+impl From<usize> for JsValue {
+    #[inline]
+    fn from(n: usize) -> Self {
+        Self::from(n as u32)
+    }
+}
+
+impl PartialEq<isize> for JsValue {
+    #[inline]
+    fn eq(&self, other: &isize) -> bool {
+        *self == (*other as i32)
+    }
+}
+
+impl From<isize> for JsValue {
+    #[inline]
+    fn from(n: isize) -> Self {
+        Self::from(n as i32)
+    }
+}
+
 externs! {
     #[link(wasm_import_module = "__wbindgen_placeholder__")]
     extern "C" {
@@ -492,6 +908,7 @@ externs! {
 
         fn __wbindgen_string_new(ptr: *const u8, len: usize) -> u32;
         fn __wbindgen_number_new(f: f64) -> u32;
+        fn __wbindgen_bigint_new(ptr: *const u8, len: usize) -> u32;
         fn __wbindgen_symbol_named_new(ptr: *const u8, len: usize) -> u32;
         fn __wbindgen_symbol_anonymous_new() -> u32;
 
@@ -503,7 +920,33 @@ externs! {
         fn __wbindgen_is_object(idx: u32) -> u32;
         fn __wbindgen_is_function(idx: u32) -> u32;
         fn __wbindgen_is_string(idx: u32) -> u32;
+        fn __wbindgen_is_bigint(idx: u32) -> u32;
+        fn __wbindgen_typeof(idx: u32) -> u32;
+
+        fn __wbindgen_in(prop: u32, obj: u32) -> u32;
+
         fn __wbindgen_is_falsy(idx: u32) -> u32;
+        fn __wbindgen_as_number(idx: u32) -> f64;
+        fn __wbindgen_try_into_number(idx: u32) -> u32;
+        fn __wbindgen_neg(idx: u32) -> u32;
+        fn __wbindgen_bit_and(a: u32, b: u32) -> u32;
+        fn __wbindgen_bit_or(a: u32, b: u32) -> u32;
+        fn __wbindgen_bit_xor(a: u32, b: u32) -> u32;
+        fn __wbindgen_bit_not(idx: u32) -> u32;
+        fn __wbindgen_shl(a: u32, b: u32) -> u32;
+        fn __wbindgen_shr(a: u32, b: u32) -> u32;
+        fn __wbindgen_unsigned_shr(a: u32, b: u32) -> u32;
+        fn __wbindgen_add(a: u32, b: u32) -> u32;
+        fn __wbindgen_sub(a: u32, b: u32) -> u32;
+        fn __wbindgen_div(a: u32, b: u32) -> u32;
+        fn __wbindgen_checked_div(a: u32, b: u32) -> u32;
+        fn __wbindgen_mul(a: u32, b: u32) -> u32;
+        fn __wbindgen_rem(a: u32, b: u32) -> u32;
+        fn __wbindgen_pow(a: u32, b: u32) -> u32;
+        fn __wbindgen_lt(a: u32, b: u32) -> u32;
+        fn __wbindgen_le(a: u32, b: u32) -> u32;
+        fn __wbindgen_ge(a: u32, b: u32) -> u32;
+        fn __wbindgen_gt(a: u32, b: u32) -> u32;
 
         fn __wbindgen_number_get(idx: u32) -> WasmOptionalF64;
         fn __wbindgen_boolean_get(idx: u32) -> u32;
@@ -513,6 +956,7 @@ externs! {
 
         fn __wbindgen_throw(a: *const u8, b: usize) -> !;
         fn __wbindgen_rethrow(a: u32) -> !;
+        fn __wbindgen_error_new(a: *const u8, b: usize) -> u32;
 
         fn __wbindgen_cb_drop(idx: u32) -> u32;
 
@@ -522,6 +966,9 @@ externs! {
         fn __wbindgen_json_parse(ptr: *const u8, len: usize) -> u32;
         fn __wbindgen_json_serialize(idx: u32) -> WasmSlice;
         fn __wbindgen_jsval_eq(a: u32, b: u32) -> u32;
+        fn __wbindgen_jsval_loose_eq(a: u32, b: u32) -> u32;
+
+        fn __wbindgen_not(idx: u32) -> u32;
 
         fn __wbindgen_memory() -> u32;
         fn __wbindgen_module() -> u32;
@@ -567,6 +1014,12 @@ impl Drop for JsValue {
                 __wbindgen_object_drop_ref(self.idx);
             }
         }
+    }
+}
+
+impl Default for JsValue {
+    fn default() -> Self {
+        Self::UNDEFINED
     }
 }
 
@@ -711,7 +1164,7 @@ pub fn anyref_heap_live_count() -> u32 {
     externref_heap_live_count()
 }
 
-/// An extension trait for `Option<T>` and `Result<T, E>` for unwraping the `T`
+/// An extension trait for `Option<T>` and `Result<T, E>` for unwrapping the `T`
 /// value, or throwing a JS error if it is not available.
 ///
 /// These methods should have a smaller code size footprint than the normal
@@ -1169,5 +1622,93 @@ impl<T> Deref for Clamped<T> {
 impl<T> DerefMut for Clamped<T> {
     fn deref_mut(&mut self) -> &mut T {
         &mut self.0
+    }
+}
+
+/// Convenience type for use on exported `fn() -> Result<T, JsError>` functions, where you wish to
+/// throw a JavaScript `Error` object.
+///
+/// You can get wasm_bindgen to throw basic errors by simply returning
+/// `Err(JsError::new("message"))` from such a function.
+///
+/// For more complex error handling, `JsError` implements `From<T> where T: std::error::Error` by
+/// converting it to a string, so you can use it with `?`. Many Rust error types already do this,
+/// and you can use [`thiserror`](https://crates.io/crates/thiserror) to derive Display
+/// implementations easily or use any number of boxed error types that implement it already.
+///
+///
+/// To allow JavaScript code to catch only your errors, you may wish to add a subclass of `Error`
+/// in a JS module, and then implement `Into<JsValue>` directly on a type and instantiate that
+/// subclass. In that case, you would not need `JsError` at all.
+///
+/// ### Basic example
+///
+/// ```rust,no_run
+/// use wasm_bindgen::prelude::*;
+///
+/// #[wasm_bindgen]
+/// pub fn throwing_function() -> Result<(), JsError> {
+///     Err(JsError::new("message"))
+/// }
+/// ```
+///
+/// ### Complex Example
+///
+/// ```rust,no_run
+/// use wasm_bindgen::prelude::*;
+///
+/// #[derive(Debug, Clone)]
+/// enum MyErrorType {
+///     SomeError,
+/// }
+///
+/// use core::fmt;
+/// impl std::error::Error for MyErrorType {}
+/// impl fmt::Display for MyErrorType {
+///     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+///         write!(f, "display implementation becomes the error message")
+///     }
+/// }
+///
+/// fn internal_api() -> Result<(), MyErrorType> {
+///     Err(MyErrorType::SomeError)
+/// }
+///
+/// #[wasm_bindgen]
+/// pub fn throwing_function() -> Result<(), JsError> {
+///     internal_api()?;
+///     Ok(())
+/// }
+///
+/// ```
+#[derive(Clone)]
+pub struct JsError {
+    value: JsValue,
+}
+
+impl JsError {
+    /// Construct a JavaScript `Error` object with a string message
+    #[inline]
+    pub fn new(s: &str) -> JsError {
+        Self {
+            value: unsafe { JsValue::_new(crate::__wbindgen_error_new(s.as_ptr(), s.len())) },
+        }
+    }
+}
+
+if_std! {
+    impl<E> From<E> for JsError
+    where
+        E: std::error::Error,
+    {
+        fn from(error: E) -> Self {
+            JsError::new(&error.to_string())
+        }
+    }
+}
+
+impl From<JsError> for JsValue {
+    fn from(error: JsError) -> Self {
+        error.value
     }
 }

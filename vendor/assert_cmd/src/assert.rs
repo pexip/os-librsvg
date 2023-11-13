@@ -1,8 +1,7 @@
-//! [`Output`][Output] assertions.
-//!
-//! [Output]: https://doc.rust-lang.org/std/process/struct.Output.html
+//! [`std::process::Output`] assertions.
 
 use std::borrow::Cow;
+use std::error::Error;
 use std::fmt;
 use std::process;
 use std::str;
@@ -10,8 +9,8 @@ use std::str;
 use predicates::str::PredicateStrExt;
 use predicates_tree::CaseTreeExt;
 
-use crate::output::dump_buffer;
 use crate::output::output_fmt;
+use crate::output::DebugBytes;
 
 /// Assert the state of an [`Output`].
 ///
@@ -28,7 +27,7 @@ use crate::output::output_fmt;
 ///     .success();
 /// ```
 ///
-/// [`Output`]: https://doc.rust-lang.org/std/process/struct.Output.html
+/// [`Output`]: std::process::Output
 pub trait OutputAssertExt {
     /// Wrap with an interface for that provides assertions on the [`Output`].
     ///
@@ -45,7 +44,7 @@ pub trait OutputAssertExt {
     ///     .success();
     /// ```
     ///
-    /// [`Output`]: https://doc.rust-lang.org/std/process/struct.Output.html
+    /// [`Output`]: std::process::Output
     fn assert(self) -> Assert;
 }
 
@@ -84,21 +83,27 @@ impl<'c> OutputAssertExt for &'c mut process::Command {
 ///     .success();
 /// ```
 ///
-/// [`Output`]: https://doc.rust-lang.org/std/process/struct.Output.html
-/// [`OutputAssertExt`]: trait.OutputAssertExt.html
+/// [`Output`]: std::process::Output
 pub struct Assert {
     output: process::Output,
-    context: Vec<(&'static str, Box<dyn fmt::Display>)>,
+    context: Vec<(&'static str, Box<dyn fmt::Display + Send + Sync>)>,
 }
 
 impl Assert {
     /// Create an `Assert` for a given [`Output`].
     ///
-    /// [`Output`]: https://doc.rust-lang.org/std/process/struct.Output.html
+    /// [`Output`]: std::process::Output
     pub fn new(output: process::Output) -> Self {
         Self {
             output,
             context: vec![],
+        }
+    }
+
+    fn into_error(self, reason: AssertReason) -> AssertError {
+        AssertError {
+            assert: self,
+            reason,
         }
     }
 
@@ -119,7 +124,7 @@ impl Assert {
     /// ```
     pub fn append_context<D>(mut self, name: &'static str, context: D) -> Self
     where
-        D: fmt::Display + 'static,
+        D: fmt::Display + Send + Sync + 'static,
     {
         self.context.push((name, Box::new(context)));
         self
@@ -127,7 +132,7 @@ impl Assert {
 
     /// Access the contained [`Output`].
     ///
-    /// [`Output`]: https://doc.rust-lang.org/std/process/struct.Output.html
+    /// [`Output`]: std::process::Output
     pub fn get_output(&self) -> &process::Output {
         &self.output
     }
@@ -146,23 +151,18 @@ impl Assert {
     ///     .assert()
     ///     .success();
     /// ```
+    #[track_caller]
     pub fn success(self) -> Self {
+        self.try_success().unwrap_or_else(AssertError::panic)
+    }
+
+    /// `try_` variant of [`Assert::success`].
+    pub fn try_success(self) -> AssertResult {
         if !self.output.status.success() {
-            let actual_code = self.output.status.code().unwrap_or_else(|| {
-                panic!(
-                    "Unexpected failure.\ncode=<interrupted>\nstderr=```{}```\n{}",
-                    dump_buffer(&self.output.stderr),
-                    self
-                )
-            });
-            panic!(
-                "Unexpected failure.\ncode-{}\nstderr=```{}```\n{}",
-                actual_code,
-                dump_buffer(&self.output.stderr),
-                self
-            );
+            let actual_code = self.output.status.code();
+            return Err(self.into_error(AssertReason::UnexpectedFailure { actual_code }));
         }
-        self
+        Ok(self)
     }
 
     /// Ensure the command failed.
@@ -180,19 +180,31 @@ impl Assert {
     ///     .assert()
     ///     .failure();
     /// ```
+    #[track_caller]
     pub fn failure(self) -> Self {
+        self.try_failure().unwrap_or_else(AssertError::panic)
+    }
+
+    /// Variant of [`Assert::failure`] that returns an [`AssertResult`].
+    pub fn try_failure(self) -> AssertResult {
         if self.output.status.success() {
-            panic!("Unexpected success\n{}", self);
+            return Err(self.into_error(AssertReason::UnexpectedSuccess));
         }
-        self
+        Ok(self)
     }
 
     /// Ensure the command aborted before returning a code.
+    #[track_caller]
     pub fn interrupted(self) -> Self {
+        self.try_interrupted().unwrap_or_else(AssertError::panic)
+    }
+
+    /// Variant of [`Assert::interrupted`] that returns an [`AssertResult`].
+    pub fn try_interrupted(self) -> AssertResult {
         if self.output.status.code().is_some() {
-            panic!("Unexpected completion\n{}", self);
+            return Err(self.into_error(AssertReason::UnexpectedCompletion));
         }
-        self
+        Ok(self)
     }
 
     /// Ensure the command returned the expected code.
@@ -243,9 +255,17 @@ impl Assert {
     ///     .code(&[2, 42] as &[i32]);
     /// ```
     ///
-    /// [`predicates`]: https://docs.rs/predicates
-    /// [`IntoCodePredicate`]: trait.IntoCodePredicate.html
+    #[track_caller]
     pub fn code<I, P>(self, pred: I) -> Self
+    where
+        I: IntoCodePredicate<P>,
+        P: predicates_core::Predicate<i32>,
+    {
+        self.try_code(pred).unwrap_or_else(AssertError::panic)
+    }
+
+    /// Variant of [`Assert::code`] that returns an [`AssertResult`].
+    pub fn try_code<I, P>(self, pred: I) -> AssertResult
     where
         I: IntoCodePredicate<P>,
         P: predicates_core::Predicate<i32>,
@@ -253,16 +273,18 @@ impl Assert {
         self.code_impl(&pred.into_code())
     }
 
-    fn code_impl(self, pred: &dyn predicates_core::Predicate<i32>) -> Self {
-        let actual_code = self
-            .output
-            .status
-            .code()
-            .unwrap_or_else(|| panic!("Command interrupted\n{}", self));
+    fn code_impl(self, pred: &dyn predicates_core::Predicate<i32>) -> AssertResult {
+        let actual_code = if let Some(actual_code) = self.output.status.code() {
+            actual_code
+        } else {
+            return Err(self.into_error(AssertReason::CommandInterrupted));
+        };
         if let Some(case) = pred.find_case(false, &actual_code) {
-            panic!("Unexpected return code, failed {}\n{}", case.tree(), self);
+            return Err(self.into_error(AssertReason::UnexpectedReturnCode {
+                case_tree: CaseTree(case.tree()),
+            }));
         }
-        self
+        Ok(self)
     }
 
     /// Ensure the command wrote the expected data to `stdout`.
@@ -300,7 +322,7 @@ impl Assert {
     ///     .env("stdout", "hello")
     ///     .env("stderr", "world")
     ///     .assert()
-    ///     .stdout(predicate::str::similar("hello\n"));
+    ///     .stdout(predicate::str::diff("hello\n"));
     /// ```
     ///
     /// Accepting bytes:
@@ -331,9 +353,17 @@ impl Assert {
     ///     .stdout("hello\n");
     /// ```
     ///
-    /// [`predicates`]: https://docs.rs/predicates
-    /// [`IntoOutputPredicate`]: trait.IntoOutputPredicate.html
+    #[track_caller]
     pub fn stdout<I, P>(self, pred: I) -> Self
+    where
+        I: IntoOutputPredicate<P>,
+        P: predicates_core::Predicate<[u8]>,
+    {
+        self.try_stdout(pred).unwrap_or_else(AssertError::panic)
+    }
+
+    /// Variant of [`Assert::stdout`] that returns an [`AssertResult`].
+    pub fn try_stdout<I, P>(self, pred: I) -> AssertResult
     where
         I: IntoOutputPredicate<P>,
         P: predicates_core::Predicate<[u8]>,
@@ -341,14 +371,16 @@ impl Assert {
         self.stdout_impl(&pred.into_output())
     }
 
-    fn stdout_impl(self, pred: &dyn predicates_core::Predicate<[u8]>) -> Self {
+    fn stdout_impl(self, pred: &dyn predicates_core::Predicate<[u8]>) -> AssertResult {
         {
             let actual = &self.output.stdout;
-            if let Some(case) = pred.find_case(false, &actual) {
-                panic!("Unexpected stdout, failed {}\n{}", case.tree(), self);
+            if let Some(case) = pred.find_case(false, actual) {
+                return Err(self.into_error(AssertReason::UnexpectedStdout {
+                    case_tree: CaseTree(case.tree()),
+                }));
             }
         }
-        self
+        Ok(self)
     }
 
     /// Ensure the command wrote the expected data to `stderr`.
@@ -386,7 +418,7 @@ impl Assert {
     ///     .env("stdout", "hello")
     ///     .env("stderr", "world")
     ///     .assert()
-    ///     .stderr(predicate::str::similar("world\n"));
+    ///     .stderr(predicate::str::diff("world\n"));
     /// ```
     ///
     /// Accepting bytes:
@@ -417,9 +449,17 @@ impl Assert {
     ///     .stderr("world\n");
     /// ```
     ///
-    /// [`predicates`]: https://docs.rs/predicates
-    /// [`IntoOutputPredicate`]: trait.IntoOutputPredicate.html
+    #[track_caller]
     pub fn stderr<I, P>(self, pred: I) -> Self
+    where
+        I: IntoOutputPredicate<P>,
+        P: predicates_core::Predicate<[u8]>,
+    {
+        self.try_stderr(pred).unwrap_or_else(AssertError::panic)
+    }
+
+    /// Variant of [`Assert::stderr`] that returns an [`AssertResult`].
+    pub fn try_stderr<I, P>(self, pred: I) -> AssertResult
     where
         I: IntoOutputPredicate<P>,
         P: predicates_core::Predicate<[u8]>,
@@ -427,21 +467,29 @@ impl Assert {
         self.stderr_impl(&pred.into_output())
     }
 
-    fn stderr_impl(self, pred: &dyn predicates_core::Predicate<[u8]>) -> Self {
+    fn stderr_impl(self, pred: &dyn predicates_core::Predicate<[u8]>) -> AssertResult {
         {
             let actual = &self.output.stderr;
-            if let Some(case) = pred.find_case(false, &actual) {
-                panic!("Unexpected stderr, failed {}\n\n{}", case.tree(), self);
+            if let Some(case) = pred.find_case(false, actual) {
+                return Err(self.into_error(AssertReason::UnexpectedStderr {
+                    case_tree: CaseTree(case.tree()),
+                }));
             }
         }
-        self
+        Ok(self)
     }
 }
 
 impl fmt::Display for Assert {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let palette = crate::Palette::current();
         for &(ref name, ref context) in &self.context {
-            writeln!(f, "{}=`{}`", name, context)?;
+            writeln!(
+                f,
+                "{}=`{}`",
+                palette.key.paint(name),
+                palette.value.paint(context)
+            )?;
         }
         output_fmt(&self.output, f)
     }
@@ -456,7 +504,7 @@ impl fmt::Debug for Assert {
 }
 
 /// Used by [`Assert::code`] to convert `Self` into the needed
-/// [`Predicate<i32>`].
+/// [`predicates_core::Predicate<i32>`].
 ///
 /// # Examples
 ///
@@ -479,9 +527,6 @@ impl fmt::Debug for Assert {
 ///     .assert()
 ///     .code(42);
 /// ```
-///
-/// [`Assert::code`]: struct.Assert.html#method.code
-/// [`Predicate<i32>`]: https://docs.rs/predicates-core/1.0.0/predicates_core/trait.Predicate.html
 pub trait IntoCodePredicate<P>
 where
     P: predicates_core::Predicate<i32>,
@@ -504,8 +549,8 @@ where
     }
 }
 
-// Keep `predicates` concrete Predicates out of our public API.
-/// [Predicate] used by [`IntoCodePredicate`] for code.
+/// Keep `predicates` concrete Predicates out of our public API.
+/// [predicates_core::Predicate] used by [`IntoCodePredicate`] for code.
 ///
 /// # Example
 ///
@@ -520,9 +565,6 @@ where
 ///     .assert()
 ///     .code(42);
 /// ```
-///
-/// [`IntoCodePredicate`]: trait.IntoCodePredicate.html
-/// [Predicate]: https://docs.rs/predicates-core/1.0.0/predicates_core/trait.Predicate.html
 #[derive(Debug)]
 pub struct EqCodePredicate(predicates::ord::EqPredicate<i32>);
 
@@ -576,8 +618,8 @@ impl IntoCodePredicate<EqCodePredicate> for i32 {
     }
 }
 
-// Keep `predicates` concrete Predicates out of our public API.
-/// [Predicate] used by [`IntoCodePredicate`] for iterables of codes.
+/// Keep `predicates` concrete Predicates out of our public API.
+/// [predicates_core::Predicate] used by [`IntoCodePredicate`] for iterables of codes.
 ///
 /// # Example
 ///
@@ -592,9 +634,6 @@ impl IntoCodePredicate<EqCodePredicate> for i32 {
 ///     .assert()
 ///     .code(&[2, 42] as &[i32]);
 /// ```
-///
-/// [`IntoCodePredicate`]: trait.IntoCodePredicate.html
-/// [Predicate]: https://docs.rs/predicates-core/1.0.0/predicates_core/trait.Predicate.html
 #[derive(Debug)]
 pub struct InCodePredicate(predicates::iter::InPredicate<i32>);
 
@@ -657,7 +696,7 @@ impl IntoCodePredicate<InCodePredicate> for &'static [i32] {
 }
 
 /// Used by [`Assert::stdout`] and [`Assert::stderr`] to convert Self
-/// into the needed [`Predicate<[u8]>`].
+/// into the needed [`predicates_core::Predicate<[u8]>`].
 ///
 /// # Examples
 ///
@@ -672,7 +711,7 @@ impl IntoCodePredicate<InCodePredicate> for &'static [i32] {
 ///     .env("stdout", "hello")
 ///     .env("stderr", "world")
 ///     .assert()
-///     .stdout(predicate::str::similar("hello\n").from_utf8());
+///     .stdout(predicate::str::diff("hello\n").from_utf8());
 ///
 /// // which can be shortened to:
 /// Command::cargo_bin("bin_fixture")
@@ -682,10 +721,6 @@ impl IntoCodePredicate<InCodePredicate> for &'static [i32] {
 ///     .assert()
 ///     .stdout("hello\n");
 /// ```
-///
-/// [`Assert::stdout`]: struct.Assert.html#method.stdout
-/// [`Assert::stderr`]: struct.Assert.html#method.stderr
-/// [`Predicate<[u8]>`]: https://docs.rs/predicates-core/1.0.0/predicates_core/trait.Predicate.html
 pub trait IntoOutputPredicate<P>
 where
     P: predicates_core::Predicate<[u8]>,
@@ -708,8 +743,8 @@ where
     }
 }
 
-// Keep `predicates` concrete Predicates out of our public API.
-/// [Predicate] used by [`IntoOutputPredicate`] for bytes.
+/// Keep `predicates` concrete Predicates out of our public API.
+/// [predicates_core::Predicate] used by [`IntoOutputPredicate`] for bytes.
 ///
 /// # Example
 ///
@@ -725,9 +760,6 @@ where
 ///     .assert()
 ///     .stderr(b"world\n" as &[u8]);
 /// ```
-///
-/// [`IntoOutputPredicate`]: trait.IntoOutputPredicate.html
-/// [Predicate]: https://docs.rs/predicates-core/1.0.0/predicates_core/trait.Predicate.html
 #[derive(Debug)]
 pub struct BytesContentOutputPredicate(Cow<'static, [u8]>);
 
@@ -784,8 +816,8 @@ impl IntoOutputPredicate<BytesContentOutputPredicate> for &'static [u8] {
     }
 }
 
-// Keep `predicates` concrete Predicates out of our public API.
-/// [Predicate] used by [`IntoOutputPredicate`] for [`str`].
+/// Keep `predicates` concrete Predicates out of our public API.
+/// [predicates_core::Predicate] used by [`IntoOutputPredicate`] for [`str`].
 ///
 /// # Example
 ///
@@ -802,8 +834,6 @@ impl IntoOutputPredicate<BytesContentOutputPredicate> for &'static [u8] {
 ///     .stderr("world\n");
 /// ```
 ///
-/// [`IntoOutputPredicate`]: trait.IntoOutputPredicate.html
-/// [Predicate]: https://docs.rs/predicates-core/1.0.0/predicates_core/trait.Predicate.html
 /// [`str`]: https://doc.rust-lang.org/std/primitive.str.html
 #[derive(Debug, Clone)]
 pub struct StrContentOutputPredicate(
@@ -812,12 +842,12 @@ pub struct StrContentOutputPredicate(
 
 impl StrContentOutputPredicate {
     pub(crate) fn from_str(value: &'static str) -> Self {
-        let pred = predicates::str::similar(value).from_utf8();
+        let pred = predicates::str::diff(value).from_utf8();
         StrContentOutputPredicate(pred)
     }
 
     pub(crate) fn from_string(value: String) -> Self {
-        let pred = predicates::str::similar(value).from_utf8();
+        let pred = predicates::str::diff(value).from_utf8();
         StrContentOutputPredicate(pred)
     }
 }
@@ -874,7 +904,8 @@ impl IntoOutputPredicate<StrContentOutputPredicate> for &'static str {
 }
 
 // Keep `predicates` concrete Predicates out of our public API.
-/// [Predicate] used by [`IntoOutputPredicate`] for [`Predicate<str>`].
+/// [predicates_core::Predicate] used by [`IntoOutputPredicate`] for
+/// [`Predicate<str>`][predicates_core::Predicate].
 ///
 /// # Example
 ///
@@ -889,11 +920,8 @@ impl IntoOutputPredicate<StrContentOutputPredicate> for &'static str {
 ///     .env("stdout", "hello")
 ///     .env("stderr", "world")
 ///     .assert()
-///     .stderr(predicate::str::similar("world\n"));
+///     .stderr(predicate::str::diff("world\n"));
 /// ```
-///
-/// [`IntoOutputPredicate`]: trait.IntoOutputPredicate.html
-/// [Predicate]: https://docs.rs/predicates-core/1.0.0/predicates_core/trait.Predicate.html
 #[derive(Debug, Clone)]
 pub struct StrOutputPredicate<P: predicates_core::Predicate<str>>(
     predicates::str::Utf8Predicate<P>,
@@ -961,6 +989,101 @@ where
 
     fn into_output(self) -> Self::Predicate {
         Self::Predicate::new(self)
+    }
+}
+
+/// [`Assert`] represented as a [`Result`].
+///
+/// Produced by the `try_` variants the [`Assert`] methods.
+///
+/// # Example
+///
+/// ```rust
+/// use assert_cmd::prelude::*;
+///
+/// use std::process::Command;
+///
+/// let result = Command::new("echo")
+///     .assert()
+///     .try_success();
+/// assert!(result.is_ok());
+/// ```
+///
+/// [`Result`]: std::result::Result
+pub type AssertResult = Result<Assert, AssertError>;
+
+/// [`Assert`] error (see [`AssertResult`]).
+#[derive(Debug)]
+pub struct AssertError {
+    assert: Assert,
+    reason: AssertReason,
+}
+
+#[derive(Debug)]
+enum AssertReason {
+    UnexpectedFailure { actual_code: Option<i32> },
+    UnexpectedSuccess,
+    UnexpectedCompletion,
+    CommandInterrupted,
+    UnexpectedReturnCode { case_tree: CaseTree },
+    UnexpectedStdout { case_tree: CaseTree },
+    UnexpectedStderr { case_tree: CaseTree },
+}
+
+impl AssertError {
+    #[track_caller]
+    fn panic<T>(self) -> T {
+        panic!("{}", self)
+    }
+}
+
+impl Error for AssertError {}
+
+impl fmt::Display for AssertError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.reason {
+            AssertReason::UnexpectedFailure { actual_code } => writeln!(
+                f,
+                "Unexpected failure.\ncode-{}\nstderr=```{}```",
+                actual_code.map_or("<interrupted>".to_owned(), |actual_code| actual_code
+                    .to_string()),
+                DebugBytes::new(&self.assert.output.stderr),
+            ),
+            AssertReason::UnexpectedSuccess => {
+                writeln!(f, "Unexpected success")
+            }
+            AssertReason::UnexpectedCompletion => {
+                writeln!(f, "Unexpected completion")
+            }
+            AssertReason::CommandInterrupted => {
+                writeln!(f, "Command interrupted")
+            }
+            AssertReason::UnexpectedReturnCode { case_tree } => {
+                writeln!(f, "Unexpected return code, failed {}", case_tree)
+            }
+            AssertReason::UnexpectedStdout { case_tree } => {
+                writeln!(f, "Unexpected stdout, failed {}", case_tree)
+            }
+            AssertReason::UnexpectedStderr { case_tree } => {
+                writeln!(f, "Unexpected stderr, failed {}", case_tree)
+            }
+        }?;
+        write!(f, "{}", self.assert)
+    }
+}
+
+struct CaseTree(predicates_tree::CaseTree);
+
+impl fmt::Display for CaseTree {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <predicates_tree::CaseTree as fmt::Display>::fmt(&self.0, f)
+    }
+}
+
+// Work around `Debug` not being implemented for `predicates_tree::CaseTree`.
+impl fmt::Debug for CaseTree {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <predicates_tree::CaseTree as fmt::Display>::fmt(&self.0, f)
     }
 }
 

@@ -5,3 +5,7 @@ Restrictions: allow-stderr, superficial
 Tests: convert
 Depends: file, librsvg2-bin
 Restrictions: allow-stderr, superficial
+
+Tests: gnome-desktop-testing
+Depends: gnome-desktop-testing, librsvg2-tests
+Restrictions: allow-stderr

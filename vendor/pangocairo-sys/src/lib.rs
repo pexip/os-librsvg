@@ -6,18 +6,15 @@
 #![allow(
     clippy::approx_constant,
     clippy::type_complexity,
-    clippy::unreadable_literal
+    clippy::unreadable_literal,
+    clippy::upper_case_acronyms
 )]
-
-extern crate cairo_sys as cairo;
-extern crate glib_sys as glib;
-extern crate libc;
-extern crate pango_sys as pango;
+#![cfg_attr(feature = "dox", feature(doc_cfg))]
 
 #[allow(unused_imports)]
 use libc::{
     c_char, c_double, c_float, c_int, c_long, c_short, c_uchar, c_uint, c_ulong, c_ushort, c_void,
-    intptr_t, size_t, ssize_t, time_t, uintptr_t, FILE,
+    intptr_t, size_t, ssize_t, uintptr_t, FILE,
 };
 
 #[allow(unused_imports)]
@@ -30,23 +27,30 @@ pub type PangoCairoShapeRendererFunc = Option<
 
 // Interfaces
 #[repr(C)]
-pub struct PangoCairoFont(c_void);
+pub struct PangoCairoFont {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for PangoCairoFont {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "PangoCairoFont @ {:?}", self as *const _)
+        write!(f, "PangoCairoFont @ {:p}", self)
     }
 }
 
 #[repr(C)]
-pub struct PangoCairoFontMap(c_void);
+pub struct PangoCairoFontMap {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
 
 impl ::std::fmt::Debug for PangoCairoFontMap {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "PangoCairoFontMap @ {:?}", self as *const _)
+        write!(f, "PangoCairoFontMap @ {:p}", self)
     }
 }
 
+#[link(name = "pangocairo-1.0")]
 extern "C" {
 
     //=========================================================================

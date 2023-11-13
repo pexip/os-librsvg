@@ -1,4 +1,5 @@
-use ffi;
+// Take a look at the license at the top of the repository in the LICENSE file.
+
 #[cfg(feature = "use_glib")]
 use glib::translate::*;
 use std::fmt;
@@ -7,6 +8,7 @@ use std::mem;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(C)]
+#[doc(alias = "cairo_rectangle_int_t")]
 pub struct RectangleInt {
     pub x: i32,
     pub y: i32,
@@ -58,8 +60,8 @@ impl FromGlibPtrNone<*const ffi::cairo_rectangle_int_t> for RectangleInt {
 #[cfg(feature = "use_glib")]
 #[doc(hidden)]
 impl FromGlibPtrBorrow<*mut ffi::cairo_rectangle_int_t> for RectangleInt {
-    unsafe fn from_glib_borrow(ptr: *mut ffi::cairo_rectangle_int_t) -> Self {
-        *(ptr as *mut RectangleInt)
+    unsafe fn from_glib_borrow(ptr: *mut ffi::cairo_rectangle_int_t) -> crate::Borrowed<Self> {
+        crate::Borrowed::new(*(ptr as *mut RectangleInt))
     }
 }
 
@@ -72,7 +74,7 @@ impl FromGlibPtrNone<*mut ffi::cairo_rectangle_int_t> for RectangleInt {
 }
 
 #[cfg(feature = "use_glib")]
-gvalue_impl!(
+gvalue_impl_inline!(
     RectangleInt,
     ffi::cairo_rectangle_int_t,
     ffi::gobject::cairo_gobject_rectangle_int_get_type

@@ -1,40 +1,39 @@
-#![cfg(all(feature = "arbitrary", feature = "debug"))]
+#![cfg(all(feature = "proptest-support", feature = "debug"))]
 
 macro_rules! gen_tests(
     ($module: ident, $scalar: ty) => {
         mod $module {
             use na::debug::RandomSDP;
-            use na::dimension::{U4, Dynamic};
+            use na::dimension::{Const, Dynamic};
             use na::{DMatrix, DVector, Matrix4x3, Vector4};
             use rand::random;
+            use simba::scalar::ComplexField;
             #[allow(unused_imports)]
             use crate::core::helper::{RandScalar, RandComplex};
-            use std::cmp;
 
-            quickcheck! {
-                fn cholesky(n: usize) -> bool {
-                    let m = RandomSDP::new(Dynamic::new(n.max(1).min(50)), || random::<$scalar>().0).unwrap();
+            use crate::proptest::*;
+            use proptest::{prop_assert, proptest};
+
+            proptest! {
+                #[test]
+                fn cholesky(n in PROPTEST_MATRIX_DIM) {
+                    let m = RandomSDP::new(Dynamic::new(n), || random::<$scalar>().0).unwrap();
                     let l = m.clone().cholesky().unwrap().unpack();
-                    relative_eq!(m, &l * l.adjoint(), epsilon = 1.0e-7)
+                    prop_assert!(relative_eq!(m, &l * l.adjoint(), epsilon = 1.0e-7));
                 }
 
-                fn cholesky_static(_m: RandomSDP<f64, U4>) -> bool {
-                    let m = RandomSDP::new(U4, || random::<$scalar>().0).unwrap();
+                #[test]
+                fn cholesky_static(_n in PROPTEST_MATRIX_DIM) {
+                    let m = RandomSDP::new(Const::<4>, || random::<$scalar>().0).unwrap();
                     let chol = m.cholesky().unwrap();
                     let l    = chol.unpack();
 
-                    if !relative_eq!(m, &l * l.adjoint(), epsilon = 1.0e-7) {
-                        false
-                    }
-                    else {
-                        true
-                    }
+                    prop_assert!(relative_eq!(m, &l * l.adjoint(), epsilon = 1.0e-7));
                 }
 
-                fn cholesky_solve(n: usize, nb: usize) -> bool {
-                    let n = n.max(1).min(50);
+                #[test]
+                fn cholesky_solve(n in PROPTEST_MATRIX_DIM, nb in PROPTEST_MATRIX_DIM) {
                     let m = RandomSDP::new(Dynamic::new(n), || random::<$scalar>().0).unwrap();
-                    let nb = cmp::min(nb, 50); // To avoid slowing down the test too much.
 
                     let chol = m.clone().cholesky().unwrap();
                     let b1 = DVector::<$scalar>::new_random(n).map(|e| e.0);
@@ -43,12 +42,13 @@ macro_rules! gen_tests(
                     let sol1 = chol.solve(&b1);
                     let sol2 = chol.solve(&b2);
 
-                    relative_eq!(&m * &sol1, b1, epsilon = 1.0e-7) &&
-                    relative_eq!(&m * &sol2, b2, epsilon = 1.0e-7)
+                    prop_assert!(relative_eq!(&m * &sol1, b1, epsilon = 1.0e-7));
+                    prop_assert!(relative_eq!(&m * &sol2, b2, epsilon = 1.0e-7));
                 }
 
-                fn cholesky_solve_static(_n: usize) -> bool {
-                    let m = RandomSDP::new(U4, || random::<$scalar>().0).unwrap();
+                #[test]
+                fn cholesky_solve_static(_n in PROPTEST_MATRIX_DIM) {
+                    let m = RandomSDP::new(Const::<4>, || random::<$scalar>().0).unwrap();
                     let chol = m.clone().cholesky().unwrap();
                     let b1 = Vector4::<$scalar>::new_random().map(|e| e.0);
                     let b2 = Matrix4x3::<$scalar>::new_random().map(|e| e.0);
@@ -56,30 +56,53 @@ macro_rules! gen_tests(
                     let sol1 = chol.solve(&b1);
                     let sol2 = chol.solve(&b2);
 
-                    relative_eq!(m * sol1, b1, epsilon = 1.0e-7) &&
-                    relative_eq!(m * sol2, b2, epsilon = 1.0e-7)
+                    prop_assert!(relative_eq!(m * sol1, b1, epsilon = 1.0e-7));
+                    prop_assert!(relative_eq!(m * sol2, b2, epsilon = 1.0e-7));
                 }
 
-                fn cholesky_inverse(n: usize) -> bool {
-                    let m = RandomSDP::new(Dynamic::new(n.max(1).min(50)), || random::<$scalar>().0).unwrap();
+                #[test]
+                fn cholesky_inverse(n in PROPTEST_MATRIX_DIM) {
+                    let m = RandomSDP::new(Dynamic::new(n), || random::<$scalar>().0).unwrap();
                     let m1 = m.clone().cholesky().unwrap().inverse();
                     let id1 = &m  * &m1;
                     let id2 = &m1 * &m;
 
-                    id1.is_identity(1.0e-7) && id2.is_identity(1.0e-7)
+                    prop_assert!(id1.is_identity(1.0e-7) && id2.is_identity(1.0e-7));
                 }
 
-                fn cholesky_inverse_static(_n: usize) -> bool {
-                    let m = RandomSDP::new(U4, || random::<$scalar>().0).unwrap();
+                #[test]
+                fn cholesky_inverse_static(_n in PROPTEST_MATRIX_DIM) {
+                    let m = RandomSDP::new(Const::<4>, || random::<$scalar>().0).unwrap();
                     let m1 = m.clone().cholesky().unwrap().inverse();
                     let id1 = &m  * &m1;
                     let id2 = &m1 * &m;
 
-                    id1.is_identity(1.0e-7) && id2.is_identity(1.0e-7)
+                    prop_assert!(id1.is_identity(1.0e-7) && id2.is_identity(1.0e-7));
                 }
 
-                fn cholesky_rank_one_update(_n: usize) -> bool {
-                    let mut m = RandomSDP::new(U4, || random::<$scalar>().0).unwrap();
+                #[test]
+                fn cholesky_determinant(n in PROPTEST_MATRIX_DIM) {
+                    let m = RandomSDP::new(Dynamic::new(n), || random::<$scalar>().0).unwrap();
+                    let lu_det = m.clone().lu().determinant();
+                    assert_relative_eq!(lu_det.imaginary(), 0., epsilon = 1.0e-7);
+                    let chol_det = m.cholesky().unwrap().determinant();
+
+                    prop_assert!(relative_eq!(lu_det.real(), chol_det, epsilon = 1.0e-7));
+                }
+
+                #[test]
+                fn cholesky_determinant_static(_n in PROPTEST_MATRIX_DIM) {
+                    let m = RandomSDP::new(Const::<4>, || random::<$scalar>().0).unwrap();
+                    let lu_det = m.clone().lu().determinant();
+                    assert_relative_eq!(lu_det.imaginary(), 0., epsilon = 1.0e-7);
+                    let chol_det = m.cholesky().unwrap().determinant();
+
+                    prop_assert!(relative_eq!(lu_det.real(), chol_det, epsilon = 1.0e-7));
+                }
+
+                #[test]
+                fn cholesky_rank_one_update(_n in PROPTEST_MATRIX_DIM) {
+                    let mut m = RandomSDP::new(Const::<4>, || random::<$scalar>().0).unwrap();
                     let x = Vector4::<$scalar>::new_random().map(|e| e.0);
 
                     // this is dirty but $scalar is not a scalar type (its a Rand) in this file
@@ -96,10 +119,11 @@ macro_rules! gen_tests(
                     // updates m manually
                     m.gerc(sigma_scalar, &x, &x, one); // m += sigma * x * x.adjoint()
 
-                    relative_eq!(m, m_chol_updated, epsilon = 1.0e-7)
+                    prop_assert!(relative_eq!(m, m_chol_updated, epsilon = 1.0e-7));
                 }
 
-                fn cholesky_insert_column(n: usize) -> bool {
+                #[test]
+                fn cholesky_insert_column(n in PROPTEST_MATRIX_DIM) {
                     let n = n.max(1).min(10);
                     let j = random::<usize>() % n;
                     let m_updated = RandomSDP::new(Dynamic::new(n), || random::<$scalar>().0).unwrap();
@@ -112,10 +136,11 @@ macro_rules! gen_tests(
                     let chol = m.clone().cholesky().unwrap().insert_column(j, col);
                     let m_chol_updated = chol.l() * chol.l().adjoint();
 
-                    relative_eq!(m_updated, m_chol_updated, epsilon = 1.0e-7)
+                    prop_assert!(relative_eq!(m_updated, m_chol_updated, epsilon = 1.0e-7));
                 }
 
-                fn cholesky_remove_column(n: usize) -> bool {
+                #[test]
+                fn cholesky_remove_column(n in PROPTEST_MATRIX_DIM) {
                     let n = n.max(1).min(10);
                     let j = random::<usize>() % n;
                     let m = RandomSDP::new(Dynamic::new(n), || random::<$scalar>().0).unwrap();
@@ -127,7 +152,7 @@ macro_rules! gen_tests(
                     // remove column from m
                     let m_updated = m.remove_column(j).remove_row(j);
 
-                    relative_eq!(m_updated, m_chol_updated, epsilon = 1.0e-7)
+                    prop_assert!(relative_eq!(m_updated, m_chol_updated, epsilon = 1.0e-7));
                 }
             }
         }

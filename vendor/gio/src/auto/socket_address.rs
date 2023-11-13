@@ -2,88 +2,92 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
+use crate::SocketConnectable;
+use crate::SocketFamily;
 use glib::object::Cast;
 use glib::object::IsA;
 use glib::signal::connect_raw;
 use glib::signal::SignalHandlerId;
 use glib::translate::*;
-use glib_sys;
 use std::boxed::Box as Box_;
 use std::fmt;
 use std::mem::transmute;
-use SocketConnectable;
-use SocketFamily;
 
-glib_wrapper! {
-    pub struct SocketAddress(Object<gio_sys::GSocketAddress, gio_sys::GSocketAddressClass, SocketAddressClass>) @implements SocketConnectable;
+glib::wrapper! {
+    #[doc(alias = "GSocketAddress")]
+    pub struct SocketAddress(Object<ffi::GSocketAddress, ffi::GSocketAddressClass>) @implements SocketConnectable;
 
     match fn {
-        get_type => || gio_sys::g_socket_address_get_type(),
+        type_ => || ffi::g_socket_address_get_type(),
     }
 }
 
 impl SocketAddress {
-    //pub fn new_from_native(native: /*Unimplemented*/Fundamental: Pointer, len: usize) -> SocketAddress {
-    //    unsafe { TODO: call gio_sys:g_socket_address_new_from_native() }
+    pub const NONE: Option<&'static SocketAddress> = None;
+
+    //#[doc(alias = "g_socket_address_new_from_native")]
+    //#[doc(alias = "new_from_native")]
+    //pub fn from_native(native: /*Unimplemented*/Fundamental: Pointer, len: usize) -> SocketAddress {
+    //    unsafe { TODO: call ffi:g_socket_address_new_from_native() }
     //}
 }
 
 unsafe impl Send for SocketAddress {}
 unsafe impl Sync for SocketAddress {}
 
-pub const NONE_SOCKET_ADDRESS: Option<&SocketAddress> = None;
-
 pub trait SocketAddressExt: 'static {
-    fn get_family(&self) -> SocketFamily;
+    #[doc(alias = "g_socket_address_get_family")]
+    #[doc(alias = "get_family")]
+    fn family(&self) -> SocketFamily;
 
-    fn get_native_size(&self) -> isize;
+    #[doc(alias = "g_socket_address_get_native_size")]
+    #[doc(alias = "get_native_size")]
+    fn native_size(&self) -> isize;
 
+    //#[doc(alias = "g_socket_address_to_native")]
     //fn to_native(&self, dest: /*Unimplemented*/Option<Fundamental: Pointer>, destlen: usize) -> Result<(), glib::Error>;
 
-    fn connect_property_family_notify<F: Fn(&Self) + Send + Sync + 'static>(
-        &self,
-        f: F,
-    ) -> SignalHandlerId;
+    #[doc(alias = "family")]
+    fn connect_family_notify<F: Fn(&Self) + Send + Sync + 'static>(&self, f: F) -> SignalHandlerId;
 }
 
 impl<O: IsA<SocketAddress>> SocketAddressExt for O {
-    fn get_family(&self) -> SocketFamily {
+    fn family(&self) -> SocketFamily {
         unsafe {
-            from_glib(gio_sys::g_socket_address_get_family(
+            from_glib(ffi::g_socket_address_get_family(
                 self.as_ref().to_glib_none().0,
             ))
         }
     }
 
-    fn get_native_size(&self) -> isize {
-        unsafe { gio_sys::g_socket_address_get_native_size(self.as_ref().to_glib_none().0) }
+    fn native_size(&self) -> isize {
+        unsafe { ffi::g_socket_address_get_native_size(self.as_ref().to_glib_none().0) }
     }
 
     //fn to_native(&self, dest: /*Unimplemented*/Option<Fundamental: Pointer>, destlen: usize) -> Result<(), glib::Error> {
-    //    unsafe { TODO: call gio_sys:g_socket_address_to_native() }
+    //    unsafe { TODO: call ffi:g_socket_address_to_native() }
     //}
 
-    fn connect_property_family_notify<F: Fn(&Self) + Send + Sync + 'static>(
-        &self,
-        f: F,
-    ) -> SignalHandlerId {
-        unsafe extern "C" fn notify_family_trampoline<P, F: Fn(&P) + Send + Sync + 'static>(
-            this: *mut gio_sys::GSocketAddress,
-            _param_spec: glib_sys::gpointer,
-            f: glib_sys::gpointer,
-        ) where
+    fn connect_family_notify<F: Fn(&Self) + Send + Sync + 'static>(&self, f: F) -> SignalHandlerId {
+        unsafe extern "C" fn notify_family_trampoline<
             P: IsA<SocketAddress>,
-        {
+            F: Fn(&P) + Send + Sync + 'static,
+        >(
+            this: *mut ffi::GSocketAddress,
+            _param_spec: glib::ffi::gpointer,
+            f: glib::ffi::gpointer,
+        ) {
             let f: &F = &*(f as *const F);
-            f(&SocketAddress::from_glib_borrow(this).unsafe_cast())
+            f(SocketAddress::from_glib_borrow(this).unsafe_cast_ref())
         }
         unsafe {
             let f: Box_<F> = Box_::new(f);
             connect_raw(
                 self.as_ptr() as *mut _,
                 b"notify::family\0".as_ptr() as *const _,
-                Some(transmute(notify_family_trampoline::<Self, F> as usize)),
+                Some(transmute::<_, unsafe extern "C" fn()>(
+                    notify_family_trampoline::<Self, F> as *const (),
+                )),
                 Box_::into_raw(f),
             )
         }
@@ -92,6 +96,6 @@ impl<O: IsA<SocketAddress>> SocketAddressExt for O {
 
 impl fmt::Display for SocketAddress {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SocketAddress")
+        f.write_str("SocketAddress")
     }
 }

@@ -91,6 +91,7 @@ where
     }
 }
 
+/// Bind a existing coordinate spec with a given key points vector. See [WithKeyPoints](struct.WithKeyPoints.html ) for more details.
 pub trait BindKeyPoints
 where
     Self: AsRangedCoord,
@@ -103,7 +104,7 @@ where
     ///let mut buffer = vec![0;1024*768*3];
     /// let root = BitMapBackend::with_buffer(&mut buffer, (1024, 768)).into_drawing_area();
     /// let mut chart = ChartBuilder::on(&root)
-    ///    .build_ranged(
+    ///    .build_cartesian_2d(
     ///        (0..100).with_key_points(vec![1,20,50,90]),   // <= This line will make the plot shows 4 tick marks at 1, 20, 50, 90
     ///        0..10
     /// ).unwrap();
@@ -131,6 +132,7 @@ pub struct WithKeyPointMethod<R: Ranged> {
     light_func: Box<dyn Fn(usize) -> Vec<R::ValueType>>,
 }
 
+/// Bind an existing coordinate spec with a given key points algorithm. See [WithKeyPointMethod](struct.WithKeyMethod.html ) for more details.
 pub trait BindKeyPointMethod
 where
     Self: AsRangedCoord,
@@ -143,7 +145,7 @@ where
     ///let mut buffer = vec![0;1024*768*3];
     /// let root = BitMapBackend::with_buffer(&mut buffer, (1024, 768)).into_drawing_area();
     /// let mut chart = ChartBuilder::on(&root)
-    ///    .build_ranged(
+    ///    .build_cartesian_2d(
     ///        (0..100).with_key_point_func(|n| (0..100 / n as i32).map(|x| x * 100 / n as i32).collect()),
     ///        0..10
     /// ).unwrap();
@@ -156,7 +158,7 @@ where
         WithKeyPointMethod {
             inner: self.into(),
             bold_func: Box::new(func),
-            light_func: Box::new(|_| vec![]),
+            light_func: Box::new(|_| Vec::new()),
         }
     }
 }

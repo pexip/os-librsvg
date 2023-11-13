@@ -2,49 +2,56 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
+use crate::Font;
+use crate::FontMetrics;
 use glib::object::IsA;
 use glib::translate::*;
-use pango_sys;
 use std::fmt;
-use Font;
-use FontMetrics;
 
-glib_wrapper! {
-    pub struct Fontset(Object<pango_sys::PangoFontset, pango_sys::PangoFontsetClass, FontsetClass>);
+glib::wrapper! {
+    #[doc(alias = "PangoFontset")]
+    pub struct Fontset(Object<ffi::PangoFontset, ffi::PangoFontsetClass>);
 
     match fn {
-        get_type => || pango_sys::pango_fontset_get_type(),
+        type_ => || ffi::pango_fontset_get_type(),
     }
 }
 
-pub const NONE_FONTSET: Option<&Fontset> = None;
+impl Fontset {
+    pub const NONE: Option<&'static Fontset> = None;
+}
 
 pub trait FontsetExt: 'static {
+    #[doc(alias = "pango_fontset_foreach")]
     fn foreach<P: FnMut(&Fontset, &Font) -> bool>(&self, func: P);
 
-    fn get_font(&self, wc: u32) -> Option<Font>;
+    #[doc(alias = "pango_fontset_get_font")]
+    #[doc(alias = "get_font")]
+    fn font(&self, wc: u32) -> Option<Font>;
 
-    fn get_metrics(&self) -> Option<FontMetrics>;
+    #[doc(alias = "pango_fontset_get_metrics")]
+    #[doc(alias = "get_metrics")]
+    fn metrics(&self) -> Option<FontMetrics>;
 }
 
 impl<O: IsA<Fontset>> FontsetExt for O {
     fn foreach<P: FnMut(&Fontset, &Font) -> bool>(&self, func: P) {
         let func_data: P = func;
         unsafe extern "C" fn func_func<P: FnMut(&Fontset, &Font) -> bool>(
-            fontset: *mut pango_sys::PangoFontset,
-            font: *mut pango_sys::PangoFont,
-            user_data: glib_sys::gpointer,
-        ) -> glib_sys::gboolean {
+            fontset: *mut ffi::PangoFontset,
+            font: *mut ffi::PangoFont,
+            user_data: glib::ffi::gpointer,
+        ) -> glib::ffi::gboolean {
             let fontset = from_glib_borrow(fontset);
             let font = from_glib_borrow(font);
             let callback: *mut P = user_data as *const _ as usize as *mut P;
             let res = (*callback)(&fontset, &font);
-            res.to_glib()
+            res.into_glib()
         }
         let func = Some(func_func::<P> as _);
         let super_callback0: &P = &func_data;
         unsafe {
-            pango_sys::pango_fontset_foreach(
+            ffi::pango_fontset_foreach(
                 self.as_ref().to_glib_none().0,
                 func,
                 super_callback0 as *const _ as usize as *mut _,
@@ -52,18 +59,18 @@ impl<O: IsA<Fontset>> FontsetExt for O {
         }
     }
 
-    fn get_font(&self, wc: u32) -> Option<Font> {
+    fn font(&self, wc: u32) -> Option<Font> {
         unsafe {
-            from_glib_full(pango_sys::pango_fontset_get_font(
+            from_glib_full(ffi::pango_fontset_get_font(
                 self.as_ref().to_glib_none().0,
                 wc,
             ))
         }
     }
 
-    fn get_metrics(&self) -> Option<FontMetrics> {
+    fn metrics(&self) -> Option<FontMetrics> {
         unsafe {
-            from_glib_full(pango_sys::pango_fontset_get_metrics(
+            from_glib_full(ffi::pango_fontset_get_metrics(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -72,6 +79,6 @@ impl<O: IsA<Fontset>> FontsetExt for O {
 
 impl fmt::Display for Fontset {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Fontset")
+        f.write_str("Fontset")
     }
 }

@@ -5,10 +5,10 @@ use std::hash;
 #[cfg(feature = "abomonation-serialize")]
 use std::io::{Result as IOResult, Write};
 
-#[cfg(feature = "serde-serialize")]
+#[cfg(feature = "serde-serialize-no-std")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[cfg(feature = "serde-serialize")]
+#[cfg(feature = "serde-serialize-no-std")]
 use crate::base::storage::Owned;
 
 #[cfg(feature = "abomonation-serialize")]
@@ -18,41 +18,64 @@ use simba::scalar::RealField;
 use simba::simd::SimdRealField;
 
 use crate::base::allocator::Allocator;
-use crate::base::dimension::{DimName, DimNameAdd, DimNameSum, U1};
-use crate::base::{DefaultAllocator, MatrixN, Scalar, VectorN};
+use crate::base::dimension::{DimNameAdd, DimNameSum, U1};
+use crate::base::{Const, DefaultAllocator, OMatrix, SMatrix, SVector, Scalar, Unit};
 use crate::geometry::Point;
 
 /// A rotation matrix.
+///
+/// This is also known as an element of a Special Orthogonal (SO) group.
+/// The `Rotation` type can either represent a 2D or 3D rotation, represented as a matrix.
+/// For a rotation based on quaternions, see [`UnitQuaternion`](crate::UnitQuaternion) instead.
+///
+/// Note that instead of using the [`Rotation`](crate::Rotation) type in your code directly, you should use one
+/// of its aliases: [`Rotation2`](crate::Rotation2), or [`Rotation3`](crate::Rotation3). Though
+/// keep in mind that all the documentation of all the methods of these aliases will also appears on
+/// this page.
+///
+/// # Construction
+/// * [Identity <span style="float:right;">`identity`</span>](#identity)
+/// * [From a 2D rotation angle <span style="float:right;">`new`…</span>](#construction-from-a-2d-rotation-angle)
+/// * [From an existing 2D matrix or rotations <span style="float:right;">`from_matrix`, `rotation_between`, `powf`…</span>](#construction-from-an-existing-2d-matrix-or-rotations)
+/// * [From a 3D axis and/or angles <span style="float:right;">`new`, `from_euler_angles`, `from_axis_angle`…</span>](#construction-from-a-3d-axis-andor-angles)
+/// * [From a 3D eye position and target point <span style="float:right;">`look_at`, `look_at_lh`, `rotation_between`…</span>](#construction-from-a-3d-eye-position-and-target-point)
+/// * [From an existing 3D matrix or rotations <span style="float:right;">`from_matrix`, `rotation_between`, `powf`…</span>](#construction-from-an-existing-3d-matrix-or-rotations)
+///
+/// # Transformation and composition
+/// Note that transforming vectors and points can be done by multiplication, e.g., `rotation * point`.
+/// Composing an rotation with another transformation can also be done by multiplication or division.
+/// * [3D axis and angle extraction <span style="float:right;">`angle`, `euler_angles`, `scaled_axis`, `angle_to`…</span>](#3d-axis-and-angle-extraction)
+/// * [2D angle extraction <span style="float:right;">`angle`, `angle_to`…</span>](#2d-angle-extraction)
+/// * [Transformation of a vector or a point <span style="float:right;">`transform_vector`, `inverse_transform_point`…</span>](#transformation-of-a-vector-or-a-point)
+/// * [Transposition and inversion <span style="float:right;">`transpose`, `inverse`…</span>](#transposition-and-inversion)
+/// * [Interpolation <span style="float:right;">`slerp`…</span>](#interpolation)
+///
+/// # Conversion
+/// * [Conversion to a matrix <span style="float:right;">`matrix`, `to_homogeneous`…</span>](#conversion-to-a-matrix)
+///
 #[repr(C)]
 #[derive(Debug)]
-pub struct Rotation<N: Scalar, D: DimName>
-where
-    DefaultAllocator: Allocator<N, D, D>,
-{
-    matrix: MatrixN<N, D>,
+pub struct Rotation<T, const D: usize> {
+    matrix: SMatrix<T, D, D>,
 }
 
-impl<N: Scalar + hash::Hash, D: DimName + hash::Hash> hash::Hash for Rotation<N, D>
+impl<T: Scalar + hash::Hash, const D: usize> hash::Hash for Rotation<T, D>
 where
-    DefaultAllocator: Allocator<N, D, D>,
-    <DefaultAllocator as Allocator<N, D, D>>::Buffer: hash::Hash,
+    <DefaultAllocator as Allocator<T, Const<D>, Const<D>>>::Buffer: hash::Hash,
 {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.matrix.hash(state)
     }
 }
 
-impl<N: Scalar + Copy, D: DimName> Copy for Rotation<N, D>
-where
-    DefaultAllocator: Allocator<N, D, D>,
-    <DefaultAllocator as Allocator<N, D, D>>::Buffer: Copy,
+impl<T: Scalar + Copy, const D: usize> Copy for Rotation<T, D> where
+    <DefaultAllocator as Allocator<T, Const<D>, Const<D>>>::Buffer: Copy
 {
 }
 
-impl<N: Scalar, D: DimName> Clone for Rotation<N, D>
+impl<T: Scalar, const D: usize> Clone for Rotation<T, D>
 where
-    DefaultAllocator: Allocator<N, D, D>,
-    <DefaultAllocator as Allocator<N, D, D>>::Buffer: Clone,
+    <DefaultAllocator as Allocator<T, Const<D>, Const<D>>>::Buffer: Clone,
 {
     #[inline]
     fn clone(&self) -> Self {
@@ -60,13 +83,27 @@ where
     }
 }
 
-#[cfg(feature = "abomonation-serialize")]
-impl<N, D> Abomonation for Rotation<N, D>
+#[cfg(feature = "bytemuck")]
+unsafe impl<T, const D: usize> bytemuck::Zeroable for Rotation<T, D>
 where
-    N: Scalar,
-    D: DimName,
-    MatrixN<N, D>: Abomonation,
-    DefaultAllocator: Allocator<N, D, D>,
+    T: Scalar + bytemuck::Zeroable,
+    SMatrix<T, D, D>: bytemuck::Zeroable,
+{
+}
+
+#[cfg(feature = "bytemuck")]
+unsafe impl<T, const D: usize> bytemuck::Pod for Rotation<T, D>
+where
+    T: Scalar + bytemuck::Pod,
+    SMatrix<T, D, D>: bytemuck::Pod,
+{
+}
+
+#[cfg(feature = "abomonation-serialize")]
+impl<T, const D: usize> Abomonation for Rotation<T, D>
+where
+    T: Scalar,
+    SMatrix<T, D, D>: Abomonation,
 {
     unsafe fn entomb<W: Write>(&self, writer: &mut W) -> IOResult<()> {
         self.matrix.entomb(writer)
@@ -81,11 +118,10 @@ where
     }
 }
 
-#[cfg(feature = "serde-serialize")]
-impl<N: Scalar, D: DimName> Serialize for Rotation<N, D>
+#[cfg(feature = "serde-serialize-no-std")]
+impl<T: Scalar, const D: usize> Serialize for Rotation<T, D>
 where
-    DefaultAllocator: Allocator<N, D, D>,
-    Owned<N, D, D>: Serialize,
+    Owned<T, Const<D>, Const<D>>: Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -95,26 +131,52 @@ where
     }
 }
 
-#[cfg(feature = "serde-serialize")]
-impl<'a, N: Scalar, D: DimName> Deserialize<'a> for Rotation<N, D>
+#[cfg(feature = "serde-serialize-no-std")]
+impl<'a, T: Scalar, const D: usize> Deserialize<'a> for Rotation<T, D>
 where
-    DefaultAllocator: Allocator<N, D, D>,
-    Owned<N, D, D>: Deserialize<'a>,
+    Owned<T, Const<D>, Const<D>>: Deserialize<'a>,
 {
     fn deserialize<Des>(deserializer: Des) -> Result<Self, Des::Error>
     where
         Des: Deserializer<'a>,
     {
-        let matrix = MatrixN::<N, D>::deserialize(deserializer)?;
+        let matrix = SMatrix::<T, D, D>::deserialize(deserializer)?;
 
         Ok(Self::from_matrix_unchecked(matrix))
     }
 }
 
-impl<N: Scalar, D: DimName> Rotation<N, D>
-where
-    DefaultAllocator: Allocator<N, D, D>,
-{
+impl<T, const D: usize> Rotation<T, D> {
+    /// Creates a new rotation from the given square matrix.
+    ///
+    /// The matrix orthonormality is not checked.
+    ///
+    /// # Example
+    /// ```
+    /// # use nalgebra::{Rotation2, Rotation3, Matrix2, Matrix3};
+    /// # use std::f32;
+    /// let mat = Matrix3::new(0.8660254, -0.5,      0.0,
+    ///                        0.5,       0.8660254, 0.0,
+    ///                        0.0,       0.0,       1.0);
+    /// let rot = Rotation3::from_matrix_unchecked(mat);
+    ///
+    /// assert_eq!(*rot.matrix(), mat);
+    ///
+    ///
+    /// let mat = Matrix2::new(0.8660254, -0.5,
+    ///                        0.5,       0.8660254);
+    /// let rot = Rotation2::from_matrix_unchecked(mat);
+    ///
+    /// assert_eq!(*rot.matrix(), mat);
+    /// ```
+    #[inline]
+    pub const fn from_matrix_unchecked(matrix: SMatrix<T, D, D>) -> Self {
+        Self { matrix }
+    }
+}
+
+/// # Conversion to a matrix
+impl<T: Scalar, const D: usize> Rotation<T, D> {
     /// A reference to the underlying matrix representation of this rotation.
     ///
     /// # Example
@@ -134,24 +196,25 @@ where
     /// assert_eq!(*rot.matrix(), expected);
     /// ```
     #[inline]
-    pub fn matrix(&self) -> &MatrixN<N, D> {
+    #[must_use]
+    pub fn matrix(&self) -> &SMatrix<T, D, D> {
         &self.matrix
     }
 
     /// A mutable reference to the underlying matrix representation of this rotation.
     #[inline]
     #[deprecated(note = "Use `.matrix_mut_unchecked()` instead.")]
-    pub unsafe fn matrix_mut(&mut self) -> &mut MatrixN<N, D> {
+    pub unsafe fn matrix_mut(&mut self) -> &mut SMatrix<T, D, D> {
         &mut self.matrix
     }
 
     /// A mutable reference to the underlying matrix representation of this rotation.
     ///
-    /// This is suffixed by "_unchecked" because this allows the user to replace the matrix by another one that is
-    /// non-square, non-inversible, or non-orthonormal. If one of those properties is broken,
-    /// subsequent method calls may be UB.
+    /// This is suffixed by "_unchecked" because this allows the user to replace the
+    /// matrix by another one that is non-inversible or non-orthonormal. If one of
+    /// those properties is broken, subsequent method calls may return bogus results.
     #[inline]
-    pub fn matrix_mut_unchecked(&mut self) -> &mut MatrixN<N, D> {
+    pub fn matrix_mut_unchecked(&mut self) -> &mut SMatrix<T, D, D> {
         &mut self.matrix
     }
 
@@ -176,15 +239,15 @@ where
     /// assert_eq!(mat, expected);
     /// ```
     #[inline]
-    pub fn into_inner(self) -> MatrixN<N, D> {
+    pub fn into_inner(self) -> SMatrix<T, D, D> {
         self.matrix
     }
 
     /// Unwraps the underlying matrix.
-    /// Deprecated: Use [Rotation::into_inner] instead.
+    /// Deprecated: Use [`Rotation::into_inner`] instead.
     #[deprecated(note = "use `.into_inner()` instead")]
     #[inline]
-    pub fn unwrap(self) -> MatrixN<N, D> {
+    pub fn unwrap(self) -> SMatrix<T, D, D> {
         self.matrix
     }
 
@@ -211,53 +274,25 @@ where
     /// assert_eq!(rot.to_homogeneous(), expected);
     /// ```
     #[inline]
-    pub fn to_homogeneous(&self) -> MatrixN<N, DimNameSum<D, U1>>
+    #[must_use]
+    pub fn to_homogeneous(&self) -> OMatrix<T, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>
     where
-        N: Zero + One,
-        D: DimNameAdd<U1>,
-        DefaultAllocator: Allocator<N, DimNameSum<D, U1>, DimNameSum<D, U1>>,
+        T: Zero + One,
+        Const<D>: DimNameAdd<U1>,
+        DefaultAllocator: Allocator<T, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>,
     {
-        // We could use `MatrixN::to_homogeneous()` here, but that would imply
+        // We could use `SMatrix::to_homogeneous()` here, but that would imply
         // adding the additional traits `DimAdd` and `IsNotStaticOne`. Maybe
         // these things will get nicer once specialization lands in Rust.
-        let mut res = MatrixN::<N, DimNameSum<D, U1>>::identity();
+        let mut res = OMatrix::<T, DimNameSum<Const<D>, U1>, DimNameSum<Const<D>, U1>>::identity();
         res.fixed_slice_mut::<D, D>(0, 0).copy_from(&self.matrix);
 
         res
     }
+}
 
-    /// Creates a new rotation from the given square matrix.
-    ///
-    /// The matrix squareness is checked but not its orthonormality.
-    ///
-    /// # Example
-    /// ```
-    /// # use nalgebra::{Rotation2, Rotation3, Matrix2, Matrix3};
-    /// # use std::f32;
-    /// let mat = Matrix3::new(0.8660254, -0.5,      0.0,
-    ///                        0.5,       0.8660254, 0.0,
-    ///                        0.0,       0.0,       1.0);
-    /// let rot = Rotation3::from_matrix_unchecked(mat);
-    ///
-    /// assert_eq!(*rot.matrix(), mat);
-    ///
-    ///
-    /// let mat = Matrix2::new(0.8660254, -0.5,
-    ///                        0.5,       0.8660254);
-    /// let rot = Rotation2::from_matrix_unchecked(mat);
-    ///
-    /// assert_eq!(*rot.matrix(), mat);
-    /// ```
-    #[inline]
-    pub fn from_matrix_unchecked(matrix: MatrixN<N, D>) -> Self {
-        assert!(
-            matrix.is_square(),
-            "Unable to create a rotation from a non-square matrix."
-        );
-
-        Self { matrix: matrix }
-    }
-
+/// # Transposition and inversion
+impl<T: Scalar, const D: usize> Rotation<T, D> {
     /// Transposes `self`.
     ///
     /// Same as `.inverse()` because the inverse of a rotation matrix is its transform.
@@ -361,10 +396,10 @@ where
     }
 }
 
-impl<N: SimdRealField, D: DimName> Rotation<N, D>
+/// # Transformation of a vector or a point
+impl<T: SimdRealField, const D: usize> Rotation<T, D>
 where
-    N::Element: SimdRealField,
-    DefaultAllocator: Allocator<N, D, D> + Allocator<N, D>,
+    T::Element: SimdRealField,
 {
     /// Rotate the given point.
     ///
@@ -381,7 +416,8 @@ where
     /// assert_relative_eq!(transformed_point, Point3::new(3.0, 2.0, -1.0), epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn transform_point(&self, pt: &Point<N, D>) -> Point<N, D> {
+    #[must_use]
+    pub fn transform_point(&self, pt: &Point<T, D>) -> Point<T, D> {
         self * pt
     }
 
@@ -400,7 +436,8 @@ where
     /// assert_relative_eq!(transformed_vector, Vector3::new(3.0, 2.0, -1.0), epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn transform_vector(&self, v: &VectorN<N, D>) -> VectorN<N, D> {
+    #[must_use]
+    pub fn transform_vector(&self, v: &SVector<T, D>) -> SVector<T, D> {
         self * v
     }
 
@@ -419,7 +456,8 @@ where
     /// assert_relative_eq!(transformed_point, Point3::new(-3.0, 2.0, 1.0), epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn inverse_transform_point(&self, pt: &Point<N, D>) -> Point<N, D> {
+    #[must_use]
+    pub fn inverse_transform_point(&self, pt: &Point<T, D>) -> Point<T, D> {
         Point::from(self.inverse_transform_vector(&pt.coords))
     }
 
@@ -438,34 +476,51 @@ where
     /// assert_relative_eq!(transformed_vector, Vector3::new(-3.0, 2.0, 1.0), epsilon = 1.0e-6);
     /// ```
     #[inline]
-    pub fn inverse_transform_vector(&self, v: &VectorN<N, D>) -> VectorN<N, D> {
+    #[must_use]
+    pub fn inverse_transform_vector(&self, v: &SVector<T, D>) -> SVector<T, D> {
         self.matrix().tr_mul(v)
+    }
+
+    /// Rotate the given vector by the inverse of this rotation. This may be
+    /// cheaper than inverting the rotation and then transforming the given
+    /// vector.
+    ///
+    /// # Example
+    /// ```
+    /// # #[macro_use] extern crate approx;
+    /// # use std::f32;
+    /// # use nalgebra::{Rotation2, Rotation3, UnitQuaternion, Vector3};
+    /// let rot = Rotation3::new(Vector3::z() * f32::consts::FRAC_PI_2);
+    /// let transformed_vector = rot.inverse_transform_unit_vector(&Vector3::x_axis());
+    ///
+    /// assert_relative_eq!(transformed_vector, -Vector3::y_axis(), epsilon = 1.0e-6);
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn inverse_transform_unit_vector(&self, v: &Unit<SVector<T, D>>) -> Unit<SVector<T, D>> {
+        Unit::new_unchecked(self.inverse_transform_vector(&**v))
     }
 }
 
-impl<N: Scalar + Eq, D: DimName> Eq for Rotation<N, D> where DefaultAllocator: Allocator<N, D, D> {}
+impl<T: Scalar + Eq, const D: usize> Eq for Rotation<T, D> {}
 
-impl<N: Scalar + PartialEq, D: DimName> PartialEq for Rotation<N, D>
-where
-    DefaultAllocator: Allocator<N, D, D>,
-{
+impl<T: Scalar + PartialEq, const D: usize> PartialEq for Rotation<T, D> {
     #[inline]
     fn eq(&self, right: &Self) -> bool {
         self.matrix == right.matrix
     }
 }
 
-impl<N, D: DimName> AbsDiffEq for Rotation<N, D>
+impl<T, const D: usize> AbsDiffEq for Rotation<T, D>
 where
-    N: Scalar + AbsDiffEq,
-    DefaultAllocator: Allocator<N, D, D>,
-    N::Epsilon: Copy,
+    T: Scalar + AbsDiffEq,
+    T::Epsilon: Clone,
 {
-    type Epsilon = N::Epsilon;
+    type Epsilon = T::Epsilon;
 
     #[inline]
     fn default_epsilon() -> Self::Epsilon {
-        N::default_epsilon()
+        T::default_epsilon()
     }
 
     #[inline]
@@ -474,15 +529,14 @@ where
     }
 }
 
-impl<N, D: DimName> RelativeEq for Rotation<N, D>
+impl<T, const D: usize> RelativeEq for Rotation<T, D>
 where
-    N: Scalar + RelativeEq,
-    DefaultAllocator: Allocator<N, D, D>,
-    N::Epsilon: Copy,
+    T: Scalar + RelativeEq,
+    T::Epsilon: Clone,
 {
     #[inline]
     fn default_max_relative() -> Self::Epsilon {
-        N::default_max_relative()
+        T::default_max_relative()
     }
 
     #[inline]
@@ -497,15 +551,14 @@ where
     }
 }
 
-impl<N, D: DimName> UlpsEq for Rotation<N, D>
+impl<T, const D: usize> UlpsEq for Rotation<T, D>
 where
-    N: Scalar + UlpsEq,
-    DefaultAllocator: Allocator<N, D, D>,
-    N::Epsilon: Copy,
+    T: Scalar + UlpsEq,
+    T::Epsilon: Clone,
 {
     #[inline]
     fn default_max_ulps() -> u32 {
-        N::default_max_ulps()
+        T::default_max_ulps()
     }
 
     #[inline]
@@ -519,12 +572,11 @@ where
  * Display
  *
  */
-impl<N, D: DimName> fmt::Display for Rotation<N, D>
+impl<T, const D: usize> fmt::Display for Rotation<T, D>
 where
-    N: RealField + fmt::Display,
-    DefaultAllocator: Allocator<N, D, D> + Allocator<usize, D, D>,
+    T: RealField + fmt::Display,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let precision = f.precision().unwrap_or(3);
 
         writeln!(f, "Rotation matrix {{")?;
@@ -538,11 +590,11 @@ where
 //          //          * Absolute
 //          //          *
 //          //          */
-//          //         impl<N: Absolute> Absolute for $t<N> {
-//          //             type AbsoluteValue = $submatrix<N::AbsoluteValue>;
+//          //         impl<T: Absolute> Absolute for $t<T> {
+//          //             type AbsoluteValue = $submatrix<T::AbsoluteValue>;
 //          //
 //          //             #[inline]
-//          //             fn abs(m: &$t<N>) -> $submatrix<N::AbsoluteValue> {
+//          //             fn abs(m: &$t<T>) -> $submatrix<T::AbsoluteValue> {
 //          //                 Absolute::abs(&m.submatrix)
 //          //             }
 //          //         }

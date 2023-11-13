@@ -1,5 +1,4 @@
-use super::{DecodingError, CHUNCK_BUFFER_SIZE};
-use std::io;
+use super::{stream::FormatErrorInner, DecodingError, CHUNCK_BUFFER_SIZE};
 
 use miniz_oxide::inflate::core::{decompress, inflate_flags, DecompressorOxide};
 use miniz_oxide::inflate::TINFLStatus;
@@ -67,14 +66,18 @@ impl ZlibStream {
         self.prepare_vec_for_appending();
 
         let (status, mut in_consumed, out_consumed) = {
-            let mut cursor = io::Cursor::new(self.out_buffer.as_mut_slice());
-            cursor.set_position(self.out_pos as u64);
             let in_data = if self.in_buffer.is_empty() {
                 data
             } else {
                 &self.in_buffer[self.in_pos..]
             };
-            decompress(&mut self.state, in_data, &mut cursor, BASE_FLAGS)
+            decompress(
+                &mut self.state,
+                in_data,
+                self.out_buffer.as_mut_slice(),
+                self.out_pos,
+                BASE_FLAGS,
+            )
         };
 
         if !self.in_buffer.is_empty() {
@@ -99,7 +102,9 @@ impl ZlibStream {
             TINFLStatus::Done | TINFLStatus::HasMoreOutput | TINFLStatus::NeedsMoreInput => {
                 Ok(in_consumed)
             }
-            _err => Err(DecodingError::CorruptFlateStream),
+            err => Err(DecodingError::Format(
+                FormatErrorInner::CorruptFlateStream { err }.into(),
+            )),
         }
     }
 
@@ -130,9 +135,13 @@ impl ZlibStream {
                 // TODO: we may be able to avoid the indirection through the buffer here.
                 // First append all buffered data and then create a cursor on the image_data
                 // instead.
-                let mut cursor = io::Cursor::new(self.out_buffer.as_mut_slice());
-                cursor.set_position(self.out_pos as u64);
-                decompress(&mut self.state, &tail[start..], &mut cursor, BASE_FLAGS)
+                decompress(
+                    &mut self.state,
+                    &tail[start..],
+                    self.out_buffer.as_mut_slice(),
+                    self.out_pos,
+                    BASE_FLAGS,
+                )
             };
 
             start += in_consumed;
@@ -151,8 +160,10 @@ impl ZlibStream {
                         "No more forward progress made in stream decoding."
                     );
                 }
-                _err => {
-                    return Err(DecodingError::CorruptFlateStream);
+                err => {
+                    return Err(DecodingError::Format(
+                        FormatErrorInner::CorruptFlateStream { err }.into(),
+                    ));
                 }
             }
         }

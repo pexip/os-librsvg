@@ -1,9 +1,9 @@
 //! Simplify one-off runs of programs.
 
+use bstr::ByteSlice;
 use std::error::Error;
 use std::fmt;
 use std::process;
-use std::str;
 
 /// Converts a type to an [`OutputResult`].
 ///
@@ -22,8 +22,6 @@ use std::str;
 /// assert!(result.is_ok());
 /// ```
 ///
-/// [`std::process::Output`]: https://doc.rust-lang.org/std/process/struct.Output.html
-/// [`OutputResult`]: type.OutputResult.html
 pub trait OutputOkExt
 where
     Self: ::std::marker::Sized,
@@ -43,8 +41,7 @@ where
     /// assert!(result.is_ok());
     /// ```
     ///
-    /// [Output]: https://doc.rust-lang.org/std/process/struct.Output.html
-    /// [OutputResult]: type.OutputResult.html
+    /// [Output]: std::process::Output
     fn ok(self) -> OutputResult;
 
     /// Unwrap a [`Output`][Output] but with a prettier message than `.ok().unwrap()`.
@@ -61,7 +58,7 @@ where
     ///     .unwrap();
     /// ```
     ///
-    /// [Output]: https://doc.rust-lang.org/std/process/struct.Output.html
+    /// [Output]: std::process::Output
     fn unwrap(self) -> process::Output {
         match self.ok() {
             Ok(output) => output,
@@ -83,12 +80,12 @@ where
     ///     .unwrap_err();
     /// ```
     ///
-    /// [Output]: https://doc.rust-lang.org/std/process/struct.Output.html
+    /// [Output]: std::process::Output
     fn unwrap_err(self) -> OutputError {
         match self.ok() {
             Ok(output) => panic!(
                 "Command completed successfully\nstdout=```{}```",
-                dump_buffer(&output.stdout)
+                DebugBytes::new(&output.stdout)
             ),
             Err(err) => err,
         }
@@ -122,7 +119,7 @@ impl<'c> OutputOkExt for &'c mut process::Command {
             Ok(output) => panic!(
                 "Completed successfully:\ncommand=`{:?}`\nstdout=```{}```",
                 self,
-                dump_buffer(&output.stdout)
+                DebugBytes::new(&output.stdout)
             ),
             Err(err) => err,
         }
@@ -146,9 +143,8 @@ impl<'c> OutputOkExt for &'c mut process::Command {
 /// assert!(result.is_ok());
 /// ```
 ///
-/// [`Output`]: https://doc.rust-lang.org/std/process/struct.Output.html
-/// [`Result`]: https://doc.rust-lang.org/std/result/enum.Result.html
-/// [`OutputOkExt`]: trait.OutputOkExt.html
+/// [`Output`]: std::process::Output
+/// [`Result`]: std::result::Result
 pub type OutputResult = Result<process::Output, OutputError>;
 
 /// [`Command`] error.
@@ -167,20 +163,19 @@ pub type OutputResult = Result<process::Output, OutputError>;
 ///     .unwrap_err();
 /// ```
 ///
-/// [`Command`]: https://doc.rust-lang.org/std/process/struct.Command.html
-/// [`OutputOkExt`]: trait.OutputOkExt.html
+/// [`Command`]: std::process::Command
 #[derive(Debug)]
 pub struct OutputError {
     cmd: Option<String>,
-    stdin: Option<Vec<u8>>,
+    stdin: Option<bstr::BString>,
     cause: OutputCause,
 }
 
 impl OutputError {
     /// Convert [`Output`] into an [`Error`].
     ///
-    /// [`Output`]: https://doc.rust-lang.org/std/process/struct.Output.html
-    /// [`Error`]: https://doc.rust-lang.org/std/error/trait.Error.html
+    /// [`Output`]: std::process::Output
+    /// [`Error`]: std::error::Error
     pub fn new(output: process::Output) -> Self {
         Self {
             cmd: None,
@@ -191,7 +186,7 @@ impl OutputError {
 
     /// For errors that happen in creating a [`Output`].
     ///
-    /// [`Output`]: https://doc.rust-lang.org/std/process/struct.Output.html
+    /// [`Output`]: std::process::Output
     pub fn with_cause<E>(cause: E) -> Self
     where
         E: Error + Send + Sync + 'static,
@@ -211,7 +206,7 @@ impl OutputError {
 
     /// Add the `stdin` for additional context.
     pub fn set_stdin(mut self, stdin: Vec<u8>) -> Self {
-        self.stdin = Some(stdin);
+        self.stdin = Some(bstr::BString::from(stdin));
         self
     }
 
@@ -233,7 +228,7 @@ impl OutputError {
     /// assert_eq!(Some(42), output.status.code());
     /// ```
     ///
-    /// [`Output`]: https://doc.rust-lang.org/std/process/struct.Output.html
+    /// [`Output`]: std::process::Output
     pub fn as_output(&self) -> Option<&process::Output> {
         match self.cause {
             OutputCause::Expected(ref e) => Some(&e.output),
@@ -246,15 +241,22 @@ impl Error for OutputError {}
 
 impl fmt::Display for OutputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let palette = crate::Palette::current();
         if let Some(ref cmd) = self.cmd {
-            writeln!(f, "command=`{}`", cmd)?;
+            writeln!(
+                f,
+                "{}={}",
+                palette.key.paint("command"),
+                palette.value.paint(cmd)
+            )?;
         }
         if let Some(ref stdin) = self.stdin {
-            if let Ok(stdin) = str::from_utf8(stdin) {
-                writeln!(f, "stdin=```{}```", stdin)?;
-            } else {
-                writeln!(f, "stdin=```{:?}```", stdin)?;
-            }
+            writeln!(
+                f,
+                "{}={}",
+                palette.key.paint("stdin"),
+                palette.value.paint(DebugBytes::new(stdin))
+            )?;
         }
         write!(f, "{}", self.cause)
     }
@@ -287,52 +289,88 @@ impl fmt::Display for Output {
 }
 
 pub(crate) fn output_fmt(output: &process::Output, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    let palette = crate::Palette::current();
     if let Some(code) = output.status.code() {
-        writeln!(f, "code={}", code)?;
+        writeln!(
+            f,
+            "{}={}",
+            palette.key.paint("code"),
+            palette.value.paint(code)
+        )?;
     } else {
-        writeln!(f, "code=<interrupted>")?;
+        writeln!(
+            f,
+            "{}={}",
+            palette.key.paint("code"),
+            palette.value.paint("<interrupted>")
+        )?;
     }
 
-    write!(f, "stdout=```")?;
-    write_buffer(&output.stdout, f)?;
-    writeln!(f, "```")?;
-
-    write!(f, "stderr=```")?;
-    write_buffer(&output.stderr, f)?;
-    writeln!(f, "```")?;
-
+    write!(
+        f,
+        "{}={}\n{}={}\n",
+        palette.key.paint("stdout"),
+        palette.value.paint(DebugBytes::new(&output.stdout)),
+        palette.key.paint("stderr"),
+        palette.value.paint(DebugBytes::new(&output.stderr)),
+    )?;
     Ok(())
 }
 
-pub(crate) fn dump_buffer(buffer: &[u8]) -> String {
-    if let Ok(buffer) = str::from_utf8(buffer) {
-        buffer.to_string()
-    } else {
-        format!("{:?}", buffer)
+#[derive(Debug)]
+pub(crate) struct DebugBytes<'a> {
+    bytes: &'a [u8],
+}
+
+impl<'a> DebugBytes<'a> {
+    pub(crate) fn new(bytes: &'a [u8]) -> Self {
+        DebugBytes { bytes }
     }
 }
 
-pub(crate) fn write_buffer(buffer: &[u8], f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    if let Ok(buffer) = str::from_utf8(buffer) {
-        write!(f, "{}", buffer)
-    } else {
-        write!(f, "{:?}", buffer)
+impl<'a> fmt::Display for DebugBytes<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        format_bytes(self.bytes, f)
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct DebugBuffer {
-    buffer: Vec<u8>,
+    buffer: bstr::BString,
 }
 
 impl DebugBuffer {
     pub(crate) fn new(buffer: Vec<u8>) -> Self {
-        DebugBuffer { buffer }
+        DebugBuffer {
+            buffer: buffer.into(),
+        }
     }
 }
 
 impl fmt::Display for DebugBuffer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write_buffer(&self.buffer, f)
+        format_bytes(&self.buffer, f)
+    }
+}
+
+fn format_bytes(data: &[u8], f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    #![allow(clippy::assertions_on_constants)]
+    const MIN_OVERFLOW: usize = 8192;
+    const MAX_START: usize = 2048;
+    const MAX_END: usize = 2048;
+    const MAX_PRINTED: usize = MAX_START + MAX_END;
+    assert!(MAX_PRINTED < MIN_OVERFLOW);
+
+    if data.len() >= MIN_OVERFLOW {
+        write!(
+            f,
+            "<{} bytes total>{:?}...<{} bytes omitted>...{:?}",
+            data.len(),
+            data[..MAX_START].as_bstr(),
+            data.len() - MAX_PRINTED,
+            data[data.len() - MAX_END..].as_bstr(),
+        )
+    } else {
+        write!(f, "{:?}", data.as_bstr())
     }
 }

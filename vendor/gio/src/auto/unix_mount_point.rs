@@ -2,136 +2,150 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
-#[cfg(any(feature = "v2_54", feature = "dox"))]
+use crate::Icon;
 use glib::translate::*;
-#[cfg(any(feature = "v2_54", feature = "dox"))]
-use glib::GString;
-use gobject_sys;
-#[cfg(any(feature = "v2_54", feature = "dox"))]
-use std;
 use std::cmp;
-#[cfg(any(feature = "v2_54", feature = "dox"))]
-use Icon;
+#[cfg(any(feature = "v2_66", feature = "dox"))]
+#[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+use std::mem;
 
-glib_wrapper! {
+glib::wrapper! {
     #[derive(Debug)]
-    pub struct UnixMountPoint(Boxed<gio_sys::GUnixMountPoint>);
+    pub struct UnixMountPoint(Boxed<ffi::GUnixMountPoint>);
 
     match fn {
-        copy => |ptr| gobject_sys::g_boxed_copy(gio_sys::g_unix_mount_point_get_type(), ptr as *mut _) as *mut gio_sys::GUnixMountPoint,
-        free => |ptr| gobject_sys::g_boxed_free(gio_sys::g_unix_mount_point_get_type(), ptr as *mut _),
-        get_type => || gio_sys::g_unix_mount_point_get_type(),
+        copy => |ptr| ffi::g_unix_mount_point_copy(mut_override(ptr)),
+        free => |ptr| ffi::g_unix_mount_point_free(ptr),
+        type_ => || ffi::g_unix_mount_point_get_type(),
     }
 }
 
 impl UnixMountPoint {
-    #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[doc(alias = "g_unix_mount_point_compare")]
     fn compare(&self, mount2: &UnixMountPoint) -> i32 {
         unsafe {
-            gio_sys::g_unix_mount_point_compare(
+            ffi::g_unix_mount_point_compare(
                 mut_override(self.to_glib_none().0),
                 mut_override(mount2.to_glib_none().0),
             )
         }
     }
 
-    #[cfg(any(feature = "v2_54", feature = "dox"))]
-    pub fn get_device_path(&self) -> Option<std::path::PathBuf> {
+    #[doc(alias = "g_unix_mount_point_get_device_path")]
+    #[doc(alias = "get_device_path")]
+    pub fn device_path(&self) -> std::path::PathBuf {
         unsafe {
-            from_glib_none(gio_sys::g_unix_mount_point_get_device_path(mut_override(
+            from_glib_none(ffi::g_unix_mount_point_get_device_path(mut_override(
                 self.to_glib_none().0,
             )))
         }
     }
 
-    #[cfg(any(feature = "v2_54", feature = "dox"))]
-    pub fn get_fs_type(&self) -> Option<GString> {
+    #[doc(alias = "g_unix_mount_point_get_fs_type")]
+    #[doc(alias = "get_fs_type")]
+    pub fn fs_type(&self) -> glib::GString {
         unsafe {
-            from_glib_none(gio_sys::g_unix_mount_point_get_fs_type(mut_override(
+            from_glib_none(ffi::g_unix_mount_point_get_fs_type(mut_override(
                 self.to_glib_none().0,
             )))
         }
     }
 
-    #[cfg(any(feature = "v2_54", feature = "dox"))]
-    pub fn get_mount_path(&self) -> Option<std::path::PathBuf> {
+    #[doc(alias = "g_unix_mount_point_get_mount_path")]
+    #[doc(alias = "get_mount_path")]
+    pub fn mount_path(&self) -> std::path::PathBuf {
         unsafe {
-            from_glib_none(gio_sys::g_unix_mount_point_get_mount_path(mut_override(
+            from_glib_none(ffi::g_unix_mount_point_get_mount_path(mut_override(
                 self.to_glib_none().0,
             )))
         }
     }
 
-    #[cfg(any(feature = "v2_54", feature = "dox"))]
-    pub fn get_options(&self) -> Option<GString> {
+    #[doc(alias = "g_unix_mount_point_get_options")]
+    #[doc(alias = "get_options")]
+    pub fn options(&self) -> Option<glib::GString> {
         unsafe {
-            from_glib_none(gio_sys::g_unix_mount_point_get_options(mut_override(
+            from_glib_none(ffi::g_unix_mount_point_get_options(mut_override(
                 self.to_glib_none().0,
             )))
         }
     }
 
-    #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[doc(alias = "g_unix_mount_point_guess_can_eject")]
     pub fn guess_can_eject(&self) -> bool {
         unsafe {
-            from_glib(gio_sys::g_unix_mount_point_guess_can_eject(mut_override(
+            from_glib(ffi::g_unix_mount_point_guess_can_eject(mut_override(
                 self.to_glib_none().0,
             )))
         }
     }
 
-    #[cfg(any(feature = "v2_54", feature = "dox"))]
-    pub fn guess_icon(&self) -> Option<Icon> {
+    #[doc(alias = "g_unix_mount_point_guess_icon")]
+    pub fn guess_icon(&self) -> Icon {
         unsafe {
-            from_glib_full(gio_sys::g_unix_mount_point_guess_icon(mut_override(
+            from_glib_full(ffi::g_unix_mount_point_guess_icon(mut_override(
                 self.to_glib_none().0,
             )))
         }
     }
 
-    #[cfg(any(feature = "v2_54", feature = "dox"))]
-    pub fn guess_name(&self) -> Option<GString> {
+    #[doc(alias = "g_unix_mount_point_guess_name")]
+    pub fn guess_name(&self) -> glib::GString {
         unsafe {
-            from_glib_full(gio_sys::g_unix_mount_point_guess_name(mut_override(
+            from_glib_full(ffi::g_unix_mount_point_guess_name(mut_override(
                 self.to_glib_none().0,
             )))
         }
     }
 
-    #[cfg(any(feature = "v2_54", feature = "dox"))]
-    pub fn guess_symbolic_icon(&self) -> Option<Icon> {
+    #[doc(alias = "g_unix_mount_point_guess_symbolic_icon")]
+    pub fn guess_symbolic_icon(&self) -> Icon {
         unsafe {
-            from_glib_full(gio_sys::g_unix_mount_point_guess_symbolic_icon(
-                mut_override(self.to_glib_none().0),
-            ))
+            from_glib_full(ffi::g_unix_mount_point_guess_symbolic_icon(mut_override(
+                self.to_glib_none().0,
+            )))
         }
     }
 
-    #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[doc(alias = "g_unix_mount_point_is_loopback")]
     pub fn is_loopback(&self) -> bool {
         unsafe {
-            from_glib(gio_sys::g_unix_mount_point_is_loopback(mut_override(
+            from_glib(ffi::g_unix_mount_point_is_loopback(mut_override(
                 self.to_glib_none().0,
             )))
         }
     }
 
-    #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[doc(alias = "g_unix_mount_point_is_readonly")]
     pub fn is_readonly(&self) -> bool {
         unsafe {
-            from_glib(gio_sys::g_unix_mount_point_is_readonly(mut_override(
+            from_glib(ffi::g_unix_mount_point_is_readonly(mut_override(
                 self.to_glib_none().0,
             )))
         }
     }
 
-    #[cfg(any(feature = "v2_54", feature = "dox"))]
+    #[doc(alias = "g_unix_mount_point_is_user_mountable")]
     pub fn is_user_mountable(&self) -> bool {
         unsafe {
-            from_glib(gio_sys::g_unix_mount_point_is_user_mountable(mut_override(
+            from_glib(ffi::g_unix_mount_point_is_user_mountable(mut_override(
                 self.to_glib_none().0,
             )))
+        }
+    }
+
+    #[cfg(any(feature = "v2_66", feature = "dox"))]
+    #[cfg_attr(feature = "dox", doc(cfg(feature = "v2_66")))]
+    #[doc(alias = "g_unix_mount_point_at")]
+    pub fn at(mount_path: impl AsRef<std::path::Path>) -> (Option<UnixMountPoint>, u64) {
+        unsafe {
+            let mut time_read = mem::MaybeUninit::uninit();
+            let ret = from_glib_full(ffi::g_unix_mount_point_at(
+                mount_path.as_ref().to_glib_none().0,
+                time_read.as_mut_ptr(),
+            ));
+            let time_read = time_read.assume_init();
+            (ret, time_read)
         }
     }
 }
@@ -158,3 +172,6 @@ impl Ord for UnixMountPoint {
         self.compare(other).cmp(&0)
     }
 }
+
+unsafe impl Send for UnixMountPoint {}
+unsafe impl Sync for UnixMountPoint {}

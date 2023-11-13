@@ -239,7 +239,7 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#[cfg(range_inclusive)]
+#[cfg(not(no_range_inclusive))]
 impl<Idx> Serialize for RangeInclusive<Idx>
 where
     Idx: Serialize,
@@ -258,7 +258,7 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#[cfg(any(ops_bound, collections_bound))]
+#[cfg(any(not(no_ops_bound), all(feature = "std", not(no_collections_bound))))]
 impl<T> Serialize for Bound<T>
 where
     T: Serialize,
@@ -467,7 +467,7 @@ where
 macro_rules! nonzero_integers {
     ( $( $T: ident, )+ ) => {
         $(
-            #[cfg(num_nonzero)]
+            #[cfg(not(no_num_nonzero))]
             impl Serialize for num::$T {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
                 where
@@ -488,7 +488,7 @@ nonzero_integers! {
     NonZeroUsize,
 }
 
-#[cfg(num_nonzero_signed)]
+#[cfg(not(no_num_nonzero_signed))]
 nonzero_integers! {
     NonZeroI8,
     NonZeroI16,
@@ -504,7 +504,7 @@ serde_if_integer128! {
         NonZeroU128,
     }
 
-    #[cfg(num_nonzero_signed)]
+    #[cfg(not(no_num_nonzero_signed))]
     nonzero_integers! {
         NonZeroI128,
     }
@@ -591,7 +591,7 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#[cfg(any(core_duration, feature = "std"))]
+#[cfg(any(feature = "std", not(no_core_duration)))]
 impl Serialize for Duration {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -675,6 +675,52 @@ impl Serialize for net::IpAddr {
 }
 
 #[cfg(feature = "std")]
+const DEC_DIGITS_LUT: &'static [u8] = b"\
+      0001020304050607080910111213141516171819\
+      2021222324252627282930313233343536373839\
+      4041424344454647484950515253545556575859\
+      6061626364656667686970717273747576777879\
+      8081828384858687888990919293949596979899";
+
+#[cfg(feature = "std")]
+#[inline]
+fn format_u8(mut n: u8, out: &mut [u8]) -> usize {
+    if n >= 100 {
+        let d1 = ((n % 100) << 1) as usize;
+        n /= 100;
+        out[0] = b'0' + n;
+        out[1] = DEC_DIGITS_LUT[d1];
+        out[2] = DEC_DIGITS_LUT[d1 + 1];
+        3
+    } else if n >= 10 {
+        let d1 = (n << 1) as usize;
+        out[0] = DEC_DIGITS_LUT[d1];
+        out[1] = DEC_DIGITS_LUT[d1 + 1];
+        2
+    } else {
+        out[0] = b'0' + n;
+        1
+    }
+}
+
+#[cfg(feature = "std")]
+#[test]
+fn test_format_u8() {
+    let mut i = 0u8;
+
+    loop {
+        let mut buf = [0u8; 3];
+        let written = format_u8(i, &mut buf);
+        assert_eq!(i.to_string().as_bytes(), &buf[..written]);
+
+        match i.checked_add(1) {
+            Some(next) => i = next,
+            None => break,
+        }
+    }
+}
+
+#[cfg(feature = "std")]
 impl Serialize for net::Ipv4Addr {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -683,7 +729,14 @@ impl Serialize for net::Ipv4Addr {
         if serializer.is_human_readable() {
             const MAX_LEN: usize = 15;
             debug_assert_eq!(MAX_LEN, "101.102.103.104".len());
-            serialize_display_bounded_length!(self, MAX_LEN, serializer)
+            let mut buf = [b'.'; MAX_LEN];
+            let mut written = format_u8(self.octets()[0], &mut buf);
+            for oct in &self.octets()[1..] {
+                // Skip over delimiters that we initialized buf with
+                written += format_u8(*oct, &mut buf[written + 1..]) + 1;
+            }
+            // We've only written ASCII bytes to the buffer, so it is valid UTF-8
+            serializer.serialize_str(unsafe { str::from_utf8_unchecked(&buf[..written]) })
         } else {
             self.octets().serialize(serializer)
         }
@@ -837,7 +890,7 @@ where
     }
 }
 
-#[cfg(core_reverse)]
+#[cfg(not(no_core_reverse))]
 impl<T> Serialize for Reverse<T>
 where
     T: Serialize,
@@ -853,7 +906,7 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#[cfg(all(feature = "std", std_atomic))]
+#[cfg(all(feature = "std", not(no_std_atomic)))]
 macro_rules! atomic_impl {
     ($($ty:ident)*) => {
         $(
@@ -862,21 +915,22 @@ macro_rules! atomic_impl {
                 where
                     S: Serializer,
                 {
-                    self.load(Ordering::SeqCst).serialize(serializer)
+                    // Matches the atomic ordering used in libcore for the Debug impl
+                    self.load(Ordering::Relaxed).serialize(serializer)
                 }
             }
         )*
     }
 }
 
-#[cfg(all(feature = "std", std_atomic))]
+#[cfg(all(feature = "std", not(no_std_atomic)))]
 atomic_impl! {
     AtomicBool
     AtomicI8 AtomicI16 AtomicI32 AtomicIsize
     AtomicU8 AtomicU16 AtomicU32 AtomicUsize
 }
 
-#[cfg(all(feature = "std", std_atomic64))]
+#[cfg(all(feature = "std", not(no_std_atomic64)))]
 atomic_impl! {
     AtomicI64 AtomicU64
 }

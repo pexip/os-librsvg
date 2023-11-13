@@ -1,14 +1,11 @@
-// Copyright 2013-2019, The Gtk-rs Project Developers.
-// See the COPYRIGHT file at the top-level directory of this distribution.
-// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 #![allow(non_camel_case_types)]
-#![cfg_attr(feature = "cargo-clippy", allow(unreadable_literal, write_literal))]
+#![allow(clippy::unreadable_literal)]
+#![allow(clippy::write_literal)]
+#![allow(clippy::upper_case_acronyms)]
 
 extern crate libc;
-
-#[cfg(feature = "use_glib")]
-extern crate glib_sys as glib_ffi;
 
 #[cfg(any(feature = "xlib", feature = "dox"))]
 extern crate x11;
@@ -53,6 +50,7 @@ pub type cairo_operator_t = c_int;
 pub type cairo_pattern_type_t = c_int;
 pub type cairo_path_data_type_t = c_int;
 pub type cairo_region_overlap_t = c_int;
+#[cfg(any(feature = "script", feature = "dox"))]
 pub type cairo_script_mode_t = c_int;
 pub type cairo_status_t = c_int;
 pub type cairo_subpixel_order_t = c_int;
@@ -74,8 +72,17 @@ pub type cairo_ps_level_t = c_int;
 
 pub type cairo_mesh_corner_t = c_uint;
 
-macro_rules! debug_impl {
-    ($name:ty) => {
+macro_rules! opaque {
+    ($(#[$attr:meta])*
+     $name:ident) => {
+        // https://doc.rust-lang.org/nomicon/ffi.html#representing-opaque-structs
+        $(#[$attr])*
+        #[repr(C)]
+        pub struct $name {
+            _data: [u8; 0],
+            _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+        }
+        $(#[$attr])*
         impl ::std::fmt::Debug for $name {
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
                 write!(f, "{} @ {:?}", stringify!($name), self as *const _)
@@ -84,26 +91,15 @@ macro_rules! debug_impl {
     };
 }
 
-#[repr(C)]
-pub struct cairo_t(c_void);
-debug_impl!(cairo_t);
+opaque!(cairo_t);
+opaque!(cairo_surface_t);
+opaque!(cairo_device_t);
+opaque!(cairo_pattern_t);
 
-#[repr(C)]
-pub struct cairo_surface_t(c_void);
-debug_impl!(cairo_surface_t);
-
-#[repr(C)]
-pub struct cairo_device_t(c_void);
-debug_impl!(cairo_device_t);
-
-#[repr(C)]
-pub struct cairo_pattern_t(c_void);
-
-#[cfg(any(feature = "xcb", feature = "dox"))]
-#[repr(C)]
-pub struct xcb_connection_t(c_void);
-#[cfg(any(feature = "xcb", feature = "dox"))]
-debug_impl!(xcb_connection_t);
+opaque!(
+    #[cfg(any(feature = "xcb", feature = "dox"))]
+    xcb_connection_t
+);
 
 #[cfg(any(feature = "xcb", feature = "dox"))]
 pub type xcb_drawable_t = u32;
@@ -111,23 +107,20 @@ pub type xcb_drawable_t = u32;
 #[cfg(any(feature = "xcb", feature = "dox"))]
 pub type xcb_pixmap_t = u32;
 
-#[cfg(any(feature = "xcb", feature = "dox"))]
-#[repr(C)]
-pub struct xcb_visualtype_t(c_void);
-#[cfg(any(feature = "xcb", feature = "dox"))]
-debug_impl!(xcb_visualtype_t);
+opaque!(
+    #[cfg(any(feature = "xcb", feature = "dox"))]
+    xcb_visualtype_t // has visible fields in <xcb/xproto.h>
+);
 
-#[cfg(any(feature = "xcb", feature = "dox"))]
-#[repr(C)]
-pub struct xcb_screen_t(c_void);
-#[cfg(any(feature = "xcb", feature = "dox"))]
-debug_impl!(xcb_screen_t);
+opaque!(
+    #[cfg(any(feature = "xcb", feature = "dox"))]
+    xcb_screen_t // has visible fields in <xcb/xproto.h>
+);
 
-#[cfg(any(feature = "xcb", feature = "dox"))]
-#[repr(C)]
-pub struct xcb_render_pictforminfo_t(c_void);
-#[cfg(any(feature = "xcb", feature = "dox"))]
-debug_impl!(xcb_render_pictforminfo_t);
+opaque!(
+    #[cfg(any(feature = "xcb", feature = "dox"))]
+    xcb_render_pictforminfo_t // has visible fields in <xcb/render.h>
+);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -171,25 +164,12 @@ pub union cairo_path_data {
     pub header: cairo_path_data_header,
     pub point: [f64; 2],
 }
-#[repr(C)]
-pub struct cairo_glyph_t(c_void);
-debug_impl!(cairo_glyph_t);
 
-#[repr(C)]
-pub struct cairo_region_t(c_void);
-debug_impl!(cairo_region_t);
-
-#[repr(C)]
-pub struct cairo_font_face_t(c_void);
-debug_impl!(cairo_font_face_t);
-
-#[repr(C)]
-pub struct cairo_scaled_font_t(c_void);
-debug_impl!(cairo_scaled_font_t);
-
-#[repr(C)]
-pub struct cairo_font_options_t(c_void);
-debug_impl!(cairo_font_options_t);
+opaque!(cairo_glyph_t);
+opaque!(cairo_region_t);
+opaque!(cairo_font_face_t);
+opaque!(cairo_scaled_font_t);
+opaque!(cairo_font_options_t);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -247,7 +227,7 @@ impl ::std::fmt::Display for Matrix {
 pub struct cairo_user_data_key_t {
     pub unused: c_int,
 }
-#[repr(C)]
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct cairo_bool_t {
     value: c_int,
@@ -274,8 +254,12 @@ pub type cairo_read_func_t =
 pub type cairo_write_func_t =
     Option<unsafe extern "C" fn(*mut c_void, *mut c_uchar, c_uint) -> cairo_status_t>;
 
+#[cfg(any(feature = "freetype", feature = "dox"))]
+pub type FT_Face = *mut c_void;
+#[cfg(any(feature = "freetype", feature = "dox"))]
+pub type FcPattern = c_void;
+
 extern "C" {
-    // CAIRO CONTEXT
     pub fn cairo_create(target: *mut cairo_surface_t) -> *mut cairo_t;
     pub fn cairo_reference(cr: *mut cairo_t) -> *mut cairo_t;
     pub fn cairo_destroy(cr: *mut cairo_t);
@@ -740,13 +724,34 @@ extern "C" {
     pub fn cairo_glyph_free(glyphs: *mut Glyph);
     pub fn cairo_text_cluster_allocate(num_clusters: c_int) -> *mut TextCluster;
     pub fn cairo_text_cluster_free(clusters: *mut TextCluster);
+
+    #[cfg(any(feature = "freetype", feature = "dox"))]
+    pub fn cairo_ft_font_face_create_for_ft_face(
+        face: FT_Face,
+        load_flags: c_int,
+    ) -> *mut cairo_font_face_t;
+    #[cfg(any(feature = "freetype", feature = "dox"))]
+    pub fn cairo_ft_font_face_create_for_pattern(pattern: *mut FcPattern)
+        -> *mut cairo_font_face_t;
+    #[cfg(any(feature = "freetype", feature = "dox"))]
+    pub fn cairo_ft_font_options_substitute(
+        options: *const cairo_font_options_t,
+        pattern: *mut FcPattern,
+    );
+    #[cfg(any(feature = "freetype", feature = "dox"))]
+    pub fn cairo_ft_scaled_font_lock_face(scaled_font: *mut cairo_scaled_font_t) -> FT_Face;
+    #[cfg(any(feature = "freetype", feature = "dox"))]
+    pub fn cairo_ft_scaled_font_unlock_face(scaled_font: *mut cairo_scaled_font_t);
+    #[cfg(any(feature = "freetype", feature = "dox"))]
     pub fn cairo_ft_font_face_get_synthesize(
         font_face: *mut cairo_font_face_t,
     ) -> cairo_ft_synthesize_t;
+    #[cfg(any(feature = "freetype", feature = "dox"))]
     pub fn cairo_ft_font_face_set_synthesize(
         font_face: *mut cairo_font_face_t,
         synth_flags: cairo_ft_synthesize_t,
     );
+    #[cfg(any(feature = "freetype", feature = "dox"))]
     pub fn cairo_ft_font_face_unset_synthesize(
         font_face: *mut cairo_font_face_t,
         synth_flags: cairo_ft_synthesize_t,
@@ -952,11 +957,25 @@ extern "C" {
     ) -> cairo_status_t;
     pub fn cairo_surface_get_reference_count(surface: *mut cairo_surface_t) -> c_uint;
     pub fn cairo_surface_mark_dirty(surface: *mut cairo_surface_t);
+    pub fn cairo_surface_mark_dirty_rectangle(
+        surface: *mut cairo_surface_t,
+        x: c_int,
+        y: c_int,
+        width: c_int,
+        height: c_int,
+    );
     pub fn cairo_surface_create_similar(
         surface: *mut cairo_surface_t,
         content: cairo_content_t,
         width: c_int,
         height: c_int,
+    ) -> *mut cairo_surface_t;
+    pub fn cairo_surface_create_for_rectangle(
+        surface: *mut cairo_surface_t,
+        x: c_double,
+        y: c_double,
+        width: c_double,
+        height: c_double,
     ) -> *mut cairo_surface_t;
     pub fn cairo_surface_get_mime_data(
         surface: *mut cairo_surface_t,
@@ -976,6 +995,7 @@ extern "C" {
         surface: *mut cairo_surface_t,
         mime_type: *const c_char,
     ) -> cairo_bool_t;
+    pub fn cairo_surface_get_device(surface: *mut cairo_surface_t) -> *mut cairo_device_t;
     pub fn cairo_surface_set_device_offset(
         surface: *mut cairo_surface_t,
         x_offset: c_double,
@@ -986,13 +1006,11 @@ extern "C" {
         x_offset: *mut c_double,
         y_offset: *mut c_double,
     );
-    #[cfg(any(feature = "v1_14", feature = "dox"))]
     pub fn cairo_surface_get_device_scale(
         surface: *mut cairo_surface_t,
         x_scale: *mut c_double,
         y_scale: *mut c_double,
     );
-    #[cfg(any(feature = "v1_14", feature = "dox"))]
     pub fn cairo_surface_set_device_scale(
         surface: *mut cairo_surface_t,
         x_scale: c_double,
@@ -1304,10 +1322,7 @@ extern "C" {
     // CAIRO WINDOWS SURFACE
     #[cfg(any(all(windows, feature = "win32-surface"), feature = "dox"))]
     pub fn cairo_win32_surface_create(hdc: winapi::HDC) -> *mut cairo_surface_t;
-    #[cfg(any(
-        all(windows, feature = "win32-surface", feature = "v1_14"),
-        feature = "dox"
-    ))]
+    #[cfg(any(all(windows, feature = "win32-surface"), feature = "dox"))]
     pub fn cairo_win32_surface_create_with_format(
         hdc: winapi::HDC,
         format: cairo_format_t,
@@ -1332,43 +1347,51 @@ extern "C" {
     #[cfg(any(all(windows, feature = "win32-surface"), feature = "dox"))]
     pub fn cairo_win32_surface_get_image(surface: *mut cairo_surface_t) -> *mut cairo_surface_t;
 
-    #[cfg(any(target_os = "macos", target_os = "ios", feature = "dox"))]
+    #[cfg(any(target_os = "macos", feature = "dox"))]
     pub fn cairo_quartz_surface_create(
         format: cairo_format_t,
         width: c_uint,
         height: c_uint,
     ) -> *mut cairo_surface_t;
-    #[cfg(any(target_os = "macos", target_os = "ios", feature = "dox"))]
+    #[cfg(any(target_os = "macos", feature = "dox"))]
     pub fn cairo_quartz_surface_create_for_cg_context(
         cg_context: CGContextRef,
         width: c_uint,
         height: c_uint,
     ) -> *mut cairo_surface_t;
-    #[cfg(any(target_os = "macos", target_os = "ios", feature = "dox"))]
+    #[cfg(any(target_os = "macos", feature = "dox"))]
     pub fn cairo_quartz_surface_get_cg_context(surface: *mut cairo_surface_t) -> CGContextRef;
 
     // CAIRO SCRIPT
+    #[cfg(any(feature = "script", feature = "dox"))]
     pub fn cairo_script_create(filename: *const c_char) -> *mut cairo_device_t;
+    #[cfg(any(feature = "script", feature = "dox"))]
     pub fn cairo_script_create_for_stream(
         write_func: cairo_write_func_t,
         closure: *mut c_void,
     ) -> cairo_status_t;
+    #[cfg(any(feature = "script", feature = "dox"))]
     pub fn cairo_script_from_recording_surface(
         script: *mut cairo_device_t,
         surface: *mut cairo_surface_t,
     ) -> cairo_status_t;
+    #[cfg(any(feature = "script", feature = "dox"))]
     pub fn cairo_script_get_mode(script: *mut cairo_device_t) -> cairo_script_mode_t;
+    #[cfg(any(feature = "script", feature = "dox"))]
     pub fn cairo_script_set_mode(script: *mut cairo_device_t, mode: cairo_script_mode_t);
+    #[cfg(any(feature = "script", feature = "dox"))]
     pub fn cairo_script_surface_create(
         script: *mut cairo_device_t,
         content: cairo_content_t,
         width: c_double,
         height: c_double,
     ) -> *mut cairo_surface_t;
+    #[cfg(any(feature = "script", feature = "dox"))]
     pub fn cairo_script_surface_create_for_target(
         script: *mut cairo_device_t,
         target: *mut cairo_surface_t,
     ) -> *mut cairo_surface_t;
+    #[cfg(any(feature = "script", feature = "dox"))]
     pub fn cairo_script_write_comment(
         script: *mut cairo_device_t,
         comment: *const c_char,

@@ -6,6 +6,7 @@ use plotters_backend::BackendCoord;
 use std::ops::Range;
 
 /// A 3D cartesian coordinate system
+#[derive(Clone)]
 pub struct Cartesian3d<X: Ranged, Y: Ranged, Z: Ranged> {
     pub(crate) logic_x: X,
     pub(crate) logic_y: Y,
@@ -21,10 +22,10 @@ impl<X: Ranged, Y: Ranged, Z: Ranged> Cartesian3d<X, Y, Z> {
     fn create_projection<F: FnOnce(ProjectionMatrixBuilder) -> ProjectionMatrix>(
         actual_x: Range<i32>,
         actual_y: Range<i32>,
+        coord_size: (i32, i32, i32),
         f: F,
     ) -> ProjectionMatrix {
-        let default_size = Self::compute_default_size(actual_x.clone(), actual_y.clone());
-        let center_3d = (default_size / 2, default_size / 2, default_size / 2);
+        let center_3d = (coord_size.0 / 2, coord_size.1 / 2, coord_size.2 / 2);
         let center_2d = (
             (actual_x.end + actual_x.start) / 2,
             (actual_y.end + actual_y.start) / 2,
@@ -33,6 +34,7 @@ impl<X: Ranged, Y: Ranged, Z: Ranged> Cartesian3d<X, Y, Z> {
         pb.set_pivot(center_3d, center_2d);
         f(pb)
     }
+    /// Creates a Cartesian3d object with the given projection.
     pub fn with_projection<
         SX: Into<X>,
         SY: Into<Y>,
@@ -46,14 +48,34 @@ impl<X: Ranged, Y: Ranged, Z: Ranged> Cartesian3d<X, Y, Z> {
         build_projection_matrix: F,
     ) -> Self {
         let default_size = Self::compute_default_size(actual_x.clone(), actual_y.clone());
+        let coord_size = (default_size, default_size, default_size);
         Self {
             logic_x: logic_x.into(),
             logic_y: logic_y.into(),
             logic_z: logic_z.into(),
-            coord_size: (default_size, default_size, default_size),
-            projection: Self::create_projection(actual_x, actual_y, build_projection_matrix),
+            coord_size,
+            projection: Self::create_projection(
+                actual_x,
+                actual_y,
+                coord_size,
+                build_projection_matrix,
+            ),
         }
     }
+
+    /// Sets the pixel sizes and projections according to the given ranges.
+    pub fn set_coord_pixel_range(
+        &mut self,
+        actual_x: Range<i32>,
+        actual_y: Range<i32>,
+        coord_size: (i32, i32, i32),
+    ) -> &mut Self {
+        self.coord_size = coord_size;
+        self.projection =
+            Self::create_projection(actual_x, actual_y, coord_size, |pb| pb.into_matrix());
+        self
+    }
+
     /// Set the projection matrix
     pub fn set_projection<F: FnOnce(ProjectionMatrixBuilder) -> ProjectionMatrix>(
         &mut self,
@@ -61,7 +83,7 @@ impl<X: Ranged, Y: Ranged, Z: Ranged> Cartesian3d<X, Y, Z> {
         actual_y: Range<i32>,
         f: F,
     ) -> &mut Self {
-        self.projection = Self::create_projection(actual_x, actual_y, f);
+        self.projection = Self::create_projection(actual_x, actual_y, self.coord_size, f);
         self
     }
 
@@ -101,5 +123,9 @@ impl<X: Ranged, Y: Ranged, Z: Ranged> CoordTranslate for Cartesian3d<X, Y, Z> {
     fn translate(&self, coord: &Self::From) -> BackendCoord {
         let pixel_coord_3d = self.map_3d(&coord.0, &coord.1, &coord.2);
         self.projection * pixel_coord_3d
+    }
+
+    fn depth(&self, coord: &Self::From) -> i32 {
+        self.projected_depth(&coord.0, &coord.1, &coord.2)
     }
 }

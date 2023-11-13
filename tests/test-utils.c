@@ -7,15 +7,14 @@
 #include <string.h>
 #include <pango/pango.h>
 #include <pango/pangocairo.h>
-#ifdef HAVE_PANGOFT2
-#include <pango/pangofc-fontmap.h>
-#else
-# if !PANGO_VERSION_CHECK (1, 44, 0)
-#  include <hb.h>
-# endif
-# include <ft2build.h>
-# include FT_FREETYPE_H
+
+#if !PANGO_VERSION_CHECK (1, 44, 0)
+# include <hb.h>
 #endif
+
+#include <ft2build.h>
+#include FT_FREETYPE_H
+
 
 /* Compare two buffers, returning the number of pixels that are
  * different and the maximum difference of any single color channel in
@@ -233,129 +232,6 @@ test_utils_get_test_data_path (void)
     data_path = g_test_build_filename (G_TEST_DIST, "fixtures", NULL);
 
     return data_path;
-}
-
-static int
-compare_files (gconstpointer a, gconstpointer b)
-{
-    char *uri1 = g_file_get_uri (G_FILE(a));
-    char *uri2 = g_file_get_uri (G_FILE(b));
-
-    int result = strcmp (uri1, uri2);
-
-    g_free (uri1);
-    g_free (uri2);
-
-    return result;
-}
-
-void
-test_utils_add_test_for_all_files (const gchar   *prefix,
-                                   GFile         *base,
-                                   GFile         *file,
-                                   GTestDataFunc  test_func,
-                                   AddTestFunc    add_test_func)
-{
-    GFileEnumerator *enumerator;
-    GFileInfo *info;
-    GList *l, *files = NULL;
-    GError *error = NULL;
-
-    if (g_file_query_file_type (file, 0, NULL) != G_FILE_TYPE_DIRECTORY)
-    {
-        gchar *test_path;
-        gchar *relative_path;
-
-        if (base)
-            relative_path = g_file_get_relative_path (base, file);
-        else
-            relative_path = g_file_get_path (file);
-
-        test_path = g_strconcat (prefix, "/", relative_path, NULL);
-        g_free (relative_path);
-
-        g_test_add_data_func_full (test_path, g_object_ref (file), test_func, g_object_unref);
-
-        g_free (test_path);
-
-        return;
-    }
-
-    enumerator = g_file_enumerate_children (file, G_FILE_ATTRIBUTE_STANDARD_NAME, 0, NULL, &error);
-    g_assert_no_error (error);
-
-    while ((info = g_file_enumerator_next_file (enumerator, NULL, &error)))
-    {
-        GFile *next_file = g_file_get_child (file, g_file_info_get_name (info));
-
-        if (add_test_func == NULL || add_test_func (next_file))
-        {
-            files = g_list_prepend (files, g_object_ref (next_file));
-        }
-
-        g_object_unref (next_file);
-        g_object_unref (info);
-    }
-
-    g_assert_no_error (error);
-    g_object_unref (enumerator);
-
-    files = g_list_sort (files, compare_files);
-
-    for (l = files; l; l = l->next)
-    {
-        test_utils_add_test_for_all_files (prefix, base, l->data, test_func, add_test_func);
-    }
-
-    g_list_free_full (files, g_object_unref);
-}
-
-#ifdef HAVE_PANGOFT2
-static FcConfig *
-create_font_config_for_testing (void)
-{
-    const char *font_paths[] =
-    {
-        "Roboto-Regular.ttf",
-        "Roboto-Italic.ttf",
-        "Roboto-Bold.ttf",
-        "Roboto-BoldItalic.ttf",
-    };
-
-    FcConfig *config = FcConfigCreate ();
-    int i;
-
-    for (i = 0; i < G_N_ELEMENTS(font_paths); i++)
-    {
-        char *font_path = g_test_build_filename (G_TEST_DIST, "resources", font_paths[i], NULL);
-
-        if (!FcConfigAppFontAddFile (config, (const FcChar8 *) font_path))
-        {
-            g_error ("Could not load font file \"%s\" for tests; aborting", font_path);
-        }
-
-        g_free (font_path);
-    }
-
-    return config;
-}
-#endif
-
-void
-test_utils_setup_font_map (void)
-{
-#ifdef HAVE_PANGOFT2
-    FcConfig *config = create_font_config_for_testing ();
-    PangoFontMap *font_map = NULL;
-
-    font_map = pango_cairo_font_map_new_for_font_type (CAIRO_FONT_TYPE_FT);
-    pango_fc_font_map_set_config (PANGO_FC_FONT_MAP (font_map), config);
-    FcConfigDestroy (config);
-
-    pango_cairo_font_map_set_default (PANGO_CAIRO_FONT_MAP (font_map));
-
-    g_object_unref (font_map);
-#endif
 }
 
 void

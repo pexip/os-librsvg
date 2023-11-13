@@ -1,8 +1,7 @@
 10_rsvg-gz.patch
-Add-fallback-for-when-tree_index.sgml-is-not-available.patch
 thin-lto.patch
 Skip-invalid_viewbox-test-on-32-bit-x86.patch
-996-Fix-arbitrary-file-read-when-href-has-special-charact.patch
-Fix-compilation-on-rustc-1.40.0.patch
-tests-Fix-build-with-older-Autotools.patch
+debian/tests-Replace-a-CC-BY-SA-2.0-test-image-with-a-simpler-on.patch
+Link-librsvg-with-libpthread-fixing-a-link-failure.patch
+debian/tests-Skip-known-failing-tests-on-i386.patch
 pexip-fix-doctest.patch

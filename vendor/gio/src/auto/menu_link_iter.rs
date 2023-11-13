@@ -2,48 +2,37 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use gio_sys;
+use crate::MenuModel;
 use glib::object::IsA;
 use glib::translate::*;
-use glib::GString;
 use std::fmt;
 use std::ptr;
-use MenuModel;
 
-glib_wrapper! {
-    pub struct MenuLinkIter(Object<gio_sys::GMenuLinkIter, gio_sys::GMenuLinkIterClass, MenuLinkIterClass>);
+glib::wrapper! {
+    #[doc(alias = "GMenuLinkIter")]
+    pub struct MenuLinkIter(Object<ffi::GMenuLinkIter, ffi::GMenuLinkIterClass>);
 
     match fn {
-        get_type => || gio_sys::g_menu_link_iter_get_type(),
+        type_ => || ffi::g_menu_link_iter_get_type(),
     }
 }
 
-pub const NONE_MENU_LINK_ITER: Option<&MenuLinkIter> = None;
+impl MenuLinkIter {
+    pub const NONE: Option<&'static MenuLinkIter> = None;
+}
 
 pub trait MenuLinkIterExt: 'static {
-    fn get_name(&self) -> Option<GString>;
-
-    fn get_next(&self) -> Option<(GString, MenuModel)>;
-
-    fn get_value(&self) -> Option<MenuModel>;
-
-    fn next(&self) -> bool;
+    #[doc(alias = "g_menu_link_iter_get_next")]
+    #[doc(alias = "get_next")]
+    fn next(&self) -> Option<(glib::GString, MenuModel)>;
 }
 
 impl<O: IsA<MenuLinkIter>> MenuLinkIterExt for O {
-    fn get_name(&self) -> Option<GString> {
-        unsafe {
-            from_glib_none(gio_sys::g_menu_link_iter_get_name(
-                self.as_ref().to_glib_none().0,
-            ))
-        }
-    }
-
-    fn get_next(&self) -> Option<(GString, MenuModel)> {
+    fn next(&self) -> Option<(glib::GString, MenuModel)> {
         unsafe {
             let mut out_link = ptr::null();
             let mut value = ptr::null_mut();
-            let ret = from_glib(gio_sys::g_menu_link_iter_get_next(
+            let ret = from_glib(ffi::g_menu_link_iter_get_next(
                 self.as_ref().to_glib_none().0,
                 &mut out_link,
                 &mut value,
@@ -55,26 +44,10 @@ impl<O: IsA<MenuLinkIter>> MenuLinkIterExt for O {
             }
         }
     }
-
-    fn get_value(&self) -> Option<MenuModel> {
-        unsafe {
-            from_glib_full(gio_sys::g_menu_link_iter_get_value(
-                self.as_ref().to_glib_none().0,
-            ))
-        }
-    }
-
-    fn next(&self) -> bool {
-        unsafe {
-            from_glib(gio_sys::g_menu_link_iter_next(
-                self.as_ref().to_glib_none().0,
-            ))
-        }
-    }
 }
 
 impl fmt::Display for MenuLinkIter {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "MenuLinkIter")
+        f.write_str("MenuLinkIter")
     }
 }
