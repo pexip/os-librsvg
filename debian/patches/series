@@ -4,4 +4,3 @@ Skip-invalid_viewbox-test-on-32-bit-x86.patch
 debian/tests-Replace-a-CC-BY-SA-2.0-test-image-with-a-simpler-on.patch
 Link-librsvg-with-libpthread-fixing-a-link-failure.patch
 debian/tests-Skip-known-failing-tests-on-i386.patch
-pexip-fix-doctest.patch
