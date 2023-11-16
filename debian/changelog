@@ -1,3 +1,9 @@
+librsvg (2.54.7+dfsg-1~deb12u1pexip1) pexip-bookworm; urgency=medium
+
+  * Initial bookworm build
+
+ -- Mark Hymers <mark.hymers@pexip.com>  Thu, 16 Nov 2023 10:07:39 +0000
+
 librsvg (2.54.7+dfsg-1~deb12u1) bookworm-security; urgency=medium
 
   * Team upload
