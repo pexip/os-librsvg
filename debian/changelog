@@ -1,6 +1,8 @@
 librsvg (2.54.7+dfsg-1~deb12u1pexip1) pexip-bookworm; urgency=medium
 
   * Initial bookworm build
+  * Pull in Don-t-pass-Z-unstable-options-to-rustc-it-s-not-needed-fo.patch
+    for newer rust support.
 
  -- Mark Hymers <mark.hymers@pexip.com>  Thu, 16 Nov 2023 10:07:39 +0000
 

@@ -1,0 +1,28 @@
+From: Federico Mena Quintero <federico@gnome.org>
+Date: Thu, 6 Jul 2023 12:07:54 -0600
+Subject: Don't pass -Z unstable-options to rustc;
+ it's not needed for --include-ignored anymore
+
+Since https://github.com/rust-lang/rust/pull/80053 this is in the
+normal compiler, not only in the nightly one.
+
+(cherry picked from commit ecd3c7462fd38a3489eb512aca0d67731dcf16ae)
+
+Origin: 2.56.3
+---
+ Makefile.am | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile.am b/Makefile.am
+index 60e51ca..bd14068 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -160,7 +160,7 @@ check-local:
+ 	CARGO_TARGET_DIR=$(CARGO_TARGET_DIR)		\
+ 	LIBRSVG_BUILD_DIR=$(LIBRSVG_BUILD_DIR)		\
+ 	OUT_DIR=$(LIBRSVG_BUILD_DIR)/tests/output	\
+-	$(CARGO) --locked test $(CARGO_VERBOSE) $(CARGO_TARGET_ARGS) $(CARGO_RELEASE_ARGS) -- --include-ignored -Z unstable-options
++	$(CARGO) --locked test $(CARGO_VERBOSE) $(CARGO_TARGET_ARGS) $(CARGO_RELEASE_ARGS) -- --include-ignored
+ 
+ clean-local:
+ 	cd $(top_srcdir) &&			\
