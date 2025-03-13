@@ -1,3 +1,9 @@
+librsvg (2.54.7+dfsg-1~deb12u1+pexip24u5) pexip; urgency=medium
+
+  * Rebuild using rust 1.85
+
+ -- Huw Jones <huw@pexip.com>  Thu, 13 Mar 2025 12:13:45 +0000
+
 librsvg (2.54.7+dfsg-1~deb12u1+pexip24u4) pexip; urgency=medium
 
   * Rebuild using rust 1.79
