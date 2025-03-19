@@ -1,0 +1,4 @@
+# https://lists.debian.org/debian-devel/2024/01/msg00226.html
+invalid-profile-name-in-source-relation nogir [*]
+# Intentionally testing non-UTF-8 encodings
+national-encoding [debian/missing-sources/encoding_rs/src/test_data/*]

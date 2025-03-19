@@ -1,6 +1,7 @@
-10_rsvg-gz.patch
-thin-lto.patch
-Skip-invalid_viewbox-test-on-32-bit-x86.patch
+debian/Revert-ABI-breakage.patch
 debian/tests-Replace-a-CC-BY-SA-2.0-test-image-with-a-simpler-on.patch
-Link-librsvg-with-libpthread-fixing-a-link-failure.patch
-debian/tests-Skip-known-failing-tests-on-i386.patch
+debian/use-vendored-crates.diff
+workarounds/skip-broken-reftests.diff
+workarounds/Skip-invalid_viewbox-test-on-32-bit-x86.patch
+workarounds/tests-Skip-known-failing-tests-on-i386.patch
+workarounds/Temporarily-disable-rtl-span-reftest-which-fails-with-Pan.patch

@@ -1,0 +1,27 @@
+From: Simon McVittie <smcv@debian.org>
+Date: Mon, 11 May 2020 14:00:13 +0100
+Subject: Skip invalid_viewbox test on 32-bit x86
+
+This test appears to be failing on i386, possibly due to extended
+precision in the i387 FPU. Building with -mfpmath=sse might resolve this,
+but that isn't currently allowed in Debian due to our i386 baseline
+being 20 years old (in particular no SSE and no SSE2).
+
+Signed-off-by: Simon McVittie <smcv@debian.org>
+Forwarded: not-needed, Debian-specific workaround
+---
+ rsvg/src/aspect_ratio.rs | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/rsvg/src/aspect_ratio.rs b/rsvg/src/aspect_ratio.rs
+index 91502cf..8434a64 100644
+--- a/rsvg/src/aspect_ratio.rs
++++ b/rsvg/src/aspect_ratio.rs
+@@ -457,6 +457,7 @@ mod tests {
+     }
+ 
+     #[test]
++    #[cfg(not(target_arch = "x86"))]
+     fn invalid_viewbox() {
+         let a = AspectRatio::default();
+         let t = a.viewport_to_viewbox_transform(

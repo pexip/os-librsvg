@@ -1,9 +1,223 @@
-librsvg (2.54.7+dfsg-1~deb12u1) bookworm-security; urgency=medium
+librsvg (2.60.0+dfsg-1) unstable; urgency=medium
+
+  * New upstream release
+  * Update vendored Rust crates
+  * Update debian/source/include-binaries
+  * Update debian/README.source to mention cargo-vendor-filterer
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Wed, 19 Mar 2025 08:29:39 -0400
+
+librsvg (2.59.90+dfsg-2) unstable; urgency=medium
+
+  * Release to unstable
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 11 Feb 2025 19:31:31 -0500
+
+librsvg (2.59.90+dfsg-1) experimental; urgency=medium
+
+  * New upstream release
+  * Bump minimum meson
+  * Update debian/README.source
+  * Update missing-sources & include-binaries per debian/README.source
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 11 Feb 2025 07:46:32 -0500
+
+librsvg (2.59.2+dfsg-1) unstable; urgency=medium
+
+  * New upstream release (LP: #2089563)
+
+ -- Nathan Pratta Teodosio <nteodosio@ubuntu.com>  Tue, 26 Nov 2024 20:50:03 +0100
+
+librsvg (2.59.1+dfsg-1) unstable; urgency=medium
+
+  * New upstream release (LP: #2083259)
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 30 Sep 2024 11:02:55 -0400
+
+librsvg (2.59.0+dfsg-3) unstable; urgency=medium
+
+  * Disable libavif feature in Ubuntu since it requires dav1d
+    which is in universe
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sat, 14 Sep 2024 14:48:18 -0400
+
+librsvg (2.59.0+dfsg-2) unstable; urgency=medium
+
+  * Release to unstable (Closes: #1081578, #1067102)
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 13 Sep 2024 19:02:00 -0400
+
+librsvg (2.59.0+dfsg-1) experimental; urgency=medium
+
+  * New upstream release
+  * Refresh patches
+  * Update Standards Version to 4.7.0
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 13 Sep 2024 08:38:05 -0400
+
+librsvg (2.58.94+dfsg-3) experimental; urgency=medium
+
+  * debian/.gitignore: Correctly override upstream .gitignore
+  * missing-sources: Add missing files now that gitignore is working correctly
+  * Apply .a workaround from gnome-snapshot
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Wed, 11 Sep 2024 11:28:52 -0400
+
+librsvg (2.58.94+dfsg-2) experimental; urgency=medium
+
+  * Revert "Temporarily disable new avif feature"
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 10 Sep 2024 14:38:16 -0400
+
+librsvg (2.58.94+dfsg-1) experimental; urgency=medium
+
+  [ Alessandro Astone ]
+  * New upstream release
+  * Refresh patches
+  * Update vendored crates
+  * Update ABI patch to correctly export the symbol
+
+  [ Jeremy Bícha ]
+  * Restore level 4 symbols checking
+
+ -- Alessandro Astone <alessandro.astone@canonical.com>  Wed, 04 Sep 2024 14:54:11 -0400
+
+librsvg (2.58.93+dfsg-5) experimental; urgency=medium
+
+  * Add Depends to librsvg2-dev: libpango1.0-dev, libxml2-dev
+    (Closes: #1079729) (LP: #2077918)
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 27 Aug 2024 08:37:43 -0400
+
+librsvg (2.58.93+dfsg-4) experimental; urgency=medium
+
+  * Temporarily disable new avif feature
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Wed, 21 Aug 2024 09:20:56 -0400
+
+librsvg (2.58.93+dfsg-3) experimental; urgency=medium
+
+  * Always build docs
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 15 Aug 2024 08:06:21 -0400
+
+librsvg (2.58.93+dfsg-2) experimental; urgency=medium
+
+  * Fix arch-independent build
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 15 Aug 2024 07:04:43 -0400
+
+librsvg (2.58.93+dfsg-1) experimental; urgency=medium
+
+  * New upstream release
+  * Build with meson
+  * Update missing-sources per debian/README.source
+  * Add Build-Depends: libdav1d-dev for new avif feature
+  * debian/librsvg2-2.symbols: Add new symbols
+  * Temporarily drop symbols checking to level 1
+  * Temporarily drop installed tests since they weren't included
+    in the meson port
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Wed, 14 Aug 2024 23:33:57 -0400
+
+librsvg (2.58.0+dfsg-1) unstable; urgency=medium
+
+  [ Jeremy Bícha ]
+  * New upstream release
+
+  [ Simon McVittie ]
+  * d/control: Add ${gir:Depends} to librsvg2-dev
+  * d/control: Add ${gir:Provides} to librsvg2-dev
+  * d/rules: Fix canonicalization of tests permissions
+  * d/copyright: Fix file pattern for d/missing-sources/*
+  * d/copyright: Remove an unused stanza
+  * d/source/lintian-overrides: Silence a warning about non-UTF-8 test data
+  * d/source/lintian-overrides: nogir is a valid build-profile
+  * d/librsvg2-tests.lintian-overrides:
+    Drop unused override for fonts that are no longer bundled
+  * d/librsvg2-tests.lintian-overrides: Silence some false-positives
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 28 Mar 2024 20:58:03 -0400
+
+librsvg (2.57.92+dfsg-2) unstable; urgency=medium
 
   * Team upload
-  * Rebuild for bookworm-security
+  * d/rules: Temporarily disable a reftest that is sensitive to Pango version.
+    (Mitigates: #1065821)
+  * d/patches: Refresh patch series. No functional changes.
+  * d/patches: Update patch metadata, sort by topic
+  * d/log-reftests.py: Update to find more reftest results.
+    In the new source tree layout, some of the reftest results now land
+    in tests/output/.
+  * d/rules: Don't output the binary gvfs metadata log into buildd logs
+  * d/.gitignore, d/source/options: Exclude debian/missing-sources/**/*.a
+    from git commits and uploads
+  * d/rules: Create a missing directory if necessary
 
- -- Simon McVittie <smcv@debian.org>  Sun, 30 Jul 2023 17:13:13 +0100
+ -- Simon McVittie <smcv@debian.org>  Sun, 10 Mar 2024 14:49:33 +0000
+
+librsvg (2.57.92+dfsg-1) unstable; urgency=medium
+
+  * New upstream release
+  * Stop using dh-sequence-gnome
+  * Fix dh_fixperms handling for installed tests
+  * Release to unstable
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sat, 09 Mar 2024 11:05:30 -0500
+
+librsvg (2.57.91+dfsg-2) experimental; urgency=medium
+
+  * debian/patches/skip-broken-reftests.diff:
+    -ignore the svg1_1_filters_conv 02 and 04 tests not only on bigendian
+     architectures, they are also failing on ppc64el
+
+  [ Matthias Geiger ]
+  * Add patch to skip two failing reftests, big-endian specific failures 
+  * Stop using d/control.in and dh_gnome_clean
+  * Build-depend on libgirepository too, bump rustc version acccording
+    to upstream requirements
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Fri, 01 Mar 2024 10:30:53 +0100
+
+librsvg (2.57.91+dfsg-1) experimental; urgency=medium
+
+  [ Amin Bandali ]
+  * Change debian-branch from debian/master to debian/latest
+  [  Jeremy Bícha ]
+  * debian/watch: Update rule to watch for odd-numbered stable releases
+    too
+  [ Sebastien Bacher]
+  * debian/librsvg2-tests.install:
+    - update the directory where to install the assets to match the
+      new version and fix the autopkgtests
+  [ Matthias Geiger ]
+  * New upstream release
+  * Rebased patches for new upstream
+  * Drop unstable-rustc-options patch; applied upstream
+  * Drop thin-lto.patch, not needed anymore
+  * Updated file paths in d/rules for new upstream
+  * Vendor sources for librsvg into debian/missing-sources
+  * Whitelisted additional binaries caused due to vendoring in
+    d/s/include-binaries
+  * Add use-vendored-crates patch to build with vendored sources
+  * Amend d/rules to get librsvg to build
+  * Exclude files needed for tests from autocleaning
+  * Update install path for librsvg2-tests package
+  * Drop libgirepository1.0-dev dependency, depend on separate gir-* packages
+    with nogir build profile
+  * Remove executable bit for test svg before install
+  * Updated copyright information
+
+ -- Matthias Geiger <werdahias@riseup.net>  Wed, 28 Feb 2024 11:37:29 +0100
+
+librsvg (2.54.7+dfsg-2) unstable; urgency=medium
+
+  * Cherry-pick unstable-options patch to fix build with newer rustc
+  * Set upstream metadata field Security-Contact
+  * debian/control.in: Update Build-Depends: libfreetype6-dev -> libfreetype-dev
+  * Update standards version to 4.6.2, no changes needed
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 14 Aug 2023 14:10:15 -0400
 
 librsvg (2.54.7+dfsg-1) unstable; urgency=high
 

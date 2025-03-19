@@ -3,5 +3,5 @@
 set -e
 set -u
 
-rsvg-convert -o "$AUTOPKGTEST_TMP/example.png" tests/fixtures/api/example.svg
+rsvg-convert -o "$AUTOPKGTEST_TMP/example.png" rsvg_convert/tests/fixtures/example.svg
 file "$AUTOPKGTEST_TMP/example.png"

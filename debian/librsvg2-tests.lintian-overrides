@@ -1,6 +1,4 @@
-# These regression tests render a SVG file to PNG and compare it to a
-# reference PNG, so they need to ship their own frozen copies of the
-# necessary fonts, to avoid spurious failures caused by different font
-# versions. These fonts are not intended to be used by other packages.
-librsvg2-tests: font-outside-font-dir usr/libexec/installed-tests/RSVG/resources/*
-librsvg2-tests: duplicate-font-file usr/libexec/installed-tests/RSVG/resources/*
+# This is Rust code, it doesn't call C string functions
+hardening-no-fortify-functions [usr/libexec/installed-tests/*]
+# Test data is not documentation
+package-contains-documentation-outside-usr-share-doc [usr/libexec/rsvg/tests/*]

@@ -1,0 +1,15 @@
+[dependencies]
+block = "0.1"
+objc = "0.2"
+objc_id = "0.1"
+
+[package]
+authors = ["Steven Sheldon"]
+description = "Rust wrapper for Objective-C's Foundation framework."
+documentation = "http://ssheldon.github.io/rust-objc/objc_foundation/"
+exclude = [".gitignore"]
+keywords = ["objective-c", "osx", "ios", "cocoa", "uikit"]
+license = "MIT"
+name = "objc-foundation"
+repository = "http://github.com/SSheldon/rust-objc-foundation"
+version = "0.1.1"

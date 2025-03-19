@@ -1,14 +1,22 @@
 #!/usr/bin/python3
-# Copyright 2021-2022 Simon McVittie
+# Copyright 2021-2024 Simon McVittie
 # SPDX-License-Identifier: CC0-1.0
 
 import base64
 import sys
 from pathlib import Path
+from typing import Iterable
+
+
+def iter_output_dirs() -> Iterable[Path]:
+    for librsvg in Path('target/release/build').glob('librsvg-*'):
+        yield librsvg / 'out'
+
+    yield Path('tests/output')
+
 
 if __name__ == '__main__':
-    for librsvg in Path('target/release/build').glob('librsvg-*'):
-        d = librsvg / 'out'
+    for d in iter_output_dirs():
         for diff in d.glob('*-diff.png'):
             out = Path(str(diff)[:-len('-diff.png')] + '-out.png')
 
