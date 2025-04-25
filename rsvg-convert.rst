@@ -305,17 +305,37 @@ language tags: https://www.rfc-editor.org/info/bcp47
 USER STYLESHEET
 ---------------
 
-You can include an extra CSS stylesheet to be used when rendering an SVG
-document with the ``--stylesheet`` option. The stylesheet will have the
-CSS user origin, while styles declared in the SVG document will have the
-CSS author origin. This means your extra stylesheet's styles will
-override or augment the ones in the document, unless the document has
-``!important`` in its styles.
+You can include an extra CSS stylesheet to be used when rendering an
+SVG document with the ``--stylesheet`` option. The stylesheet will
+have the CSS **user origin**, while styles declared in the SVG document
+will have the CSS **author origin**.
 
    **rsvg-convert** **--stylesheet=**\ *extra-styles.css* *input.svg*
    **>** *output.png*
 
-For example, if this is *input.svg*:
+Please note that per the cascading rules of CSS, a user stylesheet
+does not necessarily override the styles defined in an SVG document.
+To override them reliably, you need to set your extra styles to
+``!important``.
+
+According to the CSS Cascading specification
+(`https://www.w3.org/TR/css-cascade-4/#cascade-sort`), style
+declarations have the following precedence.  Declarations from origins
+later in the list win over declarations from earlier origins:
+
+- Normal user agent declarations (librsvg's own stylesheets).
+- Normal user declarations (from your user stylesheet).
+- Normal author declarations (from the SVG document).
+- ``!important`` author declarations (from the SVG document).
+- ``!important`` user declarations (from your user stylesheet).
+- ``!important`` user agent declarations (librsvg's own stylesheets).
+
+After that, the CSS specificity and order of appearance of
+declarations get taken into account.
+
+Consider the following *input.svg*; notice how the rectangle has
+``fill="red"`` as a presentation attribute, and a ``recolorable``
+class:
 
 ::
 
@@ -324,25 +344,26 @@ For example, if this is *input.svg*:
 
       <rect class="recolorable" x="10" y="10" width="50" height="50" fill="red"/>
 
-      <text x="10" y="80" font-size="20" fill="currentColor">Hello</text>
+      <text x="10" y="80" font-size="20" fill="red">Hello</text>
     </svg>
 
 And this is *extra-styles.css*:
 
 ::
 
-    .recolorable { fill: blue; }
+    .recolorable { fill: blue !important; }
 
-    * { color: green; }
+    text { fill: green !important; }
 
 Then the PNG created by the command above will have these elements:
 
--  A blue square instead of a red one, because of the selector for the
-   the ``recolorable`` class.
+- A blue square instead of a red one, because of the selector for the
+  the ``recolorable`` class.  The ``fill: blue !important;``
+  declaration takes precendence over the ``fill="red"`` presentation
+  attribute.
 
--  Text in green, since a fill with ``currentColor`` gets substituted to
-   the value of the ``color`` property, and the ``*`` selector applies
-   to all elements.
+- Text in green, since its ``fill="red"`` gets overriden with `fill:
+  green !important`.
 
 
 OPTIONS
@@ -351,14 +372,15 @@ OPTIONS
 GENERAL OPTIONS
 ---------------
 
-``-f`` *format*, ``--format=[png, pdf, ps, eps, svg]``
+``-f`` *format*, ``--format=[png, pdf, pdf1.4, pdf1.5, pdf1.6. pdf1.7, ps, eps, svg]``
    Output format for the rendered document. Default is ``png``.
+   See the section "PDF VERSIONS" for more detail on what each one allows.
 
 ``-o`` *filename*, ``--output`` *filename*
    Specify the output filename. If unspecified, outputs to standard
    output.
 
-``-v, ``--version``
+``-v``, ``--version``
    Display what version of rsvg-convert you are running.
 
 ``--help``
@@ -472,6 +494,12 @@ MISCELLANEOUS
 ``--testing``
    For developers only: render images for librsvg's test suite.
 
+``--completion`` *shell-name*
+  Generate a script for a shell's Tab completion.  You can use ``bash``,
+  ``elvish``, ``fish``, ``powershell``, and ``zsh`` for the shell's
+  name.  Rsvg-convert will then write a suitable script to standard
+  output.
+
 
 ENVIRONMENT VARIABLES
 =====================
@@ -490,6 +518,39 @@ ENVIRONMENT VARIABLES
    to use the system's environment to detect the user's preferred
    language. This consults the environment variables ``LANGUAGE``,
    ``LC_ALL``, ``LC_MESSAGES``, and ``LANG``.
+
+PDF VERSIONS
+============
+
+The ``--format=pdf`` option makes rsvg-convert output the latest
+version of PDF that it supports.  Normally this is the right thing to
+do, except when you have tools that consume the resulting PDFs but
+only support certain versions.
+
+For example, LaTeX tools like pdflatex may issue a warning if you try
+to include a PDF image that uses a newer version than the surrounding
+document, similar to
+
+  *PDF inclusion: found PDF version <1.7> but at most version <1.5> allowed*
+
+In this case, you may need to restrict the PDF version that
+rsvg-convert produces.  Instead of ``--format=pdf``, you can use the
+following:
+
+``--format=pdf1.4``
+  Does not use PDF object streams; files may be bigger as they allow for less compression.
+
+``--format=pdf1.5``
+  Allows creating PDFs where text can be selected and searched.
+
+``--format=pdf1.6``
+  No special behavior.
+
+``--format=pdf1.7``
+  Allows including UTF-8 filenames in link objects reliably.
+
+If you are using LaTeX tooling, you may want to research options like
+``\pdfminorversion=6``.
 
 
 MORE INFORMATION
