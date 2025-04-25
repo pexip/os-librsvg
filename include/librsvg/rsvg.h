@@ -1,7 +1,7 @@
 /* -*- Mode: C; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* vim: set sw=4 sts=4 expandtab: */
 /*
-   rsvg.h: SAX-based renderer for SVG files into a GdkPixbuf.
+   rsvg.h: SAX-based renderer for SVG files using Cairo or GDK-Pixbuf.
 
    Copyright (C) 2000 Eazel, Inc.
 
@@ -29,9 +29,6 @@
 
 #include <glib-object.h>
 #include <gio/gio.h>
-
-#include <cairo.h>
-#include <gdk-pixbuf/gdk-pixbuf.h>
 
 G_BEGIN_DECLS
 
@@ -207,6 +204,10 @@ GType rsvg_error_get_type (void);
  * [method@Rsvg.Handle.set_dpi_x_y] on an [class@Rsvg.Handle] to set the DPI before rendering
  * it.
  *
+ * For historical reasons, the default DPI is 90.  Current CSS assumes a default DPI of 96, so
+ * you may want to set the DPI of a [class@Rsvg.Handle] immediately after creating it with
+ * [method@Rsvg.Handle.set_dpi].
+ *
  * # Rendering
  *
  * The preferred way to render a whole SVG document is to use
@@ -255,12 +256,18 @@ GType rsvg_error_get_type (void);
  * RsvgHandle:dpi-x:
  *
  * Horizontal resolution in dots per inch.
+ *
+ * The default is 90.  Note that current CSS assumes a default of 96,
+ * so you may want to set it to `96.0` before rendering the handle.
  */
 
 /**
  * RsvgHandle:dpi-y:
  *
  * Horizontal resolution in dots per inch.
+ *
+ * The default is 90.  Note that current CSS assumes a default of 96,
+ * so you may want to set it to `96.0` before rendering the handle.
  */
 
 /**
@@ -607,60 +614,6 @@ RSVG_DEPRECATED_FOR(rsvg_handle_read_stream_sync)
 gboolean rsvg_handle_close (RsvgHandle *handle, GError **error);
 
 /**
- * rsvg_handle_get_pixbuf:
- * @handle: An [class@Rsvg.Handle]
- *
- * Returns the pixbuf loaded by @handle.  The pixbuf returned will be reffed, so
- * the caller of this function must assume that ref.
- *
- * API ordering: This function must be called on a fully-loaded @handle.  See
- * the section "[API ordering](class.Handle.html#api-ordering)" for details.
- *
- * This function depends on the [class@Rsvg.Handle]'s dots-per-inch value (DPI) to compute the
- * "natural size" of the document in pixels, so you should call [method@Rsvg.Handle.set_dpi]
- * beforehand.
- *
- * Returns: (transfer full) (nullable): A pixbuf, or %NULL on error.
- * during rendering.
- **/
-RSVG_API
-GdkPixbuf *rsvg_handle_get_pixbuf (RsvgHandle *handle);
-
-/**
- * rsvg_handle_get_pixbuf_sub:
- * @handle: An #RsvgHandle
- * @id: (nullable): An element's id within the SVG, starting with "#" (a single
- * hash character), for example, `#layer1`.  This notation corresponds to a
- * URL's fragment ID.  Alternatively, pass `NULL` to use the whole SVG.
- *
- * Creates a `GdkPixbuf` the same size as the entire SVG loaded into @handle, but
- * only renders the sub-element that has the specified @id (and all its
- * sub-sub-elements recursively).  If @id is `NULL`, this function renders the
- * whole SVG.
- *
- * This function depends on the [class@Rsvg.Handle]'s dots-per-inch value (DPI) to compute the
- * "natural size" of the document in pixels, so you should call [method@Rsvg.Handle.set_dpi]
- * beforehand.
- *
- * If you need to render an image which is only big enough to fit a particular
- * sub-element of the SVG, consider using [method@Rsvg.Handle.render_element].
- *
- * Element IDs should look like an URL fragment identifier; for example, pass
- * `#foo` (hash `foo`) to get the geometry of the element that
- * has an `id="foo"` attribute.
- *
- * API ordering: This function must be called on a fully-loaded @handle.  See
- * the section "[API ordering](class.Handle.html#api-ordering)" for details.
- *
- * Returns: (transfer full) (nullable): a pixbuf, or `NULL` if an error occurs
- * during rendering.
- *
- * Since: 2.14
- **/
-RSVG_API
-GdkPixbuf *rsvg_handle_get_pixbuf_sub (RsvgHandle *handle, const char *id);
-
-/**
  * rsvg_handle_get_base_uri: (attributes org.gtk.Method.get_property=base-uri)
  * @handle: A [class@Rsvg.Handle]
  *
@@ -798,9 +751,22 @@ gboolean rsvg_handle_has_sub (RsvgHandle *handle, const char *id);
  * @RSVG_UNIT_MM: millimeters
  * @RSVG_UNIT_PT: points, or 1/72 inch
  * @RSVG_UNIT_PC: picas, or 1/6 inch (12 points)
+ * @RSVG_UNIT_CH:
  *
  * Units for the `RsvgLength` struct.  These have the same meaning as [CSS length
  * units](https://www.w3.org/TR/CSS21/syndata.html#length-units).
+ *
+ * If you test for the values of this enum, please note that librsvg may add other units in the future
+ * as its support for CSS improves.  Please make your code handle unknown units gracefully (e.g. with
+ * a `default` case in a `switch()` statement).
+ *
+ */
+/**
+ * RSVG_UNIT_CH:
+ *
+ * advance measure of a '0' character (depends on the text orientation)
+ *
+ * Since: 2.58
  */
 typedef enum {
     RSVG_UNIT_PERCENT,
@@ -811,7 +777,8 @@ typedef enum {
     RSVG_UNIT_CM,
     RSVG_UNIT_MM,
     RSVG_UNIT_PT,
-    RSVG_UNIT_PC
+    RSVG_UNIT_PC,
+    RSVG_UNIT_CH,
 } RsvgUnit;
 
 /**
@@ -918,6 +885,10 @@ void rsvg_handle_get_intrinsic_dimensions (RsvgHandle *handle,
  * value set previously with [method@Rsvg.Handle.set_dpi].  For font-based units, this function
  * uses the computed value of the `font-size` property for the toplevel
  * `<svg>` element.  In those cases, this function returns `TRUE`.
+ *
+ * For historical reasons, the default DPI is 90.  Current CSS assumes a default DPI of 96, so
+ * you may want to set the DPI of a [class@Rsvg.Handle] immediately after creating it with
+ * [method@Rsvg.Handle.set_dpi].
  *
  * This function is not able to extract the size in pixels directly from the intrinsic
  * dimensions of the SVG document if the `width` or
@@ -1186,6 +1157,29 @@ gboolean rsvg_handle_set_stylesheet (RsvgHandle   *handle,
                                      gsize         css_len,
                                      GError      **error);
 
+/**
+ * rsvg_handle_set_cancellable_for_rendering:
+ * @handle: A [class@Rsvg.Handle].
+ * @cancellable: A [class@Gio.Cancellable] or `NULL`.
+ *
+ * Sets a cancellable object that can be used to interrupt rendering
+ * while the handle is being rendered in another thread.  For example,
+ * you can set a cancellable from your main thread, spawn a thread to
+ * do the rendering, and interrupt the rendering from the main thread
+ * by calling g_cancellable_cancel().
+ *
+ * If rendering is interrupted, the corresponding call to
+ * rsvg_handle_render_document() (or any of the other rendering
+ * functions) will return an error with domain `G_IO_ERROR`, and code
+ * `G_IO_ERROR_CANCELLED`.
+ *
+ * Since: 2.59.0
+ */
+RSVG_API
+void rsvg_handle_set_cancellable_for_rendering (RsvgHandle   *handle,
+                                                GCancellable *cancellable);
+
+
 #ifndef __GTK_DOC_IGNORE__
 /**
  * rsvg_handle_internal_set_testing:
@@ -1284,123 +1278,6 @@ void rsvg_handle_set_size_callback (RsvgHandle    *handle,
                                     gpointer       user_data,
                                     GDestroyNotify user_data_destroy);
 
-/* GdkPixbuf convenience API */
-
-/**
- * rsvg-pixbuf:
- *
- * Years ago, GNOME and GTK used the gdk-pixbuf library as a general mechanism to load
- * raster images into memory (PNG, JPEG, etc.) and pass them around.  The general idiom
- * was, "load this image file and give me a `GdkPixbuf` object", which is basically a pixel
- * buffer.  Librsvg supports this kind of interface to load and render SVG documents, but
- * it is deprecated in favor of rendering to Cairo contexts.
- */
-
-/**
- * rsvg_pixbuf_from_file:
- * @filename: A file name
- * @error: return location for a `GError`
- * 
- * Loads a new `GdkPixbuf` from @filename and returns it.  The caller must
- * assume the reference to the reurned pixbuf. If an error occurred, @error is
- * set and `NULL` is returned.
- * 
- * Returns: (transfer full) (nullable): A pixbuf, or %NULL on error.
- * Deprecated: Use [ctor@Rsvg.Handle.new_from_file] and [method@Rsvg.Handle.render_document] instead.
- **/
-RSVG_DEPRECATED
-GdkPixbuf *rsvg_pixbuf_from_file (const gchar *filename,
-                                  GError     **error);
-
-/**
- * rsvg_pixbuf_from_file_at_zoom:
- * @filename: A file name
- * @x_zoom: The horizontal zoom factor
- * @y_zoom: The vertical zoom factor
- * @error: return location for a `GError`
- * 
- * Loads a new `GdkPixbuf` from @filename and returns it.  This pixbuf is scaled
- * from the size indicated by the file by a factor of @x_zoom and @y_zoom.  The
- * caller must assume the reference to the returned pixbuf. If an error
- * occurred, @error is set and `NULL` is returned.
- * 
- * Returns: (transfer full) (nullable): A pixbuf, or %NULL on error.
- * Deprecated: Use [ctor@Rsvg.Handle.new_from_file] and [method@Rsvg.Handle.render_document] instead.
- **/
-RSVG_DEPRECATED
-GdkPixbuf *rsvg_pixbuf_from_file_at_zoom (const gchar *filename,
-                                          double       x_zoom,
-                                          double       y_zoom,
-                                          GError     **error);
-
-/**
- * rsvg_pixbuf_from_file_at_size:
- * @filename: A file name
- * @width: The new width, or -1
- * @height: The new height, or -1
- * @error: return location for a `GError`
- * 
- * Loads a new `GdkPixbuf` from @filename and returns it.  This pixbuf is scaled
- * from the size indicated to the new size indicated by @width and @height.  If
- * both of these are -1, then the default size of the image being loaded is
- * used.  The caller must assume the reference to the returned pixbuf. If an
- * error occurred, @error is set and `NULL` is returned.
- * 
- * Returns: (transfer full) (nullable): A pixbuf, or %NULL on error.
- * Deprecated: Use [ctor@Rsvg.Handle.new_from_file] and [method@Rsvg.Handle.render_document] instead.
- **/
-RSVG_DEPRECATED
-GdkPixbuf *rsvg_pixbuf_from_file_at_size (const gchar *filename,
-                                          gint         width,
-                                          gint         height,
-                                          GError     **error);
-
-/**
- * rsvg_pixbuf_from_file_at_max_size:
- * @filename: A file name
- * @max_width: The requested max width
- * @max_height: The requested max height
- * @error: return location for a `GError`
- * 
- * Loads a new `GdkPixbuf` from @filename and returns it.  This pixbuf is uniformly
- * scaled so that the it fits into a rectangle of size `max_width * max_height`. The
- * caller must assume the reference to the returned pixbuf. If an error occurred,
- * @error is set and `NULL` is returned.
- * 
- * Returns: (transfer full) (nullable): A pixbuf, or %NULL on error.
- * Deprecated: Use [ctor@Rsvg.Handle.new_from_file] and [method@Rsvg.Handle.render_document] instead.
- **/
-RSVG_DEPRECATED
-GdkPixbuf *rsvg_pixbuf_from_file_at_max_size (const gchar *filename,
-                                              gint         max_width,
-                                              gint         max_height,
-                                              GError     **error);
-/**
- * rsvg_pixbuf_from_file_at_zoom_with_max:
- * @filename: A file name
- * @x_zoom: The horizontal zoom factor
- * @y_zoom: The vertical zoom factor
- * @max_width: The requested max width
- * @max_height: The requested max height
- * @error: return location for a `GError`
- * 
- * Loads a new `GdkPixbuf` from @filename and returns it.  This pixbuf is scaled
- * from the size indicated by the file by a factor of @x_zoom and @y_zoom. If the
- * resulting pixbuf would be larger than max_width/max_heigh it is uniformly scaled
- * down to fit in that rectangle. The caller must assume the reference to the
- * returned pixbuf. If an error occurred, @error is set and `NULL` is returned.
- * 
- * Returns: (transfer full) (nullable): A pixbuf, or %NULL on error.
- * Deprecated: Use [ctor@Rsvg.Handle.new_from_file] and [method@Rsvg.Handle.render_document] instead.
- **/
-RSVG_DEPRECATED
-GdkPixbuf *rsvg_pixbuf_from_file_at_zoom_with_max (const gchar *filename,
-                                                   double       x_zoom,
-                                                   double       y_zoom,
-                                                   gint         max_width,
-                                                   gint         max_height,
-                                                   GError     **error);
-
 /**
  * rsvg_handle_get_title:
  * @handle: An [class@Rsvg.Handle]
@@ -1450,6 +1327,10 @@ G_END_DECLS
 #include <librsvg/rsvg-features.h>
 #include <librsvg/rsvg-version.h>
 #include <librsvg/rsvg-cairo.h>
+
+#if LIBRSVG_HAVE_PIXBUF
+#include <librsvg/rsvg-pixbuf.h>
+#endif
 
 #undef __RSVG_RSVG_H_INSIDE__
 

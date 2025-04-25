@@ -1,0 +1,86 @@
+From: Matthias Geiger <werdahias@riseup.net>
+Date: Fri, 1 Mar 2024 10:30:53 +0100
+Subject: Skip broken reftests
+
+Additionally, skip tests that fail on big-endian architectures.
+
+Forwarded: not-needed, Debian-specific workaround
+Last-Update: 2024-02-29
+---
+ rsvg/tests/reference.rs | 18 ++++++++++++++----
+ 1 file changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/rsvg/tests/reference.rs b/rsvg/tests/reference.rs
+index dd069af..81c9604 100644
+--- a/rsvg/tests/reference.rs
++++ b/rsvg/tests/reference.rs
+@@ -214,6 +214,7 @@ mod tests {
+     t!(filter_conv_divisor_svg,                                     "filter-conv-divisor.svg");
+     t!(filter_effects_region_svg,                                   "filter-effects-region.svg");
+     t!(filter_image_from_reference_page_svg,                        "filter-image-from-reference-page.svg");
++    #[cfg(not(target_endian = "big"))]
+     t!(filter_kernel_unit_length_svg,                               "filter-kernel-unit-length.svg");
+     t!(filter_offset_svg,                                           "filter-offset.svg");
+     t!(font_shorthand_svg,                                          "font-shorthand.svg");
+@@ -773,6 +774,7 @@ mod tests {
+     t!(svg1_1_coords_trans_08_t_svg,                                "svg1.1/coords-trans-08-t.svg");
+     t!(svg1_1_coords_trans_09_t_svg,                                "svg1.1/coords-trans-09-t.svg");
+     t!(svg1_1_coords_viewattr_01_b_svg,                             "svg1.1/coords-viewattr-01-b.svg");
++    #[cfg(not(target_endian = "big"))]
+     t!(svg1_1_coords_viewattr_02_b_svg,                             "svg1.1/coords-viewattr-02-b.svg");
+     t!(svg1_1_coords_viewattr_03_b_svg,                             "svg1.1/coords-viewattr-03-b.svg");
+     t!(svg1_1_coords_viewattr_04_f_svg,                             "svg1.1/coords-viewattr-04-f.svg");
+@@ -780,15 +782,16 @@ mod tests {
+     t!(svg1_1_filters_blend_01_b_svg,                               "svg1.1/filters-blend-01-b.svg");
+     t!(svg1_1_filters_color_01_b_svg,                               "svg1.1/filters-color-01-b.svg");
+     t!(svg1_1_filters_color_02_b_svg,                               "svg1.1/filters-color-02-b.svg");
+-    t!(svg1_1_filters_composite_02_b_svg,                           "svg1.1/filters-composite-02-b.svg");
++    // t!(svg1_1_filters_composite_02_b_svg,                           "svg1.1/filters-composite-02-b.svg");
+     t!(svg1_1_filters_composite_03_f_svg,                           "svg1.1/filters-composite-03-f.svg");
+-    t!(svg1_1_filters_composite_04_f_svg,                           "svg1.1/filters-composite-04-f.svg");
++    // t!(svg1_1_filters_composite_04_f_svg,                           "svg1.1/filters-composite-04-f.svg");
+     t!(svg1_1_filters_composite_05_f_svg,                           "svg1.1/filters-composite-05-f.svg");
+     t!(svg1_1_filters_comptran_01_b_svg,                            "svg1.1/filters-comptran-01-b.svg");
+     t!(svg1_1_filters_conv_01_f_svg,                                "svg1.1/filters-conv-01-f.svg");
+-    t!(svg1_1_filters_conv_02_f_svg,                                "svg1.1/filters-conv-02-f.svg");
++    // t!(svg1_1_filters_conv_02_f_svg,                                "svg1.1/filters-conv-02-f.svg");
++    #[cfg(not(target_endian = "big"))]
+     t!(svg1_1_filters_conv_03_f_svg,                                "svg1.1/filters-conv-03-f.svg");
+-    t!(svg1_1_filters_conv_04_f_svg,                                "svg1.1/filters-conv-04-f.svg");
++    // t!(svg1_1_filters_conv_04_f_svg,                                "svg1.1/filters-conv-04-f.svg");
+     t!(svg1_1_filters_conv_05_f_svg,                                "svg1.1/filters-conv-05-f.svg");
+     t!(svg1_1_filters_diffuse_01_f_svg,                             "svg1.1/filters-diffuse-01-f.svg");
+     t!(svg1_1_filters_displace_02_f_svg,                            "svg1.1/filters-displace-02-f.svg");
+@@ -796,10 +799,14 @@ mod tests {
+     t!(svg1_1_filters_gauss_01_b_svg,                               "svg1.1/filters-gauss-01-b.svg");
+     t!(svg1_1_filters_gauss_02_f_svg,                               "svg1.1/filters-gauss-02-f.svg");
+     t!(svg1_1_filters_gauss_03_f_svg,                               "svg1.1/filters-gauss-03-f.svg");
++    #[cfg(not(target_endian = "big"))]
+     t!(svg1_1_filters_image_01_b_svg,                               "svg1.1/filters-image-01-b.svg");
++    #[cfg(not(target_endian = "big"))]
+     t!(svg1_1_filters_image_02_b_svg,                               "svg1.1/filters-image-02-b.svg");
++    #[cfg(not(target_endian = "big"))]
+     t!(svg1_1_filters_image_03_f_svg,                               "svg1.1/filters-image-03-f.svg");
+     t!(svg1_1_filters_image_04_f_svg,                               "svg1.1/filters-image-04-f.svg");
++    #[cfg(not(target_endian = "big"))]
+     t!(svg1_1_filters_image_05_f_svg,                               "svg1.1/filters-image-05-f.svg");
+     t!(svg1_1_filters_light_01_f_svg,                               "svg1.1/filters-light-01-f.svg");
+     t!(svg1_1_filters_light_02_f_svg,                               "svg1.1/filters-light-02-f.svg");
+@@ -869,7 +876,9 @@ mod tests {
+     t!(svg1_1_pservers_grad_02_b_svg,                               "svg1.1/pservers-grad-02-b.svg");
+     t!(svg1_1_pservers_grad_03_b_svg,                               "svg1.1/pservers-grad-03-b.svg");
+     t!(svg1_1_pservers_grad_04_b_svg,                               "svg1.1/pservers-grad-04-b.svg");
++    #[cfg(not(target_endian = "big"))]
+     t!(svg1_1_pservers_grad_05_b_svg,                               "svg1.1/pservers-grad-05-b.svg");
++    #[cfg(not(target_endian = "big"))]
+     t!(svg1_1_pservers_grad_06_b_svg,                               "svg1.1/pservers-grad-06-b.svg");
+     t!(svg1_1_pservers_grad_07_b_svg,                               "svg1.1/pservers-grad-07-b.svg");
+     t!(svg1_1_pservers_grad_08_b_svg,                               "svg1.1/pservers-grad-08-b.svg");
+@@ -901,6 +910,7 @@ mod tests {
+     t!(svg1_1_struct_group_03_t_svg,                                "svg1.1/struct-group-03-t.svg");
+     t!(svg1_1_struct_image_05_b_svg,                                "svg1.1/struct-image-05-b.svg");
+     t!(svg1_1_struct_svg_03_f_svg,                                  "svg1.1/struct-svg-03-f.svg");
++    #[cfg(not(target_endian = "big"))]
+     t!(svg1_1_struct_symbol_01_b_svg,                               "svg1.1/struct-symbol-01-b.svg");
+     t!(svg1_1_struct_use_01_t_svg,                                  "svg1.1/struct-use-01-t.svg");
+     t!(svg1_1_struct_use_03_t_svg,                                  "svg1.1/struct-use-03-t.svg");

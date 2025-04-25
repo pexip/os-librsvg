@@ -1,0 +1,31 @@
+Re-vendoring librsvg
+====================
+
+Upstream stopped vendoring their releases. For now, we re-vendor
+the crates under debian/missing-sources so we can build the package.
+To do so, run the following steps for a new upstream release:
+
+$ rm -rf debian/missing-sources
+$ mkdir debian/missing-sources
+$ cargo vendor-filterer --platform='*-*-linux-gnu' --platform '*-*-linux-gnueabi' --all-features debian/missing-sources/
+$ git add -f debian/missing-sources
+$ git commit -m "Update vendored Rust crates"
+$ git reset --hard
+
+$ rm debian/source/include-binaries
+$ dpkg-source --include-binaries -b .
+$ git add debian/source/include-binaries
+$ git commit -m "Update debian/source/include-binaries"
+$ git reset --hard && git clean -fdx
+
+This requires rust-cargo-vendor-filterer which as of March 2025 is packaged
+for Ubuntu but not yet for Debian. You can either use the Ubuntu package or
+replace the vendor-filterer command with a simple
+$ cargo vendor debian/missing-sources/
+
+TODO
+====
+- Specify specific platforms for vendor-filterer
+  Does this make a difference?
+- Identify the specific features we need instead of all-features
+- Script the revendoring commands

@@ -5,26 +5,26 @@ Subject: tests: Replace a CC-BY-SA-2.0 test image with a simpler one
 It isn't clear whether CC-BY-SA-2.0 is considered to be Free Software by
 Debian (version 1.0 isn't, version 3.0 is).
 
-Forwarded: no
+Forwarded: not-needed, Debian-specific policy
 ---
- tests/src/cmdline/rsvg_convert.rs | 4 ++--
+ rsvg_convert/tests/rsvg_convert.rs | 4 ++--
  1 file changed, 2 insertions(+), 2 deletions(-)
 
-diff --git a/tests/src/cmdline/rsvg_convert.rs b/tests/src/cmdline/rsvg_convert.rs
-index f5c85c8..2ae794c 100644
---- a/tests/src/cmdline/rsvg_convert.rs
-+++ b/tests/src/cmdline/rsvg_convert.rs
-@@ -856,11 +856,11 @@ fn background_color_option_invalid_color_yields_error() {
+diff --git a/rsvg_convert/tests/rsvg_convert.rs b/rsvg_convert/tests/rsvg_convert.rs
+index a0e67b4..6e0fdc0 100644
+--- a/rsvg_convert/tests/rsvg_convert.rs
++++ b/rsvg_convert/tests/rsvg_convert.rs
+@@ -907,11 +907,11 @@ fn background_color_option_invalid_color_yields_error() {
  
  #[test]
  fn background_color_is_rendered() {
--    RsvgConvert::new_with_input("tests/fixtures/cmdline/gimp-wilber.svg")
-+    RsvgConvert::new_with_input("tests/fixtures/cmdline/a-link.svg")
+-    RsvgConvert::new_with_input("tests/fixtures/gimp-wilber.svg")
++    RsvgConvert::new_with_input("tests/fixtures/a-link.svg")
          .arg("--background-color=purple")
          .assert()
          .success()
--        .stdout(file::is_png().with_contents("tests/fixtures/cmdline/gimp-wilber-ref.png"));
-+        .stdout(file::is_png().with_contents("tests/fixtures/cmdline/a-link-purple-bg.png"));
+-        .stdout(file::is_png().with_contents("tests/fixtures/gimp-wilber-ref.png"));
++        .stdout(file::is_png().with_contents("tests/fixtures/a-link-purple-bg.png"));
  }
  
  #[test]

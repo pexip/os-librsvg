@@ -1,5 +1,7 @@
+# Configuration for https://gitlab.gnome.org/GNOME/gi-docgen
+
 [library]
-version = "2.54.7"
+version = "2.60.0"
 description = "Librsvg - load and render SVG documents"
 authors = "Librsvg developers"
 license = "LGPL-2.1-or-later"
@@ -8,6 +10,7 @@ repository_url = "https://gitlab.gnome.org/GNOME/librsvg.git"
 website_url = "https://wiki.gnome.org/Projects/LibRsvg"
 devhelp = true
 search_index = true
+logo_url = "librsvg-r.svg"
 
 [source-location]
 # The base URL for the web UI
@@ -25,6 +28,9 @@ content_files = [
   "overview.md",
   "recommendations.md",
   "migrating.md"
+]
+content_images = [
+  "librsvg-r.svg"
 ]
 urlmap_file = "urlmap.js"
 

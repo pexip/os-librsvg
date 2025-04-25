@@ -1,0 +1,757 @@
+use dav1d_sys::*;
+
+pub use av_data::pixel;
+use std::ffi::c_void;
+use std::fmt;
+use std::i64;
+use std::mem;
+use std::ptr;
+use std::sync::Arc;
+
+/// Error enum return by various `dav1d` operations.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Error {
+    /// Try again.
+    ///
+    /// If this is returned by [`Decoder::send_data`] or [`Decoder::send_pending_data`] then there
+    /// are decoded frames pending that first have to be retrieved via [`Decoder::get_picture`]
+    /// before processing any further pending data.
+    ///
+    /// If this is returned by [`Decoder::get_picture`] then no decoded frames are pending
+    /// currently and more data needs to be sent to the decoder.
+    Again,
+    /// Invalid argument.
+    ///
+    /// One of the arguments passed to the function was invalid.
+    InvalidArgument,
+    /// Not enough memory.
+    ///
+    /// Not enough memory is currently available for performing this operation.
+    NotEnoughMemory,
+    /// Unsupported bitstream.
+    ///
+    /// The provided bitstream is not supported by `dav1d`.
+    UnsupportedBitstream,
+    /// Unknown error.
+    UnknownError(i32),
+}
+
+impl From<i32> for Error {
+    fn from(err: i32) -> Self {
+        assert!(err < 0);
+
+        match err {
+            DAV1D_ERR_AGAIN => Error::Again,
+            DAV1D_ERR_INVAL => Error::InvalidArgument,
+            DAV1D_ERR_NOMEM => Error::NotEnoughMemory,
+            DAV1D_ERR_NOPROTOOPT => Error::UnsupportedBitstream,
+            _ => Error::UnknownError(err),
+        }
+    }
+}
+
+impl Error {
+    pub const fn is_again(&self) -> bool {
+        matches!(self, Error::Again)
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Error::Again => write!(fmt, "Try again"),
+            Error::InvalidArgument => write!(fmt, "Invalid argument"),
+            Error::NotEnoughMemory => write!(fmt, "Not enough memory available"),
+            Error::UnsupportedBitstream => write!(fmt, "Unsupported bitstream"),
+            Error::UnknownError(err) => write!(fmt, "Unknown error {}", err),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+/// Settings for creating a new [`Decoder`] instance.
+/// See documentation for native `Dav1dSettings` struct.
+#[derive(Debug)]
+pub struct Settings {
+    dav1d_settings: Dav1dSettings,
+}
+
+unsafe impl Send for Settings {}
+unsafe impl Sync for Settings {}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Settings {
+    /// Creates a new [`Settings`] instance with default settings.
+    pub fn new() -> Self {
+        unsafe {
+            let mut dav1d_settings = mem::MaybeUninit::uninit();
+
+            dav1d_default_settings(dav1d_settings.as_mut_ptr());
+
+            Self {
+                dav1d_settings: dav1d_settings.assume_init(),
+            }
+        }
+    }
+
+    pub fn set_n_threads(&mut self, n_threads: u32) {
+        self.dav1d_settings.n_threads = n_threads as i32;
+    }
+
+    pub fn get_n_threads(&self) -> u32 {
+        self.dav1d_settings.n_threads as u32
+    }
+
+    pub fn set_max_frame_delay(&mut self, max_frame_delay: u32) {
+        self.dav1d_settings.max_frame_delay = max_frame_delay as i32;
+    }
+
+    pub fn get_max_frame_delay(&self) -> u32 {
+        self.dav1d_settings.max_frame_delay as u32
+    }
+
+    pub fn set_apply_grain(&mut self, apply_grain: bool) {
+        self.dav1d_settings.apply_grain = i32::from(apply_grain);
+    }
+
+    pub fn get_apply_grain(&self) -> bool {
+        self.dav1d_settings.apply_grain != 0
+    }
+
+    pub fn set_operating_point(&mut self, operating_point: u32) {
+        self.dav1d_settings.operating_point = operating_point as i32;
+    }
+
+    pub fn get_operating_point(&self) -> u32 {
+        self.dav1d_settings.operating_point as u32
+    }
+
+    pub fn set_all_layers(&mut self, all_layers: bool) {
+        self.dav1d_settings.all_layers = i32::from(all_layers);
+    }
+
+    pub fn get_all_layers(&self) -> bool {
+        self.dav1d_settings.all_layers != 0
+    }
+
+    pub fn set_frame_size_limit(&mut self, frame_size_limit: u32) {
+        self.dav1d_settings.frame_size_limit = frame_size_limit;
+    }
+
+    pub fn get_frame_size_limit(&self) -> u32 {
+        self.dav1d_settings.frame_size_limit
+    }
+
+    pub fn set_strict_std_compliance(&mut self, strict_std_compliance: bool) {
+        self.dav1d_settings.strict_std_compliance = i32::from(strict_std_compliance);
+    }
+
+    pub fn get_strict_std_compliance(&self) -> bool {
+        self.dav1d_settings.strict_std_compliance != 0
+    }
+
+    pub fn set_output_invisible_frames(&mut self, output_invisible_frames: bool) {
+        self.dav1d_settings.output_invisible_frames = i32::from(output_invisible_frames);
+    }
+
+    pub fn get_output_invisible_frames(&self) -> bool {
+        self.dav1d_settings.output_invisible_frames != 0
+    }
+
+    pub fn set_inloop_filters(&mut self, inloop_filters: InloopFilterType) {
+        self.dav1d_settings.inloop_filters = inloop_filters.bits();
+    }
+
+    pub fn get_inloop_filters(&self) -> InloopFilterType {
+        InloopFilterType::from_bits_truncate(self.dav1d_settings.inloop_filters)
+    }
+
+    pub fn set_decode_frame_type(&mut self, decode_frame_type: DecodeFrameType) {
+        self.dav1d_settings.decode_frame_type = decode_frame_type.into();
+    }
+
+    pub fn get_decode_frame_type(&self) -> DecodeFrameType {
+        DecodeFrameType::try_from(self.dav1d_settings.decode_frame_type)
+            .expect("Invalid Dav1dDecodeFrameType")
+    }
+}
+
+bitflags::bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+    pub struct InloopFilterType: u32 {
+        const DEBLOCK = DAV1D_INLOOPFILTER_DEBLOCK;
+        const CDEF = DAV1D_INLOOPFILTER_CDEF;
+        const RESTORATION = DAV1D_INLOOPFILTER_RESTORATION;
+    }
+}
+
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
+pub enum DecodeFrameType {
+    #[default]
+    All,
+    Reference,
+    Intra,
+    Key,
+}
+
+impl TryFrom<u32> for DecodeFrameType {
+    type Error = TryFromEnumError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            DAV1D_DECODEFRAMETYPE_ALL => Ok(DecodeFrameType::All),
+            DAV1D_DECODEFRAMETYPE_REFERENCE => Ok(DecodeFrameType::Reference),
+            DAV1D_DECODEFRAMETYPE_INTRA => Ok(DecodeFrameType::Intra),
+            DAV1D_DECODEFRAMETYPE_KEY => Ok(DecodeFrameType::Key),
+            _ => Err(TryFromEnumError(())),
+        }
+    }
+}
+
+impl From<DecodeFrameType> for u32 {
+    fn from(v: DecodeFrameType) -> u32 {
+        match v {
+            DecodeFrameType::All => DAV1D_DECODEFRAMETYPE_ALL,
+            DecodeFrameType::Reference => DAV1D_DECODEFRAMETYPE_REFERENCE,
+            DecodeFrameType::Intra => DAV1D_DECODEFRAMETYPE_INTRA,
+            DecodeFrameType::Key => DAV1D_DECODEFRAMETYPE_KEY,
+        }
+    }
+}
+
+/// The error type returned when a conversion from a C enum fails.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct TryFromEnumError(());
+
+impl std::fmt::Display for TryFromEnumError {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fmt.write_str("Invalid enum value")
+    }
+}
+
+impl From<std::convert::Infallible> for TryFromEnumError {
+    fn from(x: std::convert::Infallible) -> TryFromEnumError {
+        match x {}
+    }
+}
+
+impl std::error::Error for TryFromEnumError {}
+
+/// A `dav1d` decoder instance.
+#[derive(Debug)]
+pub struct Decoder {
+    dec: ptr::NonNull<Dav1dContext>,
+    pending_data: Option<Dav1dData>,
+}
+
+unsafe extern "C" fn release_wrapped_data<T: AsRef<[u8]>>(_data: *const u8, cookie: *mut c_void) {
+    let buf = Box::from_raw(cookie as *mut T);
+    drop(buf);
+}
+
+impl Decoder {
+    /// Creates a new [`Decoder`] instance with given [`Settings`].
+    pub fn with_settings(settings: &Settings) -> Result<Self, Error> {
+        unsafe {
+            let mut dec = mem::MaybeUninit::uninit();
+
+            let ret = dav1d_open(dec.as_mut_ptr(), &settings.dav1d_settings);
+
+            if ret < 0 {
+                return Err(Error::from(ret));
+            }
+
+            Ok(Decoder {
+                dec: ptr::NonNull::new(dec.assume_init()).unwrap(),
+                pending_data: None,
+            })
+        }
+    }
+
+    /// Creates a new [`Decoder`] instance with the default settings.
+    pub fn new() -> Result<Self, Error> {
+        Self::with_settings(&Settings::default())
+    }
+
+    /// Flush the decoder.
+    ///
+    /// This flushes all delayed frames in the decoder and clears the internal decoder state.
+    ///
+    /// All currently pending frames are available afterwards via [`Decoder::get_picture`].
+    pub fn flush(&mut self) {
+        unsafe {
+            dav1d_flush(self.dec.as_ptr());
+            if let Some(mut pending_data) = self.pending_data.take() {
+                dav1d_data_unref(&mut pending_data);
+            }
+        }
+    }
+
+    /// Send new AV1 data to the decoder.
+    ///
+    /// After this returned `Ok(())` or `Err([Error::Again])` there might be decoded frames
+    /// available via [`Decoder::get_picture`].
+    ///
+    /// # Panics
+    ///
+    /// If a previous call returned [`Error::Again`] then this must not be called again until
+    /// [`Decoder::send_pending_data`] has returned `Ok(())`.
+    pub fn send_data<T: AsRef<[u8]> + Send + 'static>(
+        &mut self,
+        buf: T,
+        offset: Option<i64>,
+        timestamp: Option<i64>,
+        duration: Option<i64>,
+    ) -> Result<(), Error> {
+        assert!(
+            self.pending_data.is_none(),
+            "Have pending data that needs to be handled first"
+        );
+
+        let buf = Box::new(buf);
+        let slice = (*buf).as_ref();
+        let len = slice.len();
+
+        unsafe {
+            let mut data: Dav1dData = mem::zeroed();
+            let _ret = dav1d_data_wrap(
+                &mut data,
+                slice.as_ptr(),
+                len,
+                Some(release_wrapped_data::<T>),
+                Box::into_raw(buf) as *mut c_void,
+            );
+            if let Some(offset) = offset {
+                data.m.offset = offset;
+            }
+            if let Some(timestamp) = timestamp {
+                data.m.timestamp = timestamp;
+            }
+            if let Some(duration) = duration {
+                data.m.duration = duration;
+            }
+
+            let ret = dav1d_send_data(self.dec.as_ptr(), &mut data);
+            if ret < 0 {
+                let ret = Error::from(ret);
+
+                if ret.is_again() {
+                    self.pending_data = Some(data);
+                } else {
+                    dav1d_data_unref(&mut data);
+                }
+
+                return Err(ret);
+            }
+
+            if data.sz > 0 {
+                self.pending_data = Some(data);
+                return Err(Error::Again);
+            }
+
+            Ok(())
+        }
+    }
+
+    /// Sends any pending data to the decoder.
+    ///
+    /// This has to be called after [`Decoder::send_data`] has returned `Err([Error::Again])` to
+    /// consume any futher pending data.
+    ///
+    /// After this returned `Ok(())` or `Err([Error::Again])` there might be decoded frames
+    /// available via [`Decoder::get_picture`].
+    pub fn send_pending_data(&mut self) -> Result<(), Error> {
+        let mut data = match self.pending_data.take() {
+            None => {
+                return Ok(());
+            }
+            Some(data) => data,
+        };
+
+        unsafe {
+            let ret = dav1d_send_data(self.dec.as_ptr(), &mut data);
+            if ret < 0 {
+                let ret = Error::from(ret);
+
+                if ret.is_again() {
+                    self.pending_data = Some(data);
+                } else {
+                    dav1d_data_unref(&mut data);
+                }
+
+                return Err(ret);
+            }
+
+            if data.sz > 0 {
+                self.pending_data = Some(data);
+                return Err(Error::Again);
+            }
+
+            Ok(())
+        }
+    }
+
+    /// Get the next decoded frame from the decoder.
+    ///
+    /// If this returns `Err([Error::Again])` then further data has to be sent to the decoder
+    /// before further decoded frames become available.
+    ///
+    /// To make most use of frame threading this function should only be called once per submitted
+    /// input frame and not until it returns `Err([Error::Again])`. Calling it in a loop should
+    /// only be done to drain all pending frames at the end.
+    pub fn get_picture(&mut self) -> Result<Picture, Error> {
+        unsafe {
+            let mut pic: Dav1dPicture = mem::zeroed();
+            let ret = dav1d_get_picture(self.dec.as_ptr(), &mut pic);
+
+            if ret < 0 {
+                Err(Error::from(ret))
+            } else {
+                let inner = InnerPicture { pic };
+                Ok(Picture {
+                    inner: Arc::new(inner),
+                })
+            }
+        }
+    }
+
+    /// Get the decoder delay.
+    pub fn get_frame_delay(&self) -> u32 {
+        unsafe { dav1d_get_frame_delay(self.dec.as_ptr()) as u32 }
+    }
+}
+
+impl Drop for Decoder {
+    fn drop(&mut self) {
+        unsafe {
+            if let Some(mut pending_data) = self.pending_data.take() {
+                dav1d_data_unref(&mut pending_data);
+            }
+            let mut dec = self.dec.as_ptr();
+            dav1d_close(&mut dec);
+        };
+    }
+}
+
+unsafe impl Send for Decoder {}
+unsafe impl Sync for Decoder {}
+
+#[derive(Debug)]
+struct InnerPicture {
+    pub pic: Dav1dPicture,
+}
+
+/// A decoded frame.
+#[derive(Debug, Clone)]
+pub struct Picture {
+    inner: Arc<InnerPicture>,
+}
+
+/// Pixel layout of a frame.
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum PixelLayout {
+    /// Monochrome.
+    I400,
+    /// 4:2:0 planar.
+    I420,
+    /// 4:2:2 planar.
+    I422,
+    /// 4:4:4 planar.
+    I444,
+}
+
+/// Frame component.
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+pub enum PlanarImageComponent {
+    /// Y component.
+    Y,
+    /// U component.
+    U,
+    /// V component.
+    V,
+}
+
+impl From<usize> for PlanarImageComponent {
+    fn from(index: usize) -> Self {
+        match index {
+            0 => PlanarImageComponent::Y,
+            1 => PlanarImageComponent::U,
+            2 => PlanarImageComponent::V,
+            _ => panic!("Invalid YUV index: {}", index),
+        }
+    }
+}
+
+impl From<PlanarImageComponent> for usize {
+    fn from(component: PlanarImageComponent) -> Self {
+        match component {
+            PlanarImageComponent::Y => 0,
+            PlanarImageComponent::U => 1,
+            PlanarImageComponent::V => 2,
+        }
+    }
+}
+
+/// A single plane of a decoded frame.
+///
+/// This can be used like a `&[u8]`.
+#[derive(Clone, Debug)]
+pub struct Plane(Picture, PlanarImageComponent);
+
+impl AsRef<[u8]> for Plane {
+    fn as_ref(&self) -> &[u8] {
+        let (stride, height) = self.0.plane_data_geometry(self.1);
+        unsafe {
+            std::slice::from_raw_parts(
+                self.0.plane_data_ptr(self.1) as *const u8,
+                (stride * height) as usize,
+            )
+        }
+    }
+}
+
+impl std::ops::Deref for Plane {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_ref()
+    }
+}
+
+static_assertions::assert_impl_all!(Plane: Send, Sync);
+
+/// Number of bits per component.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct BitsPerComponent(pub usize);
+
+impl Picture {
+    /// Stride in pixels of the `component` for the decoded frame.
+    pub fn stride(&self, component: PlanarImageComponent) -> u32 {
+        let s = match component {
+            PlanarImageComponent::Y => 0,
+            _ => 1,
+        };
+        self.inner.pic.stride[s] as u32
+    }
+
+    /// Raw pointer to the data of the `component` for the decoded frame.
+    pub fn plane_data_ptr(&self, component: PlanarImageComponent) -> *mut c_void {
+        let index: usize = component.into();
+        self.inner.pic.data[index]
+    }
+
+    /// Plane geometry of the `component` for the decoded frame.
+    ///
+    /// This returns the stride and height.
+    pub fn plane_data_geometry(&self, component: PlanarImageComponent) -> (u32, u32) {
+        let height = match component {
+            PlanarImageComponent::Y => self.height(),
+            _ => match self.pixel_layout() {
+                PixelLayout::I420 => (self.height() + 1) / 2,
+                PixelLayout::I400 | PixelLayout::I422 | PixelLayout::I444 => self.height(),
+            },
+        };
+        (self.stride(component), height)
+    }
+
+    /// Plane data of the `component` for the decoded frame.
+    pub fn plane(&self, component: PlanarImageComponent) -> Plane {
+        Plane(self.clone(), component)
+    }
+
+    /// Bit depth of the plane data.
+    ///
+    /// This returns 8 or 16 for the underlying integer type used for the plane data.
+    ///
+    /// Check [`Picture::bits_per_component`] for the number of bits that are used.
+    pub fn bit_depth(&self) -> usize {
+        self.inner.pic.p.bpc as usize
+    }
+
+    /// Bits used per component of the plane data.
+    ///
+    /// Check [`Picture::bit_depth`] for the number of storage bits.
+    pub fn bits_per_component(&self) -> Option<BitsPerComponent> {
+        unsafe {
+            match (*self.inner.pic.seq_hdr).hbd {
+                0 => Some(BitsPerComponent(8)),
+                1 => Some(BitsPerComponent(10)),
+                2 => Some(BitsPerComponent(12)),
+                _ => None,
+            }
+        }
+    }
+
+    /// Width of the frame.
+    pub fn width(&self) -> u32 {
+        self.inner.pic.p.w as u32
+    }
+
+    /// Height of the frame.
+    pub fn height(&self) -> u32 {
+        self.inner.pic.p.h as u32
+    }
+
+    /// Pixel layout of the frame.
+    pub fn pixel_layout(&self) -> PixelLayout {
+        #[allow(non_upper_case_globals)]
+        match self.inner.pic.p.layout {
+            DAV1D_PIXEL_LAYOUT_I400 => PixelLayout::I400,
+            DAV1D_PIXEL_LAYOUT_I420 => PixelLayout::I420,
+            DAV1D_PIXEL_LAYOUT_I422 => PixelLayout::I422,
+            DAV1D_PIXEL_LAYOUT_I444 => PixelLayout::I444,
+            _ => unreachable!(),
+        }
+    }
+
+    /// Timestamp of the frame.
+    ///
+    /// This is the same timestamp as the one provided to [`Decoder::send_data`].
+    pub fn timestamp(&self) -> Option<i64> {
+        let ts = self.inner.pic.m.timestamp;
+        if ts == i64::MIN {
+            None
+        } else {
+            Some(ts)
+        }
+    }
+
+    /// Duration of the frame.
+    ///
+    /// This is the same duration as the one provided to [`Decoder::send_data`] or `0` if none was
+    /// provided.
+    pub fn duration(&self) -> i64 {
+        self.inner.pic.m.duration
+    }
+
+    /// Offset of the frame.
+    ///
+    /// This is the same offset as the one provided to [`Decoder::send_data`] or `-1` if none was
+    /// provided.
+    pub fn offset(&self) -> i64 {
+        self.inner.pic.m.offset
+    }
+
+    /// Chromaticity coordinates of the source colour primaries.
+    pub fn color_primaries(&self) -> pixel::ColorPrimaries {
+        unsafe {
+            #[allow(non_upper_case_globals)]
+            match (*self.inner.pic.seq_hdr).pri {
+                DAV1D_COLOR_PRI_BT709 => pixel::ColorPrimaries::BT709,
+                DAV1D_COLOR_PRI_UNKNOWN => pixel::ColorPrimaries::Unspecified,
+                DAV1D_COLOR_PRI_BT470M => pixel::ColorPrimaries::BT470M,
+                DAV1D_COLOR_PRI_BT470BG => pixel::ColorPrimaries::BT470BG,
+                DAV1D_COLOR_PRI_BT601 => pixel::ColorPrimaries::BT470BG,
+                DAV1D_COLOR_PRI_SMPTE240 => pixel::ColorPrimaries::ST240M,
+                DAV1D_COLOR_PRI_FILM => pixel::ColorPrimaries::Film,
+                DAV1D_COLOR_PRI_BT2020 => pixel::ColorPrimaries::BT2020,
+                DAV1D_COLOR_PRI_XYZ => pixel::ColorPrimaries::ST428,
+                DAV1D_COLOR_PRI_SMPTE431 => pixel::ColorPrimaries::P3DCI,
+                DAV1D_COLOR_PRI_SMPTE432 => pixel::ColorPrimaries::P3Display,
+                DAV1D_COLOR_PRI_EBU3213 => pixel::ColorPrimaries::Tech3213,
+                23..=DAV1D_COLOR_PRI_RESERVED => pixel::ColorPrimaries::Unspecified,
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    /// Transfer characteristics function.
+    pub fn transfer_characteristic(&self) -> pixel::TransferCharacteristic {
+        unsafe {
+            #[allow(non_upper_case_globals)]
+            match (*self.inner.pic.seq_hdr).trc {
+                DAV1D_TRC_BT709 => pixel::TransferCharacteristic::BT1886,
+                DAV1D_TRC_UNKNOWN => pixel::TransferCharacteristic::Unspecified,
+                DAV1D_TRC_BT470M => pixel::TransferCharacteristic::BT470M,
+                DAV1D_TRC_BT470BG => pixel::TransferCharacteristic::BT470BG,
+                DAV1D_TRC_BT601 => pixel::TransferCharacteristic::ST170M,
+                DAV1D_TRC_SMPTE240 => pixel::TransferCharacteristic::ST240M,
+                DAV1D_TRC_LINEAR => pixel::TransferCharacteristic::Linear,
+                DAV1D_TRC_LOG100 => pixel::TransferCharacteristic::Logarithmic100,
+                DAV1D_TRC_LOG100_SQRT10 => pixel::TransferCharacteristic::Logarithmic316,
+                DAV1D_TRC_IEC61966 => pixel::TransferCharacteristic::SRGB,
+                DAV1D_TRC_BT1361 => pixel::TransferCharacteristic::BT1886,
+                DAV1D_TRC_SRGB => pixel::TransferCharacteristic::SRGB,
+                DAV1D_TRC_BT2020_10BIT => pixel::TransferCharacteristic::BT2020Ten,
+                DAV1D_TRC_BT2020_12BIT => pixel::TransferCharacteristic::BT2020Twelve,
+                DAV1D_TRC_SMPTE2084 => pixel::TransferCharacteristic::PerceptualQuantizer,
+                DAV1D_TRC_SMPTE428 => pixel::TransferCharacteristic::ST428,
+                DAV1D_TRC_HLG => pixel::TransferCharacteristic::HybridLogGamma,
+                19..=DAV1D_TRC_RESERVED => pixel::TransferCharacteristic::Unspecified,
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    /// Matrix coefficients used in deriving luma and chroma signals from the
+    /// green, blue and red or X, Y and Z primaries.
+    pub fn matrix_coefficients(&self) -> pixel::MatrixCoefficients {
+        unsafe {
+            #[allow(non_upper_case_globals)]
+            match (*self.inner.pic.seq_hdr).mtrx {
+                DAV1D_MC_IDENTITY => pixel::MatrixCoefficients::Identity,
+                DAV1D_MC_BT709 => pixel::MatrixCoefficients::BT709,
+                DAV1D_MC_UNKNOWN => pixel::MatrixCoefficients::Unspecified,
+                DAV1D_MC_FCC => pixel::MatrixCoefficients::BT470M,
+                DAV1D_MC_BT470BG => pixel::MatrixCoefficients::BT470BG,
+                DAV1D_MC_BT601 => pixel::MatrixCoefficients::BT470BG,
+                DAV1D_MC_SMPTE240 => pixel::MatrixCoefficients::ST240M,
+                DAV1D_MC_SMPTE_YCGCO => pixel::MatrixCoefficients::YCgCo,
+                DAV1D_MC_BT2020_NCL => pixel::MatrixCoefficients::BT2020NonConstantLuminance,
+                DAV1D_MC_BT2020_CL => pixel::MatrixCoefficients::BT2020ConstantLuminance,
+                DAV1D_MC_SMPTE2085 => pixel::MatrixCoefficients::ST2085,
+                DAV1D_MC_CHROMAT_NCL => {
+                    pixel::MatrixCoefficients::ChromaticityDerivedNonConstantLuminance
+                }
+                DAV1D_MC_CHROMAT_CL => {
+                    pixel::MatrixCoefficients::ChromaticityDerivedConstantLuminance
+                }
+                DAV1D_MC_ICTCP => pixel::MatrixCoefficients::ICtCp,
+                15..=DAV1D_MC_RESERVED => pixel::MatrixCoefficients::Unspecified,
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    /// YUV color range.
+    pub fn color_range(&self) -> pixel::YUVRange {
+        unsafe {
+            match (*self.inner.pic.seq_hdr).color_range {
+                0 => pixel::YUVRange::Limited,
+                _ => pixel::YUVRange::Full,
+            }
+        }
+    }
+
+    /// Sample position for subsampled chroma.
+    pub fn chroma_location(&self) -> pixel::ChromaLocation {
+        // According to y4m mapping declared in dav1d's output/y4m2.c and applied from FFmpeg's yuv4mpegdec.c
+        unsafe {
+            match (*self.inner.pic.seq_hdr).chr {
+                DAV1D_CHR_UNKNOWN | DAV1D_CHR_COLOCATED => pixel::ChromaLocation::Center,
+                DAV1D_CHR_VERTICAL => pixel::ChromaLocation::Left,
+                _ => unreachable!(),
+            }
+        }
+    }
+}
+
+static_assertions::assert_impl_all!(Picture: Send, Sync);
+
+unsafe impl Send for InnerPicture {}
+unsafe impl Sync for InnerPicture {}
+
+impl Drop for InnerPicture {
+    fn drop(&mut self) {
+        unsafe {
+            dav1d_picture_unref(&mut self.pic);
+        }
+    }
+}

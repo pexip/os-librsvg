@@ -1,0 +1,30 @@
+From: Simon McVittie <smcv@debian.org>
+Date: Sun, 10 Mar 2024 14:21:05 +0000
+Subject: Temporarily disable rtl-span reftest which fails with Pango 1.52.1
+
+Ideally we would like to avoid a versioned build-dependency on
+Pango 1.52.1 until that version has reached testing, so for now we
+disable this test instead of updating its expected rendering to match
+Pango 1.52.1 behaviour. When 1.52.1 reaches testing, we should reinstate
+this (updating its expected rendering if necessary) and add a versioned
+Build-Depends.
+
+Bug: https://gitlab.gnome.org/GNOME/librsvg/-/issues/1063
+Bug-Debian: https://bugs.debian.org/1065821
+Forwarded: not-needed, Debian-specific workaround
+---
+ rsvg/tests/reference.rs | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/rsvg/tests/reference.rs b/rsvg/tests/reference.rs
+index 81c9604..aab7d45 100644
+--- a/rsvg/tests/reference.rs
++++ b/rsvg/tests/reference.rs
+@@ -224,7 +224,6 @@ mod tests {
+     t!(include_compressed_svg,                                      "include-compressed.svg");
+     t!(include_fallback_svg,                                        "include-fallback.svg");
+     t!(include_text_svg,                                            "include-text.svg");
+-    t!(rtl_tspan_svg,                                               "rtl-tspan.svg");
+     t!(specificity_svg,                                             "specificity.svg");
+     t!(structural_pseudo_classes_svg,                               "structural-pseudo-classes.svg");
+     t!(style_with_xml_comments_svg,                                 "style-with-xml-comments.svg");

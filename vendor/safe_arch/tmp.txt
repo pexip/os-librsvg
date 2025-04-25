@@ -1,1 +1,0 @@
-it's about 38.77s to 39.89s to do a fresh run of the tests when they're all doc tests.
