@@ -5,3 +5,4 @@ workarounds/skip-broken-reftests.diff
 workarounds/Skip-invalid_viewbox-test-on-32-bit-x86.patch
 workarounds/tests-Skip-known-failing-tests-on-i386.patch
 workarounds/Temporarily-disable-rtl-span-reftest-which-fails-with-Pan.patch
+CVE-2026-96889.patch
